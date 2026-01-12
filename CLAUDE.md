@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## IMPORTANT: This is the correct repo for OpenPath edits
+
+If you need to modify OpenPath code, **edit files HERE** in `/datos_replicados/Bruno/Whitelist/OpenPath/`.
+
+**DO NOT edit** `ClassroomPath/upstream/openpath/` - that's a read-only git submodule that will lose your changes.
+
 ## Project Overview
 
 OpenPath is a **multi-platform DNS-based URL whitelist enforcement system** (v4.1.0) for educational environments with a self-service domain request workflow and centralized management via a modern web dashboard.
