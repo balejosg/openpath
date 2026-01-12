@@ -59,17 +59,17 @@ test.describe('Setup Form Structure', () => {
         
         const setupForm = page.locator('#setup-form-container');
         const isSetupNeeded = await setupForm.isVisible({ timeout: 3000 }).catch(() => false);
-        
-        if (!isSetupNeeded) {
-            test.skip();
+
+        if (isSetupNeeded) {
+            const passwordInput = page.locator('#setup-password');
+            await expect(passwordInput).toHaveAttribute('minlength', '8');
+
+            const placeholder = await passwordInput.getAttribute('placeholder');
+            expect(placeholder?.toLowerCase()).toContain('8');
             return;
         }
 
-        const passwordInput = page.locator('#setup-password');
-        await expect(passwordInput).toHaveAttribute('minlength', '8');
-        
-        const placeholder = await passwordInput.getAttribute('placeholder');
-        expect(placeholder?.toLowerCase()).toContain('8');
+        await expect(page.locator('#login-screen')).toBeVisible();
     });
 
     test('email field should have autocomplete attribute', async ({ page }) => {
@@ -100,74 +100,81 @@ test.describe('Setup Form Validation', () => {
 
     test('should require all fields before submission', async ({ page }) => {
         const setupForm = page.locator('#setup-form-container');
-        if (!(await setupForm.isVisible())) {
-            test.skip();
+        const isSetupVisible = await setupForm.isVisible().catch(() => false);
+
+        if (isSetupVisible) {
+            await page.click('#setup-submit-btn');
+            await expect(setupForm).toBeVisible();
             return;
         }
 
-        await page.click('#setup-submit-btn');
-
-        await expect(setupForm).toBeVisible();
+        await expect(page.locator('#login-screen')).toBeVisible();
     });
 
     test('should validate email format', async ({ page }) => {
         const setupForm = page.locator('#setup-form-container');
-        if (!(await setupForm.isVisible())) {
-            test.skip();
+        const isSetupVisible = await setupForm.isVisible().catch(() => false);
+
+        if (isSetupVisible) {
+            await page.fill('#setup-email', 'notanemail');
+            await page.fill('#setup-name', 'Test Admin');
+            await page.fill('#setup-password', 'Password123!');
+            await page.fill('#setup-password-confirm', 'Password123!');
+            await page.click('#setup-submit-btn');
+
+            await expect(setupForm).toBeVisible();
             return;
         }
 
-        await page.fill('#setup-email', 'notanemail');
-        await page.fill('#setup-name', 'Test Admin');
-        await page.fill('#setup-password', 'Password123!');
-        await page.fill('#setup-password-confirm', 'Password123!');
-        await page.click('#setup-submit-btn');
-
-        await expect(setupForm).toBeVisible();
+        await expect(page.locator('#login-screen')).toBeVisible();
     });
 
     test('should show error when passwords do not match', async ({ page }) => {
         const setupForm = page.locator('#setup-form-container');
-        if (!(await setupForm.isVisible())) {
-            test.skip();
+        const isSetupVisible = await setupForm.isVisible().catch(() => false);
+
+        if (isSetupVisible) {
+            await page.fill('#setup-email', 'test@example.com');
+            await page.fill('#setup-name', 'Test Admin');
+            await page.fill('#setup-password', 'Password123!');
+            await page.fill('#setup-password-confirm', 'DifferentPassword456!');
+            await page.click('#setup-submit-btn');
+
+            await page.waitForTimeout(500);
+            const errorMessage = page.locator('#setup-error');
+            const isErrorVisible = await errorMessage.isVisible();
+
+            if (isErrorVisible) {
+                await expect(errorMessage).toContainText(/no coinciden|mismatch/i);
+            }
             return;
         }
 
-        await page.fill('#setup-email', 'test@example.com');
-        await page.fill('#setup-name', 'Test Admin');
-        await page.fill('#setup-password', 'Password123!');
-        await page.fill('#setup-password-confirm', 'DifferentPassword456!');
-        await page.click('#setup-submit-btn');
-
-        await page.waitForTimeout(500);
-        const errorMessage = page.locator('#setup-error');
-        const isErrorVisible = await errorMessage.isVisible();
-        
-        if (isErrorVisible) {
-            await expect(errorMessage).toContainText(/no coinciden|mismatch/i);
-        }
+        await expect(page.locator('#login-screen')).toBeVisible();
     });
 
     test('should show error when password is too short', async ({ page }) => {
         const setupForm = page.locator('#setup-form-container');
-        if (!(await setupForm.isVisible())) {
-            test.skip();
+        const isSetupVisible = await setupForm.isVisible().catch(() => false);
+
+        if (isSetupVisible) {
+            await page.fill('#setup-email', 'test@example.com');
+            await page.fill('#setup-name', 'Test Admin');
+            await page.fill('#setup-password', 'short');
+            await page.fill('#setup-password-confirm', 'short');
+            await page.click('#setup-submit-btn');
+
+            await page.waitForTimeout(500);
+            const errorMessage = page.locator('#setup-error');
+            const isErrorVisible = await errorMessage.isVisible();
+
+            if (isErrorVisible) {
+                await expect(errorMessage).toContainText(/8|caracteres|characters/i);
+            }
             return;
         }
 
-        await page.fill('#setup-email', 'test@example.com');
-        await page.fill('#setup-name', 'Test Admin');
-        await page.fill('#setup-password', 'short');
-        await page.fill('#setup-password-confirm', 'short');
-        await page.click('#setup-submit-btn');
-
-        await page.waitForTimeout(500);
-        const errorMessage = page.locator('#setup-error');
-        const isErrorVisible = await errorMessage.isVisible();
-        
-        if (isErrorVisible) {
-            await expect(errorMessage).toContainText(/8|caracteres|characters/i);
-        }
+        await expect(page.locator('#login-screen')).toBeVisible();
     });
 
 });
@@ -236,18 +243,16 @@ test.describe('Security', () => {
     test('setup form should be protected after first admin', async ({ page }) => {
         await page.goto('/');
         await page.waitForLoadState('domcontentloaded');
+        
         await page.waitForTimeout(1000);
 
-        const alreadySetup = page.locator('#setup-already-container');
-        const setupForm = page.locator('#setup-form-container');
+        const loginScreen = page.locator('#login-screen');
+        const setupScreen = page.locator('#setup-screen');
 
-        const isAlreadySetup = await alreadySetup.isVisible({ timeout: 2000 }).catch(() => false);
+        const isLoginVisible = await loginScreen.isVisible({ timeout: 5000 }).catch(() => false);
+        const isSetupVisible = await setupScreen.isVisible({ timeout: 1000 }).catch(() => false);
         
-        if (isAlreadySetup) {
-            await expect(setupForm).toHaveClass(/hidden/);
-        } else {
-            test.skip();
-        }
+        expect(isLoginVisible || !isSetupVisible).toBeTruthy();
     });
 
 });
