@@ -52,6 +52,30 @@ async function setupGroupAndTeacher(apiURL: string, accessToken: string, groupId
             
             if (assignResponse.ok) {
                 console.log('✅ Teacher assigned to default-group');
+                
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                const verifyResponse = await fetch(`${apiURL}/trpc/users.list`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+                
+                if (verifyResponse.ok) {
+                    const verifyData = await verifyResponse.json() as { result?: { data?: { id?: string; email?: string; roles?: { role?: string; groupIds?: string[] }[] }[] } };
+                    const verifiedTeacher = verifyData.result?.data?.find(u => u.email === TEACHER_CREDENTIALS.email);
+                    const teacherRole = verifiedTeacher?.roles?.find(r => r.role === 'teacher');
+                    
+                    if (teacherRole?.groupIds?.includes(groupId)) {
+                        console.log('✅ Teacher group assignment verified');
+                    } else {
+                        console.log('⚠️  Teacher group assignment not reflected in user list');
+                    }
+                } else {
+                    console.log('⚠️  Failed to verify teacher assignment');
+                }
             } else {
                 const errorText = await assignResponse.text();
                 console.log(`⚠️  Teacher group assignment failed: ${errorText}`);
@@ -272,6 +296,31 @@ async function globalSetup(config: FullConfig) {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.log(`⚠️  Whitelist group creation error: ${errorMessage}`);
+        }
+        
+        console.log('🔍 Final verification: checking teacher permissions...');
+        try {
+            const finalVerifyResponse = await fetch(`${apiURL}/trpc/users.list`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                }
+            });
+            
+            if (finalVerifyResponse.ok) {
+                const finalVerifyData = await finalVerifyResponse.json() as { result?: { data?: { email?: string; roles?: { role?: string; groupIds?: string[] }[] }[] } };
+                const finalTeacher = finalVerifyData.result?.data?.find(u => u.email === TEACHER_CREDENTIALS.email);
+                const finalTeacherRole = finalTeacher?.roles?.find(r => r.role === 'teacher');
+                
+                if (finalTeacherRole?.groupIds && finalTeacherRole.groupIds.length > 0) {
+                    console.log('✅ Teacher has groups:', finalTeacherRole.groupIds);
+                } else {
+                    console.warn('⚠️  WARNING: Teacher has no groups assigned! Tests may fail.');
+                }
+            }
+        } catch (error) {
+            console.log('⚠️  Final verification failed:', error);
         }
         
         console.log('✅ Global setup complete');
