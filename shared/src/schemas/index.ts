@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 export const RequestStatus = z.enum(['pending', 'approved', 'rejected']);
 export const RequestPriority = z.enum(['low', 'normal', 'high', 'urgent']);
-export const UserRole = z.enum(['admin', 'teacher', 'student', 'openpath-admin']);
+export const UserRole = z.enum(['admin', 'teacher', 'student']);
 export const MachineStatus = z.enum(['online', 'offline', 'unknown']);
 export const HealthStatus = z.enum([
     'healthy',

@@ -3,7 +3,7 @@ import { init } from './modules/app-core.js';
 import { pushManager } from './push.js';
 import { initUsersListeners } from './modules/users.js';
 import { initClassroomListeners, initMachineListeners } from './modules/classrooms.js';
-import { initModals, showScreen, openModal, closeModal, initTheme, toggleTheme } from './modules/ui.js';
+import { initModals, showScreen, openModal, closeModal, initTheme, toggleTheme, initSidebar, navigateToScreen, updateIcons } from './modules/ui.js';
 import { auth } from './auth.js';
 import { googleAuth } from './google-auth.js';
 import { setup } from './setup.js';
@@ -402,4 +402,11 @@ function initMainListeners() {
     document.getElementById('theme-toggle-btn')?.addEventListener('click', () => {
         toggleTheme();
     });
+
+    initSidebar();
+    updateIcons(document);
+
+    if (document.getElementById('dashboard-screen') && !document.getElementById('dashboard-screen')?.classList.contains('hidden')) {
+        navigateToScreen('overview-screen');
+    }
 }

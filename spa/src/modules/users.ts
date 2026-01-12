@@ -217,7 +217,7 @@ export function initUsersListeners(): void {
         void (async () => {
             e.preventDefault();
             const userId = (document.getElementById('assign-role-user-id') as HTMLInputElement).value;
-            const role = (document.getElementById('assign-role-select') as HTMLSelectElement).value as UserRoleType;
+            const role = (document.getElementById('assign-role-type') as HTMLSelectElement).value as UserRoleType;
 
             // Get selected groups
             const select = document.getElementById('assign-role-groups') as HTMLSelectElement;

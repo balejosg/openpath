@@ -16,6 +16,8 @@
 </head>
 
 <body>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
     <!-- Setup Screen (First-time admin setup) -->
     <div id="setup-screen" class="screen hidden">
         <div class="login-container">
@@ -183,7 +185,62 @@
 
     <!-- Dashboard -->
     <div id="dashboard-screen" class="screen hidden">
-        <header class="header">
+        <div class="app-layout">
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-logo">
+                    <span class="logo-badge">OP</span>
+                    <span class="logo-text">OpenPath</span>
+                </div>
+
+                <nav class="sidebar-nav">
+                    <button class="nav-item active" data-screen="overview-screen">
+                        <i data-lucide="layout-dashboard"></i>
+                        <span>Dashboard</span>
+                    </button>
+                    <button class="nav-item" data-screen="classrooms-screen">
+                        <i data-lucide="monitor"></i>
+                        <span>Gestión de Aulas</span>
+                    </button>
+                    <button class="nav-item" data-screen="groups-screen">
+                        <i data-lucide="folder-tree"></i>
+                        <span>Grupos</span>
+                    </button>
+                    <button class="nav-item admin-only hidden" data-screen="users-screen">
+                        <i data-lucide="users"></i>
+                        <span>Usuarios</span>
+                    </button>
+                    <button class="nav-item" data-screen="requests-screen">
+                        <i data-lucide="shield-alert"></i>
+                        <span>Solicitudes</span>
+                    </button>
+                </nav>
+
+                <div class="sidebar-footer">
+                    <button id="theme-toggle-btn" class="btn-icon" title="Cambiar tema"><i data-lucide="moon"></i></button>
+                    <button id="logout-btn" class="btn-icon" title="Cerrar sesión"><i data-lucide="log-out"></i></button>
+                </div>
+            </aside>
+
+            <div class="sidebar-backdrop hidden" id="sidebar-backdrop"></div>
+
+            <div class="main-wrapper">
+                <header class="top-header">
+                    <button class="menu-toggle" id="menu-toggle" title="Menú">
+                        <i data-lucide="menu"></i>
+                    </button>
+                    <h1 class="page-title" id="page-title">Dashboard</h1>
+                    <div class="header-right">
+                        <span class="system-status">
+                            <i data-lucide="zap"></i>
+                            <span>Sistema Activo</span>
+                        </span>
+                        <button class="notification-btn" id="notifications-btn" title="Notificaciones push">
+                            <i data-lucide="bell"></i>
+                            <span class="notification-badge hidden" id="notifications-badge">0</span>
+                        </button>
+                        <span id="current-user" class="user-badge"></span>
+                    </div>
+                </header>
             <div class="header-left">
                 <span class="logo-small">🛡️</span>
                 <h1>OpenPath</h1>
@@ -192,7 +249,6 @@
                 <button id="theme-toggle-btn" class="btn btn-ghost" title="Cambiar tema">
                     <span id="theme-icon">🌓</span>
                 </button>
-                <button id="admin-users-btn" class="btn btn-ghost admin-only hidden">👥 Gestión Usuarios</button>
                 <button id="notifications-btn" class="btn btn-ghost" title="Notificaciones push">
                     <span id="notifications-icon">🔔</span>
                 </button>
@@ -203,29 +259,112 @@
                 <span id="current-user" class="user-badge"></span>
                 <button id="logout-btn" class="btn btn-ghost btn-icon" title="Cerrar sesión">🚪</button>
             </div>
-        </header>
+                <main class="main-content">
+                    <div id="overview-screen" class="screen">
+                        <div class="stats-grid">
+                            <div class="stat-card stat-card--yellow">
+                                <div class="stat-card__header">
+                                    <div>
+                                        <p class="stat-card__label">Grupos Totales</p>
+                                        <h3 class="stat-card__value" id="stat-groups">0</h3>
+                                    </div>
+                                    <div class="stat-card__icon"><i data-lucide="folder"></i></div>
+                                </div>
+                            </div>
 
-        <main class="main-content">
-            <!-- Teacher Welcome Banner (Conditional) -->
-            <section id="teacher-banner" class="teacher-banner hidden">
-                <span class="icon">👨‍🏫</span>
-                <div class="info">
-                    <strong>¡Hola, <span id="teacher-name"></span>!</strong>
-                    <span>Gestionando solicitudes para: <em id="teacher-assigned-groups"></em></span>
-                </div>
-            </section>
+                            <div class="stat-card stat-card--green">
+                                <div class="stat-card__header">
+                                    <div>
+                                        <p class="stat-card__label">Dominios Permitidos</p>
+                                        <h3 class="stat-card__value" id="stat-whitelist">0</h3>
+                                    </div>
+                                    <div class="stat-card__icon"><i data-lucide="check-circle"></i></div>
+                                </div>
+                            </div>
 
-            <!-- System Status Banner -->
-            <section id="system-status-banner" class="system-status-banner hidden">
-                <div class="status-content">
-                    <span class="status-icon">⚠️</span>
-                    <span class="status-text">Sistema desactivado - Todo el tráfico está permitido</span>
-                </div>
-                <button id="reactivate-btn" class="btn btn-success">Reactivar Sistema</button>
-            </section>
+                            <div class="stat-card stat-card--red">
+                                <div class="stat-card__header">
+                                    <div>
+                                        <p class="stat-card__label">Bloqueados</p>
+                                        <h3 class="stat-card__value" id="stat-blocked">0</h3>
+                                    </div>
+                                    <div class="stat-card__icon"><i data-lucide="ban"></i></div>
+                                </div>
+                            </div>
 
-            <!-- Stats Cards -->
-            <section class="stats-section">
+                            <div class="stat-card stat-card--cyan" id="stat-requests-card">
+                                <div class="stat-card__header">
+                                    <div>
+                                        <p class="stat-card__label">Solicitudes Pendientes</p>
+                                        <h3 class="stat-card__value" id="stat-pending-requests">0</h3>
+                                    </div>
+                                    <div class="stat-card__icon"><i data-lucide="server"></i></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="activity-panel">
+                            <h3 class="panel-title"><i data-lucide="activity"></i> Actividad Reciente</h3>
+                            <div class="activity-list" id="activity-list"></div>
+                        </div>
+                    </div>
+
+                    <div id="requests-screen" class="screen hidden">
+                        <section id="requests-section" class="requests-section">
+                            <div class="section-header">
+                                <h2>Solicitudes de Dominios</h2>
+                                <div class="requests-actions">
+                                    <button id="refresh-requests-btn" class="btn btn-ghost" title="Actualizar"><i data-lucide="refresh-cw"></i></button>
+                                    <span id="requests-server-status" class="server-status">
+                                        <span class="status-dot"></span>
+                                        <span class="status-text">Servidor</span>
+                                    </span>
+                                </div>
+                            </div>
+                            <div id="requests-config" class="requests-config hidden">
+                                <div class="form-group inline">
+                                    <label for="requests-api-url">URL del servidor:</label>
+                                    <input type="text" id="requests-api-url" placeholder="https://openpath-requests.duckdns.org">
+                                </div>
+                                <div class="form-group inline">
+                                    <label for="requests-api-token">Token admin:</label>
+                                    <input type="password" id="requests-api-token" placeholder="Token de autenticación" autocomplete="off">
+                                </div>
+                                <button id="save-requests-config-btn" class="btn btn-primary btn-sm">Guardar</button>
+                            </div>
+                            <div id="requests-list" class="requests-list">
+                                <p class="empty-message">No hay solicitudes pendientes</p>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div id="classrooms-screen" class="screen hidden">
+                        <section id="classrooms-section" class="classrooms-section admin-only">
+                            <div class="section-header">
+                                <h2>Gestión de Aulas</h2>
+                                <button id="new-classroom-btn" class="btn btn-primary"><i data-lucide="plus"></i> Nueva aula</button>
+                            </div>
+                            <div id="classrooms-list" class="classrooms-list"><p class="empty-message">Cargando aulas...</p></div>
+                        </section>
+
+                        <section id="machines-section" class="machines-section admin-only">
+                            <div class="section-header">
+                                <h2>Máquinas Registradas</h2>
+                                <button id="refresh-machines-btn" class="btn btn-ghost" title="Actualizar"><i data-lucide="refresh-cw"></i></button>
+                            </div>
+                            <div id="machines-list" class="machines-list"><p class="empty-message">Cargando máquinas...</p></div>
+                        </section>
+
+                        <section id="schedule-section" class="schedule-section">
+                            <div class="section-header">
+                                <h2>Horario del Aula</h2>
+                                <div class="schedule-actions">
+                                    <select id="schedule-classroom-select" class="form-control">
+                                        <option value="">Seleccionar aula...</option>
+                                    </select>
+                                    <button id="add-schedule-slot-btn" class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Añadir</button>
+                                </div>
+                            </div>
                 <div class="stat-card">
                     <div class="stat-icon">📁</div>
                     <div class="stat-content">
@@ -297,59 +436,70 @@
                 </div>
             </section>
 
-            <!-- Machines Section (Admin only) -->
-            <section id="machines-section" class="machines-section admin-only hidden">
-                <div class="section-header">
-                    <h2>💻 Máquinas Registradas</h2>
-                    <button id="refresh-machines-btn" class="btn btn-ghost" title="Actualizar">🔄</button>
-                </div>
-                <div id="machines-list" class="machines-list">
-                    <p class="empty-message">Cargando máquinas...</p>
-                </div>
-            </section>
 
-            <!-- Schedule Section -->
-            <section id="schedule-section" class="schedule-section hidden">
-                <div class="section-header">
-                    <h2>📅 Horario del Aula</h2>
-                    <div class="schedule-actions">
-                        <select id="schedule-classroom-select" class="form-control">
-                            <option value="">Seleccionar aula...</option>
-                        </select>
-                        <button id="schedule-refresh-btn" class="btn btn-ghost" title="Actualizar">🔄</button>
-                    </div>
+                    </section>
                 </div>
-                <div id="schedule-grid-container">
-                    <p class="empty-message">Selecciona un aula para ver su horario</p>
-                </div>
-            </section>
 
-            <!-- Groups List -->
-            <section class="groups-section">
-                <div class="section-header">
-                    <h2>Grupos</h2>
-                    <button id="new-group-btn" class="btn btn-primary">
-                        <span>+</span> Nuevo grupo
-                    </button>
+                <div id="groups-screen" class="screen hidden">
+                    <section id="groups-section" class="groups-section">
+                        <div class="section-header">
+                            <div>
+                                <h2 class="section-title">Grupos</h2>
+                                <p class="section-subtitle">Gestiona políticas de acceso agrupadas.</p>
+                            </div>
+                            <button id="new-group-btn" class="btn btn-primary"><i data-lucide="plus"></i> Nuevo Grupo</button>
+                        </div>
+                        <div class="groups-grid" id="groups-list"></div>
+                    </section>
                 </div>
-                <div id="groups-list" class="groups-list">
-                    <!-- Groups loaded dynamically -->
-                </div>
-            </section>
 
-            <!-- Users Management Section (Admin only) -->
-            <section id="users-section" class="users-section hidden">
-                <div class="section-header">
-                    <h2>👥 Gestión de Usuarios</h2>
-                    <button id="new-user-btn" class="btn btn-primary">
-                        <span>+</span> Nuevo usuario
-                    </button>
+                <div id="users-screen" class="screen hidden">
+                    <section id="users-section" class="users-section">
+                        <div class="section-header">
+                            <div>
+                                <h2 class="section-title">Gestión de Usuarios</h2>
+                                <p class="section-subtitle">Administra los accesos y roles de la plataforma.</p>
+                            </div>
+                            <button class="btn btn-primary" id="new-user-btn"><i data-lucide="plus"></i> Nuevo Usuario</button>
+                        </div>
+                        <div class="toolbar-card">
+                            <div class="search-input search-input--wide">
+                                <i data-lucide="search"></i>
+                                <input type="text" placeholder="Buscar por nombre o email..." id="user-search">
+                            </div>
+                            <div class="toolbar-actions">
+                                <button class="btn btn-secondary"><i data-lucide="filter"></i> Filtros</button>
+                                <button class="btn btn-secondary">Exportar</button>
+                            </div>
+                        </div>
+                        <div class="table-card">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Usuario</th>
+                                            <th>Email</th>
+                                            <th>Roles</th>
+                                            <th>Estado</th>
+                                            <th class="text-right">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="users-table-body"></tbody>
+                                </table>
+                            </div>
+                            <div class="table-footer">
+                                <span class="table-footer__info" id="users-pagination-info">Mostrando 0 usuarios</span>
+                                <div class="table-footer__actions">
+                                    <button class="btn btn-sm btn-secondary" id="users-prev-btn">Anterior</button>
+                                    <button class="btn btn-sm btn-secondary" id="users-next-btn">Siguiente</button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </div>
-                <div id="users-list" class="users-list">
-                    <p class="empty-message">Cargando usuarios...</p>
-                </div>
-            </section>
-        </main>
+
+            </main>
+        </div>
     </div>
 
     <!-- Group Editor -->
