@@ -276,9 +276,9 @@ test.describe('Section 2: Common Attacks', () => {
             await page.waitForLoadState('networkidle');
 
             // Find search field
-            const searchField = page.locator('input[type="search"], #search, .search-input');
+            const searchField = page.locator('input[type="search"], #search, input.search-input');
             
-            if (await searchField.isVisible()) {
+            if (await searchField.first().isVisible()) {
                 // Try SQL injection payloads
                 const sqlPayloads = [
                     "' OR '1'='1",
@@ -288,7 +288,7 @@ test.describe('Section 2: Common Attacks', () => {
                 ];
 
                 for (const payload of sqlPayloads) {
-                    await searchField.fill(payload);
+                    await searchField.first().fill(payload);
                     await page.waitForTimeout(500);
                     
                     // Should not see SQL error messages

@@ -241,24 +241,7 @@
                         <span id="current-user" class="user-badge"></span>
                     </div>
                 </header>
-            <div class="header-left">
-                <span class="logo-small">🛡️</span>
-                <h1>OpenPath</h1>
-            </div>
-            <div class="header-right">
-                <button id="theme-toggle-btn" class="btn btn-ghost" title="Cambiar tema">
-                    <span id="theme-icon">🌓</span>
-                </button>
-                <button id="notifications-btn" class="btn btn-ghost" title="Notificaciones push">
-                    <span id="notifications-icon">🔔</span>
-                </button>
-                <button id="system-toggle-btn" class="btn btn-danger system-toggle" title="Desactivar sistema">
-                    <span class="toggle-icon">⚡</span>
-                    <span class="toggle-text">Sistema Activo</span>
-                </button>
-                <span id="current-user" class="user-badge"></span>
-                <button id="logout-btn" class="btn btn-ghost btn-icon" title="Cerrar sesión">🚪</button>
-            </div>
+
                 <main class="main-content">
                     <div id="overview-screen" class="screen">
                         <div class="stats-grid">
@@ -365,80 +348,7 @@
                                     <button id="add-schedule-slot-btn" class="btn btn-primary btn-sm"><i data-lucide="plus"></i> Añadir</button>
                                 </div>
                             </div>
-                <div class="stat-card">
-                    <div class="stat-icon">📁</div>
-                    <div class="stat-content">
-                        <span id="stat-groups" class="stat-number">0</span>
-                        <span class="stat-label">Grupos</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon">✅</div>
-                    <div class="stat-content">
-                        <span id="stat-whitelist" class="stat-number">0</span>
-                        <span class="stat-label">Dominios permitidos</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-icon">🚫</div>
-                    <div class="stat-content">
-                        <span id="stat-blocked" class="stat-number">0</span>
-                        <span class="stat-label">Bloqueados</span>
-                    </div>
-                </div>
-                <div class="stat-card stat-requests" id="stat-requests-card">
-                    <div class="stat-icon">📨</div>
-                    <div class="stat-content">
-                        <span id="stat-pending-requests" class="stat-number">0</span>
-                        <span class="stat-label">Solicitudes pendientes</span>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Pending Requests Section -->
-            <section id="requests-section" class="requests-section hidden">
-                <div class="section-header">
-                    <h2>📨 Solicitudes de Dominios</h2>
-                    <div class="requests-actions">
-                        <button id="refresh-requests-btn" class="btn btn-ghost" title="Actualizar">🔄</button>
-                        <span id="requests-server-status" class="server-status">
-                            <span class="status-dot"></span>
-                            <span class="status-text">Servidor</span>
-                        </span>
-                    </div>
-                </div>
-                <div id="requests-config" class="requests-config hidden">
-                    <div class="form-group inline">
-                        <label for="requests-api-url">URL del servidor:</label>
-                        <input type="text" id="requests-api-url" placeholder="https://openpath-requests.duckdns.org">
-                    </div>
-                    <div class="form-group inline">
-                        <label for="requests-api-token">Token admin:</label>
-                        <input type="password" id="requests-api-token" placeholder="Token de autenticación" autocomplete="off">
-                    </div>
-                    <button id="save-requests-config-btn" class="btn btn-primary btn-sm">Guardar</button>
-                </div>
-                <div id="requests-list" class="requests-list">
-                    <p class="empty-message">No hay solicitudes pendientes</p>
-                </div>
-            </section>
-
-            <!-- Classrooms Section (Admin only) -->
-            <section id="classrooms-section" class="classrooms-section admin-only hidden">
-                <div class="section-header">
-                    <h2>🏫 Gestión de Aulas</h2>
-                    <button id="new-classroom-btn" class="btn btn-primary">
-                        <span>+</span> Nueva aula
-                    </button>
-                </div>
-                <div id="classrooms-list" class="classrooms-list">
-                    <p class="empty-message">Cargando aulas...</p>
-                </div>
-            </section>
-
-
-                    </section>
-                </div>
+                        </section>
 
                 <div id="groups-screen" class="screen hidden">
                     <section id="groups-section" class="groups-section">

@@ -217,8 +217,9 @@ test.describe('Role-Based Menu Visibility', () => {
     test('admin menu should show Users management button', async ({ page }) => {
         // UAT: 01_admin_tic.md Test 1.5
         // This checks the HTML structure - the button exists but may be hidden based on role
-        const adminUsersBtn = page.locator('#admin-users-btn');
-        await expect(adminUsersBtn).toBeAttached();
+        const usersNavItem = page.locator('button.nav-item[data-screen="users-screen"]');
+        await expect(usersNavItem).toBeAttached();
+        await expect(usersNavItem).toHaveClass(/admin-only/);
     });
 
     test('dashboard should have all required sections in DOM', async ({ page }) => {

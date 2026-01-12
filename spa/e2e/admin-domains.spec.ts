@@ -23,7 +23,7 @@ test.describe('Groups/Domains Section - DOM Structure', () => {
     test('new group button should exist', async ({ page }) => {
         const newGroupBtn = page.locator('#new-group-btn');
         await expect(newGroupBtn).toBeAttached();
-        await expect(newGroupBtn).toContainText('Nuevo grupo');
+        await expect(newGroupBtn).toContainText(/Nuevo\s+Grupo/i);
     });
 
     test('groups list container should exist', async ({ page }) => {

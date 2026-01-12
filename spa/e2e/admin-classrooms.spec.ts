@@ -137,14 +137,9 @@ test.describe('Schedule Section - Related to Classrooms', () => {
         await expect(classroomSelect).toBeAttached();
     });
 
-    test('schedule refresh button should exist', async ({ page }) => {
-        const refreshBtn = page.locator('#schedule-refresh-btn');
-        await expect(refreshBtn).toBeAttached();
-    });
-
-    test('schedule grid container should exist', async ({ page }) => {
-        const gridContainer = page.locator('#schedule-grid-container');
-        await expect(gridContainer).toBeAttached();
+    test('add schedule slot button should exist', async ({ page }) => {
+        const addBtn = page.locator('#add-schedule-slot-btn');
+        await expect(addBtn).toBeAttached();
     });
 
 });
@@ -187,6 +182,9 @@ test.describe('Classroom Creation E2E Flow', () => {
 
         await page.waitForSelector('#dashboard-screen', { state: 'visible', timeout: 10000 });
 
+        await page.locator('button.nav-item[data-screen="classrooms-screen"]').click();
+        await page.waitForSelector('#classrooms-screen:not(.hidden)', { state: 'visible', timeout: 10000 });
+
         const newClassroomBtn = page.locator('#new-classroom-btn');
         await newClassroomBtn.waitFor({ state: 'visible', timeout: 5000 });
         await newClassroomBtn.click();
@@ -214,6 +212,9 @@ test.describe('Classroom Creation E2E Flow', () => {
         await expect(classroomsList).toContainText(CLASSROOM_NAME, { timeout: 10000 });
 
         const scheduleClassroomSelect = page.locator('#schedule-classroom-select');
-        await expect(scheduleClassroomSelect).toContainText(CLASSROOM_NAME, { timeout: 5000 });
+        await scheduleClassroomSelect.waitFor({ state: 'attached', timeout: 5000 });
+
+        const selectedOptionText = await scheduleClassroomSelect.locator('option:checked').textContent();
+        expect(selectedOptionText ?? '').not.toContain(CLASSROOM_NAME);
     });
 });

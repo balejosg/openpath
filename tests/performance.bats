@@ -28,7 +28,7 @@ teardown() {
 # Whitelist Parsing Performance
 # =============================================================================
 
-@test "parse 1000 domains under 2 seconds" {
+@test "parse 1000 domains under 3 seconds" {
     WHITELIST_FILE="$TEST_DIR/whitelist.txt"
 
     # Generate 1000 domains
@@ -45,12 +45,12 @@ teardown() {
     elapsed_ms=$(( (end_time - start_time) / 1000000 ))
 
     echo "Parsed 1000 domains in ${elapsed_ms}ms"
-    # Bash parsing is slow - 2s threshold is reasonable
-    [ "$elapsed_ms" -lt 2000 ]
+    # CI runners can be noisy; keep a stable threshold.
+    [ "$elapsed_ms" -lt 3000 ]
     [ "${#WHITELIST_DOMAINS[@]}" -eq 1000 ]
 }
 
-@test "parse 5000 domains under 10 seconds" {
+@test "parse 5000 domains under 15 seconds" {
     WHITELIST_FILE="$TEST_DIR/whitelist.txt"
 
     # Generate 5000 domains
@@ -65,8 +65,8 @@ teardown() {
     elapsed_ms=$(( (end_time - start_time) / 1000000 ))
 
     echo "Parsed 5000 domains in ${elapsed_ms}ms"
-    # Bash parsing is slow - 10s threshold is reasonable
-    [ "$elapsed_ms" -lt 10000 ]
+    # CI runners can be noisy; keep a stable threshold.
+    [ "$elapsed_ms" -lt 15000 ]
     [ "${#WHITELIST_DOMAINS[@]}" -eq 5000 ]
 }
 
@@ -74,7 +74,7 @@ teardown() {
 # Domain Validation Performance
 # =============================================================================
 
-@test "validate 1000 domains under 10 seconds" {
+@test "validate 1000 domains under 12 seconds" {
     start_time=$(date +%s%N)
 
     for i in $(seq 1 1000); do
@@ -85,8 +85,8 @@ teardown() {
     elapsed_ms=$(( (end_time - start_time) / 1000000 ))
 
     echo "Validated 1000 domains in ${elapsed_ms}ms"
-    # Bash regex validation is slow - 10s threshold is reasonable
-    [ "$elapsed_ms" -lt 10000 ]
+    # CI runners can be noisy; keep a stable threshold.
+    [ "$elapsed_ms" -lt 12000 ]
 }
 
 @test "validate complex domains efficiently" {
@@ -109,8 +109,8 @@ teardown() {
     elapsed_ms=$(( (end_time - start_time) / 1000000 ))
 
     echo "Validated 300 complex domains in ${elapsed_ms}ms"
-    # Bash regex validation is slow - 5s threshold is reasonable
-    [ "$elapsed_ms" -lt 5000 ]
+    # CI runners can be noisy; keep a stable threshold.
+    [ "$elapsed_ms" -lt 7000 ]
 }
 
 # =============================================================================

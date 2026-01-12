@@ -24,8 +24,8 @@ test.describe('Push Notifications - Setup', { tag: '@notifications' }, () => {
     });
 
     test('notifications icon is visible', async ({ page }) => {
-        const notificationsIcon = page.locator('#notifications-icon');
-        await expect(notificationsIcon).toBeAttached();
+        const notificationsBtn = page.locator('#notifications-btn');
+        await expect(notificationsBtn).toBeAttached();
     });
 
     test('clicking notifications button triggers permission request', async ({ page, context }) => {

@@ -1,6 +1,69 @@
 import { chromium, FullConfig } from '@playwright/test';
 import { ADMIN_CREDENTIALS, TEACHER_CREDENTIALS, STUDENT_CREDENTIALS } from './fixtures/auth';
 
+async function setupGroupAndTeacher(apiURL: string, accessToken: string, groupId: string) {
+    console.log('📝 Adding basic whitelist rules...');
+    const rulesResponse = await fetch(`${apiURL}/trpc/groups.bulkCreateRules`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+            groupId,
+            type: 'whitelist',
+            values: ['google.com', 'github.com']
+        })
+    });
+    
+    if (rulesResponse.ok) {
+        console.log('✅ Whitelist rules added');
+    } else {
+        const errorText = await rulesResponse.text();
+        console.log(`⚠️  Rules creation failed: ${errorText}`);
+    }
+
+    console.log('👨‍🏫 Assigning teacher to default-group...');
+    const usersResponse = await fetch(`${apiURL}/trpc/users.list`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+        }
+    });
+    
+    if (usersResponse.ok) {
+        const usersData = await usersResponse.json() as { result?: { data?: { id?: string; email?: string }[] } };
+        const teacher = usersData.result?.data?.find(u => u.email === TEACHER_CREDENTIALS.email);
+        
+        if (teacher?.id) {
+            const assignResponse = await fetch(`${apiURL}/trpc/users.assignRole`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`
+                },
+                body: JSON.stringify({
+                    userId: teacher.id,
+                    role: 'teacher',
+                    groupIds: [groupId]
+                })
+            });
+            
+            if (assignResponse.ok) {
+                console.log('✅ Teacher assigned to default-group');
+            } else {
+                const errorText = await assignResponse.text();
+                console.log(`⚠️  Teacher group assignment failed: ${errorText}`);
+            }
+        } else {
+            console.log('⚠️  Teacher not found in user list');
+        }
+    } else {
+        console.log('⚠️  Failed to fetch user list');
+    }
+}
+
 async function globalSetup(config: FullConfig) {
     const baseURL = config.projects[0]?.use.baseURL;
     const apiURL = process.env.API_URL ?? baseURL ?? 'http://localhost:3005';
@@ -179,25 +242,27 @@ async function globalSetup(config: FullConfig) {
                 
                 const groupId = groupData.result?.data?.id;
                 if (typeof groupId === 'string') {
-                    console.log('📝 Adding basic whitelist rules...');
-                    const rulesResponse = await fetch(`${apiURL}/trpc/groups.bulkCreateRules`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${accessToken}`
-                        },
-                        body: JSON.stringify({
-                            groupId,
-                            type: 'whitelist',
-                            values: ['google.com', 'github.com']
-                        })
-                    });
-                    
-                    if (rulesResponse.ok) {
-                        console.log('✅ Whitelist rules added');
+                    await setupGroupAndTeacher(apiURL, accessToken, groupId);
+                }
+            } else if (groupResponse.status === 409) {
+                // Group already exists, fetch it and continue setup
+                console.log('ℹ️  Default group already exists, fetching ID...');
+                const listResponse = await fetch(`${apiURL}/trpc/groups.list`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+                
+                if (listResponse.ok) {
+                    const listData = await listResponse.json() as { result?: { data?: { id?: string; name?: string }[] } };
+                    const existingGroup = listData.result?.data?.find(g => g.name === 'default-group');
+                    if (existingGroup?.id) {
+                        console.log('✅ Found existing default-group:', existingGroup.id);
+                        await setupGroupAndTeacher(apiURL, accessToken, existingGroup.id);
                     } else {
-                        const errorText = await rulesResponse.text();
-                        console.log(`⚠️  Rules creation failed: ${errorText}`);
+                        console.log('⚠️  Could not find default-group in list');
                     }
                 }
             } else {

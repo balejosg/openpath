@@ -25,7 +25,7 @@ export function generateTestUsers() {
             password: 'E2ETestPass123!',
             name: `Test Teacher ${runId}`,
             role: 'teacher' as const,
-            groups: [`test-group-${runId}`]
+            groups: ['default-group']
         },
         student: {
             email: `test-student-${runId}@e2e.openpath.local`,

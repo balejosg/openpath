@@ -27,9 +27,9 @@ test.describe('Users Section - DOM Structure', () => {
 
     test('users section should have header with title', async ({ page }) => {
         // UAT: 01_admin_tic.md Test 2.1
-        const sectionHeader = page.locator('#users-section .section-header h2');
+        const sectionHeader = page.locator('#users-section .section-header .section-title');
         await expect(sectionHeader).toBeAttached();
-        await expect(sectionHeader).toContainText('Usuarios');
+        await expect(sectionHeader).toContainText('Gestión de Usuarios');
     });
 
     test('new user button should exist', async ({ page }) => {
@@ -40,14 +40,15 @@ test.describe('Users Section - DOM Structure', () => {
 
     test('users list container should exist', async ({ page }) => {
         // UAT: 01_admin_tic.md Test 2.1
-        const usersList = page.locator('#users-list');
-        await expect(usersList).toBeAttached();
+        const usersTableBody = page.locator('#users-table-body');
+        await expect(usersTableBody).toBeAttached();
     });
 
     test('admin users button should exist in header', async ({ page }) => {
         // UAT: 01_admin_tic.md Test 1.5 & 2.1
-        const adminUsersBtn = page.locator('#admin-users-btn');
-        await expect(adminUsersBtn).toBeAttached();
+        const usersNavItem = page.locator('button.nav-item[data-screen="users-screen"]');
+        await expect(usersNavItem).toBeAttached();
+        await expect(usersNavItem).toHaveClass(/admin-only/);
     });
 
 });

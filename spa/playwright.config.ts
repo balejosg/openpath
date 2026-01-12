@@ -64,7 +64,7 @@ export default defineConfig({
 
     // Run local server before tests
     webServer: {
-        command: 'cd ../api && PORT=3005 NODE_ENV=test npm start',
+        command: 'cd ../api && PORT=3005 NODE_ENV=test SKIP_DB_MIGRATIONS=true ADMIN_EMAIL=maria.admin@test.com ADMIN_PASSWORD=AdminPassword123! npm start',
         url: 'http://localhost:3005/health',
         reuseExistingServer: true,
         timeout: 120 * 1000,

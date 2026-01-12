@@ -15,7 +15,7 @@ test.describe('Schedule Section - DOM Structure', () => {
     });
 
     test('schedule section should have header with title', async ({ page }) => {
-        const sectionHeader = page.locator('#schedule-section .section-header h2');
+        const sectionHeader = page.locator('#schedule-section .section-header h2').first();
         await expect(sectionHeader).toBeAttached();
         await expect(sectionHeader).toContainText('Horario');
     });
@@ -25,14 +25,14 @@ test.describe('Schedule Section - DOM Structure', () => {
         await expect(classroomSelect).toBeAttached();
     });
 
-    test('schedule refresh button should exist', async ({ page }) => {
-        const refreshBtn = page.locator('#schedule-refresh-btn');
-        await expect(refreshBtn).toBeAttached();
+    test('schedule add slot button should exist', async ({ page }) => {
+        const addBtn = page.locator('#add-schedule-slot-btn');
+        await expect(addBtn).toBeAttached();
     });
 
-    test('schedule grid container should exist', async ({ page }) => {
-        const gridContainer = page.locator('#schedule-grid-container');
-        await expect(gridContainer).toBeAttached();
+    test('schedule actions container should exist', async ({ page }) => {
+        const actionsContainer = page.locator('#schedule-section .schedule-actions');
+        await expect(actionsContainer).toBeAttached();
     });
 
 });
@@ -70,15 +70,11 @@ test.describe('Schedule - Empty State', () => {
         await page.waitForLoadState('domcontentloaded');
     });
 
-    test('schedule grid should have empty message', async ({ page }) => {
-        const emptyMessage = page.locator('#schedule-grid-container .empty-message');
-        await expect(emptyMessage).toBeAttached();
-    });
-
-    test('empty message should prompt classroom selection', async ({ page }) => {
-        const emptyMessage = page.locator('#schedule-grid-container .empty-message');
-        const text = await emptyMessage.textContent();
-        expect(text?.toLowerCase()).toContain('selecciona');
+    test('schedule section should include a classroom selector prompt option', async ({ page }) => {
+        const emptyOption = page.locator('#schedule-classroom-select option[value=""]');
+        await expect(emptyOption).toBeAttached();
+        const text = await emptyOption.textContent();
+        expect(text?.toLowerCase()).toContain('seleccionar');
     });
 
 });
@@ -122,13 +118,13 @@ test.describe('Responsive - Schedule Section', () => {
         await expect(classroomSelect).toBeAttached();
     });
 
-    test('schedule grid container should be in DOM on mobile', async ({ page }) => {
+    test('schedule actions should be in DOM on mobile', async ({ page }) => {
         await page.setViewportSize({ width: 375, height: 667 });
         await page.goto('/');
         await page.waitForLoadState('domcontentloaded');
 
-        const gridContainer = page.locator('#schedule-grid-container');
-        await expect(gridContainer).toBeAttached();
+        const actionsContainer = page.locator('#schedule-section .schedule-actions');
+        await expect(actionsContainer).toBeAttached();
     });
 
 });

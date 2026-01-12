@@ -62,9 +62,9 @@ test.describe('Requests - Stats Display', () => {
     });
 
     test('stats section should contain requests card', async ({ page }) => {
-        const statsSection = page.locator('.stats-section');
-        await expect(statsSection).toBeAttached();
-        const requestsCard = statsSection.locator('#stat-requests-card');
+        const statsGrid = page.locator('.stats-grid');
+        await expect(statsGrid).toBeAttached();
+        const requestsCard = statsGrid.locator('#stat-requests-card');
         await expect(requestsCard).toBeAttached();
     });
 
@@ -218,8 +218,8 @@ test.describe('Responsive - Requests Section', () => {
         await page.goto('/');
         await page.waitForLoadState('domcontentloaded');
 
-        const statsSection = page.locator('.stats-section');
-        await expect(statsSection).toBeAttached();
+        const statsGrid = page.locator('.stats-grid');
+        await expect(statsGrid).toBeAttached();
         
         const pendingCard = page.locator('#stat-pending-requests');
         await expect(pendingCard).toBeAttached();

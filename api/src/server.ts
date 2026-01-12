@@ -106,7 +106,7 @@ app.use(helmet({
             defaultSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://unpkg.com', 'https://accounts.google.com'],
             fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-            scriptSrc: ["'self'", 'https://accounts.google.com/gsi/client'],
+            scriptSrc: ["'self'", 'https://accounts.google.com/gsi/client', 'https://unpkg.com'],
             frameSrc: ["'self'", 'https://accounts.google.com'],
             imgSrc: ["'self'", 'data:', 'https:'],
             connectSrc: connectSrcDirectives
@@ -598,8 +598,12 @@ if (isMainModule) {
     const serverStartTime = new Date();
 
     // Initialize database schema before accepting connections
-    const { initializeSchema } = await import('./db/index.js');
-    await initializeSchema();
+    if (process.env.SKIP_DB_MIGRATIONS !== 'true') {
+        const { initializeSchema } = await import('./db/index.js');
+        await initializeSchema();
+    } else {
+        logger.warn('Skipping database migrations (SKIP_DB_MIGRATIONS=true)');
+    }
 
     server = app.listen(PORT, HOST, () => {
         void (async (): Promise<void> => {
@@ -622,25 +626,31 @@ if (isMainModule) {
                 }
             });
 
-            if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD && !(await roleStorage.hasAnyAdmins())) {
-                logger.info('Creating default admin user from environment variables...');
-                try {
-                    const admin = await userStorage.createUser({
-                        email: process.env.ADMIN_EMAIL,
-                        name: 'System Admin',
-                        password: process.env.ADMIN_PASSWORD,
-                    });
+    if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+        const existingAdmin = await userStorage.getUserByEmail(process.env.ADMIN_EMAIL).catch(() => null);
 
-                    await roleStorage.assignRole({
-                        userId: admin.id,
-                        role: 'admin',
-                        groupIds: [],
-                    });
-                    logger.info(`Default admin user created: ${admin.email}`);
-                } catch (error) {
-                    logger.error('Failed to create default admin user', { error: getErrorMessage(error) });
-                }
+        if (!existingAdmin) {
+            logger.info('Creating default admin user from environment variables...');
+            try {
+                const admin = await userStorage.createUser({
+                    email: process.env.ADMIN_EMAIL,
+                    name: 'System Admin',
+                    password: process.env.ADMIN_PASSWORD,
+                });
+
+                await roleStorage.assignRole({
+                    userId: admin.id,
+                    role: 'admin',
+                    groupIds: [],
+                });
+
+                logger.info(`Default admin user created: ${admin.email}`);
+            } catch (error) {
+                logger.error('Failed to create default admin user', { error: getErrorMessage(error) });
             }
+        }
+    }
+
 
             logger.info('');
             logger.info('╔═══════════════════════════════════════════════════════╗');
