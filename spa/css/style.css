@@ -95,6 +95,7 @@ a:hover {
 
 .screen {
     min-height: 100vh;
+    width: 100%;
 }
 
 /* ============== App Layout (Sidebar + Main) ============== */
