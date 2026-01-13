@@ -2,6 +2,7 @@ import { trpc } from './trpc.js';
 import { auth } from './auth.js';
 import { logger } from './lib/logger.js';
 import { showToast } from './utils.js';
+import { isLocalStorageAvailable } from './lib/storage.js';
 import type { RoleInfo } from '@openpath/shared';
 
 declare global {
@@ -212,6 +213,14 @@ export const googleAuth = {
                 name: user.name,
                 roles: user.roles
             });
+
+            // If localStorage is blocked, reload won't work (in-memory storage is lost)
+            // Show error and don't reload
+            if (!isLocalStorageAvailable()) {
+                showToast('Tu navegador está bloqueando el almacenamiento. Desactiva la protección antirrastreo para iniciar sesión.', 'error');
+                auth.clearAuth(); // Clear in-memory tokens since they'll be lost anyway
+                return;
+            }
 
             window.location.reload();
         } catch (error) {
