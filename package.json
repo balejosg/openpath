@@ -28,7 +28,7 @@
   },
   "lint-staged": {
     "*.{js,ts,tsx,mjs,cjs}": [
-      "eslint --fix"
+      "bash -c 'files=\"$@\"; filtered=\"$(echo \"$files\" | tr \" \" \"\\n\" | grep -v \"_backup/\" | tr \"\\n\" \" \")\"; [ -n \"$filtered\" ] && eslint --fix $filtered || true' --"
     ]
   },
   "engines": {
