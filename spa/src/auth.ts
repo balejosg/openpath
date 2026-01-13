@@ -3,6 +3,8 @@ import { getErrorMessage, safeJsonParse, RoleInfo } from '@openpath/shared';
 import type { AuthAPI, AuthTokens, StoredUser, User, UserRole, APIResponse } from './types/index.js';
 import { trpc } from './trpc.js';
 import { logger } from './lib/logger.js';
+import { getStorage, isLocalStorageAvailable } from './lib/storage.js';
+import { showToast } from './utils.js';
 
 // Stored user schema for validation
 const StoredUserSchema = z.object({
@@ -25,7 +27,7 @@ export const auth: AuthAPI = {
     // API base URL (uses RequestsAPI config if available)
     getApiUrl(): string {
         if (typeof window === 'undefined') return '';
-        return localStorage.getItem('requests_api_url') ?? '';
+        return getStorage().getItem('requests_api_url') ?? '';
     },
 
     // ==========================================================================
@@ -34,7 +36,7 @@ export const auth: AuthAPI = {
 
     getAccessToken(): string | null {
         if (typeof window === 'undefined') return null;
-        return localStorage.getItem(this.ACCESS_TOKEN_KEY);
+        return getStorage().getItem(this.ACCESS_TOKEN_KEY);
     },
 
     getToken(): string | null {
@@ -43,14 +45,13 @@ export const auth: AuthAPI = {
 
     getRefreshToken(): string | null {
         if (typeof window === 'undefined') return null;
-        return localStorage.getItem(this.REFRESH_TOKEN_KEY);
+        return getStorage().getItem(this.REFRESH_TOKEN_KEY);
     },
 
     getAuthHeaders(): Record<string, string> {
         const token = this.getAccessToken();
         if (!token) {
-            // Fall back to legacy admin token
-            const adminToken = typeof window !== 'undefined' ? localStorage.getItem('requests_api_token') : null;
+            const adminToken = typeof window !== 'undefined' ? getStorage().getItem('requests_api_token') : null;
             return {
                 'Content-Type': 'application/json',
                 'Authorization': adminToken ? `Bearer ${adminToken}` : ''
@@ -64,22 +65,26 @@ export const auth: AuthAPI = {
 
     storeTokens(tokens: AuthTokens): void {
         if (typeof window === 'undefined') return;
+        if (!isLocalStorageAvailable()) {
+            showToast('Tu navegador está bloqueando el almacenamiento. Desactiva la protección antirrastreo para iniciar sesión.', 'error');
+        }
+        const storage = getStorage();
         if (tokens.accessToken) {
-            localStorage.setItem(this.ACCESS_TOKEN_KEY, tokens.accessToken);
+            storage.setItem(this.ACCESS_TOKEN_KEY, tokens.accessToken);
         }
         if (tokens.refreshToken) {
-            localStorage.setItem(this.REFRESH_TOKEN_KEY, tokens.refreshToken);
+            storage.setItem(this.REFRESH_TOKEN_KEY, tokens.refreshToken);
         }
     },
 
     storeUser(user: User): void {
         if (typeof window === 'undefined') return;
-        localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+        getStorage().setItem(this.USER_KEY, JSON.stringify(user));
     },
 
     getUser(): StoredUser | null {
         if (typeof window === 'undefined') return null;
-        const stored = localStorage.getItem(this.USER_KEY);
+        const stored = getStorage().getItem(this.USER_KEY);
         if (!stored) return null;
         const result = safeJsonParse(stored, StoredUserSchema);
         if (result.success) {
@@ -92,21 +97,21 @@ export const auth: AuthAPI = {
 
     clearAuth(): void {
         if (typeof window === 'undefined') return;
-        localStorage.removeItem(this.ACCESS_TOKEN_KEY);
-        localStorage.removeItem(this.REFRESH_TOKEN_KEY);
-        localStorage.removeItem(this.USER_KEY);
+        const storage = getStorage();
+        storage.removeItem(this.ACCESS_TOKEN_KEY);
+        storage.removeItem(this.REFRESH_TOKEN_KEY);
+        storage.removeItem(this.USER_KEY);
     },
 
     isAuthenticated(): boolean {
         if (typeof window === 'undefined') return false;
-        return !!(this.getAccessToken() ?? localStorage.getItem('requests_api_token'));
+        return !!(this.getAccessToken() ?? getStorage().getItem('requests_api_token'));
     },
 
     hasRole(role: UserRole): boolean {
         const user = this.getUser();
         if (!user?.roles) {
-            // Legacy admin token is always admin
-            if (typeof window !== 'undefined' && localStorage.getItem('requests_api_token')) {
+            if (typeof window !== 'undefined' && getStorage().getItem('requests_api_token')) {
                 return role === 'admin';
             }
             return false;
