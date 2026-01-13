@@ -186,12 +186,12 @@ npm run drizzle:studio --workspace=@openpath/api  # Open Drizzle Studio
 
 **SPA Dashboard** (`spa/`):
 ```bash
-npm run build --workspace=openpath-spa
-npm run dev --workspace=openpath-spa           # Watch mode
-npm run test --workspace=openpath-spa          # Unit tests
-npm run test:e2e --workspace=openpath-spa      # Playwright E2E
-npm run test:e2e:ui --workspace=openpath-spa   # E2E with UI
-npm run test:coverage --workspace=openpath-spa
+npm run build --workspace=@openpath/spa
+npm run dev --workspace=@openpath/spa           # Watch mode
+npm run test --workspace=@openpath/spa          # Unit tests
+npm run test:e2e --workspace=@openpath/spa      # Playwright E2E
+npm run test:e2e:ui --workspace=@openpath/spa   # E2E with UI
+npm run test:coverage --workspace=@openpath/spa
 ```
 
 **Dashboard** (`dashboard/`):
@@ -469,9 +469,9 @@ npm run test:coverage --workspace=@openpath/api  # Coverage report (65% threshol
 
 Dashboard/UI tests:
 ```bash
-npm run test --workspace=openpath-spa          # Unit tests
-npm run test:e2e --workspace=openpath-spa      # Playwright E2E
-npm run test:e2e:ui --workspace=openpath-spa   # Interactive UI
+npm run test --workspace=@openpath/spa          # Unit tests
+npm run test:e2e --workspace=@openpath/spa      # Playwright E2E
+npm run test:e2e:ui --workspace=@openpath/spa   # Interactive UI
 ```
 
 ### E2E System Tests

@@ -46,7 +46,7 @@ From repo root:
 
 Per workspace examples:
 - API: `npm run build --workspace=@openpath/api`
-- SPA: `npm run build --workspace=openpath-spa`
+- SPA: `npm run build --workspace=@openpath/spa`
 - Shared: `npm run build --workspace=@openpath/shared`
 
 ## Lint / Typecheck
@@ -97,7 +97,7 @@ Prefer the existing scripts where possible (ports are pre-chosen):
 
 #### SPA (`spa/`)
 Unit tests:
-- All: `npm test --workspace=openpath-spa`
+- All: `npm test --workspace=@openpath/spa`
 - Single file:
   - `cd spa && npx tsx --test tests/config.test.ts`
 
