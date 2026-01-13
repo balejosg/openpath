@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { showScreen } from './ui.js';
+import { showScreen, navigateToScreen } from './ui.js';
 import { showToast, escapeHtml } from '../utils.js';
 import { auth } from '../auth.js';
 import { initRequestsSection } from './requests.js';
@@ -282,6 +282,7 @@ export async function deleteGroup(): Promise<void> {
         await trpc.groups.delete.mutate({ id: state.currentGroupSha });
         showToast('Grupo eliminado');
         showScreen('dashboard-screen');
+        navigateToScreen('overview-screen');
         void loadDashboard();
     } catch (err) {
         if (err instanceof Error) {

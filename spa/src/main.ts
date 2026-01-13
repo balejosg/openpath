@@ -241,6 +241,7 @@ function initMainListeners() {
     // Back button
     document.getElementById('back-btn')?.addEventListener('click', () => {
         showScreen('dashboard-screen');
+        navigateToScreen('overview-screen');
         void loadDashboard();
     });
 
