@@ -105,7 +105,7 @@ jobs:
       # SPA Tests
       - name: Run SPA tests
         if: inputs.test-type == 'spa'
-        run: npm run test:coverage --workspace=openpath-spa
+        run: npm run test:coverage --workspace=@openpath/spa
 
       # Shared Package Tests
       - name: Run Shared tests
