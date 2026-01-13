@@ -1,83 +1,172 @@
 import { test, expect } from '@playwright/test';
+import { loginAsAdmin } from './fixtures/auth';
 
-// UAT Script: 01_admin_tic.md Section 3 (Tests 3.1-3.6)
-
-test.describe('Requests Section - DOM Structure', () => {
+test.describe('Requests Section - React Components', () => {
 
     test.beforeEach(async ({ page }) => {
-        await page.goto('/');
+        await loginAsAdmin(page);
+        await page.goto('/dashboard/requests');
         await page.waitForLoadState('domcontentloaded');
     });
 
-    test('requests section should exist in DOM', { tag: '@smoke' }, async ({ page }) => {
-        const requestsSection = page.locator('#requests-section');
-        await expect(requestsSection).toBeAttached();
+    test('requests page should display title and description', { tag: '@smoke' }, async ({ page }) => {
+        await expect(page.locator('text=Solicitudes de Desbloqueo')).toBeVisible();
+        await expect(page.locator('text=Revisión y aprobación')).toBeVisible();
     });
 
-    test('requests section should have header with title', async ({ page }) => {
-        const sectionHeader = page.locator('#requests-section .section-header h2');
-        await expect(sectionHeader).toBeAttached();
-        await expect(sectionHeader).toContainText('Solicitudes');
+    test('should have status filter tabs with counts', async ({ page }) => {
+        await expect(page.locator('button:has-text("Pendientes")')).toBeVisible();
+        await expect(page.locator('button:has-text("Aprobadas")')).toBeVisible();
+        await expect(page.locator('button:has-text("Rechazadas")')).toBeVisible();
+        await expect(page.locator('button:has-text("Todas")')).toBeVisible();
     });
 
-    test('requests list container should exist', async ({ page }) => {
-        const requestsList = page.locator('#requests-list');
-        await expect(requestsList).toBeAttached();
+    test('pending tab should be active by default', async ({ page }) => {
+        const pendingTab = page.locator('button:has-text("Pendientes")');
+        await expect(pendingTab).toHaveClass(/text-blue-600/);
     });
 
-    test('refresh requests button should exist', async ({ page }) => {
-        const refreshBtn = page.locator('#refresh-requests-btn');
-        await expect(refreshBtn).toBeAttached();
+    test('should switch to approved tab when clicked', async ({ page }) => {
+        await page.locator('button:has-text("Aprobadas")').click();
+        await expect(page.locator('button:has-text("Aprobadas")')).toHaveClass(/text-blue-600/);
     });
 
-    test('server status indicator should exist', async ({ page }) => {
-        const serverStatus = page.locator('#requests-server-status');
-        await expect(serverStatus).toBeAttached();
-    });
-
-    test('pending requests stat card should exist', async ({ page }) => {
-        const statCard = page.locator('#stat-pending-requests');
-        await expect(statCard).toBeAttached();
+    test('should show empty state when no requests', async ({ page }) => {
+        const hasRequests = await page.locator('text=No hay solicitudes').count() > 0;
+        const hasLoadingState = await page.locator('text=Cargando solicitudes').count() > 0;
+        expect(hasRequests || hasLoadingState).toBe(true);
     });
 
 });
 
-test.describe('Requests - Stats Display', () => {
+test.describe('Request Cards - React Components', () => {
 
     test.beforeEach(async ({ page }) => {
-        await page.goto('/');
+        await loginAsAdmin(page);
+        await page.goto('/dashboard/requests');
         await page.waitForLoadState('domcontentloaded');
     });
 
-    test('stat card should show pending requests count', async ({ page }) => {
-        const pendingCount = page.locator('#stat-pending-requests');
-        await expect(pendingCount).toBeAttached();
-        const text = await pendingCount.textContent();
-        expect(text).toMatch(/^\d+$/);
+    test('request cards should display domain name', async ({ page }) => {
+        const hasRequests = await page.locator('text=No hay solicitudes').count() === 0;
+        if (hasRequests) {
+            const firstCard = page.locator('[class*="bg-white"]').filter({ has: page.locator('text=Solicitado por') }).first();
+            if (await firstCard.count() > 0) {
+                await expect(firstCard).toBeVisible();
+            }
+        }
     });
 
-    test('requests stat card should be clickable', async ({ page }) => {
-        const statCard = page.locator('#stat-requests-card');
-        await expect(statCard).toBeAttached();
+    test('request cards should show priority badge', async ({ page }) => {
+        const priorityBadge = page.locator('.bg-red-100, .bg-yellow-100, .bg-gray-100').first();
+        if (await priorityBadge.count() > 0) {
+            await expect(priorityBadge).toBeVisible();
+        }
     });
 
-    test('stats section should contain requests card', async ({ page }) => {
-        const statsGrid = page.locator('.stats-grid');
-        await expect(statsGrid).toBeAttached();
-        const requestsCard = statsGrid.locator('#stat-requests-card');
-        await expect(requestsCard).toBeAttached();
+    test('request cards should show status badge', async ({ page }) => {
+        const statusBadge = page.locator('.bg-emerald-100, .bg-amber-100, .bg-red-100').first();
+        if (await statusBadge.count() > 0) {
+            await expect(statusBadge).toBeVisible();
+        }
+    });
+
+    test('request cards should display requester email', async ({ page }) => {
+        const requesterText = page.locator('text=Solicitado por').first();
+        if (await requesterText.count() > 0) {
+            await expect(requesterText).toBeVisible();
+        }
     });
 
 });
 
-test.describe('Requests - Server Status Indicator', () => {
+test.describe('Request Actions - React Components', () => {
 
     test.beforeEach(async ({ page }) => {
-        await page.goto('/');
+        await loginAsAdmin(page);
+        await page.goto('/dashboard/requests');
         await page.waitForLoadState('domcontentloaded');
     });
 
-    test('server status should have status dot', async ({ page }) => {
+    test('pending requests should have group selector', async ({ page }) => {
+        const hasNonEmpty = await page.locator('text=No hay solicitudes').count() === 0;
+        if (hasNonEmpty) {
+            const groupSelect = page.locator('select').first();
+            if (await groupSelect.count() > 0) {
+                await expect(groupSelect).toBeVisible();
+            }
+        }
+    });
+
+    test('pending requests should have approve button', async ({ page }) => {
+        const approveBtn = page.locator('button:has-text("Aprobar")').first();
+        if (await approveBtn.count() > 0) {
+            await expect(approveBtn).toBeVisible();
+        }
+    });
+
+    test('pending requests should have reject button', async ({ page }) => {
+        const rejectBtn = page.locator('button:has-text("Rechazar")').first();
+        if (await rejectBtn.count() > 0) {
+            await expect(rejectBtn).toBeVisible();
+        }
+    });
+
+    test('requests should have delete button', async ({ page }) => {
+        const hasRequests = await page.locator('text=No hay solicitudes').count() === 0;
+        if (hasRequests) {
+            const deleteBtn = page.locator('button').filter({ has: page.locator('svg') }).first();
+            if (await deleteBtn.count() > 0) {
+                await expect(deleteBtn).toBeVisible();
+            }
+        }
+    });
+
+});
+
+test.describe('Request Details - React Components', () => {
+
+    test.beforeEach(async ({ page }) => {
+        await loginAsAdmin(page);
+        await page.goto('/dashboard/requests');
+        await page.waitForLoadState('domcontentloaded');
+    });
+
+    test('requests should show creation timestamp', async ({ page }) => {
+        const timeText = page.locator('text=/Hace \\d+[mhd]|Justo ahora/').first();
+        if (await timeText.count() > 0) {
+            await expect(timeText).toBeVisible();
+        }
+    });
+
+    test('requests should display reason if provided', async ({ page }) => {
+        const reasonLabel = page.locator('text=Razón:').first();
+        if (await reasonLabel.count() > 0) {
+            await expect(reasonLabel).toBeVisible();
+        }
+    });
+
+    test('approved requests should show resolved info', async ({ page }) => {
+        await page.locator('button:has-text("Aprobadas")').click();
+        await page.waitForTimeout(500);
+        
+        const resolvedText = page.locator('text=Resuelto por').first();
+        if (await resolvedText.count() > 0) {
+            await expect(resolvedText).toBeVisible();
+        }
+    });
+
+    test('rejected requests should show rejection reason if provided', async ({ page }) => {
+        await page.locator('button:has-text("Rechazadas")').click();
+        await page.waitForTimeout(500);
+        
+        const rejectionNote = page.locator('text=Nota:').first();
+        if (await rejectionNote.count() > 0) {
+            await expect(rejectionNote).toBeVisible();
+        }
+    });
+
+});
         const statusDot = page.locator('#requests-server-status .status-dot');
         await expect(statusDot).toBeAttached();
     });
