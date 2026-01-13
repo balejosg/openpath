@@ -121,6 +121,7 @@ async function globalSetup(config: FullConfig) {
         
         await page.goto(baseURL);
         await page.waitForLoadState('load');
+        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
 
         await page.evaluate((apiUrl) => {
             localStorage.setItem('requests_api_url', apiUrl);
@@ -130,19 +131,21 @@ async function globalSetup(config: FullConfig) {
         console.log('🔄 Reloading page to apply API URL...');
         await page.reload();
         await page.waitForLoadState('load');
+        await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
 
-        const setupHeader = page.locator('#setup-header');
-        if (await setupHeader.isVisible({ timeout: 5000 }).catch(() => false)) {
+        const setupHeading = page.locator('text=Configuración inicial');
+        if (await setupHeading.isVisible({ timeout: 5000 }).catch(() => false)) {
             console.log('🔧 Running first-time setup...');
-            await page.fill('#setup-email', ADMIN_CREDENTIALS.email);
-            await page.fill('#setup-name', ADMIN_CREDENTIALS.name);
-            await page.fill('#setup-password', ADMIN_CREDENTIALS.password);
-            await page.fill('#setup-password-confirm', ADMIN_CREDENTIALS.password);
+            await page.fill('input[type="email"]', ADMIN_CREDENTIALS.email);
+            await page.fill('input[placeholder="Nombre completo"]', ADMIN_CREDENTIALS.name);
+            const passwordInputs = page.locator('input[type="password"]');
+            await passwordInputs.nth(0).fill(ADMIN_CREDENTIALS.password);
+            await passwordInputs.nth(1).fill(ADMIN_CREDENTIALS.password);
             console.log('📝 Filled setup form, clicking submit...');
-            await page.click('#setup-submit-btn');
+            await page.click('button[type="submit"]');
             
-            console.log('⏳ Waiting for setup complete container to appear...');
-            await page.waitForSelector('#setup-complete-container', { timeout: 10000 });
+            console.log('⏳ Waiting for setup complete (token display)...');
+            await page.waitForSelector('text=Token de registro', { timeout: 10000 });
             console.log('✅ Setup complete');
         }
 
@@ -151,18 +154,18 @@ async function globalSetup(config: FullConfig) {
         await page.waitForLoadState('load');
 
         console.log('⏳ Waiting for login screen to become visible...');
-        await page.waitForSelector('#login-screen:not(.hidden)', { 
+        await page.waitForSelector('text=Iniciar sesión', { 
             timeout: 10000,
             state: 'visible'
         });
         console.log('✅ Login screen is visible');
         
-        await page.fill('#login-email', ADMIN_CREDENTIALS.email);
-        await page.fill('#login-password', ADMIN_CREDENTIALS.password);
-        await page.click('#email-login-btn');
+        await page.fill('input[type="email"]', ADMIN_CREDENTIALS.email);
+        await page.fill('input[type="password"]', ADMIN_CREDENTIALS.password);
+        await page.click('button[type="submit"]:has-text("Entrar")');
         
         console.log('⏳ Waiting for dashboard to appear...');
-        const dashboardVisible = await page.waitForSelector('#dashboard-screen:not(.hidden)', { 
+        const dashboardVisible = await page.waitForSelector('text=Panel de control', { 
             timeout: 30000,
             state: 'visible'
         }).catch((e: unknown) => {
@@ -172,17 +175,13 @@ async function globalSetup(config: FullConfig) {
         });
         
         if (!dashboardVisible) {
-            const currentScreen = await page.evaluate(() => {
-                const screens = Array.from(document.querySelectorAll('.screen'));
-                const visible = screens.find(s => !s.classList.contains('hidden'));
-                return visible?.id ?? 'none';
-            });
-            console.error(`❌ Current visible screen: ${currentScreen}`);
-            throw new Error(`Dashboard screen not visible. Current screen: ${currentScreen}`);
+            const currentUrl = page.url();
+            console.error(`❌ Current URL: ${currentUrl}`);
+            throw new Error(`Dashboard screen not visible. Current URL: ${currentUrl}`);
         }
         
-        console.log('✅ Dashboard visible, waiting for logout button...');
-        await page.waitForSelector('#logout-btn', { timeout: 10000, state: 'visible' });
+        console.log('✅ Dashboard visible, waiting for sidebar...');
+        await page.waitForSelector('text=Grupos', { timeout: 10000, state: 'visible' });
         console.log('✅ Admin logged in successfully');
 
         const accessToken = await page.evaluate(() => localStorage.getItem('openpath_access_token'));
