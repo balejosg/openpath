@@ -1,5 +1,5 @@
 import { state, setCurrentUser, setCanEdit } from './state.js';
-import { showScreen } from './ui.js';
+import { showScreen, navigateToScreen } from './ui.js';
 import { loadDashboard } from './groups.js';
 import { loadUsers } from './users.js';
 import { auth } from '../auth.js';
@@ -21,6 +21,7 @@ function showDashboardWithUser(user: ReturnType<typeof auth.getUser>): void {
 
     updateEditUI();
     showScreen('dashboard-screen');
+    navigateToScreen('overview-screen');
 }
 
 async function refreshUserDataInBackground(): Promise<void> {
@@ -80,6 +81,7 @@ export async function init(): Promise<void> {
 
     console.warn('[init] No cached user, showing dashboard and fetching user data');
     showScreen('dashboard-screen');
+    navigateToScreen('overview-screen');
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     
     try {
