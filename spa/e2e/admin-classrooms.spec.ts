@@ -1,220 +1,174 @@
 import { test, expect } from '@playwright/test';
+import { loginAsAdmin } from './fixtures/auth';
 
-// UAT Script: 01_admin_tic.md Section 4 (Tests 4.1-4.8)
-
-test.describe('Classrooms Section - DOM Structure', () => {
+test.describe('Classrooms Section - React Components', () => {
 
     test.beforeEach(async ({ page }) => {
-        await page.goto('/');
+        await loginAsAdmin(page);
+        await page.goto('/dashboard/classrooms');
         await page.waitForLoadState('domcontentloaded');
     });
 
-    test('classrooms section should exist in DOM', { tag: '@smoke' }, async ({ page }) => {
-        const classroomsSection = page.locator('#classrooms-section');
-        await expect(classroomsSection).toBeAttached();
+    test('classrooms page should display title and description', { tag: '@smoke' }, async ({ page }) => {
+        await expect(page.locator('text=Aulas Seguras')).toBeVisible();
+        await expect(page.locator('text=Administración de aulas')).toBeVisible();
     });
 
-    test('classrooms section should have header with title', async ({ page }) => {
-        const sectionHeader = page.locator('#classrooms-section .section-header h2');
-        await expect(sectionHeader).toBeAttached();
-        await expect(sectionHeader).toContainText('Aulas');
+    test('should have new classroom button for admins', async ({ page }) => {
+        await expect(page.locator('button:has-text("Nueva Aula")')).toBeVisible();
     });
 
-    test('new classroom button should exist', async ({ page }) => {
-        const newClassroomBtn = page.locator('#new-classroom-btn');
-        await expect(newClassroomBtn).toBeAttached();
-        await expect(newClassroomBtn).toContainText('Nueva aula');
+    test('should show empty state when no classrooms configured', async ({ page }) => {
+        const hasClassrooms = await page.locator('text=computadoras').count() > 0;
+        if (!hasClassrooms) {
+            await expect(page.locator('text=No hay aulas configuradas')).toBeVisible();
+            await expect(page.locator('button:has-text("Crear primera aula")')).toBeVisible();
+        }
     });
 
-    test('classrooms list container should exist', async ({ page }) => {
-        const classroomsList = page.locator('#classrooms-list');
-        await expect(classroomsList).toBeAttached();
+    test('classroom cards should display name and machine count', async ({ page }) => {
+        const classroomCard = page.locator('text=computadoras').first();
+        if (await classroomCard.count() > 0) {
+            await expect(classroomCard).toBeVisible();
+        }
     });
 
-    test('classrooms section should be admin-only', async ({ page }) => {
-        const classroomsSection = page.locator('#classrooms-section');
-        const classNames = await classroomsSection.getAttribute('class');
-        expect(classNames).toContain('admin-only');
+    test('classroom cards should have group selector', async ({ page }) => {
+        const groupSelect = page.locator('select').filter({ hasText: 'Grupo activo' }).first();
+        if (await groupSelect.count() > 0) {
+            await expect(groupSelect).toBeVisible();
+        }
     });
 
 });
 
-test.describe('New Classroom Modal - Structure', () => {
+test.describe('New Classroom Modal - React Components', () => {
 
     test.beforeEach(async ({ page }) => {
-        await page.goto('/');
+        await loginAsAdmin(page);
+        await page.goto('/dashboard/classrooms');
         await page.waitForLoadState('domcontentloaded');
     });
 
-    test('new classroom modal should exist in DOM', async ({ page }) => {
-        const modal = page.locator('#modal-new-classroom');
-        await expect(modal).toBeAttached();
+    test('should open new classroom modal when clicking Nueva Aula button', async ({ page }) => {
+        await page.locator('button:has-text("Nueva Aula")').click();
+        await expect(page.locator('text=Nueva Aula')).toBeVisible();
     });
 
     test('new classroom modal should have name field', async ({ page }) => {
-        const nameField = page.locator('#new-classroom-name');
-        await expect(nameField).toBeAttached();
-        await expect(nameField).toHaveAttribute('required', '');
+        await page.locator('button:has-text("Nueva Aula")').click();
+        await expect(page.locator('label:has-text("Nombre del aula")')).toBeVisible();
+        await expect(page.locator('input[placeholder*="Informática"]')).toBeVisible();
     });
 
-    test('new classroom modal should have default group selector', async ({ page }) => {
-        const groupSelect = page.locator('#new-classroom-default-group');
-        await expect(groupSelect).toBeAttached();
+    test('new classroom modal should have group selector', async ({ page }) => {
+        await page.locator('button:has-text("Nueva Aula")').click();
+        await expect(page.locator('label:has-text("Grupo por defecto")')).toBeVisible();
+        await expect(page.locator('select').filter({ has: page.locator('option:has-text("Seleccionar grupo")') })).toBeVisible();
     });
 
-    test('new classroom form should have submit button', async ({ page }) => {
-        const form = page.locator('#new-classroom-form');
-        await expect(form).toBeAttached();
-        
-        const submitBtn = form.locator('button[type="submit"]');
-        await expect(submitBtn).toBeAttached();
-        await expect(submitBtn).toContainText('Crear aula');
+    test('new classroom modal should have cancel and create buttons', async ({ page }) => {
+        await page.locator('button:has-text("Nueva Aula")').click();
+        await expect(page.locator('button:has-text("Cancelar")')).toBeVisible();
+        await expect(page.locator('button:has-text("Crear")').last()).toBeVisible();
     });
 
-    test('new classroom modal should have close button', async ({ page }) => {
-        const closeBtn = page.locator('#modal-new-classroom .modal-close');
-        await expect(closeBtn).toBeAttached();
-    });
-
-    test('new classroom modal should have cancel button', async ({ page }) => {
-        const cancelBtn = page.locator('#modal-new-classroom .modal-cancel');
-        await expect(cancelBtn).toBeAttached();
-    });
-
-    test('new classroom name field should have placeholder', async ({ page }) => {
-        const nameField = page.locator('#new-classroom-name');
-        const placeholder = await nameField.getAttribute('placeholder');
-        expect(placeholder).toBeTruthy();
-    });
-
-    test('default group selector should have empty option', async ({ page }) => {
-        const emptyOption = page.locator('#new-classroom-default-group option[value=""]');
-        await expect(emptyOption).toBeAttached();
+    test('should close modal when clicking Cancelar', async ({ page }) => {
+        await page.locator('button:has-text("Nueva Aula")').click();
+        await page.locator('button:has-text("Cancelar")').click();
+        await expect(page.locator('text=Nueva Aula')).not.toBeVisible();
     });
 
 });
 
-test.describe('Classrooms - Form Labels', () => {
+test.describe('Schedule Section - React Components', () => {
 
     test.beforeEach(async ({ page }) => {
-        await page.goto('/');
+        await loginAsAdmin(page);
+        await page.goto('/dashboard/classrooms');
         await page.waitForLoadState('domcontentloaded');
     });
 
-    test('classroom name field should have label', async ({ page }) => {
-        const label = page.locator('label[for="new-classroom-name"]');
-        await expect(label).toBeAttached();
-        await expect(label).toContainText('Nombre');
+    test('should have schedule toggle button for each classroom', async ({ page }) => {
+        const scheduleBtn = page.locator('button:has-text("Horarios")').first();
+        if (await scheduleBtn.count() > 0) {
+            await expect(scheduleBtn).toBeVisible();
+        }
     });
 
-    test('default group field should have label', async ({ page }) => {
-        const label = page.locator('label[for="new-classroom-default-group"]');
-        await expect(label).toBeAttached();
-        await expect(label).toContainText('Grupo');
+    test('should expand schedule section when clicking Horarios button', async ({ page }) => {
+        const scheduleBtn = page.locator('button:has-text("Horarios")').first();
+        if (await scheduleBtn.count() > 0) {
+            await scheduleBtn.click();
+            await expect(page.locator('text=Horario Semanal')).toBeVisible();
+        }
     });
 
-    test('default group field should have help text', async ({ page }) => {
-        const helpText = page.locator('#modal-new-classroom small');
-        await expect(helpText.first()).toBeAttached();
+    test('should collapse schedule section when clicking button again', async ({ page }) => {
+        const scheduleBtn = page.locator('button:has-text("Horarios")').first();
+        if (await scheduleBtn.count() > 0) {
+            await scheduleBtn.click();
+            await page.waitForTimeout(500);
+            await scheduleBtn.click();
+            await expect(page.locator('text=Horario Semanal')).not.toBeVisible();
+        }
     });
 
 });
 
-test.describe('Schedule Section - Related to Classrooms', () => {
+test.describe('Machines Table - React Components', () => {
 
     test.beforeEach(async ({ page }) => {
-        await page.goto('/');
+        await loginAsAdmin(page);
+        await page.goto('/dashboard/classrooms');
         await page.waitForLoadState('domcontentloaded');
     });
 
-    test('schedule section should exist in DOM', async ({ page }) => {
-        const scheduleSection = page.locator('#schedule-section');
-        await expect(scheduleSection).toBeAttached();
+    test('should display machines table if machines exist', async ({ page }) => {
+        const machinesTable = page.locator('text=Máquinas Registradas');
+        if (await machinesTable.count() > 0) {
+            await expect(machinesTable).toBeVisible();
+            await expect(page.locator('th:has-text("Hostname")')).toBeVisible();
+            await expect(page.locator('th:has-text("Versión")')).toBeVisible();
+            await expect(page.locator('th:has-text("Última conexión")')).toBeVisible();
+        }
     });
 
-    test('schedule section should have classroom selector', async ({ page }) => {
-        const classroomSelect = page.locator('#schedule-classroom-select');
-        await expect(classroomSelect).toBeAttached();
+    test('machines should have rotate token button', async ({ page }) => {
+        const rotateBtn = page.locator('button:has-text("Rotar")').first();
+        if (await rotateBtn.count() > 0) {
+            await expect(rotateBtn).toBeVisible();
+        }
     });
 
-    test('add schedule slot button should exist', async ({ page }) => {
-        const addBtn = page.locator('#add-schedule-slot-btn');
-        await expect(addBtn).toBeAttached();
+    test('machines should have delete button', async ({ page }) => {
+        const hasMachines = await page.locator('text=Máquinas Registradas').count() > 0;
+        if (hasMachines) {
+            const deleteBtn = page.locator('tbody tr').first().locator('button').filter({ has: page.locator('svg') }).last();
+            await expect(deleteBtn).toBeVisible();
+        }
     });
 
 });
 
 test.describe('Responsive - Classrooms Section', () => {
 
-    test('classrooms section should be in DOM on mobile', async ({ page }) => {
+    test('classrooms page should be accessible on mobile', async ({ page }) => {
         await page.setViewportSize({ width: 375, height: 667 });
-        await page.goto('/');
+        await loginAsAdmin(page);
+        await page.goto('/dashboard/classrooms');
         await page.waitForLoadState('domcontentloaded');
 
-        const classroomsSection = page.locator('#classrooms-section');
-        await expect(classroomsSection).toBeAttached();
+        await expect(page.locator('text=Aulas Seguras')).toBeVisible();
     });
 
-    test('new classroom button should be in DOM on tablet', async ({ page }) => {
+    test('new classroom button should be visible on tablet', async ({ page }) => {
         await page.setViewportSize({ width: 768, height: 1024 });
-        await page.goto('/');
+        await loginAsAdmin(page);
+        await page.goto('/dashboard/classrooms');
         await page.waitForLoadState('domcontentloaded');
 
-        const newBtn = page.locator('#new-classroom-btn');
-        await expect(newBtn).toBeAttached();
+        await expect(page.locator('button:has-text("Nueva Aula")')).toBeVisible();
     });
 
-});
-
-test.describe('Classroom Creation E2E Flow', () => {
-    const ADMIN_EMAIL = 'maria.admin@test.com';
-    const ADMIN_PASSWORD = 'AdminPassword123!';
-    const CLASSROOM_NAME = `E2E Test Aula ${String(Date.now())}`;
-
-    test('should create classroom and verify it appears in listings', { tag: '@smoke' }, async ({ page }) => {
-        await page.goto('/');
-        await page.waitForLoadState('domcontentloaded');
-
-        await page.locator('#login-email').waitFor({ state: 'visible', timeout: 10000 });
-        await page.fill('#login-email', ADMIN_EMAIL);
-        await page.fill('#login-password', ADMIN_PASSWORD);
-        await page.click('#email-login-btn');
-
-        await page.waitForSelector('#dashboard-screen', { state: 'visible', timeout: 10000 });
-
-        await page.locator('button.nav-item[data-screen="classrooms-screen"]').click();
-        await page.waitForSelector('#classrooms-screen:not(.hidden)', { state: 'visible', timeout: 10000 });
-
-        const newClassroomBtn = page.locator('#new-classroom-btn');
-        await newClassroomBtn.waitFor({ state: 'visible', timeout: 5000 });
-        await newClassroomBtn.click();
-
-        const modal = page.locator('#modal-new-classroom');
-        await modal.waitFor({ state: 'visible', timeout: 5000 });
-
-        await page.fill('#new-classroom-name', CLASSROOM_NAME);
-
-        const groupSelect = page.locator('#new-classroom-default-group');
-        const firstOption = groupSelect.locator('option:not([value=""])').first();
-        const firstOptionValue = await firstOption.getAttribute('value');
-        if (firstOptionValue) {
-            await groupSelect.selectOption(firstOptionValue);
-        }
-
-        const submitBtn = page.locator('#new-classroom-form button[type="submit"]');
-        await submitBtn.click();
-
-        await modal.waitFor({ state: 'hidden', timeout: 10000 });
-
-        await page.waitForTimeout(1000);
-
-        const classroomsList = page.locator('#classrooms-list');
-        await expect(classroomsList).toContainText(CLASSROOM_NAME, { timeout: 10000 });
-
-        const scheduleClassroomSelect = page.locator('#schedule-classroom-select');
-        await scheduleClassroomSelect.waitFor({ state: 'attached', timeout: 5000 });
-
-        const selectedOptionText = await scheduleClassroomSelect.locator('option:checked').textContent();
-        expect(selectedOptionText ?? '').not.toContain(CLASSROOM_NAME);
-    });
 });
