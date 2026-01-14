@@ -506,8 +506,8 @@ app.use('/trpc', createExpressMiddleware({
 // Detect if running from dist/ (compiled) or src/ (tsx dev)
 const isCompiledCode = __dirname.includes('/dist');
 const spaPath = isCompiledCode
-    ? path.join(__dirname, '../../../spa')
-    : path.join(__dirname, '../../spa');
+    ? path.join(__dirname, '../../../spa/dist')
+    : path.join(__dirname, '../../spa/dist');
 
 app.use(express.static(spaPath));
 
