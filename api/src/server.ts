@@ -511,6 +511,14 @@ const spaPath = isCompiledCode
 
 app.use(express.static(spaPath));
 
+// Catch-all route: serve index.html for client-side routing
+// This must come after API routes and static files
+app.get('*', (_req, res) => {
+    res.sendFile(path.join(spaPath, 'index.html'));
+});
+
+// =============================================================================
+// Error Handling
 // =============================================================================
 // Error Handling
 // =============================================================================
