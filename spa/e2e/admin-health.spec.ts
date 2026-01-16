@@ -10,8 +10,8 @@ test.describe('Stats Section - System Health Overview', () => {
     });
 
     test('stats section should exist in DOM', { tag: '@smoke' }, async ({ page }) => {
-        const statsGrid = page.locator('.stats-grid');
-        await expect(statsGrid).toBeAttached();
+        const statsSection = page.locator('.stats-section');
+        await expect(statsSection).toBeAttached();
     });
 
     test('groups stat card should exist', async ({ page }) => {
@@ -77,17 +77,17 @@ test.describe('Stat Cards - Structure', () => {
     });
 
     test('stat cards should have icons', async ({ page }) => {
-        const statIcons = page.locator('.stat-card .stat-card__icon');
+        const statIcons = page.locator('.stat-card .stat-icon');
         await expect(statIcons.first()).toBeAttached();
     });
 
     test('stat cards should have labels', async ({ page }) => {
-        const statLabels = page.locator('.stat-card .stat-card__label');
+        const statLabels = page.locator('.stat-card .stat-label');
         await expect(statLabels.first()).toBeAttached();
     });
 
     test('stat cards should have number elements', async ({ page }) => {
-        const statNumbers = page.locator('.stat-card .stat-card__value');
+        const statNumbers = page.locator('.stat-card .stat-number');
         await expect(statNumbers.first()).toBeAttached();
     });
 
@@ -100,10 +100,43 @@ test.describe('System Status Banner', () => {
         await page.waitForLoadState('domcontentloaded');
     });
 
-    test('system status should exist in header', async ({ page }) => {
-        const systemStatus = page.locator('.top-header .system-status');
-        await expect(systemStatus).toBeAttached();
-        await expect(systemStatus).toContainText(/Sistema/i);
+    test('system status banner should exist in DOM', async ({ page }) => {
+        const statusBanner = page.locator('#system-status-banner');
+        await expect(statusBanner).toBeAttached();
+    });
+
+    test('system status banner should have status content', async ({ page }) => {
+        const statusContent = page.locator('#system-status-banner .status-content');
+        await expect(statusContent).toBeAttached();
+    });
+
+    test('system status banner should have reactivate button', async ({ page }) => {
+        const reactivateBtn = page.locator('#reactivate-btn');
+        await expect(reactivateBtn).toBeAttached();
+    });
+
+});
+
+test.describe('System Toggle', () => {
+
+    test.beforeEach(async ({ page }) => {
+        await page.goto('/');
+        await page.waitForLoadState('domcontentloaded');
+    });
+
+    test('system toggle button should exist in header', async ({ page }) => {
+        const toggleBtn = page.locator('#system-toggle-btn');
+        await expect(toggleBtn).toBeAttached();
+    });
+
+    test('system toggle should have icon', async ({ page }) => {
+        const toggleIcon = page.locator('#system-toggle-btn .toggle-icon');
+        await expect(toggleIcon).toBeAttached();
+    });
+
+    test('system toggle should have text', async ({ page }) => {
+        const toggleText = page.locator('#system-toggle-btn .toggle-text');
+        await expect(toggleText).toBeAttached();
     });
 
 });
@@ -115,8 +148,8 @@ test.describe('Responsive - Stats Section', () => {
         await page.goto('/');
         await page.waitForLoadState('domcontentloaded');
 
-        const statsGrid = page.locator('.stats-grid');
-        await expect(statsGrid).toBeAttached();
+        const statsSection = page.locator('.stats-section');
+        await expect(statsSection).toBeAttached();
     });
 
     test('all stat cards should be in DOM on tablet', async ({ page }) => {
