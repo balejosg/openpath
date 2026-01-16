@@ -20,7 +20,7 @@
     "lint:fix": "eslint src/ --fix --max-warnings=0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.40.0",
+    "@playwright/test": "^1.57.0",
     "@openpath/shared": "file:../shared",
     "@types/node": "^22.19.3",
     "@types/uuid": "^10.0.0",
