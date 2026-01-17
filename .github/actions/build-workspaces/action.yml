@@ -39,7 +39,12 @@ runs:
     - name: Build SPA
       if: inputs.build-spa == 'true'
       shell: bash
-      run: npm run build --workspace=@openpath/spa
+      run: npm run build --workspace=openpath-spa
+
+    - name: Build React SPA
+      if: inputs.build-spa == 'true'
+      shell: bash
+      run: npm run build --workspace=@openpath/react-spa
 
     - name: Build Dashboard
       if: inputs.build-dashboard == 'true'
