@@ -58,7 +58,7 @@
     "@openpath/shared": "file:../shared",
     "@trpc/server": "^11.8.1",
     "bcrypt": "^6.0.0",
-    "compression": "^1.7.4",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.45.1",
