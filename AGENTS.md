@@ -47,7 +47,9 @@ From repo root:
 Per workspace examples:
 - API: `npm run build --workspace=@openpath/api`
 - SPA: `npm run build --workspace=@openpath/spa`
+- React SPA: `npm run build --workspace=@openpath/react-spa`
 - Shared: `npm run build --workspace=@openpath/shared`
+- Extension: `npm run build --workspace=@openpath/firefox-extension`
 
 ## Lint / Typecheck
 From repo root:
@@ -118,7 +120,7 @@ CI runs `@smoke` tests on every PR. Full suite runs on main/nightly/`e2e` label.
 - Runs in `e2e-comprehensive.yml` workflow
 
 #### Firefox Extension (`firefox-extension/`)
-- All: `npm test --workspace=openpath-firefox-extension`
+- All: `npm test --workspace=@openpath/firefox-extension`
 - Single file:
   - `cd firefox-extension && npx tsx --test tests/background.test.ts`
 

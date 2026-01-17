@@ -105,7 +105,7 @@ jobs:
       # SPA Tests
       - name: Run SPA tests
         if: inputs.test-type == 'spa'
-        run: npm run test:coverage --workspace=openpath-spa
+        run: npm run test:coverage --workspace=@openpath/spa
 
       # Shared Package Tests
       - name: Run Shared tests
@@ -115,12 +115,12 @@ jobs:
       # Auth Worker Tests
       - name: Run Auth Worker tests
         if: inputs.test-type == 'auth-worker'
-        run: npm run test:coverage --workspace=auth-worker
+        run: npm run test:coverage --workspace=@openpath/auth-worker
 
       # Extension Tests
       - name: Run Extension tests
         if: inputs.test-type == 'extension'
-        run: npm run test:coverage --workspace=openpath-firefox-extension
+        run: npm run test:coverage --workspace=@openpath/firefox-extension
 
       # Bash Tests (no coverage - kcov not available in Ubuntu apt repos)
       - name: Run Bash tests

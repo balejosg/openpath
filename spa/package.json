@@ -1,5 +1,5 @@
 {
-  "name": "openpath-spa",
+  "name": "@openpath/spa",
   "version": "1.0.0",
   "description": "OpenPath SPA Dashboard",
   "license": "AGPL-3.0-or-later",

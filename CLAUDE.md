@@ -23,7 +23,8 @@ OpenPath is a **multi-platform DNS-based URL whitelist enforcement system** (v4.
 - **`linux/`** - Bash scripts and shell libraries for Linux agents
 - **`windows/`** - PowerShell scripts for Windows agents
 - **`api/`** - Node.js/Express tRPC API server (home server deployment)
-- **`spa/`** - Vanilla TypeScript SPA dashboard for rule management
+- **`spa/`** - Vanilla TypeScript SPA dashboard (legacy/maintenance)
+- **`react-spa/`** - New React-based management SPA (v2)
 - **`dashboard/`** - Analytics/monitoring dashboard (legacy, maintained)
 - **`firefox-extension/`** - WebExtension for real-time block detection
 - **`shared/`** - TypeScript shared types and schemas used across workspaces
@@ -192,6 +193,13 @@ npm run test --workspace=@openpath/spa          # Unit tests
 npm run test:e2e --workspace=@openpath/spa      # Playwright E2E
 npm run test:e2e:ui --workspace=@openpath/spa   # E2E with UI
 npm run test:coverage --workspace=@openpath/spa
+```
+
+**React SPA** (`react-spa/`):
+```bash
+npm run build --workspace=@openpath/react-spa
+npm run dev --workspace=@openpath/react-spa     # Watch mode
+npm run typecheck --workspace=@openpath/react-spa
 ```
 
 **Dashboard** (`dashboard/`):

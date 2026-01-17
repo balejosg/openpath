@@ -1,5 +1,5 @@
 {
-  "name": "openpath-firefox-extension",
+  "name": "@openpath/firefox-extension",
   "version": "1.0.0",
   "description": "OpenPath Firefox Extension for blocked domain handling",
   "license": "AGPL-3.0-or-later",

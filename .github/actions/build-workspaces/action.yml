@@ -39,7 +39,7 @@ runs:
     - name: Build SPA
       if: inputs.build-spa == 'true'
       shell: bash
-      run: npm run build --workspace=openpath-spa
+      run: npm run build --workspace=@openpath/spa
 
     - name: Build React SPA
       if: inputs.build-spa == 'true'
@@ -54,4 +54,4 @@ runs:
     - name: Build Firefox Extension
       if: inputs.build-extension == 'true'
       shell: bash
-      run: npm run build --workspace=openpath-firefox-extension
+      run: npm run build --workspace=@openpath/firefox-extension
