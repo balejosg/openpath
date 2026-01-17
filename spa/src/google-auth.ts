@@ -27,6 +27,7 @@ interface GoogleInitConfig {
     cancel_on_tap_outside?: boolean;
     ux_mode?: 'popup' | 'redirect';
     itp_support?: boolean;
+    use_fedcm_for_prompt?: boolean;
 }
 
 interface GoogleButtonOptions {
@@ -129,6 +130,7 @@ export const googleAuth = {
             cancel_on_tap_outside: true,
             ux_mode: 'popup',
             itp_support: true,
+            use_fedcm_for_prompt: true,
         });
 
         this.initialized = true;
