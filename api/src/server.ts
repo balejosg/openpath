@@ -42,6 +42,7 @@ import type { Request, Response, ErrorRequestHandler } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import rateLimit from 'express-rate-limit';
 import 'dotenv/config';
@@ -505,6 +506,22 @@ app.use('/trpc', createExpressMiddleware({
 // Serve SPA static files
 // Detect if running from dist/ (compiled) or src/ (tsx dev)
 const isCompiledCode = __dirname.includes('/dist');
+
+// React SPA en /v2/* (NUEVO)
+const reactSpaPath = isCompiledCode
+    ? path.join(__dirname, '../../../react-spa/dist')
+    : path.join(__dirname, '../../react-spa/dist');
+
+// Solo servir si existe el directorio de build
+if (fs.existsSync(reactSpaPath)) {
+    app.use('/v2', express.static(reactSpaPath));
+    app.get('/v2/*', (_req, res) => {
+        res.sendFile(path.join(reactSpaPath, 'index.html'));
+    });
+    logger.info('React SPA enabled at /v2');
+}
+
+// SPA vanilla en /* (existente)
 const spaPath = isCompiledCode
     ? path.join(__dirname, '../../../spa/dist')
     : path.join(__dirname, '../../spa/dist');

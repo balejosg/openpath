@@ -49,6 +49,7 @@
   "workspaces": [
     "api",
     "spa",
+    "react-spa",
     "shared",
     "dashboard",
     "firefox-extension"
