@@ -71,7 +71,7 @@
     "redis": "^4.7.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "uuid": "^11.0.5",
+    "uuid": "^13.0.0",
     "web-push": "^3.6.7",
     "winston": "^3.11.0",
     "zod": "^3.25.76"
