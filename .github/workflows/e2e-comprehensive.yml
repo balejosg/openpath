@@ -72,7 +72,7 @@ jobs:
         working-directory: spa
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: build-artifacts
           path: |
@@ -180,7 +180,7 @@ jobs:
 
       # Upload blob report for merging (not playwright-report)
       - name: Upload blob report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: blob-report-shard-${{ matrix.shard }}
@@ -188,7 +188,7 @@ jobs:
           retention-days: 1
 
       - name: Upload test results on failure
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: test-results-shard-${{ matrix.shard }}
@@ -253,7 +253,7 @@ jobs:
 
       - name: Upload merged HTML report
         if: steps.check-blobs.outputs.has-blobs == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-report
           path: spa/playwright-report/
