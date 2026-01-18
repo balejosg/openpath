@@ -512,6 +512,13 @@ const reactSpaPath = isCompiledCode
     ? path.join(__dirname, '../../../react-spa/dist')
     : path.join(__dirname, '../../react-spa/dist');
 
+logger.info('React SPA path check', { 
+    path: reactSpaPath, 
+    exists: fs.existsSync(reactSpaPath),
+    __dirname,
+    isCompiledCode
+});
+
 // Solo servir si existe el directorio de build
 if (fs.existsSync(reactSpaPath)) {
     app.use('/v2', express.static(reactSpaPath));
