@@ -37,7 +37,7 @@ const GroupRules: React.FC<GroupRulesProps> = ({ groupId, groupName, onBack }) =
   const handleDeleteRule = async (id: string, value: string) => {
     if (window.confirm(`¿Eliminar la regla "${value}"?`)) {
       try {
-        await deleteRule(id);
+        await deleteRule({ id, groupId });
       } catch (err: any) {
         alert(`Error: ${err.message}`);
       }

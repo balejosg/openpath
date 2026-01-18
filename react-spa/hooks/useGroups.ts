@@ -69,9 +69,10 @@ export function useGroupRules(groupId: string) {
   });
 
   const deleteRuleMutation = useMutation({
-    mutationFn: (id: string) => trpc.groups.deleteRule.mutate({ id }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['groups', groupId, 'rules'] });
+    mutationFn: ({ id, groupId }: { id: string; groupId: string }) => 
+      (trpc.groups.deleteRule.mutate as any)({ id, groupId }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['groups', variables.groupId, 'rules'] });
       queryClient.invalidateQueries({ queryKey: ['groups'] }); // Update counts
     },
   });

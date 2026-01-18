@@ -10,6 +10,8 @@ const RoleBadge: React.FC<{ role: string }> = ({ role }) => {
     const styles: Record<string, string> = {
         'admin': 'bg-purple-50 text-purple-700 border-purple-200',
         'openpath-admin': 'bg-blue-50 text-blue-700 border-blue-200',
+        'teacher': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        'student': 'bg-amber-50 text-amber-700 border-amber-200',
         'user': 'bg-slate-100 text-slate-600 border-slate-200',
         'no roles': 'bg-red-50 text-red-600 border-red-200',
     };
@@ -46,7 +48,7 @@ const UsersView = () => {
     e.preventDefault();
     setCreateError(null);
     try {
-        await createUser({ ...newUser, role: 'user' });
+        await createUser({ ...newUser, role: 'teacher' });
         setIsCreateModalOpen(false);
         setNewUser({ name: '', email: '', password: '' });
     } catch (err: any) {

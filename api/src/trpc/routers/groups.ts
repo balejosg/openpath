@@ -187,10 +187,11 @@ export const groupsRouter = router({
     /**
      * Delete a rule.
      * @param id - Rule ID
+     * @param groupId - Optional Group ID for compatibility
      * @returns { deleted: boolean }
      */
     deleteRule: adminProcedure
-        .input(z.object({ id: z.string().min(1) }))
+        .input(z.object({ id: z.string().min(1), groupId: z.string().optional() }))
         .mutation(async ({ input }) => {
             const result = await GroupsService.deleteRule(input.id);
             if (!result.ok) {

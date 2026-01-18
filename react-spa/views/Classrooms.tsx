@@ -3,12 +3,19 @@ import { Monitor, Calendar, Plus, Trash2, Search, Clock, Laptop, RefreshCw } fro
 import { useClassrooms, useClassroomMachines } from '../hooks/useClassrooms';
 import { useGroups } from '../hooks/useGroups';
 import { Button } from '../components/ui/Button';
+import { Modal } from '../components/ui/Modal';
+import { Input } from '../components/ui/Input';
 
 const Classrooms = () => {
-  const { classrooms, isLoading, error, refetch, deleteClassroom, setActiveGroup } = useClassrooms();
+  const { classrooms, isLoading, error, refetch, deleteClassroom, setActiveGroup, createClassroom, isCreating } = useClassrooms();
   const { groups } = useGroups();
   const [selectedClassroomId, setSelectedClassroomId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Create Modal State
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newClassroom, setNewClassroom] = useState({ name: '', displayName: '', defaultGroupId: '' });
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const selectedClassroom = classrooms.find(c => c.id === selectedClassroomId) || classrooms[0];
   const { data: machines, isLoading: isLoadingMachines } = useClassroomMachines(selectedClassroom?.id);
@@ -34,6 +41,21 @@ const Classrooms = () => {
       } catch (err: any) {
         alert(`Error: ${err.message}`);
       }
+    }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+    try {
+        await createClassroom({
+            ...newClassroom,
+            defaultGroupId: newClassroom.defaultGroupId || undefined
+        });
+        setIsCreateModalOpen(false);
+        setNewClassroom({ name: '', displayName: '', defaultGroupId: '' });
+    } catch (err: any) {
+        setCreateError(err.message || 'Error al crear el aula');
     }
   };
 
@@ -74,7 +96,7 @@ const Classrooms = () => {
       <div className="w-full md:w-1/3 flex flex-col gap-4">
         <div className="flex justify-between items-center px-1">
             <h2 className="text-lg font-bold text-slate-800">Aulas</h2>
-            <Button size="sm">
+            <Button size="sm" onClick={() => setIsCreateModalOpen(true)}>
                 <Plus size={16} className="mr-1" /> Nueva
             </Button>
         </div>
@@ -241,6 +263,64 @@ const Classrooms = () => {
             </div>
         )}
       </div>
+
+      {/* Create Classroom Modal */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Nueva Aula"
+      >
+        <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Nombre de Identificación (ID)</label>
+                <Input 
+                    placeholder="ej: aula-informatica-1"
+                    value={newClassroom.name}
+                    onChange={e => setNewClassroom({ ...newClassroom, name: e.target.value })}
+                    required
+                />
+                <p className="text-[10px] text-slate-500">Este ID se usa para vincular equipos al aula.</p>
+            </div>
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Nombre Visible</label>
+                <Input 
+                    placeholder="ej: Aula de Informática 1"
+                    value={newClassroom.displayName}
+                    onChange={e => setNewClassroom({ ...newClassroom, displayName: e.target.value })}
+                    required
+                />
+            </div>
+            <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-700">Grupo Predeterminado</label>
+                <select 
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm text-sm"
+                    value={newClassroom.defaultGroupId}
+                    onChange={e => setNewClassroom({ ...newClassroom, defaultGroupId: e.target.value })}
+                >
+                    <option value="">Sin grupo predeterminado</option>
+                    {groups.map(g => (
+                        <option key={g.id} value={g.id}>{g.displayName}</option>
+                    ))}
+                </select>
+                <p className="text-[10px] text-slate-400">Grupo que se aplicará automáticamente al iniciar sesión.</p>
+            </div>
+
+            {createError && (
+                <div className="text-xs text-red-600 bg-red-50 p-2 rounded">
+                    {createError}
+                </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4">
+                <Button type="button" variant="ghost" onClick={() => setIsCreateModalOpen(false)}>
+                    Cancelar
+                </Button>
+                <Button type="submit" isLoading={isCreating}>
+                    Crear Aula
+                </Button>
+            </div>
+        </form>
+      </Modal>
     </div>
   );
 };
