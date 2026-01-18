@@ -11,6 +11,7 @@ COPY tsconfig.base.json ./
 COPY api/package*.json ./api/
 COPY shared/package*.json ./shared/
 COPY spa/package*.json ./spa/
+COPY react-spa/package*.json ./react-spa/
 
 # Install all dependencies
 RUN npm ci
@@ -19,17 +20,19 @@ RUN npm ci
 COPY api ./api
 COPY shared ./shared
 COPY spa ./spa
+COPY react-spa ./react-spa
 
 # Build shared package first
-RUN cd shared && npm run build
+RUN npm run build --workspace=@openpath/shared
 
 # Build API (needed for SPA types)
-WORKDIR /app/api
-RUN npm run build
-WORKDIR /app
+RUN npm run build --workspace=@openpath/api
 
 # Build SPA
-RUN cd spa && npm run build
+RUN npm run build --workspace=@openpath/spa
+
+# Build React SPA
+RUN npm run build --workspace=@openpath/react-spa
 
 
 
@@ -48,14 +51,16 @@ COPY package*.json ./
 COPY api/package*.json ./api/
 COPY shared/package*.json ./shared/
 COPY spa/package*.json ./spa/
+COPY react-spa/package*.json ./react-spa/
 
 # Install production dependencies only
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --omit=dev && npm cache clean --force
 
 # Copy built artifacts from builder stage
 COPY --from=builder /app/api/dist ./api/dist
 COPY --from=builder /app/shared/dist ./shared/dist
-COPY --from=builder /app/spa ./spa
+COPY --from=builder /app/spa/dist ./spa/dist
+COPY --from=builder /app/react-spa/dist ./react-spa/dist
 COPY --from=builder /app/api/data ./api/data
 
 # Copy database schema (needed for migration)
