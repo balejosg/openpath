@@ -4,6 +4,7 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  base: '/v2/',
   server: {
     port: 3001,
     proxy: {
