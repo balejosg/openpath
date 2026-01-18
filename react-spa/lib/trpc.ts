@@ -36,7 +36,9 @@ function getAuthToken(): string | null {
 export const trpc = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: `${getApiUrl()}/trpc`,
+      // Usamos ruta relativa para que funcione tanto en / como en /v2/
+      // Si estamos en /v2/, esto resolverá a /v2/trpc
+      url: `${getApiUrl()}${getApiUrl() ? '/trpc' : 'trpc'}`,
       headers: () => {
         const token = getAuthToken();
         return token ? { Authorization: `Bearer ${token}` } : {};

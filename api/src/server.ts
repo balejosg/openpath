@@ -498,7 +498,7 @@ import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './trpc/routers/index.js';
 import { createContext } from './trpc/context.js';
 
-app.use('/trpc', createExpressMiddleware({
+app.use(['/trpc', '/v2/trpc'], createExpressMiddleware({
     router: appRouter,
     createContext,
 }));
