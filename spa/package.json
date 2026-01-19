@@ -30,7 +30,7 @@
     "esbuild": "^0.25.0",
     "eslint": "^9.17.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.7.2",
+    "typescript": "^5.9.3",
     "typescript-eslint": "^8.20.0",
     "@openpath/api": "file:../api"
   },
