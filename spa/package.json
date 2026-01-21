@@ -7,7 +7,7 @@
   "scripts": {
     "clean": "rm -rf dist *.tsbuildinfo",
     "prebuild": "npm run clean",
-    "build": "npm run typecheck && node esbuild.config.mjs && mkdir -p dist/css && cp css/style.css dist/css/ && cp index.html dist/ && cp reset-password.html dist/ && cp dist/sw.js sw.js",
+    "build": "npm run typecheck && node esbuild.config.mjs && mkdir -p dist/css && cp css/style.css dist/css/ && cp index.html dist/ && cp reset-password.html dist/ && sed -i 's|/src/main.ts|/main.js|g' dist/index.html && sed -i 's|/src/reset-password.ts|/reset-password.js|g' dist/reset-password.html && cp dist/sw.js sw.js",
     "build:watch": "node esbuild.config.mjs --watch",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.sw.json --noEmit",
     "dev": "node esbuild.config.mjs --watch",
