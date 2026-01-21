@@ -231,6 +231,8 @@ jobs:
         working-directory: spa
         env:
           CI: true
+          BASE_URL: http://localhost:3001
+          API_URL: http://localhost:3001
           PORT: 3001
           NODE_ENV: test
           DB_HOST: localhost
@@ -240,6 +242,7 @@ jobs:
           DB_PASSWORD: openpath_dev
           JWT_SECRET: test-jwt-secret-for-ci-testing
           ADMIN_TOKEN: test-admin-token-for-ci
+          CORS_ORIGINS: http://localhost:3001
           SHARED_SECRET: test-shared-secret-for-ci
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

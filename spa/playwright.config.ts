@@ -4,9 +4,13 @@ import { defineConfig, devices } from '@playwright/test';
  * OpenPath SPA - Playwright E2E Configuration
  *
  * Tests require:
- * - API server running on port 3001
- * - SPA served (can use simple http-server or the API serves static files)
+ * - API server running (auto-started via webServer config)
+ * - SPA served (API serves static files from dist/)
  */
+
+const PORT = process.env['PORT'] ?? '3005';
+const BASE_URL = process.env['BASE_URL'] ?? `http://localhost:${PORT}`;
+
 export default defineConfig({
     testDir: './e2e',
     globalSetup: './e2e/global-setup.ts',
@@ -37,7 +41,7 @@ export default defineConfig({
     // Shared settings for all projects
     use: {
         // Base URL for navigation
-        baseURL: process.env['BASE_URL'] ?? 'http://localhost:3005',
+        baseURL: BASE_URL,
 
         // Collect trace on first retry
         trace: 'on-first-retry',
@@ -64,9 +68,21 @@ export default defineConfig({
 
     // Run local server before tests
     webServer: {
-        command: 'cd ../api && PORT=3005 NODE_ENV=test npm start',
-        url: 'http://localhost:3005/health',
+        command: `cd ../api && npm start`,
+        url: `${BASE_URL}/health`,
         reuseExistingServer: true,
         timeout: 120 * 1000,
+        env: {
+            PORT,
+            NODE_ENV: 'test',
+            ...(process.env['DB_HOST'] && { DB_HOST: process.env['DB_HOST'] }),
+            ...(process.env['DB_PORT'] && { DB_PORT: process.env['DB_PORT'] }),
+            ...(process.env['DB_NAME'] && { DB_NAME: process.env['DB_NAME'] }),
+            ...(process.env['DB_USER'] && { DB_USER: process.env['DB_USER'] }),
+            ...(process.env['DB_PASSWORD'] && { DB_PASSWORD: process.env['DB_PASSWORD'] }),
+            ...(process.env['JWT_SECRET'] && { JWT_SECRET: process.env['JWT_SECRET'] }),
+            ...(process.env['ADMIN_TOKEN'] && { ADMIN_TOKEN: process.env['ADMIN_TOKEN'] }),
+            ...(process.env['CORS_ORIGINS'] && { CORS_ORIGINS: process.env['CORS_ORIGINS'] }),
+        },
     },
 });
