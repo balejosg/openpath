@@ -76,7 +76,8 @@ export class ApiClient {
     private async request<T>(
         method: string,
         path: string,
-        body?: unknown
+        body?: unknown,
+        isTrpc = true
     ): Promise<ApiResponse<T>> {
         try {
             const headers: Record<string, string> = {
@@ -96,12 +97,32 @@ export class ApiClient {
 
             const response = await fetch(`${this.baseUrl}${path}`, fetchOptions);
 
-            const data = await response.json().catch(() => ({})) as T & { message?: string };
+            const json = await response.json().catch(() => ({}));
+            
+            // Handle tRPC response structure
+            let data = json;
+            if (isTrpc && json && typeof json === 'object') {
+                // Success: { result: { data: ... } }
+                if ('result' in json) {
+                    data = json.result.data;
+                } 
+                // Error: { error: { message: ... } }
+                else if ('error' in json) {
+                    // Normalize tRPC error to match ApiResponse expectations
+                    return { 
+                        ok: false, 
+                        status: response.status, 
+                        data: undefined, 
+                        error: json.error.message ?? 'Unknown tRPC error' 
+                    };
+                }
+            }
+
             return {
                 ok: response.ok,
                 status: response.status,
                 data: response.ok ? data : undefined,
-                error: !response.ok ? data.message : undefined
+                error: !response.ok ? (data.message || data.error || 'Unknown error') : undefined
             };
         } catch (error) {
             return { ok: false, status: 0, data: undefined, error: String(error) };
@@ -110,50 +131,56 @@ export class ApiClient {
 
     // User CRUD
     async createUser(user: { email: string; name: string; password: string; role: string }): Promise<ApiResponse<User>> {
-        return this.request<User>('POST', '/api/users', user);
+        return this.request<User>('POST', '/trpc/users.create', user);
     }
 
     async deleteUser(userId: string): Promise<ApiResponse<null>> {
-        return this.request<null>('DELETE', `/api/users/${userId}`);
+        return this.request<null>('POST', '/trpc/users.delete', { id: userId });
     }
 
     async getUsers(): Promise<ApiResponse<User[]>> {
-        return this.request<User[]>('GET', '/api/users');
+        return this.request<User[]>('GET', '/trpc/users.list');
     }
 
     async assignGroups(userId: string, groups: readonly string[]): Promise<ApiResponse<User>> {
-        return this.request<User>('PATCH', `/api/users/${userId}/groups`, { groups });
+        return this.request<User>('POST', '/trpc/users.assignRole', { 
+            userId, 
+            role: 'teacher', 
+            groupIds: groups 
+        });
     }
 
     // Request CRUD
     async createRequest(domain: string, reason: string): Promise<ApiResponse<Request>> {
-        return this.request<Request>('POST', '/api/requests', { domain, reason });
+        return this.request<Request>('POST', '/trpc/requests.create', { domain, reason });
     }
 
     async approveRequest(requestId: string): Promise<ApiResponse<Request>> {
-        return this.request<Request>('POST', `/api/requests/${requestId}/approve`);
+        return this.request<Request>('POST', '/trpc/requests.approve', { id: requestId });
     }
 
     async rejectRequest(requestId: string, reason?: string): Promise<ApiResponse<Request>> {
-        return this.request<Request>('POST', `/api/requests/${requestId}/reject`, { reason });
+        return this.request<Request>('POST', '/trpc/requests.reject', { id: requestId, reason });
     }
 
     async getRequests(status?: string): Promise<ApiResponse<Request[]>> {
-        const query = status ? `?status=${status}` : '';
-        return this.request<Request[]>('GET', `/api/requests${query}`);
+        const query = status 
+            ? `?input=${encodeURIComponent(JSON.stringify({ status }))}` 
+            : '';
+        return this.request<Request[]>('GET', `/trpc/requests.list${query}`);
     }
 
     // Classroom CRUD
     async createClassroom(name: string, defaultGroup?: string): Promise<ApiResponse<Classroom>> {
-        return this.request<Classroom>('POST', '/api/classrooms', { name, defaultGroup });
+        return this.request<Classroom>('POST', '/trpc/classrooms.create', { name, defaultGroupId: defaultGroup });
     }
 
     async deleteClassroom(classroomId: string): Promise<ApiResponse<null>> {
-        return this.request<null>('DELETE', `/api/classrooms/${classroomId}`);
+        return this.request<null>('POST', '/trpc/classrooms.delete', { id: classroomId });
     }
 
     async getClassrooms(): Promise<ApiResponse<Classroom[]>> {
-        return this.request<Classroom[]>('GET', '/api/classrooms');
+        return this.request<Classroom[]>('GET', '/trpc/classrooms.list');
     }
 }
 

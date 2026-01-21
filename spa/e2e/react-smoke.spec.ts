@@ -7,14 +7,14 @@ test.describe('React App Smoke Tests', () => {
       errors.push(error.message);
     });
 
-    await page.goto('/');
+    await page.goto('/v2/');
     await page.waitForLoadState('networkidle');
 
     expect(errors).toHaveLength(0);
   });
 
   test('should render login page @smoke', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/v2/');
     
     await expect(page.locator('text=Iniciar sesión')).toBeVisible();
     await expect(page.locator('input[type="email"]')).toBeVisible();
@@ -22,8 +22,10 @@ test.describe('React App Smoke Tests', () => {
   });
 
   test('should navigate to setup page @smoke', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/v2/');
     
+    // In React app, this might be handled differently or the text might be different.
+    // If the test still fails, we should skip it until React app is confirmed stable.
     await page.click('text=Primera configuración');
     await page.waitForURL('**/setup');
     
@@ -31,10 +33,10 @@ test.describe('React App Smoke Tests', () => {
   });
 
   test('should have working React Router @smoke', async ({ page }) => {
-    await page.goto('/setup');
+    await page.goto('/v2/setup');
     await expect(page.locator('text=Configuración inicial')).toBeVisible();
     
-    await page.goto('/');
+    await page.goto('/v2/');
     await expect(page.locator('text=Iniciar sesión')).toBeVisible();
   });
 });
