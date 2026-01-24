@@ -203,7 +203,7 @@ test.describe('Classroom Creation E2E Flow', () => {
             await groupSelect.selectOption(firstOptionValue);
         }
 
-        const submitBtn = page.locator('#new-classroom-form button[type="submit"]');
+        const submitBtn = page.locator('#new-classroom-form button[type=\"submit\"]');
         await submitBtn.click();
 
         await modal.waitFor({ state: 'hidden', timeout: 10000 });
@@ -214,11 +214,14 @@ test.describe('Classroom Creation E2E Flow', () => {
         const classroomsList = page.locator('#classrooms-list');
         await expect(classroomsList).toContainText(CLASSROOM_NAME, { timeout: 10000 });
 
-        // Wait a bit more for the schedule dropdown to be populated
-        // This dropdown is updated after the classroom list
-        await page.waitForTimeout(2000);
-        
+        // The schedule dropdown is populated asynchronously and separately from the list
+        // We need to wait for it to actually contain our classroom, not just wait a fixed time
         const scheduleClassroomSelect = page.locator('#schedule-classroom-select');
-        await expect(scheduleClassroomSelect).toContainText(CLASSROOM_NAME, { timeout: 10000 });
+        
+        // Poll the dropdown until it contains the new classroom (up to 30 seconds)
+        await expect(async () => {
+            const dropdownText = await scheduleClassroomSelect.textContent();
+            expect(dropdownText).toContain(CLASSROOM_NAME);
+        }).toPass({ timeout: 30000, intervals: [1000, 2000, 5000] });
     });
 });
