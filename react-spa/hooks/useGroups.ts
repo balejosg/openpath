@@ -61,7 +61,13 @@ export function useGroupRules(groupId: string) {
       type: 'whitelist' | 'blocked_subdomain' | 'blocked_path';
       value: string;
       comment?: string;
-    }) => trpc.groups.createRule.mutate(data),
+    }) => {
+      // In ClassroomPath, the method is named addRule, in OpenPath it's createRule
+      // We try addRule first if createRule is not available (compatibility)
+      const router = trpc.groups as any;
+      const mutation = router.addRule || router.createRule;
+      return mutation.mutate(data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups', groupId, 'rules'] });
       queryClient.invalidateQueries({ queryKey: ['groups'] }); // Update counts
