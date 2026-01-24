@@ -162,11 +162,19 @@ const UsersView = () => {
                                     </div>
                                 </td>
                                 <td className="px-6 py-3 text-right">
-                                    <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                        <button className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Editar">
+                                    <div className="flex items-center justify-end gap-1 opacity-100 transition-opacity">
+                                        <button 
+                                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" 
+                                            title="Editar"
+                                            onClick={() => { alert('Próximamente: Edición de usuario'); }}
+                                        >
                                             <Edit2 size={16} />
                                         </button>
-                                        <button className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" title="Restablecer Contraseña">
+                                        <button 
+                                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" 
+                                            title="Restablecer Contraseña"
+                                            onClick={() => { alert('Próximamente: Restablecer contraseña'); }}
+                                        >
                                             <Key size={16} />
                                         </button>
                                         <button 
