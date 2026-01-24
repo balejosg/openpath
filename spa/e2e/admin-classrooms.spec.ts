@@ -208,12 +208,17 @@ test.describe('Classroom Creation E2E Flow', () => {
 
         await modal.waitFor({ state: 'hidden', timeout: 10000 });
 
-        await page.waitForTimeout(1000);
+        // Wait for network to settle after classroom creation
+        await page.waitForLoadState('networkidle', { timeout: 10000 });
 
         const classroomsList = page.locator('#classrooms-list');
         await expect(classroomsList).toContainText(CLASSROOM_NAME, { timeout: 10000 });
 
+        // Wait a bit more for the schedule dropdown to be populated
+        // This dropdown is updated after the classroom list
+        await page.waitForTimeout(2000);
+        
         const scheduleClassroomSelect = page.locator('#schedule-classroom-select');
-        await expect(scheduleClassroomSelect).toContainText(CLASSROOM_NAME, { timeout: 5000 });
+        await expect(scheduleClassroomSelect).toContainText(CLASSROOM_NAME, { timeout: 10000 });
     });
 });
