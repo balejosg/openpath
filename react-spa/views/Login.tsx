@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
-import { login } from '../lib/auth';
+import { login, loginWithGoogle } from '../lib/auth';
+import { GoogleLoginButton } from '../components/GoogleLoginButton';
 
 interface LoginProps {
   onLogin: () => void;
@@ -12,6 +13,20 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister }) => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleGoogleLogin = async (token: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await loginWithGoogle(token);
+      onLogin();
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      setError(err?.message || 'Error al iniciar sesión con Google');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +96,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister }) => {
           <div className="text-center mb-8">
             <h2 className="text-2xl font-bold text-slate-900">Acceso Seguro</h2>
             <p className="text-slate-500 text-sm mt-2">Ingresa tus credenciales de administrador</p>
+          </div>
+
+          <GoogleLoginButton onSuccess={handleGoogleLogin} />
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-slate-500">o con tu cuenta del colegio</span>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
