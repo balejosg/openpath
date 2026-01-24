@@ -63,6 +63,20 @@ export async function login(email: string, password: string): Promise<User> {
 }
 
 /**
+ * Realiza login con Google.
+ */
+export async function loginWithGoogle(idToken: string): Promise<User> {
+  const result = await trpc.auth.googleLogin.mutate({ idToken });
+
+  // Guardar tokens
+  localStorage.setItem(ACCESS_TOKEN_KEY, result.accessToken);
+  localStorage.setItem(REFRESH_TOKEN_KEY, result.refreshToken);
+  localStorage.setItem(USER_KEY, JSON.stringify(result.user));
+
+  return result.user as unknown as User;
+}
+
+/**
  * Cierra la sesión actual.
  */
 export function logout(): void {
