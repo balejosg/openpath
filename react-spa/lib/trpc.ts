@@ -30,6 +30,17 @@ function getAuthToken(): string | null {
 }
 
 /**
+ * Limpia el estado de autenticación y recarga la página.
+ */
+function clearAuthAndReload(): void {
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem('openpath_refresh_token');
+  localStorage.removeItem('openpath_user');
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  window.location.reload();
+}
+
+/**
  * Cliente tRPC configurado.
  * Uso: await trpc.groups.list.query()
  */
@@ -42,6 +53,15 @@ export const trpc = createTRPCClient<AppRouter>({
       headers: () => {
         const token = getAuthToken();
         return token ? { Authorization: `Bearer ${token}` } : {};
+      },
+      // Interceptar respuestas 401 (UNAUTHORIZED) para limpiar auth y redirigir
+      fetch(url, options) {
+        return fetch(url, options).then(async (res) => {
+          if (res.status === 401) {
+            clearAuthAndReload();
+          }
+          return res;
+        });
       },
     }),
   ],
