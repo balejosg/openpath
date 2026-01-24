@@ -59,7 +59,8 @@ export const trpc = createTRPCClient<AppRouter>({
         return fetch(url, options).then(async (res) => {
           if (res.status === 401) {
             // No redirigir si el error ocurre durante el login o registro
-            const isAuthRoute = url.includes('auth.login') || url.includes('auth.register');
+            const urlString = typeof url === 'string' ? url : url.toString();
+            const isAuthRoute = urlString.includes('auth.login') || urlString.includes('auth.register');
             if (!isAuthRoute) {
               clearAuthAndReload();
             }
