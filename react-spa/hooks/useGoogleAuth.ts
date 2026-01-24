@@ -58,6 +58,7 @@ export function useGoogleAuth() {
     const [isInitialized, setIsInitialized] = useState(false);
     const [clientId, setClientId] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     // Effect 1: Fetch configuration
     useEffect(() => {
@@ -65,19 +66,24 @@ export function useGoogleAuth() {
         
         async function fetchConfig() {
             try {
-                // In a real hook, we might use react-query or trpc if available for config,
-                // but requirements say "use fetch, like the reference".
                 const response = await fetch('/api/config');
                 if (!response.ok) {
                     throw new Error(`Config fetch failed: ${response.status}`);
                 }
                 const data = await response.json() as AppConfig;
                 
-                if (mounted && data.googleClientId) {
-                    setClientId(data.googleClientId);
+                if (mounted) {
+                    if (!data.googleClientId) {
+                        setError('Google Client ID not configured');
+                    } else {
+                        setClientId(data.googleClientId);
+                    }
                 }
-            } catch (error) {
-                console.error('Failed to fetch app config', error);
+            } catch (err) {
+                console.error('Failed to fetch app config', err);
+                if (mounted) {
+                    setError(err instanceof Error ? err.message : 'Failed to fetch config');
+                }
             } finally {
                 if (mounted) setIsLoading(false);
             }
@@ -109,17 +115,6 @@ export function useGoogleAuth() {
         return false;
     }, []);
 
-    // Effect 2: Poll/wait for window.google script to load
-    // The requirement says "Effect 2: Poll/wait for window.google script to load."
-    // This implies we should be checking for it proactively? 
-    // Or just exposing the capability?
-    // The reference `waitForGoogleScript` is a function called on demand.
-    // However, the prompt says "Effect 2: Poll/wait...". 
-    // Maybe it just means ensure we know when it's ready?
-    // But GSI script is loaded via <script async defer> in index.html usually.
-    
-    // I will implement the init function which uses waitForGoogleScript.
-
     const initGoogleAuth = useCallback(async (callback: (response: GoogleCredentialResponse) => void) => {
         if (!clientId) {
             console.warn('Google Client ID not loaded yet');
@@ -149,6 +144,11 @@ export function useGoogleAuth() {
     }, [clientId, waitForGoogleScript]);
 
     const renderGoogleButton = useCallback(async (elementId: string) => {
+        if (!isInitialized) {
+            console.warn('renderGoogleButton called before initGoogleAuth');
+            return;
+        }
+
         const loaded = await waitForGoogleScript();
         if (!loaded || !window.google) {
             console.error('Google Identity Services unexpectedly unavailable');
@@ -177,11 +177,13 @@ export function useGoogleAuth() {
         }
 
         window.google.accounts.id.renderButton(element, buttonOptions);
-    }, [waitForGoogleScript]);
+    }, [isInitialized, waitForGoogleScript]);
 
     return {
         isInitialized,
         isLoading,
+        error,
+        isConfigured: !!clientId,
         initGoogleAuth,
         renderGoogleButton
     };
