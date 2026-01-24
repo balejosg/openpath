@@ -33,8 +33,16 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister }) => {
     try {
       await login(email, password);
       onLogin();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      // tRPC errors usually have a 'shape' or 'message' property
+      const message = err?.shape?.message || err?.message || 'Error al iniciar sesión';
+      
+      if (message.includes('UNAUTHORIZED') || message.includes('401')) {
+        setError('Usuario o contraseña incorrectos');
+      } else {
+        setError(message);
+      }
     } finally {
       setIsLoading(false);
     }
