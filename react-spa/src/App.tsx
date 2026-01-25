@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './views/Dashboard';
@@ -8,18 +8,25 @@ import UsersView from './views/Users';
 import Login from './views/Login';
 import Register from './views/Register';
 import { ShieldAlert, CheckCircle } from 'lucide-react';
+import { isAuthenticated, onAuthChange } from './lib/auth';
 
 type AuthView = 'login' | 'register';
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuth, setIsAuth] = useState(isAuthenticated());
   const [authView, setAuthView] = useState<AuthView>('login');
   
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleLogin = () => setIsAuthenticated(true);
-  const handleRegister = () => setIsAuthenticated(true);
+  useEffect(() => {
+    return onAuthChange(() => {
+      setIsAuth(isAuthenticated());
+    });
+  }, []);
+
+  const handleLogin = () => setIsAuth(true);
+  const handleRegister = () => setIsAuth(true);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -52,7 +59,7 @@ const App: React.FC = () => {
      }
   };
 
-  if (!isAuthenticated) {
+  if (!isAuth) {
     if (authView === 'register') {
         return <Register onRegister={handleRegister} onNavigateToLogin={() => setAuthView('login')} />;
     }

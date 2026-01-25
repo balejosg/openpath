@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
+import { login } from '../lib/auth';
 
 interface LoginProps {
   onLogin: () => void;
@@ -8,14 +9,24 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    setError('');
+    
+    try {
+      await login(email, password);
       onLogin();
-    }, 1000);
+    } catch (err) {
+      setError('Credenciales inválidas o error de conexión');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -53,6 +64,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister }) => {
             <p className="text-slate-500 text-sm mt-2">Ingresa tus credenciales de administrador</p>
           </div>
 
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 flex items-center gap-2">
+              <span className="font-semibold">Error:</span> {error}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Correo Electrónico</label>
@@ -60,6 +77,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister }) => {
                 <Mail className="absolute left-3 top-2.5 text-slate-400" size={18} />
                 <input
                   type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                   className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 placeholder-slate-400 transition-all"
                   placeholder="admin@institucion.edu"
@@ -73,6 +92,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister }) => {
                 <Lock className="absolute left-3 top-2.5 text-slate-400" size={18} />
                 <input
                   type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   required
                   className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 placeholder-slate-400 transition-all"
                   placeholder="••••••••"
