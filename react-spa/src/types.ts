@@ -1,0 +1,37 @@
+import React from 'react';
+
+export enum UserRole {
+  ADMIN = 'admin',
+  OPENPATH_ADMIN = 'openpath-admin',
+  USER = 'user',
+  NO_ROLES = 'no roles'
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  roles: UserRole[];
+  status: 'Active' | 'Inactive';
+}
+
+export interface Classroom {
+  id: string;
+  name: string;
+  computerCount: number;
+  activeGroup: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string;
+  domainCount: number;
+  status: 'Active' | 'Inactive';
+}
+
+export interface NavItem {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+}
