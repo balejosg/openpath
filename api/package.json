@@ -73,7 +73,7 @@
     "swagger-ui-express": "^5.0.1",
     "uuid": "^11.0.5",
     "web-push": "^3.6.7",
-    "winston": "^3.11.0",
+    "winston": "^3.19.0",
     "zod": "^3.25.76"
   },
   "c8": {
