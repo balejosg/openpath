@@ -104,7 +104,7 @@ jobs:
           dpkg-deb --info build/*.deb
       
       - name: Upload package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: debian-package
           path: build/*.deb
