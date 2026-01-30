@@ -173,13 +173,13 @@ export function updateEditUI(): void {
     }
 }
 
-async function initScheduleSection(): Promise<void> {
+async function refreshScheduleClassrooms(): Promise<void> {
     const select = document.getElementById('schedule-classroom-select') as HTMLSelectElement;
-
-    select.dataset.initialized = 'true';
+    if (!select) return;
 
     try {
         const classrooms = await trpc.classrooms.list.query();
+        const currentValue = select.value;
 
         select.innerHTML = '<option value="">Select classroom...</option>';
         classrooms.forEach((c) => {
@@ -188,9 +188,25 @@ async function initScheduleSection(): Promise<void> {
             option.textContent = c.displayName || c.name;
             select.appendChild(option);
         });
+
+        // Restore value if it still exists
+        if (currentValue && classrooms.some(c => c.id === currentValue)) {
+            select.value = currentValue;
+        }
     } catch (e) {
         logger.error('Failed to load classrooms for schedule', { error: e instanceof Error ? e.message : String(e) });
     }
+}
+
+async function initScheduleSection(): Promise<void> {
+    const select = document.getElementById('schedule-classroom-select') as HTMLSelectElement;
+    if (!select || select.dataset.initialized === 'true') {
+        if (select) await refreshScheduleClassrooms();
+        return;
+    }
+
+    select.dataset.initialized = 'true';
+    await refreshScheduleClassrooms();
 
     select.addEventListener('change', () => void (async () => {
         const classroomId = select.value;
@@ -209,4 +225,8 @@ async function initScheduleSection(): Promise<void> {
             schedulesModule.render();
         }
     })());
+
+    window.addEventListener('classrooms-updated', () => {
+        void refreshScheduleClassrooms();
+    });
 }

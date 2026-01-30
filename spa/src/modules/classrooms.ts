@@ -40,6 +40,7 @@ export async function loadClassrooms(): Promise<void> {
         allClassrooms = await trpc.classrooms.list.query();
         renderClassroomsList();
         void loadMachines();
+        window.dispatchEvent(new CustomEvent('classrooms-updated'));
     } catch (error: unknown) {
         if (listEl) {
             const message = getErrorMessage(error);
