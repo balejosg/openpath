@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
-import { login } from '../lib/auth';
+import { login, loginWithGoogle } from '../lib/auth';
+import GoogleLoginButton from '../components/GoogleLoginButton';
 
 interface LoginProps {
   onLogin: () => void;
@@ -23,6 +24,20 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister }) => {
       onLogin();
     } catch (err) {
       setError('Credenciales inválidas o error de conexión');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (idToken: string) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      await loginWithGoogle(idToken);
+      onLogin();
+    } catch (err: any) {
+      setError(err.message || 'Error al iniciar sesión con Google');
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -112,10 +127,27 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 disabled:opacity-70"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-200"
             >
-              {isLoading ? <Loader2 className="animate-spin" size={18} /> : <>Ingresar al Panel <ArrowRight size={18} /></>}
+              {isLoading ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : (
+                <>
+                  Entrar <ArrowRight size={18} />
+                </>
+              )}
             </button>
+
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200"></div>
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-slate-400">O también</span>
+              </div>
+            </div>
+
+            <GoogleLoginButton onSuccess={handleGoogleSuccess} disabled={isLoading} />
           </form>
 
           <div className="mt-6 pt-6 border-t border-slate-100 text-center text-sm">

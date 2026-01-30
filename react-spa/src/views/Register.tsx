@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock, User, ArrowRight, Loader2, Shield, Briefcase } from 'lucide-react';
+import { loginWithGoogle } from '../lib/auth';
+import GoogleLoginButton from '../components/GoogleLoginButton';
 
 interface RegisterProps {
   onRegister: () => void;
@@ -8,14 +10,30 @@ interface RegisterProps {
 
 const Register: React.FC<RegisterProps> = ({ onRegister, onNavigateToLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
     setTimeout(() => {
       setIsLoading(false);
       onRegister();
     }, 1500);
+  };
+
+  const handleGoogleSuccess = async (idToken: string) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      await loginWithGoogle(idToken);
+      onRegister();
+    } catch (err: any) {
+      setError(err.message || 'Error al registrarse con Google');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -50,6 +68,12 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onNavigateToLogin }) =>
             <h2 className="text-2xl font-bold text-slate-900">Registro Institucional</h2>
             <p className="text-slate-500 text-sm mt-2">Crea una nueva cuenta de administrador</p>
           </div>
+
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 flex items-center gap-2">
+              <span className="font-semibold">Error:</span> {error}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -129,6 +153,17 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onNavigateToLogin }) =>
             >
               {isLoading ? <Loader2 className="animate-spin" size={18} /> : <>Crear Cuenta <ArrowRight size={18} /></>}
             </button>
+
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200"></div>
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-slate-400">O también</span>
+              </div>
+            </div>
+
+            <GoogleLoginButton onSuccess={handleGoogleSuccess} disabled={isLoading} />
           </form>
 
           <div className="mt-6 text-center text-sm">
