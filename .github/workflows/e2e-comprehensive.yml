@@ -79,6 +79,7 @@ jobs:
             api/dist/
             shared/dist/
             spa/dist/
+            react-spa/dist/
           retention-days: 1
 
   # SPA E2E tests with sharding (chromium only for speed)
