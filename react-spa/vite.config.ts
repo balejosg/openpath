@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   base: '/v2/',
   server: {
-    port: 3001,
+    port: Number(process.env.PORT) || 3001,
     proxy: {
       '/trpc': {
         target: 'http://localhost:3000',
