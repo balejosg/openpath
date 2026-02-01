@@ -36,17 +36,4 @@ test.describe('React App Smoke Tests', () => {
     // Should show registration form
     await expect(page.getByText('Registro Institucional')).toBeVisible();
   });
-
-
-  test('should navigate to register page @smoke', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    // React app has "Solicitar acceso" instead of "Primera configuración"
-    await page.getByText('Solicitar acceso').click();
-    await page.waitForLoadState('networkidle');
-    
-    // Should show registration form
-    await expect(page.getByText('Registro Institucional')).toBeVisible();
-  });
 });
