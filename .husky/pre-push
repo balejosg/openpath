@@ -1,4 +1,6 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-npm run verify:full
+# Fast verification before push (typecheck + lint only)
+# Full tests run in CI - no need to block push for 5+ minutes
+npm run verify
