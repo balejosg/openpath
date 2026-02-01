@@ -1,4 +1,3 @@
-#!/bin/sh
-# Commit-msg hook: Validate commit message format
+# Commit-msg hook: Validate commit message format (conventional commits)
 
 npx --no -- commitlint --edit "$1"

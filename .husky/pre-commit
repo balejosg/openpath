@@ -1,6 +1,5 @@
-#!/bin/sh
 # Pre-commit hook: Full verification before every commit
-# Runs: typecheck + lint + all tests + E2E
+# Runs: typecheck + lint + shellcheck + prettier + tests + e2e + security
 # Policy: If this fails, FIX IT. No --no-verify allowed.
 
 npm run verify:full

@@ -1,6 +1,4 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
+# Pre-push hook: No additional verification needed
+# All checks already done in pre-commit
 
-# No verification needed here - already done in pre-commit
-# This hook is kept for future use if needed
 echo "Pre-push: verification already done in pre-commit"
