@@ -47,9 +47,12 @@ function clearAuthAndReload(): void {
 export const trpc = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      // Usamos ruta relativa para que funcione tanto en / como en /v2/
-      // Si estamos en /v2/, esto resolverá a /v2/trpc
-      url: `${getApiUrl()}${getApiUrl() ? '/trpc' : 'trpc'}`,
+      // Always use an absolute path when no API base is configured.
+      // Relative URLs like "trpc" would resolve to "/current/path/trpc".
+      url: (() => {
+        const apiBase = getApiUrl();
+        return apiBase ? `${apiBase}/trpc` : '/trpc';
+      })(),
       headers: () => {
         const token = getAuthToken();
         return token ? { Authorization: `Bearer ${token}` } : {};

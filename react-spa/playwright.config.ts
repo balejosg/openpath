@@ -1,9 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// On CI, we use the API to serve the built React SPA at /v2/
+// On CI, we use the API to serve the built React SPA at /
 // In development, we can still use the Vite server on port 3001
 const port = process.env.CI ? 3000 : 3001;
-const baseURL = process.env.CI ? `http://localhost:3000/v2/` : `http://localhost:3001/v2/`;
+const baseURL = process.env.CI ? 'http://localhost:3000/' : 'http://localhost:3001/';
 
 export default defineConfig({
   testDir: './e2e',

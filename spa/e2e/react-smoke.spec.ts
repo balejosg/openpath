@@ -7,14 +7,14 @@ test.describe('React App Smoke Tests', () => {
       errors.push(error.message);
     });
 
-    await page.goto('/v2/');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
 
     expect(errors).toHaveLength(0);
   });
 
   test('should render login page @smoke', async ({ page }) => {
-    await page.goto('/v2/');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
     
     // Check for actual React app login page elements
@@ -25,7 +25,7 @@ test.describe('React App Smoke Tests', () => {
   });
 
   test('should navigate to register page @smoke', async ({ page }) => {
-    await page.goto('/v2/');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
     
     // React app has "Solicitar acceso" instead of "Primera configuración"
@@ -39,7 +39,7 @@ test.describe('React App Smoke Tests', () => {
   test('should have working React Router @smoke', async ({ page }) => {
     // React app doesn't have a /v2/setup route - skip this test
     // The app goes directly from login to dashboard
-    await page.goto('/v2/');
+    await page.goto('/');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('text=Acceso Seguro')).toBeVisible();
   });

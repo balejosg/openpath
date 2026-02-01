@@ -4,7 +4,7 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/v2/',
+  base: '/',
   server: {
     port: Number(process.env.PORT) || 3001,
     strictPort: true,

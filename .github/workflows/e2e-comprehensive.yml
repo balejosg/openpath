@@ -158,7 +158,7 @@ jobs:
         run: npx playwright test --shard=${{ matrix.shard }}/2 --project=chromium
         working-directory: react-spa
         env:
-          BASE_URL: http://localhost:3000/v2/
+          BASE_URL: http://localhost:3000/
           API_URL: http://localhost:3000
           CI: true
           PORT: 3000

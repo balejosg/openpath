@@ -498,16 +498,22 @@ import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './trpc/routers/index.js';
 import { createContext } from './trpc/context.js';
 
-app.use(['/trpc', '/v2/trpc'], createExpressMiddleware({
+app.use('/trpc', createExpressMiddleware({
     router: appRouter,
     createContext,
 }));
+
+// v2 UI and API endpoints are removed. Keep an explicit 404 to avoid
+// accidental SPA fallbacks or proxying.
+app.use('/v2', (_req, res) => {
+    res.status(404).type('text/plain').send('Not found');
+});
 
 // Serve SPA static files
 // Detect if running from dist/ (compiled) or src/ (tsx dev)
 const isCompiledCode = __dirname.includes('/dist');
 
-// React SPA en /v2/* (NUEVO)
+// React SPA served from /
 const reactSpaPath = isCompiledCode
     ? path.join(__dirname, '../../../react-spa/dist')
     : path.join(__dirname, '../../react-spa/dist');
@@ -521,25 +527,22 @@ logger.info('React SPA path check', {
 
 // Solo servir si existe el directorio de build
 if (fs.existsSync(reactSpaPath)) {
-    app.use('/v2', express.static(reactSpaPath));
-    app.get('/v2/*', (_req, res) => {
-        res.sendFile(path.join(reactSpaPath, 'index.html'));
-    });
-    logger.info('React SPA enabled at /v2');
+    app.use(express.static(reactSpaPath));
+    logger.info('React SPA enabled at /');
 }
 
-// SPA vanilla en /* (existente)
-const spaPath = isCompiledCode
-    ? path.join(__dirname, '../../../spa/dist')
-    : path.join(__dirname, '../../spa/dist');
-
-app.use(express.static(spaPath));
-
-// Catch-all route: serve index.html for client-side routing
-// This must come after API routes and static files
-app.get('*', (_req, res) => {
-    res.sendFile(path.join(spaPath, 'index.html'));
-});
+// SPA fallback (HTML) - must come after API routes and static files.
+// Only serve for non-API paths so unknown API endpoints can return JSON 404.
+if (fs.existsSync(reactSpaPath)) {
+    app.get('*', (req: Request, res: Response, next) => {
+        const url = req.originalUrl || req.url;
+        if (url.startsWith('/api') || url.startsWith('/trpc') || url.startsWith('/api-docs')) {
+            next();
+            return;
+        }
+        res.sendFile(path.join(reactSpaPath, 'index.html'));
+    });
+}
 
 // =============================================================================
 // Error Handling
