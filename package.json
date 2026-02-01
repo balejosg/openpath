@@ -16,8 +16,8 @@
     "test:local": "npm test --workspaces --if-present",
     "test:api": "npm test --workspace=@openpath/api",
     "test:dashboard": "npm test --workspace=@openpath/dashboard",
-    "test:spa": "npm test --workspace=@openpath/spa",
-    "test:e2e": "npm run test:e2e --workspace=@openpath/spa",
+    "test:react-spa": "npm test --workspace=@openpath/react-spa",
+    "test:e2e": "npm run test:e2e --workspace=@openpath/react-spa",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "verify": "npm run typecheck && npm run lint --workspaces --if-present",
     "verify:full": "npm run verify && npm run lint:shell && npm run format:check && npm run test:local && npm run test:e2e && npm run security:audit && npm run security:secrets && npm run size:check",
@@ -71,7 +71,6 @@
   "license": "AGPL-3.0-or-later",
   "workspaces": [
     "api",
-    "spa",
     "react-spa",
     "shared",
     "dashboard",

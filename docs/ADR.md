@@ -227,7 +227,7 @@ firefox-extension/
 | Componente | Tecnología |
 |------------|------------|
 | Backend | Node.js + Express |
-| Frontend | HTML + CSS + JavaScript vanilla |
+| Frontend | React + TypeScript + Tailwind CSS |
 | Almacenamiento | JSON file-based |
 | Autenticación | JWT con bcrypt |
 | Despliegue | Docker |
