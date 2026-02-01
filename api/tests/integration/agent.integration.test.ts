@@ -26,7 +26,7 @@ const SHARED_SECRET = 'test-shared-secret';
 
 let server: Server | undefined;
 
-describe('Agent & Health Integration', async () => {
+void describe('Agent & Health Integration', () => {
     before(async () => {
         await resetDb();
         
@@ -49,7 +49,7 @@ describe('Agent & Health Integration', async () => {
         await closeConnection();
     });
 
-    test('should receive health reports from agents', async () => {
+    void test('should receive health reports from agents', async () => {
         const hostname = 'agent-01';
 
         // 1. Submit report (Agent context)
@@ -66,19 +66,15 @@ describe('Agent & Health Integration', async () => {
         // 2. Verify in list (Admin context)
         const listResp = await trpcQuery(API_URL, 'healthReports.list', undefined, bearerAuth(ADMIN_TOKEN));
         assertStatus(listResp, 200);
-        const { data: summary } = await parseTRPC(listResp) as { data: any };
+        const { data: summary } = await parseTRPC(listResp) as { data: { hosts: { hostname: string; status: string }[] } };
         
-        const agent = summary.hosts.find((h: any) => h.hostname === hostname);
+        const agent = summary.hosts.find((h) => h.hostname === hostname);
         assert.ok(agent);
         assert.strictEqual(agent.status, 'HEALTHY');
     });
 
-    test('should detect stale agents', async () => {
+    void test('should detect stale agents', async () => {
         const staleHostname = 'stale-agent';
-        
-        // Submit an old report (not possible directly via API as timestamp is server-side, 
-        // but we can test the getAlerts logic with a high threshold or mock data if needed.
-        // For now, we test that it's NOT stale initially)
         
         await trpcMutate(API_URL, 'healthReports.submit', {
             hostname: staleHostname,
@@ -86,9 +82,9 @@ describe('Agent & Health Integration', async () => {
         }, bearerAuth(SHARED_SECRET));
 
         const alertsResp = await trpcQuery(API_URL, 'healthReports.getAlerts', { staleThreshold: 60 }, bearerAuth(ADMIN_TOKEN));
-        const { data: alerts } = await parseTRPC(alertsResp) as { data: any };
+        const { data: alerts } = await parseTRPC(alertsResp) as { data: { alerts: { hostname: string; type: string }[] } };
         
-        const staleAlert = alerts.alerts.find((a: any) => a.hostname === staleHostname && a.type === 'stale');
+        const staleAlert = alerts.alerts.find((a) => a.hostname === staleHostname && a.type === 'stale');
         assert.ok(!staleAlert, 'Agent should not be stale yet');
     });
 });

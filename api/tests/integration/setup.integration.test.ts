@@ -26,7 +26,7 @@ const ADMIN_TOKEN = 'test-admin-token';
 
 let server: Server | undefined;
 
-describe('Setup & Settings Integration', async () => {
+void describe('Setup & Settings Integration', () => {
     beforeEach(async () => {
         await resetDb();
         
@@ -48,11 +48,11 @@ describe('Setup & Settings Integration', async () => {
         await closeConnection();
     });
 
-    test('should handle system setup flow', async () => {
+    void test('should handle system setup flow', async () => {
         // 1. Initial status: should NOT be completed (resetDb only inserts user, not role)
         const statusResp = await trpcQuery(API_URL, 'setup.status');
         assertStatus(statusResp, 200);
-        const { data: status } = await parseTRPC(statusResp) as { data: any };
+        const { data: status } = await parseTRPC(statusResp) as { data: { hasAdmin: boolean; needsSetup: boolean } };
         assert.strictEqual(status.hasAdmin, false);
         assert.strictEqual(status.needsSetup, true);
 
@@ -64,12 +64,12 @@ describe('Setup & Settings Integration', async () => {
             password: 'StrongPassword123'
         });
         assertStatus(createResp, 200);
-        const { data: createData } = await parseTRPC(createResp) as { data: any };
+        const { data: createData } = await parseTRPC(createResp) as { data: { registrationToken: string } };
         assert.ok(createData.registrationToken, 'Should return initial registration token');
 
         // 3. Verify status now completed
         const statusResp2 = await trpcQuery(API_URL, 'setup.status');
-        const { data: status2 } = await parseTRPC(statusResp2) as { data: any };
+        const { data: status2 } = await parseTRPC(statusResp2) as { data: { hasAdmin: boolean; needsSetup: boolean } };
         assert.strictEqual(status2.hasAdmin, true);
         assert.strictEqual(status2.needsSetup, false);
 
@@ -77,20 +77,20 @@ describe('Setup & Settings Integration', async () => {
         // Use ADMIN_TOKEN (legacy fallback) to bypass auth for internal test management
         const getResp = await trpcQuery(API_URL, 'setup.getRegistrationToken', undefined, bearerAuth(ADMIN_TOKEN));
         assertStatus(getResp, 200);
-        const { data: tokenData } = await parseTRPC(getResp) as { data: any };
+        const { data: tokenData } = await parseTRPC(getResp) as { data: { registrationToken: string } };
         assert.ok(tokenData.registrationToken);
 
         // 5. Regenerate
         const regenResp = await trpcMutate(API_URL, 'setup.regenerateToken', {}, bearerAuth(ADMIN_TOKEN));
         assertStatus(regenResp, 200);
-        const { data: newTokenData } = await parseTRPC(regenResp) as { data: any };
+        const { data: newTokenData } = await parseTRPC(regenResp) as { data: { registrationToken: string } };
         
         assert.notStrictEqual(tokenData.registrationToken, newTokenData.registrationToken);
 
         // 6. Validate
         const validResp = await trpcMutate(API_URL, 'setup.validateToken', { token: newTokenData.registrationToken });
         assertStatus(validResp, 200);
-        const { data: validation } = await parseTRPC(validResp) as { data: any };
+        const { data: validation } = await parseTRPC(validResp) as { data: { valid: boolean } };
         assert.strictEqual(validation.valid, true);
     });
 });

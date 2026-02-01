@@ -26,7 +26,7 @@ const ADMIN_TOKEN = 'test-admin-token';
 
 let server: Server | undefined;
 
-describe('Groups & Domains Integration', async () => {
+void describe('Groups & Domains Integration', () => {
     before(async () => {
         await resetDb();
         
@@ -51,11 +51,11 @@ describe('Groups & Domains Integration', async () => {
         await closeConnection();
     });
 
-    describe('Whitelist Rule Management', async () => {
+    void describe('Whitelist Rule Management', () => {
         let groupId: string;
         const groupName = 'integration-group';
 
-        test('should create a group and add domain rules', async () => {
+        void test('should create a group and add domain rules', async () => {
             // 1. Create Group
             const createResp = await trpcMutate(API_URL, 'groups.create', {
                 name: groupName,
@@ -86,13 +86,13 @@ describe('Groups & Domains Integration', async () => {
             // 3. Verify rules are listed
             const listResp = await trpcQuery(API_URL, 'groups.listRules', { groupId }, bearerAuth(ADMIN_TOKEN));
             assertStatus(listResp, 200);
-            const { data: rules } = await parseTRPC(listResp) as { data: any[] };
+            const { data: rules } = await parseTRPC(listResp) as { data: { value: string }[] };
             
             assert.strictEqual(rules.length, 3);
             assert.ok(rules.some(r => r.value === 'google.com'));
         });
 
-        test('should handle blocked subdomains and paths', async () => {
+        void test('should handle blocked subdomains and paths', async () => {
             // Add blocked subdomain
             await trpcMutate(API_URL, 'groups.createRule', {
                 groupId,
@@ -108,13 +108,13 @@ describe('Groups & Domains Integration', async () => {
             }, bearerAuth(ADMIN_TOKEN));
 
             const statsResp = await trpcQuery(API_URL, 'groups.stats', undefined, bearerAuth(ADMIN_TOKEN));
-            const { data: stats } = await parseTRPC(statsResp) as { data: any };
+            const { data: stats } = await parseTRPC(statsResp) as { data: { whitelistCount: number; blockedCount: number } };
             
             assert.ok(stats.whitelistCount >= 3);
             assert.ok(stats.blockedCount >= 2);
         });
 
-        test('should export group correctly', async () => {
+        void test('should export group correctly', async () => {
             const exportResp = await trpcQuery(API_URL, 'groups.export', { groupId }, bearerAuth(ADMIN_TOKEN));
             assertStatus(exportResp, 200);
             const { data: exported } = await parseTRPC(exportResp) as { data: { content: string } };
