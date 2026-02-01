@@ -158,10 +158,10 @@ jobs:
         run: npx playwright test --shard=${{ matrix.shard }}/2 --project=chromium
         working-directory: react-spa
         env:
-          BASE_URL: http://localhost:3005
-          API_URL: http://localhost:3005
+          BASE_URL: http://localhost:3000/v2/
+          API_URL: http://localhost:3000
           CI: true
-          PORT: 3005
+          PORT: 3000
           NODE_ENV: test
           DB_HOST: localhost
           DB_PORT: 5432
@@ -170,7 +170,7 @@ jobs:
           DB_PASSWORD: openpath_dev
           JWT_SECRET: test-jwt-secret-for-ci-testing
           ADMIN_TOKEN: test-admin-token-for-ci
-          CORS_ORIGINS: http://localhost:3005
+          CORS_ORIGINS: http://localhost:3000
 
       # Upload blob report for merging (not playwright-report)
       - name: Upload blob report
