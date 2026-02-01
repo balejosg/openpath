@@ -20,18 +20,35 @@
     "test:e2e": "npm run test:e2e --workspace=@openpath/spa",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "verify": "npm run typecheck && npm run lint --workspaces --if-present",
-    "verify:full": "npm run verify && npm run test:local && npm run test:e2e"
+    "verify:full": "npm run verify && npm run test:local && npm run test:e2e && npm run security:audit && npm run size:check",
+    "security:audit": "npm audit --audit-level=high",
+    "size:check": "npm run size --workspace=@openpath/react-spa"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.4.0",
+    "@commitlint/config-conventional": "^20.4.0",
     "@eslint/js": "^9.17.0",
+    "@secretlint/secretlint-rule-preset-recommend": "^11.3.1",
+    "@size-limit/preset-app": "^12.0.0",
     "eslint": "^9.17.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.10",
+    "prettier": "^3.8.1",
+    "secretlint": "^11.3.1",
+    "size-limit": "^12.0.0",
     "typescript-eslint": "^8.20.0"
   },
   "lint-staged": {
     "*.{js,ts,tsx,mjs,cjs}": [
-      "bash -c 'files=\"$@\"; filtered=\"$(echo \"$files\" | tr \" \" \"\\n\" | grep -v \"_backup/\" | tr \"\\n\" \" \")\"; [ -n \"$filtered\" ] && eslint --fix $filtered || true' --"
+      "bash -c 'files=\"$@\"; filtered=\"$(echo \"$files\" | tr \" \" \"\\n\" | grep -v \"_backup/\" | tr \"\\n\" \" \")\"; [ -n \"$filtered\" ] && eslint --fix $filtered || true' --",
+      "prettier --write",
+      "secretlint"
+    ],
+    "*.{json,yml,yaml,env*}": [
+      "secretlint"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
     ]
   },
   "engines": {

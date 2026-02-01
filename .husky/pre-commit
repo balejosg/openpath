@@ -1,1 +1,6 @@
+#!/bin/sh
+# Pre-commit hook: Fast checks before every commit
+# - ESLint + Prettier on staged files
+# - Secretlint for secret detection on staged files
+
 npx lint-staged
