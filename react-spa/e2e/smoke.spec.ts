@@ -21,8 +21,22 @@ test.describe('React App Smoke Tests', () => {
     await expect(page.getByText('Acceso Seguro')).toBeVisible();
     await expect(page.locator('input[type="email"]')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Ingresar al Panel' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible();
   });
+
+  test('should navigate to register page @smoke', async ({ page }) => {
+    await page.goto('./');
+    await page.waitForLoadState('networkidle');
+    
+    // React app has "Solicitar acceso" instead of "Primera configuración"
+    const registerLink = page.getByText('Solicitar acceso');
+    await expect(registerLink).toBeVisible();
+    await registerLink.click();
+    
+    // Should show registration form
+    await expect(page.getByText('Registro Institucional')).toBeVisible();
+  });
+
 
   test('should navigate to register page @smoke', async ({ page }) => {
     await page.goto('/');
