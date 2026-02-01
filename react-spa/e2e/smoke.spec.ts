@@ -7,14 +7,14 @@ test.describe('React App Smoke Tests', () => {
       errors.push(error.message);
     });
 
-    await page.goto('/');
+    await page.goto('./');
     await page.waitForLoadState('networkidle');
 
     expect(errors).toHaveLength(0);
   });
 
   test('should render login page @smoke', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('./');
     await page.waitForLoadState('networkidle');
     
     // Check for actual React app login page elements

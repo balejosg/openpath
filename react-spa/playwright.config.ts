@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const port = Number(process.env.PORT) || 3001;
+// On CI, we use the API to serve the built React SPA at /v2/
+// In development, we can still use the Vite server on port 3001
+const port = process.env.CI ? 3000 : 3001;
+const baseURL = process.env.CI ? `http://localhost:3000/v2/` : `http://localhost:3001/v2/`;
 
 export default defineConfig({
   testDir: './e2e',
@@ -17,7 +20,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.BASE_URL || `http://localhost:${port}`,
+    baseURL: process.env.BASE_URL || baseURL,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -40,11 +43,12 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
     },
-    {
+    // Only run Vite server if NOT on CI
+    ...(!process.env.CI ? [{
       command: 'npm run dev',
-      port: port,
-      reuseExistingServer: !process.env.CI,
+      port: 3001,
+      reuseExistingServer: true,
       timeout: 120000,
-    },
+    }] : []),
   ],
 });

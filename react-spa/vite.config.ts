@@ -7,6 +7,7 @@ export default defineConfig({
   base: '/v2/',
   server: {
     port: Number(process.env.PORT) || 3001,
+    strictPort: true,
     proxy: {
       '/trpc': {
         target: 'http://localhost:3000',
