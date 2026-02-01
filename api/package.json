@@ -26,6 +26,7 @@
     "test:e2e": "NODE_ENV=test PORT=3002 node --import tsx --test --test-force-exit tests/e2e.test.ts",
     "test:roles": "NODE_ENV=test PORT=3007 node --import tsx --test --test-force-exit tests/roles.test.ts",
     "test:groups": "NODE_ENV=test node --import tsx --test --test-force-exit tests/groups.test.ts",
+    "test:integration:api": "NODE_ENV=test node --import tsx --test --test-force-exit tests/integration/*.test.ts",
     "test:push": "NODE_ENV=test PORT=3003 node --import tsx --test --test-force-exit tests/push.test.ts",
     "test:security": "NODE_ENV=test PORT=3004 node --import tsx --test --test-force-exit tests/security.test.ts",
     "test:token-delivery": "NODE_ENV=test node --import tsx --test --test-force-exit tests/token-delivery.test.ts",

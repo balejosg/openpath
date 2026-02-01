@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       test-type:
-        description: 'Type of test to run (api, web, spa, bash, shared, auth-worker, extension)'
+        description: 'Type of test to run (api, web, spa, integration, bash, shared, auth-worker, extension)'
         required: true
         type: string
       node-version:
@@ -28,7 +28,7 @@ jobs:
 
     services:
       postgres:
-        image: ${{ (inputs.test-type == 'api' || inputs.test-type == 'web' || inputs.test-type == 'spa-e2e') && 'postgres:16' || '' }}
+        image: ${{ (inputs.test-type == 'api' || inputs.test-type == 'web' || inputs.test-type == 'spa-e2e' || inputs.test-type == 'integration') && 'postgres:16' || '' }}
         env:
           POSTGRES_USER: openpath
           POSTGRES_PASSWORD: openpath_dev
@@ -66,9 +66,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bats
 
-      # Run database migrations for API/Web tests
+      # Run database migrations for API/Web/Integration tests
       - name: Run database migrations
-        if: inputs.test-type == 'api' || inputs.test-type == 'web' || inputs.test-type == 'spa-e2e'
+        if: inputs.test-type == 'api' || inputs.test-type == 'web' || inputs.test-type == 'spa-e2e' || inputs.test-type == 'integration'
         run: |
           npm run drizzle:push --workspace=@openpath/api
           npm run db:migrate --workspace=@openpath/api
@@ -102,10 +102,25 @@ jobs:
         env:
           NODE_ENV: test
 
-      # SPA Tests
+      # SPA Tests (React 19)
       - name: Run SPA tests
         if: inputs.test-type == 'spa'
-        run: npm run test:coverage --workspace=@openpath/spa
+        run: npm run test --workspace=@openpath/react-spa
+
+      # Integration Tests
+      - name: Run Integration tests
+        if: inputs.test-type == 'integration'
+        run: npm run test:integration:api --workspace=@openpath/api
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: openpath
+          DB_USER: openpath
+          DB_PASSWORD: openpath_dev
+          JWT_SECRET: test-jwt-secret-for-ci-testing
+          ADMIN_TOKEN: test-admin-token-for-ci
+          SHARED_SECRET: test-shared-secret-for-ci
 
       # Shared Package Tests
       - name: Run Shared tests

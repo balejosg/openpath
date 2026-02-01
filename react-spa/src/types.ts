@@ -30,6 +30,13 @@ export interface Group {
   status: 'Active' | 'Inactive';
 }
 
+export interface GroupData {
+  enabled: boolean;
+  whitelist: string[];
+  blockedSubdomains: string[];
+  blockedPaths: string[];
+}
+
 export interface NavItem {
   id: string;
   label: string;

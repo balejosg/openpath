@@ -178,13 +178,23 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # ============================================
+  # Job 10: Integration Tests
+  # ============================================
+  test-integration:
+    name: Integration Tests
+    uses: ./.github/workflows/reusable-test.yml
+    with:
+      test-type: integration
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ============================================
   # Job 11: SPA E2E Smoke Tests (fast feedback)
-  # Full E2E suite runs in e2e-comprehensive.yml
   # ============================================
   test-spa-e2e:
     name: SPA E2E Smoke
     runs-on: ubuntu-latest
-    needs: [test-api]
+    needs: [test-api, test-integration]
 
     services:
       postgres:
@@ -224,11 +234,11 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-        working-directory: spa
+        working-directory: react-spa
 
       - name: Run Smoke E2E tests
         run: npx playwright test --grep @smoke --project=chromium
-        working-directory: spa
+        working-directory: react-spa
         env:
           CI: true
           BASE_URL: http://localhost:3001
@@ -251,7 +261,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: spa/playwright-report/
+          path: react-spa/playwright-report/
           retention-days: 7
 
   # ============================================
@@ -286,13 +296,13 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [lint, security, test-web, test-bash, test-windows, test-api, test-spa, test-shared, test-firefox-extension, test-spa-e2e, build-docker, build-docker-api]
+    needs: [lint, security, test-web, test-bash, test-windows, test-api, test-integration, test-spa, test-shared, test-firefox-extension, test-spa-e2e, build-docker, build-docker-api]
     if: always()
 
     steps:
       - name: Check all jobs
         run: |
-          if [[ "${{ needs.lint.result }}" == "failure" ]] ||              [[ "${{ needs.security.result }}" == "failure" ]] ||              [[ "${{ needs.test-web.result }}" == "failure" ]] ||              [[ "${{ needs.test-bash.result }}" == "failure" ]] ||              [[ "${{ needs.test-windows.result }}" == "failure" ]] ||              [[ "${{ needs.test-api.result }}" == "failure" ]] ||              [[ "${{ needs.test-spa.result }}" == "failure" ]] ||              [[ "${{ needs.test-shared.result }}" == "failure" ]] ||              [[ "${{ needs.test-firefox-extension.result }}" == "failure" ]] ||              [[ "${{ needs.test-spa-e2e.result }}" == "failure" ]] ||              [[ "${{ needs.build-docker.result }}" == "failure" ]] ||              [[ "${{ needs.build-docker-api.result }}" == "failure" ]]; then
+          if [[ "${{ needs.lint.result }}" == "failure" ]] ||              [[ "${{ needs.security.result }}" == "failure" ]] ||              [[ "${{ needs.test-web.result }}" == "failure" ]] ||              [[ "${{ needs.test-bash.result }}" == "failure" ]] ||              [[ "${{ needs.test-windows.result }}" == "failure" ]] ||              [[ "${{ needs.test-api.result }}" == "failure" ]] ||              [[ "${{ needs.test-integration.result }}" == "failure" ]] ||              [[ "${{ needs.test-spa.result }}" == "failure" ]] ||              [[ "${{ needs.test-shared.result }}" == "failure" ]] ||              [[ "${{ needs.test-firefox-extension.result }}" == "failure" ]] ||              [[ "${{ needs.test-spa-e2e.result }}" == "failure" ]] ||              [[ "${{ needs.build-docker.result }}" == "failure" ]] ||              [[ "${{ needs.build-docker-api.result }}" == "failure" ]]; then
             echo "CI Failed"
             exit 1
           fi

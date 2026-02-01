@@ -45,6 +45,41 @@ export function isAdmin(): boolean {
 }
 
 /**
+ * Verifica si el usuario es profesor.
+ */
+export function isTeacher(): boolean {
+  const user = getCurrentUser();
+  if (!user || !Array.isArray(user.roles)) return false;
+  return user.roles.some(r => r.role === 'teacher');
+}
+
+/**
+ * Verifica si el usuario es estudiante.
+ */
+export function isStudent(): boolean {
+  const user = getCurrentUser();
+  if (!user || !Array.isArray(user.roles)) return false;
+  return user.roles.some(r => r.role === 'student');
+}
+
+/**
+ * Obtiene los grupos asignados al profesor.
+ */
+export function getTeacherGroups(): string[] {
+  const user = getCurrentUser();
+  if (!user || !Array.isArray(user.roles)) return [];
+  
+  const groups = new Set<string>();
+  user.roles
+    .filter(r => r.role === 'teacher')
+    .forEach(r => {
+      (r.groupIds ?? []).forEach(g => groups.add(g));
+    });
+  
+  return Array.from(groups);
+}
+
+/**
  * Realiza login con email y password.
  */
 export async function login(email: string, password: string): Promise<User> {

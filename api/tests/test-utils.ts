@@ -47,10 +47,12 @@ export async function resetDb(): Promise<void> {
         'roles',
         'tokens',
         'classrooms',
-        'schedules', // Was classroom_schedules
-        'requests',  // Was whitelist_requests
+        'schedules',
+        'requests',
         'machines',
-        'settings'
+        'settings',
+        'whitelist_groups',
+        'whitelist_rules'
     ];
 
     for (const table of tables) {
