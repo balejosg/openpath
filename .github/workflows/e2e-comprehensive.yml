@@ -57,7 +57,7 @@ jobs:
       - name: Get Playwright version
         id: pw-version
         run: echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >> $GITHUB_OUTPUT
-        working-directory: spa
+        working-directory: react-spa
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -69,7 +69,7 @@ jobs:
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
-        working-directory: spa
+        working-directory: react-spa
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -78,7 +78,6 @@ jobs:
           path: |
             api/dist/
             shared/dist/
-            spa/dist/
             react-spa/dist/
           retention-days: 1
 
@@ -124,8 +123,8 @@ jobs:
 
       - name: Debug - Verify build artifacts
         run: |
-          echo "=== Checking spa/dist/ contents ==="
-          ls -la spa/dist/ || echo "spa/dist/ not found!"
+          echo "=== Checking react-spa/dist/ contents ==="
+          ls -la react-spa/dist/ || echo "react-spa/dist/ not found!"
           echo "=== Checking api/dist/ contents ==="
           ls -la api/dist/ || echo "api/dist/ not found!"
 
@@ -133,7 +132,7 @@ jobs:
       - name: Get Playwright version
         id: pw-version
         run: echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >> $GITHUB_OUTPUT
-        working-directory: spa
+        working-directory: react-spa
 
       - name: Restore Playwright cache
         uses: actions/cache@v4
@@ -144,7 +143,7 @@ jobs:
       # System deps can't be cached (installed to /usr/lib) but this is fast (~15s)
       - name: Install Playwright system dependencies
         run: npx playwright install-deps chromium
-        working-directory: spa
+        working-directory: react-spa
 
       - name: Run DB migrations
         run: npm run drizzle:push --workspace=@openpath/api
@@ -157,7 +156,7 @@ jobs:
 
       - name: Run E2E tests (shard ${{ matrix.shard }}/2)
         run: npx playwright test --shard=${{ matrix.shard }}/2 --project=chromium
-        working-directory: spa
+        working-directory: react-spa
         env:
           BASE_URL: http://localhost:3005
           API_URL: http://localhost:3005
@@ -179,7 +178,7 @@ jobs:
         if: always()
         with:
           name: blob-report-shard-${{ matrix.shard }}
-          path: spa/blob-report/
+          path: react-spa/blob-report/
           retention-days: 1
 
       - name: Upload test results on failure
@@ -187,7 +186,7 @@ jobs:
         if: failure()
         with:
           name: test-results-shard-${{ matrix.shard }}
-          path: spa/test-results/
+          path: react-spa/test-results/
           retention-days: 14
 
   linux-agent-e2e:
@@ -227,13 +226,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: blob-report-shard-*
-          path: spa/all-blob-reports/
+          path: react-spa/all-blob-reports/
           merge-multiple: true
 
       - name: Check if blob reports exist
         id: check-blobs
         run: |
-          if [ -d "spa/all-blob-reports" ] && [ "$(ls -A spa/all-blob-reports 2>/dev/null)" ]; then
+          if [ -d "react-spa/all-blob-reports" ] && [ "$(ls -A react-spa/all-blob-reports 2>/dev/null)" ]; then
             echo "has-blobs=true" >> $GITHUB_OUTPUT
             echo "Found blob reports to merge"
           else
@@ -244,14 +243,14 @@ jobs:
       - name: Merge reports into HTML
         if: steps.check-blobs.outputs.has-blobs == 'true'
         run: npx playwright merge-reports --reporter html ./all-blob-reports
-        working-directory: spa
+        working-directory: react-spa
 
       - name: Upload merged HTML report
         if: steps.check-blobs.outputs.has-blobs == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: spa/playwright-report/
+          path: react-spa/playwright-report/
           retention-days: 14
 
       - name: Report merge skipped
