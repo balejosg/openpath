@@ -124,10 +124,79 @@ CI runs `@smoke` tests on every PR. Full suite runs on main/nightly/`e2e` label.
 - Single file:
   - `cd firefox-extension && npx tsx --test tests/background.test.ts`
 
-## Git Hooks (Do not bypass)
+## ⛔ MANDATORY LOCAL VERIFICATION (CRITICAL - READ THIS)
+
+**All agents MUST run full verification locally before ANY commit.**
+
+### The Rule
+```bash
+# BEFORE committing ANY changes:
+npm run verify:full
+```
+
+This command runs:
+1. `npm run verify` - Typecheck + ESLint (all workspaces)
+2. `npm run test:local` - All unit tests (API, SPA, shared, extension, dashboard)
+3. `npm run test:e2e` - Full Playwright E2E test suite
+
+### E2E Prerequisites
+E2E tests require backend services running:
+```bash
+# Start API + PostgreSQL (via Docker Compose or locally)
+docker compose up -d  # Or: npm run dev --workspace=@openpath/api
+
+# Then run E2E
+npm run test:e2e
+```
+If E2E fails with "login failed" or similar, ensure API is accessible.
+
+### What CI Runs
+GitHub Actions CI is **minimal by design**. It only runs tests requiring specific OS:
+- **Linux dnsmasq tests** - Require Ubuntu with dnsmasq/systemd installed
+- **Windows agent tests** - Require Windows with Pester
+
+Everything else (lint, typecheck, unit tests, E2E) runs **locally only**.
+
+### Policy: Fix Without Shortcuts
+
+| Situation | ✅ CORRECT | ❌ FORBIDDEN |
+|-----------|-----------|-------------|
+| Test fails | Fix the test or code | `--no-verify`, skip test, comment out |
+| Lint error | Fix the code | `eslint-disable`, `--no-verify` |
+| Typecheck error | Fix the types | `@ts-ignore`, `any`, `--no-verify` |
+| E2E flaky | Fix the flakiness | Skip test, retry until pass |
+| "Takes too long" | Wait for it | `--no-verify`, partial run |
+
+**NO EXCEPTIONS. NO SHORTCUTS. FIX THE PROBLEM.**
+
+### Why This Policy Exists
+- CI minutes are expensive and limited
+- Local verification gives faster feedback (seconds vs minutes)
+- Agents must take responsibility for code quality
+- Pushing broken code wastes everyone's time
+
+### Verification Workflow
+```bash
+# 1. Make changes
+# 2. Run full verification
+npm run verify:full
+
+# 3. If ANY failure:
+#    - DO NOT commit
+#    - Fix the issue
+#    - Run verify:full again
+#    - Repeat until ALL PASS
+
+# 4. Only after ALL PASS:
+git add .
+git commit -m "your message"
+```
+
+## Git Hooks (Enforced)
 - pre-commit: `.husky/pre-commit` runs `npx lint-staged`
-- pre-push: `.husky/pre-push` runs `npm run verify`
-Avoid `--no-verify` unless explicitly requested by humans.
+- pre-push: `.husky/pre-push` runs `npm run verify:full`
+
+**NEVER use `--no-verify`.** If the hook fails, fix the issue.
 
 ## Code Style (TypeScript)
 Keep changes consistent with ESLint + tsconfig settings.

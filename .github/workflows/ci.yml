@@ -8,100 +8,54 @@ on:
 
 permissions:
   contents: read
-  packages: write
+
+# ============================================
+# IMPORTANT: Local Verification Policy
+# ============================================
+# All lint, typecheck, unit tests, and E2E tests MUST be run locally
+# before pushing (via `npm run verify:full`).
+#
+# This CI only runs tests that REQUIRE specific OS environments:
+# - Linux dnsmasq tests (require Ubuntu with dnsmasq/systemd)
+# - Windows agent tests (require Windows with Pester)
+#
+# See AGENTS.md for the mandatory local verification protocol.
+# ============================================
 
 jobs:
   # ============================================
-  # Job 1: Lint
+  # Job 1: Linux dnsmasq Agent Tests
   # ============================================
-  lint:
-    name: Lint
+  test-linux-dnsmasq:
+    name: Linux Agent Tests (BATS)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-
-      - name: Build workspaces
-        uses: ./.github/actions/build-workspaces
-
-      - name: Verify Strict Compliance (Lint & Type Check)
-        run: npm run verify
-
-      - name: Verify Database Schema Consistency
-        run: npm run verify:schema --workspace=@openpath/api
-
-      - name: Shellcheck
+      - name: Install dnsmasq
         run: |
-          find linux -name '*.sh' -type f | xargs shellcheck --severity=warning
-          echo "Shellcheck completed successfully"
+          sudo apt-get update
+          sudo apt-get install -y dnsmasq
 
-      - name: PSScriptAnalyzer (Windows PowerShell)
-        shell: pwsh
+      - name: Install BATS
         run: |
-          Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
-          $results = Invoke-ScriptAnalyzer -Path windows -Recurse -Severity Warning,Error
-          if ($results) {
-            $results | Format-Table -AutoSize
-            exit 1
-          }
-          Write-Host "PSScriptAnalyzer completed successfully"
+          sudo apt-get install -y bats
 
-      - name: Lint Markdown files
-        uses: DavidAnson/markdownlint-cli2-action@v16
-        with:
-          globs: |
-            **/*.md
-            !**/node_modules/**
-            !**/dist/**
-            !**/coverage/**
-          config: '.markdownlint.json'
+      - name: Run BATS unit tests
+        run: |
+          cd tests && bats *.bats
+
+      - name: Run Linux agent E2E tests
+        run: |
+          bats tests/e2e/agent-integration.bats
 
   # ============================================
-  # Job 2: Security Audit
-  # ============================================
-  security:
-    name: Security Audit
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-
-      - name: NPM Audit (API)
-        run: npm audit --audit-level=moderate --workspace=@openpath/api
-
-  # ============================================
-  # Job 3: Test Web Application
-  # ============================================
-  test-web:
-    name: Web Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: web
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ============================================
-  # Job 4: Test Bash Scripts
-  # ============================================
-  test-bash:
-    name: Bash Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: bash
-
-  # ============================================
-  # Job 5: Test Windows PowerShell Scripts
+  # Job 2: Windows Agent Tests
   # ============================================
   test-windows:
-    name: Windows Tests
+    name: Windows Agent Tests (Pester)
     runs-on: windows-latest
 
     steps:
@@ -134,175 +88,19 @@ jobs:
           retention-days: 7
 
   # ============================================
-  # Job 6: Test Request API
-  # ============================================
-  test-api:
-    name: API Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: api
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ============================================
-  # Job 7: Test SPA
-  # ============================================
-  test-spa:
-    name: SPA Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: spa
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ============================================
-  # Job 8: Test Shared Package
-  # ============================================
-  test-shared:
-    name: Shared Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: shared
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ============================================
-  # Job 9: Test Firefox Extension
-  # ============================================
-  test-firefox-extension:
-    name: Extension Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: extension
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ============================================
-  # Job 10: Integration Tests
-  # ============================================
-  test-integration:
-    name: Integration Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: integration
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ============================================
-  # Job 11: SPA E2E Smoke Tests (fast feedback)
-  # ============================================
-  test-spa-e2e:
-    name: SPA E2E Smoke
-    runs-on: ubuntu-latest
-    needs: [test-api, test-integration]
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: openpath
-          POSTGRES_PASSWORD: openpath_dev
-          POSTGRES_DB: openpath
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-
-      - name: Build workspaces
-        uses: ./.github/actions/build-workspaces
-        with:
-          build-spa: 'true'
-
-      - name: Run DB migrations
-        run: npm run drizzle:push --workspace=@openpath/api
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: openpath
-          DB_USER: openpath
-          DB_PASSWORD: openpath_dev
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-        working-directory: react-spa
-
-      - name: Run Smoke E2E tests
-        run: npx playwright test --grep @smoke --project=chromium
-        working-directory: react-spa
-        env:
-          CI: true
-          BASE_URL: http://localhost:3000/
-          API_URL: http://localhost:3000
-          PORT: 3000
-          NODE_ENV: test
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: openpath
-          DB_USER: openpath
-          DB_PASSWORD: openpath_dev
-          JWT_SECRET: test-jwt-secret-for-ci-testing
-          ADMIN_TOKEN: test-admin-token-for-ci
-          CORS_ORIGINS: http://localhost:3000
-          SHARED_SECRET: test-shared-secret-for-ci
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload test artifacts
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: react-spa/playwright-report/
-          retention-days: 7
-
-  # ============================================
-  # Job 12: Build Docker Image (Dashboard)
-  # ============================================
-  build-docker:
-    name: Build Dashboard Docker
-    needs: [lint, test-web]
-    uses: ./.github/workflows/reusable-docker.yml
-    with:
-      image-name: dashboard
-      dockerfile: ./dashboard/Dockerfile
-      push: ${{ github.event_name != 'pull_request' }}
-    secrets: inherit
-
-  # ============================================
-  # Job 13: Build Docker Image (API)
-  # ============================================
-  build-docker-api:
-    name: Build API Docker
-    needs: [lint, test-api]
-    uses: ./.github/workflows/reusable-docker.yml
-    with:
-      image-name: api
-      dockerfile: ./api/Dockerfile
-      push: ${{ github.event_name != 'pull_request' }}
-    secrets: inherit
-
-  # ============================================
   # Summary Job
   # ============================================
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [lint, security, test-web, test-bash, test-windows, test-api, test-integration, test-spa, test-shared, test-firefox-extension, test-spa-e2e, build-docker, build-docker-api]
+    needs: [test-linux-dnsmasq, test-windows]
     if: always()
 
     steps:
       - name: Check all jobs
         run: |
-          if [[ "${{ needs.lint.result }}" == "failure" ]] ||              [[ "${{ needs.security.result }}" == "failure" ]] ||              [[ "${{ needs.test-web.result }}" == "failure" ]] ||              [[ "${{ needs.test-bash.result }}" == "failure" ]] ||              [[ "${{ needs.test-windows.result }}" == "failure" ]] ||              [[ "${{ needs.test-api.result }}" == "failure" ]] ||              [[ "${{ needs.test-integration.result }}" == "failure" ]] ||              [[ "${{ needs.test-spa.result }}" == "failure" ]] ||              [[ "${{ needs.test-shared.result }}" == "failure" ]] ||              [[ "${{ needs.test-firefox-extension.result }}" == "failure" ]] ||              [[ "${{ needs.test-spa-e2e.result }}" == "failure" ]] ||              [[ "${{ needs.build-docker.result }}" == "failure" ]] ||              [[ "${{ needs.build-docker-api.result }}" == "failure" ]]; then
+          if [[ "${{ needs.test-linux-dnsmasq.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-windows.result }}" == "failure" ]]; then
             echo "CI Failed"
             exit 1
           fi

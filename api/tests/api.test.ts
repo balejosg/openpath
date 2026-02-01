@@ -190,9 +190,18 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
     });
 
     await describe('Error Handling', async () => {
-        await test('should return 404 for unknown routes', async () => {
-            const response = await fetch(`${API_URL}/unknown-route`);
+        await test('should return 404 for blocked /v2 routes', async () => {
+            // /v2 is explicitly blocked now that React SPA is served from /
+            const response = await fetch(`${API_URL}/v2`);
             assert.strictEqual(response.status, 404);
+        });
+
+        await test('should return SPA for client-side routes', async () => {
+            // Unknown routes now return SPA HTML for client-side routing
+            const response = await fetch(`${API_URL}/unknown-route`);
+            assert.strictEqual(response.status, 200);
+            const text = await response.text();
+            assert.ok(text.includes('<!DOCTYPE html>') || text.includes('<html'), 'Expected HTML response');
         });
 
         await test('should handle malformed JSON', async () => {
