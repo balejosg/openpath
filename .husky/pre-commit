@@ -1,6 +1,6 @@
 #!/bin/sh
-# Pre-commit hook: Fast checks before every commit
-# - ESLint + Prettier on staged files
-# - Secretlint for secret detection on staged files
+# Pre-commit hook: Full verification before every commit
+# Runs: typecheck + lint + all tests + E2E
+# Policy: If this fails, FIX IT. No --no-verify allowed.
 
-npx lint-staged
+npm run verify:full

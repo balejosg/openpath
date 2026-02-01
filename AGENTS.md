@@ -193,8 +193,8 @@ git commit -m "your message"
 ```
 
 ## Git Hooks (Enforced)
-- pre-commit: `.husky/pre-commit` runs `npx lint-staged`
-- pre-push: `.husky/pre-push` runs `npm run verify:full`
+- **pre-commit**: `.husky/pre-commit` runs `npm run verify:full` (typecheck + lint + tests + E2E)
+- pre-push: No additional checks (already verified at commit time)
 
 **NEVER use `--no-verify`.** If the hook fails, fix the issue.
 
