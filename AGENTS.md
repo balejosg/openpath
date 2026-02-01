@@ -136,8 +136,13 @@ npm run verify:full
 
 This command runs:
 1. `npm run verify` - Typecheck + ESLint (all workspaces)
-2. `npm run test:local` - All unit tests (API, SPA, shared, extension, dashboard)
-3. `npm run test:e2e` - Full Playwright E2E test suite
+2. `npm run lint:shell` - Shellcheck for bash scripts
+3. `npm run format:check` - Prettier format validation
+4. `npm run test:local` - All unit tests (API, SPA, shared, extension, dashboard)
+5. `npm run test:e2e` - Full Playwright E2E test suite
+6. `npm run security:audit` - npm audit (high severity)
+7. `npm run security:secrets` - Secretlint for leaked credentials
+8. `npm run size:check` - Bundle size limits
 
 ### E2E Prerequisites
 E2E tests require backend services running:
@@ -193,7 +198,8 @@ git commit -m "your message"
 ```
 
 ## Git Hooks (Enforced)
-- **pre-commit**: `.husky/pre-commit` runs `npm run verify:full` (typecheck + lint + tests + E2E)
+- **pre-commit**: `.husky/pre-commit` runs `npm run verify:full` (full verification suite)
+- **commit-msg**: `.husky/commit-msg` runs `commitlint` (conventional commits format)
 - pre-push: No additional checks (already verified at commit time)
 
 **NEVER use `--no-verify`.** If the hook fails, fix the issue.
