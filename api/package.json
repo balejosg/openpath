@@ -41,7 +41,7 @@
     "test:mutation": "stryker run",
     "db:migrate": "node dist/scripts/migrate.js",
     "db:test": "node -e \"import { db } from './dist/src/db/index.js'; console.log('DB module loaded'); process.exit(0);\"",
-    "db:push": "drizzle-kit push",
+    "db:push": "drizzle-kit push --force",
     "drizzle:generate": "drizzle-kit generate",
     "drizzle:push": "drizzle-kit push",
     "drizzle:studio": "drizzle-kit studio",
