@@ -85,6 +85,7 @@ export const TEACHER_CREDENTIALS = {
 
 /**
  * Logs in as admin user - assumes test database is seeded
+ * Note: SPA uses state-based navigation, not URL routing
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
   await page.goto('./');
@@ -92,7 +93,8 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   await page.locator('input[type="email"]').fill(ADMIN_CREDENTIALS.email);
   await page.locator('input[type="password"]').fill(ADMIN_CREDENTIALS.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  await page.waitForURL(/\/(dashboard|groups|requests)/);
+  // Wait for dashboard content to appear (state-based navigation)
+  await page.getByText(/Panel de Control|Vista General|Aulas Seguras/i).first().waitFor({ timeout: 15000 });
 }
 
 /**
@@ -104,18 +106,30 @@ export async function loginAsTeacher(page: Page): Promise<void> {
   await page.locator('input[type="email"]').fill(TEACHER_CREDENTIALS.email);
   await page.locator('input[type="password"]').fill(TEACHER_CREDENTIALS.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  await page.waitForURL(/\/(dashboard|groups|requests)/);
+  // Wait for dashboard content to appear (state-based navigation)
+  await page.getByText(/Panel de Control|Vista General|Aulas Seguras/i).first().waitFor({ timeout: 15000 });
 }
 
 /**
  * Logs out the current user
+ * Note: SPA uses state-based navigation, looks for logout button in sidebar
  */
 export async function logout(page: Page): Promise<void> {
+  // Try sidebar logout button first
+  const logoutButton = page.getByRole('button', { name: /Cerrar Sesión/i });
+  if (await logoutButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+    await logoutButton.click();
+    // Wait for login form to appear
+    await page.waitForSelector('input[type="email"]', { timeout: 5000 });
+    return;
+  }
+  
+  // Fallback to user menu
   const userMenu = page.locator('[data-testid="user-menu"]');
   if (await userMenu.isVisible()) {
     await userMenu.click();
     await page.getByRole('menuitem', { name: /Cerrar sesión|Logout/i }).click();
-    await page.waitForURL(/\/login|\//);
+    await page.waitForSelector('input[type="email"]', { timeout: 5000 });
   }
 }
 
@@ -130,6 +144,29 @@ export async function clearAuth(context: BrowserContext): Promise<void> {
 // ============================================================================
 // Wait Helpers
 // ============================================================================
+
+/**
+ * Waits for authenticated dashboard to appear
+ * Use this instead of waitForURL since SPA uses state-based navigation
+ */
+export async function waitForDashboard(page: Page, timeout = 15000): Promise<void> {
+  await page.getByText(/Panel de Control|Vista General|Aulas Seguras/i).first().waitFor({ timeout });
+}
+
+/**
+ * Waits for login page to appear
+ */
+export async function waitForLoginPage(page: Page, timeout = 10000): Promise<void> {
+  await page.locator('input[type="email"]').waitFor({ timeout });
+  await page.locator('input[type="password"]').waitFor({ timeout });
+}
+
+/**
+ * Waits for register page to appear
+ */
+export async function waitForRegisterPage(page: Page, timeout = 10000): Promise<void> {
+  await page.getByText(/Registro Institucional|Crear cuenta|Registrarse/i).first().waitFor({ timeout });
+}
 
 /**
  * Waits for network to be idle (no pending requests)

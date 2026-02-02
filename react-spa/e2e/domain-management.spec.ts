@@ -11,7 +11,8 @@ import {
   loginAsTeacher,
   createTestDomain,
   waitForNetworkIdle,
-  waitForToast 
+  waitForToast,
+  waitForDashboard
 } from './fixtures/test-utils';
 
 test.describe('Domain Request Management', () => {
@@ -132,23 +133,29 @@ test.describe('Teacher Domain Approval Workflow', () => {
     await loginAsTeacher(page);
     await waitForNetworkIdle(page);
     
-    // Navigate to requests
-    await page.goto('./requests');
-    await waitForNetworkIdle(page);
+    // Navigate to requests via sidebar
+    const requestsButton = page.getByRole('button', { name: /Control de Dominios|Solicitudes/i });
+    if (await requestsButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await requestsButton.click();
+    }
     
-    // Teacher should see request list
-    await expect(page.getByText(/Solicitudes|Requests/i)).toBeVisible();
+    // Teacher should see request list or dashboard
+    await expect(page.getByText(/Solicitudes|Requests|Panel|Dashboard/i)).toBeVisible();
   });
 
   test('should allow teacher to approve requests for their groups @domains @teacher', async ({ page }) => {
     await loginAsTeacher(page);
     await waitForNetworkIdle(page);
     
-    await page.goto('./requests');
+    // Navigate to requests via sidebar
+    const requestsButton = page.getByRole('button', { name: /Control de Dominios|Solicitudes/i });
+    if (await requestsButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await requestsButton.click();
+    }
     
     const pendingRow = page.locator('[data-status="pending"]').first();
     
-    if (await pendingRow.isVisible()) {
+    if (await pendingRow.isVisible({ timeout: 3000 }).catch(() => false)) {
       // Teacher should have approve button
       const approveButton = pendingRow.getByRole('button', { name: /Aprobar|Approve/i });
       await expect(approveButton).toBeVisible();

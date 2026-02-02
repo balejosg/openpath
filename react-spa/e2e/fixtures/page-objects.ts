@@ -110,7 +110,12 @@ export class DashboardPage {
   }
 
   async goto() {
-    await this.page.goto('./dashboard');
+    // SPA uses state-based navigation, click sidebar if already logged in
+    // Otherwise just ensure we're on the page
+    const sidebarDashboard = this.page.getByRole('button', { name: /Panel de Control/i });
+    if (await sidebarDashboard.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await sidebarDashboard.click();
+    }
     await this.page.waitForLoadState('networkidle');
   }
 
@@ -145,12 +150,16 @@ export class GroupsPage {
   }
 
   async goto() {
-    await this.page.goto('./groups');
+    // SPA uses state-based navigation, click sidebar
+    const sidebarGroups = this.page.getByRole('button', { name: /Políticas de Grupo/i });
+    if (await sidebarGroups.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await sidebarGroups.click();
+    }
     await this.page.waitForLoadState('networkidle');
   }
 
   async expectLoaded() {
-    await expect(this.newGroupButton).toBeVisible();
+    await expect(this.page.getByText(/Grupos y Políticas|Políticas de Grupo/i)).toBeVisible();
   }
 
   async getGroupCount(): Promise<number> {
@@ -173,13 +182,20 @@ export class GroupsPage {
 
 export class DomainRequestsPage {
   readonly page: Page;
-  readonly requestList: Locator;
   readonly filterDropdown: Locator;
 
   constructor(page: Page) {
     this.page = page;
-    this.requestList = page.locator('[data-testid="request-list"]');
-    this.filterDropdown = page.getByRole('combobox', { name: /Filtrar/i });
+    this.filterDropdown = page.getByRole('combobox');
+  }
+
+  async goto() {
+    // SPA uses state-based navigation, click sidebar
+    const domainsButton = this.page.getByRole('button', { name: /Control de Dominios/i });
+    if (await domainsButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await domainsButton.click();
+    }
+    await this.page.waitForLoadState('networkidle');
   }
 
   async goto() {
