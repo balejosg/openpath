@@ -10,7 +10,8 @@ import Register from './views/Register';
 import ForgotPassword from './views/ForgotPassword';
 import ResetPassword from './views/ResetPassword';
 import Settings from './views/Settings';
-import { ShieldAlert, CheckCircle } from 'lucide-react';
+import DomainRequests from './views/DomainRequests';
+import { ShieldAlert } from 'lucide-react';
 import { isAuthenticated, onAuthChange } from './lib/auth';
 
 type AuthView = 'login' | 'register' | 'forgot-password' | 'reset-password';
@@ -44,17 +45,7 @@ const App: React.FC = () => {
       case 'settings':
         return <Settings />;
       case 'domains':
-        return (
-          <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-lg border border-slate-200 shadow-sm text-slate-500">
-            <div className="bg-green-50 p-4 rounded-full mb-4">
-              <CheckCircle size={48} className="text-green-500" />
-            </div>
-            <h2 className="text-xl font-semibold text-slate-800">Todo en orden</h2>
-            <p className="mt-2 text-slate-500 text-sm">
-              No hay solicitudes de dominio pendientes de revisión.
-            </p>
-          </div>
-        );
+        return <DomainRequests />;
       default:
         return <Dashboard />;
     }
