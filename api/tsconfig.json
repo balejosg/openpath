@@ -11,14 +11,6 @@
     "resolveJsonModule": true,
     "noEmit": false
   },
-  "include": [
-    "src/**/*",
-    "scripts/**/*",
-    "tests/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "tests/load"
-  ]
+  "include": ["src/**/*", "scripts/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "dist", "tests/load"]
 }

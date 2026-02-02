@@ -1,7 +1,7 @@
 coverage:
   precision: 2
   round: down
-  range: "50...90"
+  range: '50...90'
   status:
     project:
       default:
@@ -33,6 +33,6 @@ flags:
       - firefox-extension/src
 
 comment:
-  layout: "reach,diff,flags,files"
+  layout: 'reach,diff,flags,files'
   behavior: default
   require_changes: false

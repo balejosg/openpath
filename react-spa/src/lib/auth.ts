@@ -41,7 +41,7 @@ export function isAuthenticated(): boolean {
 export function isAdmin(): boolean {
   const user = getCurrentUser();
   if (!user || !Array.isArray(user.roles)) return false;
-  return user.roles.some(r => r.role === 'admin');
+  return user.roles.some((r) => r.role === 'admin');
 }
 
 /**
@@ -50,7 +50,7 @@ export function isAdmin(): boolean {
 export function isTeacher(): boolean {
   const user = getCurrentUser();
   if (!user || !Array.isArray(user.roles)) return false;
-  return user.roles.some(r => r.role === 'teacher');
+  return user.roles.some((r) => r.role === 'teacher');
 }
 
 /**
@@ -59,7 +59,7 @@ export function isTeacher(): boolean {
 export function isStudent(): boolean {
   const user = getCurrentUser();
   if (!user || !Array.isArray(user.roles)) return false;
-  return user.roles.some(r => r.role === 'student');
+  return user.roles.some((r) => r.role === 'student');
 }
 
 /**
@@ -68,14 +68,14 @@ export function isStudent(): boolean {
 export function getTeacherGroups(): string[] {
   const user = getCurrentUser();
   if (!user || !Array.isArray(user.roles)) return [];
-  
+
   const groups = new Set<string>();
   user.roles
-    .filter(r => r.role === 'teacher')
-    .forEach(r => {
-      (r.groupIds ?? []).forEach(g => groups.add(g));
+    .filter((r) => r.role === 'teacher')
+    .forEach((r) => {
+      (r.groupIds ?? []).forEach((g) => groups.add(g));
     });
-  
+
   return Array.from(groups);
 }
 
@@ -133,5 +133,7 @@ export function onAuthChange(callback: () => void): () => void {
     }
   };
   window.addEventListener('storage', handler);
-  return () => { window.removeEventListener('storage', handler); };
+  return () => {
+    window.removeEventListener('storage', handler);
+  };
 }

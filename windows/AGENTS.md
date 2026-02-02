@@ -20,12 +20,12 @@ windows/
 
 ## Key Modules
 
-| Module | Purpose |
-|--------|---------|
-| `DNS.psm1` | Acrylic installation, host file generation, service control |
-| `Firewall.psm1` | Block external DNS, allow localhost only |
-| `Browser.psm1` | Chrome/Edge/Firefox policy via registry |
-| `Services.psm1` | Scheduled tasks for updates, watchdog |
+| Module          | Purpose                                                     |
+| --------------- | ----------------------------------------------------------- |
+| `DNS.psm1`      | Acrylic installation, host file generation, service control |
+| `Firewall.psm1` | Block external DNS, allow localhost only                    |
+| `Browser.psm1`  | Chrome/Edge/Firefox policy via registry                     |
+| `Services.psm1` | Scheduled tasks for updates, watchdog                       |
 
 ## Conventions
 

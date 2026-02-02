@@ -8,41 +8,39 @@
 
 import { relations } from 'drizzle-orm';
 import {
-    users,
-    roles,
-    classrooms,
-    machines,
-    schedules,
-    tokens,
-    passwordResetTokens,
+  users,
+  roles,
+  classrooms,
+  machines,
+  schedules,
+  tokens,
+  passwordResetTokens,
 } from './schema.js';
-
 
 // =============================================================================
 // User Relations
 // =============================================================================
 
 export const usersRelations = relations(users, ({ many }) => ({
-    roles: many(roles),
-    schedules: many(schedules),
-    tokens: many(tokens),
-    passwordResetTokens: many(passwordResetTokens),
+  roles: many(roles),
+  schedules: many(schedules),
+  tokens: many(tokens),
+  passwordResetTokens: many(passwordResetTokens),
 }));
-
 
 // =============================================================================
 // Role Relations
 // =============================================================================
 
 export const rolesRelations = relations(roles, ({ one }) => ({
-    user: one(users, {
-        fields: [roles.userId],
-        references: [users.id],
-    }),
-    createdByUser: one(users, {
-        fields: [roles.createdBy],
-        references: [users.id],
-    }),
+  user: one(users, {
+    fields: [roles.userId],
+    references: [users.id],
+  }),
+  createdByUser: one(users, {
+    fields: [roles.createdBy],
+    references: [users.id],
+  }),
 }));
 
 // =============================================================================
@@ -50,8 +48,8 @@ export const rolesRelations = relations(roles, ({ one }) => ({
 // =============================================================================
 
 export const classroomsRelations = relations(classrooms, ({ many }) => ({
-    machines: many(machines),
-    schedules: many(schedules),
+  machines: many(machines),
+  schedules: many(schedules),
 }));
 
 // =============================================================================
@@ -59,10 +57,10 @@ export const classroomsRelations = relations(classrooms, ({ many }) => ({
 // =============================================================================
 
 export const machinesRelations = relations(machines, ({ one }) => ({
-    classroom: one(classrooms, {
-        fields: [machines.classroomId],
-        references: [classrooms.id],
-    }),
+  classroom: one(classrooms, {
+    fields: [machines.classroomId],
+    references: [classrooms.id],
+  }),
 }));
 
 // =============================================================================
@@ -70,14 +68,14 @@ export const machinesRelations = relations(machines, ({ one }) => ({
 // =============================================================================
 
 export const schedulesRelations = relations(schedules, ({ one }) => ({
-    classroom: one(classrooms, {
-        fields: [schedules.classroomId],
-        references: [classrooms.id],
-    }),
-    teacher: one(users, {
-        fields: [schedules.teacherId],
-        references: [users.id],
-    }),
+  classroom: one(classrooms, {
+    fields: [schedules.classroomId],
+    references: [classrooms.id],
+  }),
+  teacher: one(users, {
+    fields: [schedules.teacherId],
+    references: [users.id],
+  }),
 }));
 
 // =============================================================================
@@ -85,16 +83,15 @@ export const schedulesRelations = relations(schedules, ({ one }) => ({
 // =============================================================================
 
 export const tokensRelations = relations(tokens, ({ one }) => ({
-    user: one(users, {
-        fields: [tokens.userId],
-        references: [users.id],
-    }),
+  user: one(users, {
+    fields: [tokens.userId],
+    references: [users.id],
+  }),
 }));
 
 export const passwordResetTokensRelations = relations(passwordResetTokens, ({ one }) => ({
-    user: one(users, {
-        fields: [passwordResetTokens.userId],
-        references: [users.id],
-    }),
+  user: one(users, {
+    fields: [passwordResetTokens.userId],
+    references: [users.id],
+  }),
 }));
-

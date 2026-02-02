@@ -130,7 +130,7 @@ detect_primary_dns() {
     # 1. Try to read saved DNS
     if [ -f "$ORIGINAL_DNS_FILE" ]; then
         local saved_dns
-        saved_dns=$(cat "$ORIGINAL_DNS_FILE" | head -1)
+        saved_dns=$(head -1 "$ORIGINAL_DNS_FILE")
         # Validate IP format before using
         if [ -n "$saved_dns" ] && validate_ip "$saved_dns" && timeout 5 dig @"$saved_dns" google.com +short >/dev/null 2>&1; then
             echo "$saved_dns"

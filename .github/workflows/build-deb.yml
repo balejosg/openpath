@@ -45,11 +45,11 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       package_name: ${{ steps.version.outputs.package_name }}
       suite: ${{ steps.version.outputs.suite }}
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
       - name: Extract version
         id: version
         run: |
@@ -62,7 +62,7 @@ jobs:
             # Fallback: read from version.txt or use 0.0.0
             VERSION=$(cat version.txt 2>/dev/null || echo "0.0.0")
           fi
-          
+
           # Determine suite
           SUITE="${{ inputs.suite }}"
           if [ -z "$SUITE" ]; then
@@ -73,12 +73,12 @@ jobs:
               SUITE="unstable"
             fi
           fi
-          
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "package_name=openpath-dnsmasq_${VERSION}-1_amd64.deb" >> $GITHUB_OUTPUT
           echo "suite=$SUITE" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION for suite: $SUITE"
-      
+
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
@@ -93,7 +93,7 @@ jobs:
         run: |
           chmod +x linux/scripts/build/build-deb.sh
           ./linux/scripts/build/build-deb.sh ${{ steps.version.outputs.version }} 1
-      
+
       - name: Verify package with lintian
         run: |
           sudo apt-get update && sudo apt-get install -y lintian
@@ -102,7 +102,7 @@ jobs:
           echo ""
           echo "Package info:"
           dpkg-deb --info build/*.deb
-      
+
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
@@ -114,35 +114,35 @@ jobs:
     name: Publish to APT Repository (${{ needs.build.outputs.suite }})
     needs: build
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
       - name: Checkout gh-pages branch
         uses: actions/checkout@v4
         with:
           ref: gh-pages
           path: gh-pages
         continue-on-error: true
-      
+
       - name: Create gh-pages directory if not exists
         run: |
           if [ ! -d gh-pages ]; then
             mkdir gh-pages
           fi
-      
+
       - name: Download package artifact
         uses: actions/download-artifact@v4
         with:
           name: debian-package
           path: packages/
-      
+
       - name: Install reprepro and GPG
         run: |
           sudo apt-get update
           sudo apt-get install -y reprepro gnupg
-      
+
       - name: Setup GPG key
         run: |
           # Check if secret is provided
@@ -166,13 +166,13 @@ jobs:
           fi
           echo "GPG_KEY_ID=$GPG_KEY_ID" >> $GITHUB_ENV
           echo "Using GPG key: $GPG_KEY_ID"
-      
+
       - name: Setup APT repository structure
         run: |
           SUITE="${{ needs.build.outputs.suite }}"
           mkdir -p gh-pages/apt/conf
           mkdir -p gh-pages/apt/pool/main
-          
+
           # Create distributions file with both stable and unstable
           cat > gh-pages/apt/conf/distributions << EOF
           Origin: OpenPath System
@@ -193,29 +193,29 @@ jobs:
           Description: OpenPath DNS System - Development builds
           SignWith: ${{ env.GPG_KEY_ID }}
           EOF
-          
+
           cat > gh-pages/apt/conf/options << EOF
           verbose
           basedir .
           EOF
-          
+
           echo "SUITE=$SUITE" >> $GITHUB_ENV
-      
+
       - name: Add package to repository
         working-directory: gh-pages/apt
         run: |
           echo "Adding package to ${{ env.SUITE }} suite..."
           reprepro includedeb ${{ env.SUITE }} ../../packages/*.deb
-      
+
       - name: Export GPG public key
         run: |
           gpg --armor --export ${{ env.GPG_KEY_ID }} > gh-pages/apt/pubkey.gpg
-      
+
       - name: Copy setup script
         run: |
           cp linux/scripts/build/apt-setup.sh gh-pages/apt/apt-setup.sh
           chmod +x gh-pages/apt/apt-setup.sh
-      
+
       - name: Create index.html for apt directory
         run: |
           cat > gh-pages/apt/index.html << 'EOF'
@@ -237,15 +237,15 @@ jobs:
           </body>
           </html>
           EOF
-      
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
-      
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./gh-pages
-      
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
@@ -254,14 +254,14 @@ jobs:
     name: Upload to GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Download package artifact
         uses: actions/download-artifact@v4
         with:
           name: debian-package
           path: packages/
-      
+
       - name: Upload to Release
         uses: softprops/action-gh-release@v1
         with:
@@ -269,4 +269,3 @@ jobs:
           files: packages/*.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-

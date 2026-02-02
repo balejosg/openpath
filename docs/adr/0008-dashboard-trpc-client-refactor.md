@@ -28,21 +28,26 @@ This violated the DRY principle and created tight coupling between Dashboard and
 ## Considered Options
 
 ### Option 1: Keep Current Architecture (Rejected)
+
 **Pros**: No changes needed  
 **Cons**: Continued maintenance burden, code duplication, security concerns
 
 ### Option 2: Merge Dashboard into API (Rejected)
+
 **Pros**: Complete unification  
 **Cons**: Loses service separation, harder to deploy independently
 
 ### Option 3: Refactor Dashboard as tRPC Client (Accepted)
-**Pros**: 
+
+**Pros**:
+
 - Maintains service separation
 - Eliminates database dependency in Dashboard
 - Reuses existing API logic
 - Clear responsibility boundaries
 
-**Cons**: 
+**Cons**:
+
 - Requires migration effort
 - Additional network hop for Dashboard requests
 
@@ -87,6 +92,7 @@ Dashboard is now a thin REST wrapper around the API's tRPC endpoints, acting as 
    - `@trpc/client` for API communication
 
 3. **New Architecture**:
+
    ```
    Client → Dashboard (REST) → tRPC Client → API (tRPC) → Database
    ```
@@ -100,6 +106,7 @@ Dashboard is now a thin REST wrapper around the API's tRPC endpoints, acting as 
 ### Authentication Changes
 
 Dashboard users are now migrated to the main `users` table with `admin` role:
+
 - Migration script: `api/scripts/migrate-dashboard-users.ts`
 - JWT-based auth tokens stored in signed cookies
 - Access token + refresh token flow
@@ -108,15 +115,18 @@ Dashboard users are now migrated to the main `users` table with `admin` role:
 ### Environment Variables
 
 **Dashboard** (new):
+
 - `API_URL`: URL to API server (default: `http://localhost:3000`)
 - `COOKIE_SECRET`: Secret for signing cookies
 
 **Dashboard** (removed):
+
 - `DATABASE_URL`, `SESSION_SECRET`, `ADMIN_PASSWORD`
 
 ## Testing
 
 Comprehensive test suite added (`api/tests/groups.test.ts`):
+
 - 30 tests covering all groups router functionality
 - Authorization tests (unauthenticated, non-admin, admin)
 - CRUD operations for groups and rules
@@ -150,6 +160,7 @@ Comprehensive test suite added (`api/tests/groups.test.ts`):
 ## Compliance
 
 This refactor aligns with:
+
 - **ADR-0001**: DNS sinkhole architecture (groups storage for whitelist management)
 - **ADR-0004**: tRPC adoption (extends tRPC usage to dashboard)
 - **SECURITY-HARDENING.md**: Reduces attack surface, centralizes auth

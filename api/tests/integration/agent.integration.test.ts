@@ -9,13 +9,13 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import type { Server } from 'node:http';
 import {
-    getAvailablePort,
-    trpcQuery,
-    trpcMutate,
-    parseTRPC,
-    bearerAuth,
-    assertStatus,
-    resetDb,
+  getAvailablePort,
+  trpcQuery,
+  trpcMutate,
+  parseTRPC,
+  bearerAuth,
+  assertStatus,
+  resetDb,
 } from '../test-utils.js';
 import { closeConnection } from '../../src/db/index.js';
 
@@ -27,64 +27,90 @@ const SHARED_SECRET = 'test-shared-secret';
 let server: Server | undefined;
 
 void describe('Agent & Health Integration', () => {
-    before(async () => {
-        await resetDb();
-        
-        PORT = await getAvailablePort();
-        API_URL = `http://localhost:${String(PORT)}`;
-        process.env.PORT = String(PORT);
-        process.env.ADMIN_TOKEN = ADMIN_TOKEN;
-        process.env.SHARED_SECRET = SHARED_SECRET;
-        
-        const { app } = await import('../../src/server.js');
+  before(async () => {
+    await resetDb();
 
-        server = app.listen(PORT);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-    });
+    PORT = await getAvailablePort();
+    API_URL = `http://localhost:${String(PORT)}`;
+    process.env.PORT = String(PORT);
+    process.env.ADMIN_TOKEN = ADMIN_TOKEN;
+    process.env.SHARED_SECRET = SHARED_SECRET;
 
-    after(async () => {
-        if (server !== undefined) {
-            server.close();
-        }
-        await closeConnection();
-    });
+    const { app } = await import('../../src/server.js');
 
-    void test('should receive health reports from agents', async () => {
-        const hostname = 'agent-01';
+    server = app.listen(PORT);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  });
 
-        // 1. Submit report (Agent context)
-        const reportResp = await trpcMutate(API_URL, 'healthReports.submit', {
-            hostname,
-            status: 'HEALTHY',
-            dnsmasqRunning: true,
-            dnsResolving: true,
-            version: '1.0.0'
-        }, bearerAuth(SHARED_SECRET));
+  after(async () => {
+    if (server !== undefined) {
+      server.close();
+    }
+    await closeConnection();
+  });
 
-        assertStatus(reportResp, 200);
+  void test('should receive health reports from agents', async () => {
+    const hostname = 'agent-01';
 
-        // 2. Verify in list (Admin context)
-        const listResp = await trpcQuery(API_URL, 'healthReports.list', undefined, bearerAuth(ADMIN_TOKEN));
-        assertStatus(listResp, 200);
-        const { data: summary } = await parseTRPC(listResp) as { data: { hosts: { hostname: string; status: string }[] } };
-        
-        const agent = summary.hosts.find((h) => h.hostname === hostname);
-        assert.ok(agent);
-        assert.strictEqual(agent.status, 'HEALTHY');
-    });
+    // 1. Submit report (Agent context)
+    const reportResp = await trpcMutate(
+      API_URL,
+      'healthReports.submit',
+      {
+        hostname,
+        status: 'HEALTHY',
+        dnsmasqRunning: true,
+        dnsResolving: true,
+        version: '1.0.0',
+      },
+      bearerAuth(SHARED_SECRET)
+    );
 
-    void test('should detect stale agents', async () => {
-        const staleHostname = 'stale-agent';
-        
-        await trpcMutate(API_URL, 'healthReports.submit', {
-            hostname: staleHostname,
-            status: 'HEALTHY',
-        }, bearerAuth(SHARED_SECRET));
+    assertStatus(reportResp, 200);
 
-        const alertsResp = await trpcQuery(API_URL, 'healthReports.getAlerts', { staleThreshold: 60 }, bearerAuth(ADMIN_TOKEN));
-        const { data: alerts } = await parseTRPC(alertsResp) as { data: { alerts: { hostname: string; type: string }[] } };
-        
-        const staleAlert = alerts.alerts.find((a) => a.hostname === staleHostname && a.type === 'stale');
-        assert.ok(!staleAlert, 'Agent should not be stale yet');
-    });
+    // 2. Verify in list (Admin context)
+    const listResp = await trpcQuery(
+      API_URL,
+      'healthReports.list',
+      undefined,
+      bearerAuth(ADMIN_TOKEN)
+    );
+    assertStatus(listResp, 200);
+    const { data: summary } = (await parseTRPC(listResp)) as {
+      data: { hosts: { hostname: string; status: string }[] };
+    };
+
+    const agent = summary.hosts.find((h) => h.hostname === hostname);
+    assert.ok(agent);
+    assert.strictEqual(agent.status, 'HEALTHY');
+  });
+
+  void test('should detect stale agents', async () => {
+    const staleHostname = 'stale-agent';
+
+    await trpcMutate(
+      API_URL,
+      'healthReports.submit',
+      {
+        hostname: staleHostname,
+        status: 'HEALTHY',
+      },
+      bearerAuth(SHARED_SECRET)
+    );
+
+    const alertsResp = await trpcQuery(
+      API_URL,
+      'healthReports.getAlerts',
+      { staleThreshold: 60 },
+      bearerAuth(ADMIN_TOKEN)
+    );
+    const { data: alerts } = (await parseTRPC(alertsResp)) as {
+      data: { alerts: { hostname: string; type: string }[] };
+    };
+
+    const staleAlert = alerts.alerts.find(
+      (a) => a.hostname === staleHostname && a.type === 'stale'
+    );
+    assert.ok(!staleAlert, 'Agent should not be stale yet');
+  });
 });

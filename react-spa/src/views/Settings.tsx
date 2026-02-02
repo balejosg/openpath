@@ -51,7 +51,9 @@ const Settings: React.FC = () => {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-600">Autenticación de dos factores</span>
-              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded font-medium">Próximamente</span>
+              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded font-medium">
+                Próximamente
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-600">Tiempo de sesión</span>
@@ -101,7 +103,9 @@ const Settings: React.FC = () => {
             <div className="p-3 bg-slate-50 rounded-lg">
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-slate-700">Token principal</span>
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Activo</span>
+                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                  Activo
+                </span>
               </div>
               <code className="text-xs text-slate-500 mt-1 block">••••••••••••••••</code>
             </div>

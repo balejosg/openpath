@@ -20,12 +20,12 @@ firefox-extension/
 
 ## Key Components
 
-| Component | Purpose |
-|-----------|---------|
-| `background.ts` | webRequest interception, badge updates |
-| `content.ts` | Page-level block detection |
-| `native/` | Local whitelist verification via native messaging |
-| `popup/` | UI for viewing blocked domains, submitting requests |
+| Component       | Purpose                                             |
+| --------------- | --------------------------------------------------- |
+| `background.ts` | webRequest interception, badge updates              |
+| `content.ts`    | Page-level block detection                          |
+| `native/`       | Local whitelist verification via native messaging   |
+| `popup/`        | UI for viewing blocked domains, submitting requests |
 
 ## Manifest
 
@@ -36,6 +36,7 @@ firefox-extension/
 ## Native Messaging
 
 Python host for local whitelist verification:
+
 ```bash
 ./native/install-native-host.sh  # Installs host manifest
 ```

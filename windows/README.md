@@ -1,26 +1,31 @@
 # OpenPath DNS for Windows
+
 Internet access control system using a DNS sinkhole for Windows, powered by Acrylic DNS Proxy.
 
 ## Features
+
 ✅ **DNS Sinkhole** - Blocks all domains except for the whitelist.  
 ✅ **Acrylic DNS Proxy** - Local DNS server with wildcard support.  
 ✅ **Windows Firewall** - Blocks external DNS, VPNs, and Tor.  
 ✅ **Browser Policies** - Supports Firefox, Chrome, and Edge.  
 ✅ **Auto-Update** - Syncs every 5 minutes via Task Scheduler.  
-✅ **Watchdog** - Automatic failure recovery.  
+✅ **Watchdog** - Automatic failure recovery.
 
 ## Requirements
+
 - Windows 10/11 or Windows Server 2016+.
 - PowerShell 5.1+.
 - Administrator privileges.
 
 ## Quick Install
+
 ```powershell
 # Run as Administrator
 .\Install-OpenPath.ps1 -WhitelistUrl "http://your-server:3000/export/group.txt"
 ```
 
 ## Verify Installation
+
 ```powershell
 # Test DNS (should resolve)
 nslookup google.com 127.0.0.1
@@ -36,6 +41,7 @@ Get-NetFirewallRule -DisplayName "OpenPath-*"
 ```
 
 ## Structure
+
 ```
 C:\OpenPath\
 ├── Install-OpenPath.ps1        # Installer
@@ -56,25 +62,30 @@ C:\OpenPath\
 ```
 
 ## Configuration
+
 Edit `C:\OpenPath\data\config.json`:
+
 ```json
 {
-    "whitelistUrl": "http://server:3000/export/group.txt",
-    "updateIntervalMinutes": 5,
-    "primaryDNS": "8.8.8.8",
-    "enableFirewall": true,
-    "enableBrowserPolicies": true
+  "whitelistUrl": "http://server:3000/export/group.txt",
+  "updateIntervalMinutes": 5,
+  "primaryDNS": "8.8.8.8",
+  "enableFirewall": true,
+  "enableBrowserPolicies": true
 }
 ```
 
 ## Uninstallation
+
 ```powershell
 # Run as Administrator
 .\Uninstall-OpenPath.ps1
 ```
 
 ## Troubleshooting
+
 ### DNS not resolving
+
 ```powershell
 # Check Acrylic service
 Get-Service -DisplayName "*Acrylic*"
@@ -87,6 +98,7 @@ Get-Content C:\OpenPath\data\logs\openpath.log -Tail 50
 ```
 
 ### Firewall blocking
+
 ```powershell
 # Check rules
 Get-NetFirewallRule -DisplayName "OpenPath-*" | Format-Table
@@ -96,10 +108,13 @@ Get-NetFirewallRule -DisplayName "OpenPath-*" | Disable-NetFirewallRule
 ```
 
 ## Linux Compatibility
+
 This system is the Windows equivalent of the [Linux system](../README.md) based on dnsmasq. Both systems:
+
 - Use the same whitelist format.
 - Are compatible with the [SPA](../spa/) for centralized management.
 - Implement the same DNS sinkhole logic.
 
 ## License
+
 AGPL-3.0-or-later

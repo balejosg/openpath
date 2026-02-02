@@ -60,9 +60,7 @@
         "classrooms_name_unique": {
           "name": "classrooms_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         }
       },
       "policies": {},
@@ -120,9 +118,7 @@
         "dashboard_users_username_unique": {
           "name": "dashboard_users_username_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "username"
-          ]
+          "columns": ["username"]
         }
       },
       "policies": {},
@@ -256,12 +252,8 @@
           "name": "machines_classroom_id_classrooms_id_fk",
           "tableFrom": "machines",
           "tableTo": "classrooms",
-          "columnsFrom": [
-            "classroom_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["classroom_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -271,9 +263,7 @@
         "machines_hostname_unique": {
           "name": "machines_hostname_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "hostname"
-          ]
+          "columns": ["hostname"]
         }
       },
       "policies": {},
@@ -322,12 +312,8 @@
           "name": "password_reset_tokens_user_id_users_id_fk",
           "tableFrom": "password_reset_tokens",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -398,12 +384,8 @@
           "name": "push_subscriptions_user_id_users_id_fk",
           "tableFrom": "push_subscriptions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -413,9 +395,7 @@
         "push_subscriptions_endpoint_unique": {
           "name": "push_subscriptions_endpoint_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "endpoint"
-          ]
+          "columns": ["endpoint"]
         }
       },
       "policies": {},
@@ -572,12 +552,8 @@
           "name": "roles_user_id_users_id_fk",
           "tableFrom": "roles",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -585,12 +561,8 @@
           "name": "roles_created_by_users_id_fk",
           "tableFrom": "roles",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -600,9 +572,7 @@
         "roles_user_id_key": {
           "name": "roles_user_id_key",
           "nullsNotDistinct": false,
-          "columns": [
-            "user_id"
-          ]
+          "columns": ["user_id"]
         }
       },
       "policies": {},
@@ -684,12 +654,8 @@
           "name": "schedules_classroom_id_classrooms_id_fk",
           "tableFrom": "schedules",
           "tableTo": "classrooms",
-          "columnsFrom": [
-            "classroom_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["classroom_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -697,12 +663,8 @@
           "name": "schedules_teacher_id_users_id_fk",
           "tableFrom": "schedules",
           "tableTo": "users",
-          "columnsFrom": [
-            "teacher_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["teacher_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -794,12 +756,8 @@
           "name": "tokens_user_id_users_id_fk",
           "tableFrom": "tokens",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -874,9 +832,7 @@
         "users_email_unique": {
           "name": "users_email_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "email"
-          ]
+          "columns": ["email"]
         }
       },
       "policies": {},
@@ -934,9 +890,7 @@
         "whitelist_groups_name_unique": {
           "name": "whitelist_groups_name_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "name"
-          ]
+          "columns": ["name"]
         }
       },
       "policies": {},
@@ -991,12 +945,8 @@
           "name": "whitelist_rules_group_id_whitelist_groups_id_fk",
           "tableFrom": "whitelist_rules",
           "tableTo": "whitelist_groups",
-          "columnsFrom": [
-            "group_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["group_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1006,11 +956,7 @@
         "whitelist_rules_group_type_value_key": {
           "name": "whitelist_rules_group_type_value_key",
           "nullsNotDistinct": false,
-          "columns": [
-            "group_id",
-            "type",
-            "value"
-          ]
+          "columns": ["group_id", "type", "value"]
         }
       },
       "policies": {},

@@ -9,18 +9,12 @@ import winston from 'winston';
 const logLevel = process.env.LOG_LEVEL ?? 'info';
 
 export const logger = winston.createLogger({
-    level: logLevel,
-    format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-    ),
-    defaultMeta: { service: 'dashboard' },
-    transports: [
-        new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.colorize(),
-                winston.format.simple()
-            )
-        })
-    ],
+  level: logLevel,
+  format: winston.format.combine(winston.format.timestamp(), winston.format.json()),
+  defaultMeta: { service: 'dashboard' },
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(winston.format.colorize(), winston.format.simple()),
+    }),
+  ],
 });

@@ -28,12 +28,20 @@ describe('Button Component', () => {
   });
 
   it('applies variant and size classes', () => {
-    const { rerender } = render(<Button variant="danger" size="lg">Danger Large</Button>);
+    const { rerender } = render(
+      <Button variant="danger" size="lg">
+        Danger Large
+      </Button>
+    );
     const button = screen.getByRole('button');
     expect(button).toHaveClass('bg-red-600');
     expect(button).toHaveClass('h-12');
 
-    rerender(<Button variant="outline" size="sm">Outline Small</Button>);
+    rerender(
+      <Button variant="outline" size="sm">
+        Outline Small
+      </Button>
+    );
     expect(button).toHaveClass('border-slate-200');
     expect(button).toHaveClass('h-8');
   });

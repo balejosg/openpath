@@ -10,14 +10,14 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, title }) => {
   return (
     <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-30 px-4 md:px-8 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-4">
-        <button 
+        <button
           onClick={onMenuClick}
           className="md:hidden p-2 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-100"
         >
           <Menu size={24} />
         </button>
         <div>
-           <h1 className="text-xl font-semibold text-slate-800 tracking-tight">{title}</h1>
+          <h1 className="text-xl font-semibold text-slate-800 tracking-tight">{title}</h1>
         </div>
       </div>
 
@@ -25,9 +25,9 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, title }) => {
         {/* Search - Subtle & Functional */}
         <div className="hidden md:flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all w-64">
           <Search size={16} className="text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Buscar..." 
+          <input
+            type="text"
+            placeholder="Buscar..."
             className="bg-transparent border-none outline-none text-sm text-slate-700 ml-2 w-full placeholder-slate-400"
           />
         </div>
@@ -46,14 +46,14 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, title }) => {
             <Bell size={20} />
             <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
           </button>
-          
+
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-bold border border-blue-200">
               BA
             </div>
             <div className="text-sm hidden md:block">
-               <p className="font-medium text-slate-700 leading-none">Bruno Alejos</p>
-               <p className="text-xs text-slate-500 mt-0.5">Admin</p>
+              <p className="font-medium text-slate-700 leading-none">Bruno Alejos</p>
+              <p className="text-xs text-slate-500 mt-0.5">Admin</p>
             </div>
           </div>
         </div>

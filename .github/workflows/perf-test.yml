@@ -3,13 +3,13 @@ name: Performance Tests
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 5 * * 0'  # Weekly on Sunday at 5am UTC
+    - cron: '0 5 * * 0' # Weekly on Sunday at 5am UTC
 
 jobs:
   load-test:
     name: API Load Test (k6)
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,7 +37,7 @@ jobs:
           NODE_ENV: test
           ADMIN_TOKEN: test-token
           SHARED_SECRET: test-secret
-      
+
       - name: Run k6 load test
         run: k6 run api/tests/load/load-test.js
         env:
@@ -46,7 +46,7 @@ jobs:
           K6_DURATION: 60s
           RATE_LIMIT_MAX: 10000
           NODE_ENV: test
-      
+
       - name: Generate summary
         if: always()
         run: |

@@ -19,7 +19,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
     e.preventDefault();
     setIsLoading(true);
     setError('');
-    
+
     try {
       await login(email, password);
       onLogin();
@@ -50,24 +50,33 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
       {/* Branding Side */}
       <div className="hidden lg:flex lg:w-1/2 bg-slate-900 flex-col justify-center px-12 xl:px-24 relative overflow-hidden">
         {/* Subtle geometric pattern for stability */}
-        <div className="absolute inset-0 opacity-5" style={{backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '30px 30px'}}></div>
-        
+        <div
+          className="absolute inset-0 opacity-5"
+          style={{
+            backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)',
+            backgroundSize: '30px 30px',
+          }}
+        ></div>
+
         <div className="relative z-10">
           <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-8 shadow-lg shadow-blue-900/50">
-             <ShieldCheck size={32} className="text-white" />
+            <ShieldCheck size={32} className="text-white" />
           </div>
-          <h1 className="text-4xl font-bold text-white mb-6 leading-tight">Seguridad simplificada para tu entorno educativo.</h1>
+          <h1 className="text-4xl font-bold text-white mb-6 leading-tight">
+            Seguridad simplificada para tu entorno educativo.
+          </h1>
           <p className="text-slate-400 text-lg leading-relaxed max-w-md">
-            Plataforma de gestión centralizada diseñada para la estabilidad, el control y la tranquilidad de tu institución.
+            Plataforma de gestión centralizada diseñada para la estabilidad, el control y la
+            tranquilidad de tu institución.
           </p>
-          
+
           <div className="mt-12 flex items-center gap-4 text-sm font-medium text-slate-500">
-             <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div> Encriptación E2E
-             </div>
-             <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div> 99.9% Uptime
-             </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div> Encriptación E2E
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div> 99.9% Uptime
+            </div>
           </div>
         </div>
       </div>
@@ -88,7 +97,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Correo Electrónico</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Correo Electrónico
+              </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-2.5 text-slate-400" size={18} />
                 <input
@@ -118,17 +129,20 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
             </div>
 
             <div className="flex items-center justify-between text-sm">
-               <label className="flex items-center cursor-pointer text-slate-600">
-                  <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mr-2" />
-                  Mantener sesión
-               </label>
-               <button 
-                  type="button"
-                  onClick={onNavigateToForgot} 
-                  className="text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  Recuperar clave
-                </button>
+              <label className="flex items-center cursor-pointer text-slate-600">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mr-2"
+                />
+                Mantener sesión
+              </label>
+              <button
+                type="button"
+                onClick={onNavigateToForgot}
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Recuperar clave
+              </button>
             </div>
 
             <button
@@ -159,7 +173,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
 
           <div className="mt-6 pt-6 border-t border-slate-100 text-center text-sm">
             <span className="text-slate-500">¿Nuevo en la plataforma? </span>
-            <button onClick={onNavigateToRegister} className="text-blue-600 font-bold hover:underline">
+            <button
+              onClick={onNavigateToRegister}
+              className="text-blue-600 font-bold hover:underline"
+            >
               Solicitar acceso
             </button>
           </div>

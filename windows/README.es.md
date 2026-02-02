@@ -9,7 +9,7 @@ Sistema de control de acceso a internet mediante DNS sinkhole para Windows, usan
 ✅ **Windows Firewall** - Bloquea DNS externo, VPNs, Tor  
 ✅ **Políticas de navegadores** - Firefox y Chrome/Edge  
 ✅ **Actualización automática** - Cada 5 minutos vía Task Scheduler  
-✅ **Watchdog** - Auto-recuperación de fallos  
+✅ **Watchdog** - Auto-recuperación de fallos
 
 ## Requisitos
 
@@ -67,11 +67,11 @@ Editar `C:\OpenPath\data\config.json`:
 
 ```json
 {
-    "whitelistUrl": "http://servidor:3000/export/grupo.txt",
-    "updateIntervalMinutes": 5,
-    "primaryDNS": "8.8.8.8",
-    "enableFirewall": true,
-    "enableBrowserPolicies": true
+  "whitelistUrl": "http://servidor:3000/export/grupo.txt",
+  "updateIntervalMinutes": 5,
+  "primaryDNS": "8.8.8.8",
+  "enableFirewall": true,
+  "enableBrowserPolicies": true
 }
 ```
 

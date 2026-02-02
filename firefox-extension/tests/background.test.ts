@@ -12,41 +12,38 @@ import { mockBrowser, resetMockState, getBadgeForTab } from './mocks/browser.js'
 // =============================================================================
 
 const BLOCKING_ERRORS = [
-    'NS_ERROR_UNKNOWN_HOST',
-    'NS_ERROR_CONNECTION_REFUSED',
-    'NS_ERROR_NET_TIMEOUT',
-    'NS_ERROR_PROXY_CONNECTION_REFUSED'
+  'NS_ERROR_UNKNOWN_HOST',
+  'NS_ERROR_CONNECTION_REFUSED',
+  'NS_ERROR_NET_TIMEOUT',
+  'NS_ERROR_PROXY_CONNECTION_REFUSED',
 ];
 
-const IGNORED_ERRORS = [
-    'NS_BINDING_ABORTED',
-    'NS_ERROR_ABORT'
-];
+const IGNORED_ERRORS = ['NS_BINDING_ABORTED', 'NS_ERROR_ABORT'];
 
 /**
  * Extract hostname from URL
  */
 function extractHostname(url: string): string | null {
-    try {
-        const urlObj = new URL(url);
-        return urlObj.hostname;
-    } catch {
-        return null;
-    }
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Check if an error should be processed as a block
  */
 function isBlockingError(error: string): boolean {
-    return BLOCKING_ERRORS.includes(error);
+  return BLOCKING_ERRORS.includes(error);
 }
 
 /**
  * Check if an error should be ignored
  */
 function isIgnoredError(error: string): boolean {
-    return IGNORED_ERRORS.includes(error);
+  return IGNORED_ERRORS.includes(error);
 }
 
 // =============================================================================
@@ -54,90 +51,100 @@ function isIgnoredError(error: string): boolean {
 // =============================================================================
 
 interface BlockedDomainData {
-    errors: Set<string>;
-    origin: string | null;
-    timestamp: number;
+  errors: Set<string>;
+  origin: string | null;
+  timestamp: number;
 }
 
 type BlockedDomainsMap = Record<number, Map<string, BlockedDomainData>>;
 
 // Create a fresh state for each test
 function createBlockedDomainsState(): {
-    blockedDomains: BlockedDomainsMap;
-    ensureTabStorage: (tabId: number) => void;
-    addBlockedDomain: (tabId: number, hostname: string, error: string, originUrl?: string) => void;
-    clearBlockedDomains: (tabId: number) => void;
-    getBlockedDomainsForTab: (tabId: number) => Record<string, { errors: string[]; origin: string | null; timestamp: number }>;
-    updateBadge: (tabId: number) => void;
+  blockedDomains: BlockedDomainsMap;
+  ensureTabStorage: (tabId: number) => void;
+  addBlockedDomain: (tabId: number, hostname: string, error: string, originUrl?: string) => void;
+  clearBlockedDomains: (tabId: number) => void;
+  getBlockedDomainsForTab: (
+    tabId: number
+  ) => Record<string, { errors: string[]; origin: string | null; timestamp: number }>;
+  updateBadge: (tabId: number) => void;
 } {
-    const blockedDomains: BlockedDomainsMap = {};
+  const blockedDomains: BlockedDomainsMap = {};
 
-    function ensureTabStorage(tabId: number): void {
-        blockedDomains[tabId] ??= new Map();
+  function ensureTabStorage(tabId: number): void {
+    blockedDomains[tabId] ??= new Map();
+  }
+
+  function updateBadge(tabId: number): void {
+    const count = blockedDomains[tabId] ? blockedDomains[tabId].size : 0;
+
+    void mockBrowser.browserAction.setBadgeText({
+      text: count > 0 ? count.toString() : '',
+      tabId: tabId,
+    });
+
+    void mockBrowser.browserAction.setBadgeBackgroundColor({
+      color: '#FF0000',
+      tabId: tabId,
+    });
+  }
+
+  function addBlockedDomain(
+    tabId: number,
+    hostname: string,
+    error: string,
+    originUrl?: string
+  ): void {
+    ensureTabStorage(tabId);
+
+    const originHostname = originUrl ? extractHostname(originUrl) : null;
+
+    if (!blockedDomains[tabId]?.has(hostname)) {
+      blockedDomains[tabId]?.set(hostname, {
+        errors: new Set(),
+        origin: originHostname,
+        timestamp: Date.now(),
+      });
+    }
+    blockedDomains[tabId]?.get(hostname)?.errors.add(error);
+
+    updateBadge(tabId);
+  }
+
+  function clearBlockedDomains(tabId: number): void {
+    if (blockedDomains[tabId]) {
+      blockedDomains[tabId].clear();
+    }
+    updateBadge(tabId);
+  }
+
+  function getBlockedDomainsForTab(
+    tabId: number
+  ): Record<string, { errors: string[]; origin: string | null; timestamp: number }> {
+    const result: Record<string, { errors: string[]; origin: string | null; timestamp: number }> =
+      {};
+
+    if (blockedDomains[tabId]) {
+      blockedDomains[tabId].forEach((data, hostname) => {
+        result[hostname] = {
+          errors: Array.from(data.errors),
+          origin: data.origin,
+          timestamp: data.timestamp,
+        };
+      });
     }
 
-    function updateBadge(tabId: number): void {
-        const count = blockedDomains[tabId] ? blockedDomains[tabId].size : 0;
+    return result;
+  }
 
-        void mockBrowser.browserAction.setBadgeText({
-            text: count > 0 ? count.toString() : '',
-            tabId: tabId
-        });
-
-        void mockBrowser.browserAction.setBadgeBackgroundColor({
-            color: '#FF0000',
-            tabId: tabId
-        });
-    }
-
-    function addBlockedDomain(tabId: number, hostname: string, error: string, originUrl?: string): void {
-        ensureTabStorage(tabId);
-
-        const originHostname = originUrl ? extractHostname(originUrl) : null;
-
-        if (!blockedDomains[tabId]?.has(hostname)) {
-            blockedDomains[tabId]?.set(hostname, {
-                errors: new Set(),
-                origin: originHostname,
-                timestamp: Date.now()
-            });
-        }
-        blockedDomains[tabId]?.get(hostname)?.errors.add(error);
-
-        updateBadge(tabId);
-    }
-
-    function clearBlockedDomains(tabId: number): void {
-        if (blockedDomains[tabId]) {
-            blockedDomains[tabId].clear();
-        }
-        updateBadge(tabId);
-    }
-
-    function getBlockedDomainsForTab(tabId: number): Record<string, { errors: string[]; origin: string | null; timestamp: number }> {
-        const result: Record<string, { errors: string[]; origin: string | null; timestamp: number }> = {};
-
-        if (blockedDomains[tabId]) {
-            blockedDomains[tabId].forEach((data, hostname) => {
-                result[hostname] = {
-                    errors: Array.from(data.errors),
-                    origin: data.origin,
-                    timestamp: data.timestamp
-                };
-            });
-        }
-
-        return result;
-    }
-
-    return {
-        blockedDomains,
-        ensureTabStorage,
-        addBlockedDomain,
-        clearBlockedDomains,
-        getBlockedDomainsForTab,
-        updateBadge
-    };
+  return {
+    blockedDomains,
+    ensureTabStorage,
+    addBlockedDomain,
+    clearBlockedDomains,
+    getBlockedDomainsForTab,
+    updateBadge,
+  };
 }
 
 // =============================================================================
@@ -145,71 +152,71 @@ function createBlockedDomainsState(): {
 // =============================================================================
 
 void describe('extractHostname()', () => {
-    void test('should extract hostname from valid HTTP URL', () => {
-        assert.strictEqual(extractHostname('http://example.com/page'), 'example.com');
-    });
+  void test('should extract hostname from valid HTTP URL', () => {
+    assert.strictEqual(extractHostname('http://example.com/page'), 'example.com');
+  });
 
-    void test('should extract hostname from valid HTTPS URL', () => {
-        assert.strictEqual(extractHostname('https://www.google.com/search?q=test'), 'www.google.com');
-    });
+  void test('should extract hostname from valid HTTPS URL', () => {
+    assert.strictEqual(extractHostname('https://www.google.com/search?q=test'), 'www.google.com');
+  });
 
-    void test('should extract hostname with port', () => {
-        assert.strictEqual(extractHostname('http://localhost:8080/api'), 'localhost');
-    });
+  void test('should extract hostname with port', () => {
+    assert.strictEqual(extractHostname('http://localhost:8080/api'), 'localhost');
+  });
 
-    void test('should handle subdomain', () => {
-        assert.strictEqual(extractHostname('https://sub.domain.example.com'), 'sub.domain.example.com');
-    });
+  void test('should handle subdomain', () => {
+    assert.strictEqual(extractHostname('https://sub.domain.example.com'), 'sub.domain.example.com');
+  });
 
-    void test('should return null for invalid URL', () => {
-        assert.strictEqual(extractHostname('not-a-url'), null);
-    });
+  void test('should return null for invalid URL', () => {
+    assert.strictEqual(extractHostname('not-a-url'), null);
+  });
 
-    void test('should return null for empty string', () => {
-        assert.strictEqual(extractHostname(''), null);
-    });
+  void test('should return null for empty string', () => {
+    assert.strictEqual(extractHostname(''), null);
+  });
 
-    void test('should handle file:// URLs', () => {
-        // file:// URLs have empty hostname
-        assert.strictEqual(extractHostname('file:///home/user/file.txt'), '');
-    });
+  void test('should handle file:// URLs', () => {
+    // file:// URLs have empty hostname
+    assert.strictEqual(extractHostname('file:///home/user/file.txt'), '');
+  });
 
-    void test('should handle about: URLs', () => {
-        // In Node.js, about:blank parses with empty hostname
-        // In Firefox, this may differ - test documents actual behavior
-        const result = extractHostname('about:blank');
-        assert.ok(result === '' || result === null);
-    });
+  void test('should handle about: URLs', () => {
+    // In Node.js, about:blank parses with empty hostname
+    // In Firefox, this may differ - test documents actual behavior
+    const result = extractHostname('about:blank');
+    assert.ok(result === '' || result === null);
+  });
 
-    void test('should handle data: URLs', () => {
-        // data: URLs throw on URL parse
-        const result = extractHostname('data:text/html,<h1>Hello</h1>');
-        assert.strictEqual(result, '');
-    });
+  void test('should handle data: URLs', () => {
+    // data: URLs throw on URL parse
+    const result = extractHostname('data:text/html,<h1>Hello</h1>');
+    assert.strictEqual(result, '');
+  });
 
-    void test('should handle IP addresses', () => {
-        assert.strictEqual(extractHostname('http://192.168.1.1/admin'), '192.168.1.1');
-    });
+  void test('should handle IP addresses', () => {
+    assert.strictEqual(extractHostname('http://192.168.1.1/admin'), '192.168.1.1');
+  });
 
-    void test('should handle IPv6 addresses', () => {
-        assert.strictEqual(extractHostname('http://[::1]:8080/'), '[::1]');
-    });
+  void test('should handle IPv6 addresses', () => {
+    assert.strictEqual(extractHostname('http://[::1]:8080/'), '[::1]');
+  });
 
-    void test('Privacy: should never leak path in hostname extraction', () => {
-        const url = 'https://example.com/private/api/v1?token=12345';
-        const hostname = extractHostname(url);
-        assert.strictEqual(hostname, 'example.com');
-        assert.ok(!hostname.includes('private'));
-        assert.ok(!hostname.includes('token'));
-    });
+  void test('Privacy: should never leak path in hostname extraction', () => {
+    const url = 'https://example.com/private/api/v1?token=12345';
+    const hostname = extractHostname(url);
+    assert.strictEqual(hostname, 'example.com');
+    assert.ok(!hostname.includes('private'));
+    assert.ok(!hostname.includes('token'));
+  });
 
-    void test('Privacy: should handle credentials safely', () => {
-        const url = 'https://admin:secret@internal.dev/config';
-        const hostname = extractHostname(url);
-        assert.strictEqual(hostname, 'internal.dev');
-        assert.ok(!hostname.includes('admin'));
-        assert.ok(!hostname.includes('secret'));
-    });
+  void test('Privacy: should handle credentials safely', () => {
+    const url = 'https://admin:secret@internal.dev/config';
+    const hostname = extractHostname(url);
+    assert.strictEqual(hostname, 'internal.dev');
+    assert.ok(!hostname.includes('admin'));
+    assert.ok(!hostname.includes('secret'));
+  });
 });
 
 // =============================================================================
@@ -217,33 +224,33 @@ void describe('extractHostname()', () => {
 // =============================================================================
 
 void describe('isBlockingError()', () => {
-    void test('should recognize NS_ERROR_UNKNOWN_HOST as blocking', () => {
-        assert.strictEqual(isBlockingError('NS_ERROR_UNKNOWN_HOST'), true);
-    });
+  void test('should recognize NS_ERROR_UNKNOWN_HOST as blocking', () => {
+    assert.strictEqual(isBlockingError('NS_ERROR_UNKNOWN_HOST'), true);
+  });
 
-    void test('should recognize NS_ERROR_CONNECTION_REFUSED as blocking', () => {
-        assert.strictEqual(isBlockingError('NS_ERROR_CONNECTION_REFUSED'), true);
-    });
+  void test('should recognize NS_ERROR_CONNECTION_REFUSED as blocking', () => {
+    assert.strictEqual(isBlockingError('NS_ERROR_CONNECTION_REFUSED'), true);
+  });
 
-    void test('should recognize NS_ERROR_NET_TIMEOUT as blocking', () => {
-        assert.strictEqual(isBlockingError('NS_ERROR_NET_TIMEOUT'), true);
-    });
+  void test('should recognize NS_ERROR_NET_TIMEOUT as blocking', () => {
+    assert.strictEqual(isBlockingError('NS_ERROR_NET_TIMEOUT'), true);
+  });
 
-    void test('should recognize NS_ERROR_PROXY_CONNECTION_REFUSED as blocking', () => {
-        assert.strictEqual(isBlockingError('NS_ERROR_PROXY_CONNECTION_REFUSED'), true);
-    });
+  void test('should recognize NS_ERROR_PROXY_CONNECTION_REFUSED as blocking', () => {
+    assert.strictEqual(isBlockingError('NS_ERROR_PROXY_CONNECTION_REFUSED'), true);
+  });
 
-    void test('should not recognize NS_BINDING_ABORTED as blocking', () => {
-        assert.strictEqual(isBlockingError('NS_BINDING_ABORTED'), false);
-    });
+  void test('should not recognize NS_BINDING_ABORTED as blocking', () => {
+    assert.strictEqual(isBlockingError('NS_BINDING_ABORTED'), false);
+  });
 
-    void test('should not recognize random errors as blocking', () => {
-        assert.strictEqual(isBlockingError('SOME_OTHER_ERROR'), false);
-    });
+  void test('should not recognize random errors as blocking', () => {
+    assert.strictEqual(isBlockingError('SOME_OTHER_ERROR'), false);
+  });
 
-    void test('should not recognize empty string as blocking', () => {
-        assert.strictEqual(isBlockingError(''), false);
-    });
+  void test('should not recognize empty string as blocking', () => {
+    assert.strictEqual(isBlockingError(''), false);
+  });
 });
 
 // =============================================================================
@@ -251,21 +258,21 @@ void describe('isBlockingError()', () => {
 // =============================================================================
 
 void describe('isIgnoredError()', () => {
-    void test('should recognize NS_BINDING_ABORTED as ignored', () => {
-        assert.strictEqual(isIgnoredError('NS_BINDING_ABORTED'), true);
-    });
+  void test('should recognize NS_BINDING_ABORTED as ignored', () => {
+    assert.strictEqual(isIgnoredError('NS_BINDING_ABORTED'), true);
+  });
 
-    void test('should recognize NS_ERROR_ABORT as ignored', () => {
-        assert.strictEqual(isIgnoredError('NS_ERROR_ABORT'), true);
-    });
+  void test('should recognize NS_ERROR_ABORT as ignored', () => {
+    assert.strictEqual(isIgnoredError('NS_ERROR_ABORT'), true);
+  });
 
-    void test('should not ignore blocking errors', () => {
-        assert.strictEqual(isIgnoredError('NS_ERROR_UNKNOWN_HOST'), false);
-    });
+  void test('should not ignore blocking errors', () => {
+    assert.strictEqual(isIgnoredError('NS_ERROR_UNKNOWN_HOST'), false);
+  });
 
-    void test('should not ignore unknown errors', () => {
-        assert.strictEqual(isIgnoredError('UNKNOWN_ERROR'), false);
-    });
+  void test('should not ignore unknown errors', () => {
+    assert.strictEqual(isIgnoredError('UNKNOWN_ERROR'), false);
+  });
 });
 
 // =============================================================================
@@ -273,131 +280,136 @@ void describe('isIgnoredError()', () => {
 // =============================================================================
 
 void describe('Blocked Domains State', () => {
-    beforeEach(() => {
-        resetMockState();
-    });
+  beforeEach(() => {
+    resetMockState();
+  });
 
-    void test('addBlockedDomain should create storage for new tab', () => {
-        const state = createBlockedDomainsState();
+  void test('addBlockedDomain should create storage for new tab', () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
 
-        const tabDomains = state.blockedDomains[1];
-        assert.ok(tabDomains !== undefined);
-        assert.strictEqual(tabDomains.size, 1);
-    });
+    const tabDomains = state.blockedDomains[1];
+    assert.ok(tabDomains !== undefined);
+    assert.strictEqual(tabDomains.size, 1);
+  });
 
-    void test('addBlockedDomain should add hostname to existing tab', () => {
-        const state = createBlockedDomainsState();
+  void test('addBlockedDomain should add hostname to existing tab', () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
-        state.addBlockedDomain(1, 'google.com', 'NS_ERROR_CONNECTION_REFUSED');
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'google.com', 'NS_ERROR_CONNECTION_REFUSED');
 
-        assert.strictEqual(state.blockedDomains[1]?.size, 2);
-    });
+    assert.strictEqual(state.blockedDomains[1]?.size, 2);
+  });
 
-    void test('addBlockedDomain should accumulate errors for same hostname', () => {
-        const state = createBlockedDomainsState();
+  void test('addBlockedDomain should accumulate errors for same hostname', () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_NET_TIMEOUT');
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_NET_TIMEOUT');
 
-        const domains = state.getBlockedDomainsForTab(1);
-        assert.deepStrictEqual(domains['example.com']?.errors.sort(), [
-            'NS_ERROR_NET_TIMEOUT',
-            'NS_ERROR_UNKNOWN_HOST'
-        ]);
-    });
+    const domains = state.getBlockedDomainsForTab(1);
+    assert.deepStrictEqual(domains['example.com']?.errors.sort(), [
+      'NS_ERROR_NET_TIMEOUT',
+      'NS_ERROR_UNKNOWN_HOST',
+    ]);
+  });
 
-    void test('addBlockedDomain should extract origin hostname', () => {
-        const state = createBlockedDomainsState();
+  void test('addBlockedDomain should extract origin hostname', () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'ads.example.com', 'NS_ERROR_UNKNOWN_HOST', 'https://main-page.com/article');
+    state.addBlockedDomain(
+      1,
+      'ads.example.com',
+      'NS_ERROR_UNKNOWN_HOST',
+      'https://main-page.com/article'
+    );
 
-        const domains = state.getBlockedDomainsForTab(1);
-        assert.strictEqual(domains['ads.example.com']?.origin, 'main-page.com');
-    });
+    const domains = state.getBlockedDomainsForTab(1);
+    assert.strictEqual(domains['ads.example.com']?.origin, 'main-page.com');
+  });
 
-    void test('addBlockedDomain should update badge', async () => {
-        const state = createBlockedDomainsState();
+  void test('addBlockedDomain should update badge', async () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
 
-        // Wait for async badge update
-        await new Promise(resolve => setTimeout(resolve, 10));
+    // Wait for async badge update
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
-        const badge = getBadgeForTab(1);
-        assert.ok(badge !== undefined);
-        assert.strictEqual(badge.text, '1');
-        assert.strictEqual(badge.color, '#FF0000');
-    });
+    const badge = getBadgeForTab(1);
+    assert.ok(badge !== undefined);
+    assert.strictEqual(badge.text, '1');
+    assert.strictEqual(badge.color, '#FF0000');
+  });
 
-    void test('clearBlockedDomains should remove all domains for tab', () => {
-        const state = createBlockedDomainsState();
+  void test('clearBlockedDomains should remove all domains for tab', () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
-        state.addBlockedDomain(1, 'google.com', 'NS_ERROR_UNKNOWN_HOST');
-        state.clearBlockedDomains(1);
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'google.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.clearBlockedDomains(1);
 
-        assert.strictEqual(state.blockedDomains[1]?.size, 0);
-    });
+    assert.strictEqual(state.blockedDomains[1]?.size, 0);
+  });
 
-    void test('clearBlockedDomains should reset badge', async () => {
-        const state = createBlockedDomainsState();
+  void test('clearBlockedDomains should reset badge', async () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
-        state.clearBlockedDomains(1);
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.clearBlockedDomains(1);
 
-        await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
-        const badge = getBadgeForTab(1);
-        assert.strictEqual(badge?.text, '');
-    });
+    const badge = getBadgeForTab(1);
+    assert.strictEqual(badge?.text, '');
+  });
 
-    void test('getBlockedDomainsForTab should return empty for unknown tab', () => {
-        const state = createBlockedDomainsState();
+  void test('getBlockedDomainsForTab should return empty for unknown tab', () => {
+    const state = createBlockedDomainsState();
 
-        const result = state.getBlockedDomainsForTab(999);
-        assert.deepStrictEqual(result, {});
-    });
+    const result = state.getBlockedDomainsForTab(999);
+    assert.deepStrictEqual(result, {});
+  });
 
-    void test('getBlockedDomainsForTab should serialize errors as array', () => {
-        const state = createBlockedDomainsState();
+  void test('getBlockedDomainsForTab should serialize errors as array', () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
 
-        const result = state.getBlockedDomainsForTab(1);
-        assert.ok(Array.isArray(result['example.com']?.errors));
-    });
+    const result = state.getBlockedDomainsForTab(1);
+    assert.ok(Array.isArray(result['example.com']?.errors));
+  });
 
-    void test('getBlockedDomainsForTab should include timestamp', () => {
-        const state = createBlockedDomainsState();
-        const before = Date.now();
+  void test('getBlockedDomainsForTab should include timestamp', () => {
+    const state = createBlockedDomainsState();
+    const before = Date.now();
 
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
 
-        const after = Date.now();
-        const result = state.getBlockedDomainsForTab(1);
-        const timestamp = result['example.com']?.timestamp ?? 0;
+    const after = Date.now();
+    const result = state.getBlockedDomainsForTab(1);
+    const timestamp = result['example.com']?.timestamp ?? 0;
 
-        assert.ok(timestamp >= before);
-        assert.ok(timestamp <= after);
-    });
+    assert.ok(timestamp >= before);
+    assert.ok(timestamp <= after);
+  });
 
-    void test('different tabs should have isolated storage', () => {
-        const state = createBlockedDomainsState();
+  void test('different tabs should have isolated storage', () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'tab1.com', 'NS_ERROR_UNKNOWN_HOST');
-        state.addBlockedDomain(2, 'tab2.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'tab1.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(2, 'tab2.com', 'NS_ERROR_UNKNOWN_HOST');
 
-        const tab1Domains = state.getBlockedDomainsForTab(1);
-        const tab2Domains = state.getBlockedDomainsForTab(2);
+    const tab1Domains = state.getBlockedDomainsForTab(1);
+    const tab2Domains = state.getBlockedDomainsForTab(2);
 
-        assert.ok('tab1.com' in tab1Domains);
-        assert.ok(!('tab2.com' in tab1Domains));
-        assert.ok('tab2.com' in tab2Domains);
-        assert.ok(!('tab1.com' in tab2Domains));
-    });
+    assert.ok('tab1.com' in tab1Domains);
+    assert.ok(!('tab2.com' in tab1Domains));
+    assert.ok('tab2.com' in tab2Domains);
+    assert.ok(!('tab1.com' in tab2Domains));
+  });
 });
 
 // =============================================================================
@@ -405,45 +417,45 @@ void describe('Blocked Domains State', () => {
 // =============================================================================
 
 void describe('Badge Updates', () => {
-    beforeEach(() => {
-        resetMockState();
-    });
+  beforeEach(() => {
+    resetMockState();
+  });
 
-    void test('badge should show count when domains present', async () => {
-        const state = createBlockedDomainsState();
+  void test('badge should show count when domains present', async () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'a.com', 'NS_ERROR_UNKNOWN_HOST');
-        state.addBlockedDomain(1, 'b.com', 'NS_ERROR_UNKNOWN_HOST');
-        state.addBlockedDomain(1, 'c.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'a.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'b.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'c.com', 'NS_ERROR_UNKNOWN_HOST');
 
-        await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
-        const badge = getBadgeForTab(1);
-        assert.strictEqual(badge?.text, '3');
-    });
+    const badge = getBadgeForTab(1);
+    assert.strictEqual(badge?.text, '3');
+  });
 
-    void test('badge should be empty when no domains', async () => {
-        const state = createBlockedDomainsState();
+  void test('badge should be empty when no domains', async () => {
+    const state = createBlockedDomainsState();
 
-        state.ensureTabStorage(1);
-        state.updateBadge(1);
+    state.ensureTabStorage(1);
+    state.updateBadge(1);
 
-        await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
-        const badge = getBadgeForTab(1);
-        assert.strictEqual(badge?.text, '');
-    });
+    const badge = getBadgeForTab(1);
+    assert.strictEqual(badge?.text, '');
+  });
 
-    void test('badge should be red', async () => {
-        const state = createBlockedDomainsState();
+  void test('badge should be red', async () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
 
-        await new Promise(resolve => setTimeout(resolve, 10));
+    await new Promise((resolve) => setTimeout(resolve, 10));
 
-        const badge = getBadgeForTab(1);
-        assert.strictEqual(badge?.color, '#FF0000');
-    });
+    const badge = getBadgeForTab(1);
+    assert.strictEqual(badge?.color, '#FF0000');
+  });
 });
 
 // =============================================================================
@@ -451,59 +463,59 @@ void describe('Badge Updates', () => {
 // =============================================================================
 
 void describe('Edge Cases', () => {
-    beforeEach(() => {
-        resetMockState();
-    });
+  beforeEach(() => {
+    resetMockState();
+  });
 
-    void test('should handle negative tab IDs gracefully', () => {
-        const state = createBlockedDomainsState();
+  void test('should handle negative tab IDs gracefully', () => {
+    const state = createBlockedDomainsState();
 
-        // Background requests have tabId = -1
-        state.addBlockedDomain(-1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    // Background requests have tabId = -1
+    state.addBlockedDomain(-1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
 
-        const result = state.getBlockedDomainsForTab(-1);
-        assert.ok('example.com' in result);
-    });
+    const result = state.getBlockedDomainsForTab(-1);
+    assert.ok('example.com' in result);
+  });
 
-    void test('should handle very long hostnames', () => {
-        const longHostname = 'a'.repeat(63) + '.' + 'b'.repeat(63) + '.com';
-        const state = createBlockedDomainsState();
+  void test('should handle very long hostnames', () => {
+    const longHostname = 'a'.repeat(63) + '.' + 'b'.repeat(63) + '.com';
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, longHostname, 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, longHostname, 'NS_ERROR_UNKNOWN_HOST');
 
-        const result = state.getBlockedDomainsForTab(1);
-        assert.ok(longHostname in result);
-    });
+    const result = state.getBlockedDomainsForTab(1);
+    assert.ok(longHostname in result);
+  });
 
-    void test('should handle unicode hostnames (punycode)', () => {
-        const state = createBlockedDomainsState();
+  void test('should handle unicode hostnames (punycode)', () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'xn--mnchen-3ya.de', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'xn--mnchen-3ya.de', 'NS_ERROR_UNKNOWN_HOST');
 
-        const result = state.getBlockedDomainsForTab(1);
-        assert.ok('xn--mnchen-3ya.de' in result);
-    });
+    const result = state.getBlockedDomainsForTab(1);
+    assert.ok('xn--mnchen-3ya.de' in result);
+  });
 
-    void test('should handle duplicate error additions', () => {
-        const state = createBlockedDomainsState();
+  void test('should handle duplicate error additions', () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
-        state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
+    state.addBlockedDomain(1, 'example.com', 'NS_ERROR_UNKNOWN_HOST');
 
-        const result = state.getBlockedDomainsForTab(1);
-        // Set should deduplicate
-        assert.strictEqual(result['example.com']?.errors.length, 1);
-    });
+    const result = state.getBlockedDomainsForTab(1);
+    // Set should deduplicate
+    assert.strictEqual(result['example.com']?.errors.length, 1);
+  });
 
-    void test('should preserve origin from first block of a domain', () => {
-        const state = createBlockedDomainsState();
+  void test('should preserve origin from first block of a domain', () => {
+    const state = createBlockedDomainsState();
 
-        state.addBlockedDomain(1, 'ads.com', 'NS_ERROR_UNKNOWN_HOST', 'https://first-origin.com');
-        state.addBlockedDomain(1, 'ads.com', 'NS_ERROR_NET_TIMEOUT', 'https://second-origin.com');
+    state.addBlockedDomain(1, 'ads.com', 'NS_ERROR_UNKNOWN_HOST', 'https://first-origin.com');
+    state.addBlockedDomain(1, 'ads.com', 'NS_ERROR_NET_TIMEOUT', 'https://second-origin.com');
 
-        const result = state.getBlockedDomainsForTab(1);
-        // Origin should be from first block
-        assert.strictEqual(result['ads.com']?.origin, 'first-origin.com');
-    });
+    const result = state.getBlockedDomainsForTab(1);
+    // Origin should be from first block
+    assert.strictEqual(result['ads.com']?.origin, 'first-origin.com');
+  });
 });

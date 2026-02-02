@@ -193,7 +193,8 @@ test_firefox_extension_structure() {
     
     # Check icon files
     if [ -d "$ext_dir/icons" ]; then
-        local icon_count=$(find "$ext_dir/icons" -type f \( -name "*.png" -o -name "*.svg" \) 2>/dev/null | wc -l)
+        local icon_count
+        icon_count=$(find "$ext_dir/icons" -type f \( -name "*.png" -o -name "*.svg" \) 2>/dev/null | wc -l)
         if [ "$icon_count" -gt 0 ]; then
             test_pass "Found $icon_count icon file(s)"
         else
@@ -230,7 +231,8 @@ test_release_tarball_simulation() {
         local item_path="$PROJECT_ROOT/$item"
         if [ -e "$item_path" ]; then
             if [ -d "$item_path" ]; then
-                local file_count=$(find "$item_path" -type f 2>/dev/null | wc -l)
+                local file_count
+                file_count=$(find "$item_path" -type f 2>/dev/null | wc -l)
                 test_pass "Directory $item ($file_count files)"
             else
                 test_pass "File $item"

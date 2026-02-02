@@ -25,8 +25,7 @@ function getApiUrl(): string {
  */
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(ACCESS_TOKEN_KEY)
-    ?? localStorage.getItem(LEGACY_TOKEN_KEY);
+  return localStorage.getItem(ACCESS_TOKEN_KEY) ?? localStorage.getItem(LEGACY_TOKEN_KEY);
 }
 
 /**
@@ -62,8 +61,10 @@ export const trpc = createTRPCClient<AppRouter>({
         return fetch(url, options).then(async (res) => {
           if (res.status === 401) {
             // No redirigir si el error ocurre durante el login o registro
-            const urlString = res.url || (typeof url === 'string' ? url : (url as any).href || url.toString());
-            const isAuthRoute = urlString.includes('auth.login') || urlString.includes('auth.register');
+            const urlString =
+              res.url || (typeof url === 'string' ? url : (url as any).href || url.toString());
+            const isAuthRoute =
+              urlString.includes('auth.login') || urlString.includes('auth.register');
             if (!isAuthRoute) {
               clearAuthAndReload();
             }

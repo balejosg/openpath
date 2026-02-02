@@ -17,6 +17,7 @@ This will show the status of all components and help identify issues.
 ### DNS Resolution Not Working
 
 **Symptoms:**
+
 - Websites don't load
 - Browser shows "DNS_PROBE_FINISHED_NXDOMAIN"
 - `dig @127.0.0.1 google.com` returns no results
@@ -24,28 +25,36 @@ This will show the status of all components and help identify issues.
 **Solutions:**
 
 1. **Check if dnsmasq is running:**
+
    ```bash
    systemctl status dnsmasq
    ```
+
    If not running:
+
    ```bash
    sudo systemctl restart dnsmasq
    ```
 
 2. **Check dnsmasq configuration:**
+
    ```bash
    dnsmasq --test
    ```
+
    If there are syntax errors, regenerate the config:
+
    ```bash
    sudo openpath update
    ```
 
 3. **Check upstream DNS:**
+
    ```bash
    cat /run/dnsmasq/resolv.conf
    dig @8.8.8.8 google.com +short
    ```
+
    If upstream DNS is unreachable, the network may be down.
 
 4. **Check resolv.conf:**
@@ -60,16 +69,20 @@ This will show the status of all components and help identify issues.
 ### dnsmasq Keeps Crashing
 
 **Symptoms:**
+
 - dnsmasq service repeatedly fails
 - Watchdog logs show restart attempts
 
 **Solutions:**
 
 1. **Check for port conflicts:**
+
    ```bash
    sudo ss -tuln | grep :53
    ```
+
    If systemd-resolved is using port 53:
+
    ```bash
    sudo systemctl disable systemd-resolved
    sudo systemctl stop systemd-resolved
@@ -77,11 +90,13 @@ This will show the status of all components and help identify issues.
    ```
 
 2. **Check dnsmasq logs:**
+
    ```bash
    journalctl -u dnsmasq -n 50
    ```
 
 3. **Verify configuration syntax:**
+
    ```bash
    sudo dnsmasq --test -C /etc/dnsmasq.d/openpath.conf
    ```
@@ -94,18 +109,22 @@ This will show the status of all components and help identify issues.
 ### Firewall Rules Not Applied
 
 **Symptoms:**
+
 - Users can bypass DNS restrictions
 - External DNS servers are accessible
 
 **Solutions:**
 
 1. **Check iptables rules:**
+
    ```bash
    sudo iptables -L OUTPUT -n -v
    ```
+
    Should show DROP rules for port 53 and 853.
 
 2. **Reapply firewall rules:**
+
    ```bash
    sudo openpath force
    ```
@@ -122,6 +141,7 @@ This will show the status of all components and help identify issues.
 ### Browser Policies Not Applying
 
 **Symptoms:**
+
 - Users can access blocked URLs
 - Search engines other than DuckDuckGo are available
 - Extensions can be installed
@@ -129,20 +149,24 @@ This will show the status of all components and help identify issues.
 **Solutions:**
 
 1. **Check Firefox policies:**
+
    ```bash
    cat /etc/firefox/policies/policies.json | python3 -m json.tool
    ```
 
 2. **Check Chromium policies:**
+
    ```bash
    ls -la /etc/chromium/policies/managed/
    cat /etc/chromium/policies/managed/openpath.json
    ```
 
 3. **Force policy regeneration:**
+
    ```bash
    sudo openpath force
    ```
+
    This will close browsers and regenerate policies.
 
 4. **Restart Firefox to apply policies:**
@@ -152,20 +176,24 @@ This will show the status of all components and help identify issues.
 ### Captive Portal Not Detected
 
 **Symptoms:**
+
 - Can't connect to hotel/airport WiFi
 - Login page doesn't appear
 
 **Solutions:**
 
 1. **Check captive portal detector status:**
+
    ```bash
    systemctl status captive-portal-detector
    ```
 
 2. **Manually trigger detection:**
+
    ```bash
    curl -s http://detectportal.firefox.com/success.txt
    ```
+
    Should return "success". If it redirects, there's a captive portal.
 
 3. **Temporarily disable OpenPath:**
@@ -180,22 +208,26 @@ This will show the status of all components and help identify issues.
 ### Whitelist Not Updating
 
 **Symptoms:**
+
 - New domains not resolving
 - Old domains still accessible after removal
 
 **Solutions:**
 
 1. **Check whitelist URL:**
+
    ```bash
    cat /etc/openpath/whitelist-url.conf
    ```
 
 2. **Manually update:**
+
    ```bash
    sudo openpath update
    ```
 
 3. **Check download errors:**
+
    ```bash
    grep -i "error\|fail" /var/log/openpath.log | tail -20
    ```
@@ -208,12 +240,14 @@ This will show the status of all components and help identify issues.
 ### Connection Flush Issues
 
 **Symptoms:**
+
 - Blocked sites remain accessible after policy change
 - Need to restart browser for changes to take effect
 
 **Solutions:**
 
 1. **Force connection flush:**
+
    ```bash
    sudo openpath force
    ```
@@ -232,16 +266,19 @@ This will show the status of all components and help identify issues.
 ## Viewing Logs
 
 **Real-time log viewing:**
+
 ```bash
 openpath logs
 ```
 
 **Last 100 log lines:**
+
 ```bash
 openpath log 100
 ```
 
 **Service-specific logs:**
+
 ```bash
 journalctl -u dnsmasq -f
 journalctl -u openpath-dnsmasq.service -f
@@ -297,6 +334,7 @@ sudo systemctl stop dnsmasq
 If you can't resolve an issue:
 
 1. Collect diagnostic information:
+
    ```bash
    sudo openpath health > health-report.txt
    openpath log 200 > logs.txt
@@ -306,6 +344,7 @@ If you can't resolve an issue:
 2. Open an issue at: https://github.com/LasEncinasIT/openpath/issues
 
 Include:
+
 - Operating system version
 - OpenPath version (`openpath status`)
 - Health check output

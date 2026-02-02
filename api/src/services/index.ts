@@ -10,10 +10,10 @@ import ScheduleService from './schedule.service.js';
 import UserService from './user.service.js';
 
 export {
-    SetupService,
-    ClassroomService,
-    RequestService,
-    AuthService,
-    ScheduleService,
-    UserService
+  SetupService,
+  ClassroomService,
+  RequestService,
+  AuthService,
+  ScheduleService,
+  UserService,
 };

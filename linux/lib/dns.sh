@@ -281,9 +281,11 @@ server=/time.google.com/${PRIMARY_DNS}
 EOF
     
     # Add allowed domains from whitelist
-    echo "# =============================================" >> "$temp_conf"
-    echo "# WHITELIST DOMAINS (${#WHITELIST_DOMAINS[@]} domains)" >> "$temp_conf"
-    echo "# =============================================" >> "$temp_conf"
+    {
+        echo "# ============================================="
+        echo "# WHITELIST DOMAINS (${#WHITELIST_DOMAINS[@]} domains)"
+        echo "# ============================================="
+    } >> "$temp_conf"
 
     local valid_count=0
     local invalid_count=0

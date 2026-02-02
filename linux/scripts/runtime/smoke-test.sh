@@ -174,7 +174,7 @@ test_config_files() {
     
     if [ -f /var/lib/openpath/whitelist.txt ]; then
         local count
-        count=$(grep -v "^#" /var/lib/openpath/whitelist.txt 2>/dev/null | grep -v "^$" | wc -l)
+        count=$(grep -cv "^#\|^$" /var/lib/openpath/whitelist.txt 2>/dev/null || echo "0")
         test_pass "Whitelist descargada ($count dominios)"
     else
         test_warn "Whitelist no descargada aún (el timer lo hará)"

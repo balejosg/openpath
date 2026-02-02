@@ -52,7 +52,7 @@ ssh user@pc-01 "curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh 
 
     - name: Add APT repository
       apt_repository:
-        repo: "deb [signed-by=/usr/share/keyrings/openpath.gpg] https://balejosg.github.io/openpath/apt stable main"
+        repo: 'deb [signed-by=/usr/share/keyrings/openpath.gpg] https://balejosg.github.io/openpath/apt stable main'
         filename: openpath
 
     - name: Install openpath-dnsmasq
@@ -63,7 +63,7 @@ ssh user@pc-01 "curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh 
 
     - name: Set whitelist URL
       copy:
-        content: "https://your-url.com/whitelist.txt"
+        content: 'https://your-url.com/whitelist.txt'
         dest: /etc/openpath/whitelist-url.conf
 
     - name: Apply configuration
@@ -71,6 +71,7 @@ ssh user@pc-01 "curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh 
 ```
 
 Run with:
+
 ```bash
 ansible-playbook -i inventory.ini openpath-install.yml
 ```
@@ -150,13 +151,13 @@ sudo /usr/local/bin/openpath-update.sh
 
 ## Configuration Files
 
-| File | Purpose |
-|------|---------|
-| `/etc/openpath/whitelist-url.conf` | URL to fetch whitelist from |
-| `/etc/openpath/health-api-url.conf` | Health API endpoint (optional) |
-| `/etc/openpath/health-api-secret.conf` | Health API secret (optional) |
-| `/var/lib/openpath/whitelist.txt` | Downloaded whitelist (cache) |
-| `/etc/dnsmasq.d/openpath.conf` | dnsmasq configuration |
+| File                                   | Purpose                        |
+| -------------------------------------- | ------------------------------ |
+| `/etc/openpath/whitelist-url.conf`     | URL to fetch whitelist from    |
+| `/etc/openpath/health-api-url.conf`    | Health API endpoint (optional) |
+| `/etc/openpath/health-api-secret.conf` | Health API secret (optional)   |
+| `/var/lib/openpath/whitelist.txt`      | Downloaded whitelist (cache)   |
+| `/etc/dnsmasq.d/openpath.conf`         | dnsmasq configuration          |
 
 ---
 

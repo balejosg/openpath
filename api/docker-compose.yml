@@ -19,11 +19,11 @@ services:
       POSTGRES_USER: ${DB_USER:-openpath}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-openpath_dev}
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-openpath}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-openpath}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,7 +35,7 @@ services:
     container_name: openpath-api
     restart: unless-stopped
     ports:
-      - "${PORT:-3000}:3000"
+      - '${PORT:-3000}:3000'
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - PORT=3000
@@ -70,16 +70,16 @@ services:
       # Persist logs
       - api-logs:/app/logs
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:3000/health']
       interval: 30s
       timeout: 3s
       start_period: 10s
       retries: 3
     logging:
-      driver: "json-file"
+      driver: 'json-file'
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: '10m'
+        max-file: '3'
 
 volumes:
   postgres_data:

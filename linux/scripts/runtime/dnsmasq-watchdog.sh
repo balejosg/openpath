@@ -78,7 +78,7 @@ recover_upstream_dns() {
     else
         mkdir -p /run/dnsmasq
         local dns
-        dns=$(cat "$ORIGINAL_DNS_FILE" 2>/dev/null | head -1)
+        dns=$(head -1 "$ORIGINAL_DNS_FILE" 2>/dev/null)
         [ -z "$dns" ] && dns="8.8.8.8"
         echo "nameserver $dns" > /run/dnsmasq/resolv.conf
         echo "nameserver 8.8.8.8" >> /run/dnsmasq/resolv.conf

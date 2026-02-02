@@ -6,7 +6,10 @@ interface ForgotPasswordProps {
   onNavigateToReset: () => void;
 }
 
-const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onNavigateToLogin, onNavigateToReset }) => {
+const ForgotPassword: React.FC<ForgotPasswordProps> = ({
+  onNavigateToLogin,
+  onNavigateToReset,
+}) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -35,8 +38,8 @@ const ForgotPassword: React.FC<ForgotPasswordProps> = ({ onNavigateToLogin, onNa
               <div>
                 <h3 className="font-semibold text-amber-800 text-sm">Proceso de recuperación</h3>
                 <p className="text-amber-700 text-sm mt-1">
-                  Para restablecer tu contraseña, contacta al administrador de tu institución. 
-                  Te proporcionará un token de recuperación.
+                  Para restablecer tu contraseña, contacta al administrador de tu institución. Te
+                  proporcionará un token de recuperación.
                 </p>
               </div>
             </div>

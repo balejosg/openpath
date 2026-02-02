@@ -2,7 +2,7 @@ name: Build Prerelease Deb
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ['CI']
     types: [completed]
     branches: [main]
 
@@ -16,11 +16,11 @@ jobs:
     name: Build and Publish Prerelease
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      
+
       - name: Get version from run number
         id: version
         run: |
@@ -29,7 +29,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "package_name=openpath-dnsmasq_${VERSION}-1_amd64.deb" >> $GITHUB_OUTPUT
           echo "Building prerelease version: $VERSION"
-      
+
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
@@ -44,7 +44,7 @@ jobs:
         run: |
           chmod +x linux/scripts/build/build-deb.sh
           ./linux/scripts/build/build-deb.sh ${{ steps.version.outputs.version }} 1
-      
+
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
@@ -58,18 +58,18 @@ jobs:
           ref: gh-pages
           path: gh-pages
         continue-on-error: true
-      
+
       - name: Create gh-pages directory if not exists
         run: |
           if [ ! -d gh-pages ]; then
             mkdir gh-pages
           fi
-      
+
       - name: Install reprepro and GPG
         run: |
           sudo apt-get update
           sudo apt-get install -y reprepro gnupg
-      
+
       - name: Setup GPG key
         run: |
           if [ -n "${{ secrets.APT_GPG_PRIVATE_KEY }}" ]; then
@@ -91,12 +91,12 @@ jobs:
           fi
           echo "GPG_KEY_ID=$GPG_KEY_ID" >> $GITHUB_ENV
           echo "Using GPG key: $GPG_KEY_ID"
-      
+
       - name: Setup APT repository structure
         run: |
           mkdir -p gh-pages/apt/conf
           mkdir -p gh-pages/apt/pool/main
-          
+
           cat > gh-pages/apt/conf/distributions << EOF
           Origin: OpenPath System
           Label: OpenPath System
@@ -116,39 +116,39 @@ jobs:
           Description: OpenPath DNS System - Development builds
           SignWith: ${{ env.GPG_KEY_ID }}
           EOF
-          
+
           cat > gh-pages/apt/conf/options << EOF
           verbose
           basedir .
           EOF
-      
+
       - name: Add package to unstable repository
         working-directory: gh-pages/apt
         run: |
           echo "Adding package to unstable suite..."
           reprepro includedeb unstable ../../build/*.deb
-      
+
       - name: Export GPG public key
         run: |
           gpg --armor --export ${{ env.GPG_KEY_ID }} > gh-pages/apt/pubkey.gpg
-      
+
       - name: Copy setup script
         run: |
           cp linux/scripts/build/apt-setup.sh gh-pages/apt/apt-setup.sh
           chmod +x gh-pages/apt/apt-setup.sh
-      
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
-      
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./gh-pages
-      
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-      
+
       - name: Summary
         run: |
           echo "## 📦 Prerelease Deb Published" >> $GITHUB_STEP_SUMMARY

@@ -1,6 +1,6 @@
 /**
  * Test Utilities for OpenPath E2E Tests
- * 
+ *
  * Provides test data factories, helpers, and common setup functions.
  */
 
@@ -94,7 +94,10 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   await page.locator('input[type="password"]').fill(ADMIN_CREDENTIALS.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
   // Wait for dashboard content to appear (state-based navigation)
-  await page.getByText(/Panel de Control|Vista General|Aulas Seguras/i).first().waitFor({ timeout: 15000 });
+  await page
+    .getByText(/Panel de Control|Vista General|Aulas Seguras/i)
+    .first()
+    .waitFor({ timeout: 15000 });
 }
 
 /**
@@ -107,7 +110,10 @@ export async function loginAsTeacher(page: Page): Promise<void> {
   await page.locator('input[type="password"]').fill(TEACHER_CREDENTIALS.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
   // Wait for dashboard content to appear (state-based navigation)
-  await page.getByText(/Panel de Control|Vista General|Aulas Seguras/i).first().waitFor({ timeout: 15000 });
+  await page
+    .getByText(/Panel de Control|Vista General|Aulas Seguras/i)
+    .first()
+    .waitFor({ timeout: 15000 });
 }
 
 /**
@@ -123,7 +129,7 @@ export async function logout(page: Page): Promise<void> {
     await page.waitForSelector('input[type="email"]', { timeout: 5000 });
     return;
   }
-  
+
   // Fallback to user menu
   const userMenu = page.locator('[data-testid="user-menu"]');
   if (await userMenu.isVisible()) {
@@ -150,7 +156,10 @@ export async function clearAuth(context: BrowserContext): Promise<void> {
  * Use this instead of waitForURL since SPA uses state-based navigation
  */
 export async function waitForDashboard(page: Page, timeout = 15000): Promise<void> {
-  await page.getByText(/Panel de Control|Vista General|Aulas Seguras/i).first().waitFor({ timeout });
+  await page
+    .getByText(/Panel de Control|Vista General|Aulas Seguras/i)
+    .first()
+    .waitFor({ timeout });
 }
 
 /**
@@ -165,7 +174,10 @@ export async function waitForLoginPage(page: Page, timeout = 10000): Promise<voi
  * Waits for register page to appear
  */
 export async function waitForRegisterPage(page: Page, timeout = 10000): Promise<void> {
-  await page.getByText(/Registro Institucional|Crear cuenta|Registrarse/i).first().waitFor({ timeout });
+  await page
+    .getByText(/Registro Institucional|Crear cuenta|Registrarse/i)
+    .first()
+    .waitFor({ timeout });
 }
 
 /**
@@ -264,7 +276,7 @@ export async function getPerformanceMetrics(page: Page): Promise<{
 }> {
   const metrics = await page.evaluate(() => {
     const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
-    const paint = performance.getEntriesByType('paint').find(p => p.name === 'first-paint');
+    const paint = performance.getEntriesByType('paint').find((p) => p.name === 'first-paint');
     return {
       domContentLoaded: navigation?.domContentLoadedEventEnd || 0,
       loadComplete: navigation?.loadEventEnd || 0,

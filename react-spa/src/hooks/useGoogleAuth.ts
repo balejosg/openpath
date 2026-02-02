@@ -33,7 +33,9 @@ export const useGoogleAuth = () => {
       }
     }, 100);
 
-    return () => { clearInterval(interval); };
+    return () => {
+      clearInterval(interval);
+    };
   }, []);
 
   const initGoogleAuth = useCallback(

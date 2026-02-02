@@ -13,12 +13,12 @@ jobs:
   release-please:
     name: Release Please
     runs-on: ubuntu-latest
-    
+
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
       version: ${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}.${{ steps.release.outputs.patch }}
-    
+
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -35,7 +35,7 @@ jobs:
               {"type": "refactor", "section": "♻️ Refactoring", "hidden": false},
               {"type": "chore", "section": "🧹 Chores", "hidden": true}
             ]
-      
+
       - name: Release Summary
         if: ${{ steps.release.outputs.release_created }}
         run: |
@@ -50,7 +50,7 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Trigger build-deb workflow
         uses: actions/github-script@v7
@@ -66,4 +66,3 @@ jobs:
               }
             });
             console.log('Triggered build-deb.yml for version ${{ needs.release-please.outputs.version }}');
-

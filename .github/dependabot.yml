@@ -1,103 +1,103 @@
 version: 2
 updates:
   # GitHub Actions dependencies
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     open-pull-requests-limit: 5
     labels:
-      - "dependencies"
-      - "github-actions"
+      - 'dependencies'
+      - 'github-actions'
 
   # dashboard (Node.js)
-  - package-ecosystem: "npm"
-    directory: "/dashboard"
+  - package-ecosystem: 'npm'
+    directory: '/dashboard'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     open-pull-requests-limit: 5
     labels:
-      - "dependencies"
-      - "npm"
-      - "dashboard"
+      - 'dependencies'
+      - 'npm'
+      - 'dashboard'
     versioning-strategy: increase
 
   # api (Node.js)
-  - package-ecosystem: "npm"
-    directory: "/api"
+  - package-ecosystem: 'npm'
+    directory: '/api'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     open-pull-requests-limit: 5
     labels:
-      - "dependencies"
-      - "npm"
-      - "api"
+      - 'dependencies'
+      - 'npm'
+      - 'api'
     versioning-strategy: increase
 
   # auth-worker (Node.js)
-  - package-ecosystem: "npm"
-    directory: "/auth-worker"
+  - package-ecosystem: 'npm'
+    directory: '/auth-worker'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     open-pull-requests-limit: 5
     labels:
-      - "dependencies"
-      - "npm"
-      - "auth-worker"
+      - 'dependencies'
+      - 'npm'
+      - 'auth-worker'
     versioning-strategy: increase
 
   # Root (Node.js)
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     open-pull-requests-limit: 5
     labels:
-      - "dependencies"
-      - "npm"
-      - "root"
+      - 'dependencies'
+      - 'npm'
+      - 'root'
     versioning-strategy: increase
 
   # spa (Node.js)
-  - package-ecosystem: "npm"
-    directory: "/spa"
+  - package-ecosystem: 'npm'
+    directory: '/spa'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     open-pull-requests-limit: 5
     labels:
-      - "dependencies"
-      - "npm"
-      - "spa"
+      - 'dependencies'
+      - 'npm'
+      - 'spa'
     versioning-strategy: increase
 
   # shared (Node.js)
-  - package-ecosystem: "npm"
-    directory: "/shared"
+  - package-ecosystem: 'npm'
+    directory: '/shared'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     open-pull-requests-limit: 5
     labels:
-      - "dependencies"
-      - "npm"
-      - "shared"
+      - 'dependencies'
+      - 'npm'
+      - 'shared'
     versioning-strategy: increase
 
   # firefox-extension (Node.js)
-  - package-ecosystem: "npm"
-    directory: "/firefox-extension"
+  - package-ecosystem: 'npm'
+    directory: '/firefox-extension'
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: 'weekly'
+      day: 'monday'
     open-pull-requests-limit: 5
     labels:
-      - "dependencies"
-      - "npm"
-      - "extension"
+      - 'dependencies'
+      - 'npm'
+      - 'extension'
     versioning-strategy: increase

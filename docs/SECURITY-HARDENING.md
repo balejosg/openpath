@@ -77,6 +77,7 @@ sudo chattr +i /etc/systemd/system/dnsmasq-watchdog.service
 ```
 
 To modify later:
+
 ```bash
 sudo chattr -i /etc/openpath/whitelist-url.conf
 # ... make changes ...
@@ -240,6 +241,7 @@ Never use the auto-generated random secret in production - tokens will be invali
 ### Rate Limiting
 
 The API includes rate limiting by default:
+
 - Global: 200 requests/minute per IP
 - Auth: 10 attempts/minute per IP
 - Domain requests: 5/minute per IP
@@ -282,6 +284,7 @@ CORS_ORIGINS=https://spa.yourdomain.com
 ### Suspected Bypass Attempt
 
 1. **Collect evidence:**
+
    ```bash
    sudo openpath log 500 > incident-logs.txt
    sudo iptables -L -n -v > firewall-state.txt
@@ -289,6 +292,7 @@ CORS_ORIGINS=https://spa.yourdomain.com
    ```
 
 2. **Check for tampering:**
+
    ```bash
    # Verify file integrity
    md5sum /usr/local/bin/openpath* > current-hashes.txt

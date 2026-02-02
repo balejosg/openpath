@@ -27,7 +27,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -46,11 +46,11 @@ jobs:
         run: |
           echo "🐳 Building systemd-enabled E2E test Docker image..."
           docker build -t openpath-e2e:latest -f tests/e2e/Dockerfile .
-      
+
       - name: Run E2E tests in systemd container
         run: |
           echo "🧪 Starting systemd container..."
-          
+
           # Start container with systemd
           docker run -d --name e2e-test \
             --privileged \
@@ -59,10 +59,10 @@ jobs:
             --dns 8.8.8.8 \
             -e CI=true \
             openpath-e2e:latest
-          
+
           echo "⏳ Waiting for systemd to boot..."
           sleep 5  # Reduced from 15s - systemd boots quickly in privileged mode
-          
+
           # Wait for e2e-tests.service to complete (max 8 minutes)
           for i in {1..96}; do
             status=$(docker exec e2e-test systemctl is-active e2e-tests.service 2>/dev/null || echo "unknown")
@@ -75,22 +75,22 @@ jobs:
             fi
             sleep 5
           done
-          
+
           echo ""
           echo "📋 Test output:"
           docker exec e2e-test journalctl -u e2e-tests.service --no-pager -n 100 || true
-          
+
           echo ""
           echo "🔍 Checking service result..."
-          
+
           # Get the actual result - "success" means tests passed
           result=$(docker exec e2e-test systemctl show e2e-tests.service --property=Result --value 2>/dev/null || echo "failed")
           echo "Service Result: $result"
-          
+
           # Cleanup (force, ignore errors)
           docker stop e2e-test 2>/dev/null || true
           docker rm -f e2e-test 2>/dev/null || true
-          
+
           if [ "$result" = "success" ]; then
             echo "✅ E2E tests passed"
             exit 0
@@ -98,21 +98,21 @@ jobs:
             echo "❌ E2E tests failed (result: $result)"
             exit 1
           fi
-      
+
       - name: Test whitelist update mechanism
         if: success()
         run: |
           echo "📥 Testing whitelist update in container..."
-          
+
           # Start a fresh container for this test
           docker run -d --name whitelist-test \
             --privileged \
             --cgroupns=host \
             -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
             openpath-e2e:latest
-          
+
           sleep 3
-          
+
           # Create test whitelist using echo commands
           docker exec whitelist-test bash -c '
             echo "## WHITELIST" > /tmp/test-whitelist.txt
@@ -123,21 +123,20 @@ jobs:
             echo "## BLOCKED-SUBDOMAINS" >> /tmp/test-whitelist.txt
             echo "ads.example.com" >> /tmp/test-whitelist.txt
           '
-          
+
           # Test update script (if it exists)
           docker exec whitelist-test bash -c 'if [ -f /opt/openpath/scripts/update-whitelist.sh ]; then /opt/openpath/scripts/update-whitelist.sh --url file:///tmp/test-whitelist.txt || echo "Update script test skipped"; else echo "Update script not found (expected in full installation)"; fi'
-          
+
           docker stop whitelist-test 2>/dev/null || true
           docker rm -f whitelist-test 2>/dev/null || true
           echo "✓ Whitelist update test completed"
-      
+
       - name: Debug on failure
         if: failure()
         run: |
           echo "📋 Debug information..."
           docker logs e2e-test 2>/dev/null || echo "Container logs not available"
           docker rm -f e2e-test 2>/dev/null || true
-
 
   # ============================================
   # Windows E2E Tests
@@ -151,33 +150,33 @@ jobs:
       matrix:
         os: [windows-2022, windows-2019]
     # Note: Windows failures now visible but don't block Linux-only users
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install Pester and Chocolatey
         shell: pwsh
         run: |
           Install-Module -Name Pester -Force -SkipPublisherCheck
           Import-Module Pester -PassThru
-          
+
           # Ensure Chocolatey is available
           if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
             Set-ExecutionPolicy Bypass -Scope Process -Force
             [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
             iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
           }
-      
+
       - name: Install Acrylic DNS Proxy
         shell: pwsh
         run: |
           Write-Host "🔧 Installing Acrylic DNS Proxy..."
           choco install acrylic-dns-proxy -y --no-progress
-          
+
           # Wait for installation
           Start-Sleep -Seconds 5
-          
+
           # Configure Acrylic for testing
           $acrylicPath = "C:\Program Files (x86)\Acrylic DNS Proxy"
           if (Test-Path $acrylicPath) {
@@ -196,7 +195,7 @@ jobs:
             Write-Host "⚠ Acrylic installation path not found (may use different path)"
           }
         continue-on-error: true
-      
+
       - name: Prepare installation
         shell: pwsh
         run: |
@@ -204,11 +203,11 @@ jobs:
           New-Item -ItemType Directory -Path "C:\OpenPath\lib" -Force | Out-Null
           New-Item -ItemType Directory -Path "C:\OpenPath\scripts" -Force | Out-Null
           New-Item -ItemType Directory -Path "C:\OpenPath\data\logs" -Force | Out-Null
-          
+
           Write-Host "📋 Copying modules..."
           Copy-Item "windows\lib\*.psm1" "C:\OpenPath\lib\" -Force
           Copy-Item "windows\scripts\*.ps1" "C:\OpenPath\scripts\" -Force
-      
+
       - name: Create test configuration
         shell: pwsh
         run: |
@@ -224,7 +223,7 @@ jobs:
           }
           $config | ConvertTo-Json -Depth 10 | Set-Content "C:\OpenPath\data\config.json" -Encoding UTF8
           Write-Host "✓ Test configuration created"
-      
+
       - name: Import and test modules
         shell: pwsh
         run: |
@@ -232,22 +231,22 @@ jobs:
           Import-Module "C:\OpenPath\lib\Common.psm1" -Force
           Import-Module "C:\OpenPath\lib\DNS.psm1" -Force
           Import-Module "C:\OpenPath\lib\Firewall.psm1" -Force
-          
+
           Write-Host ""
           Write-Host "🔍 Testing module functions..."
-          
+
           # Test DNS module functions
           $acrylicPath = Get-AcrylicPath
           Write-Host "Acrylic Path: $acrylicPath"
-          
+
           $installed = Test-AcrylicInstalled
           Write-Host "Acrylic Installed: $installed"
-      
+
       - name: Test DNS resolution
         shell: pwsh
         run: |
           Write-Host "🔍 Testing system DNS resolution..."
-          
+
           # Test basic resolution
           try {
               $result = Resolve-DnsName -Name "google.com" -ErrorAction Stop
@@ -256,7 +255,7 @@ jobs:
           catch {
               Write-Host "⚠ DNS resolution failed: $_"
           }
-          
+
           # Test Acrylic if available
           $acrylicRunning = (Get-Service -Name "AcrylicDNSProxySvc" -ErrorAction SilentlyContinue).Status -eq 'Running'
           if ($acrylicRunning) {
@@ -270,15 +269,15 @@ jobs:
                   Write-Host "⚠ Acrylic proxy test failed: $_"
               }
           }
-      
+
       - name: Test DNS Blocking (Sinkhole)
         shell: pwsh
         run: |
           Write-Host "🚫 Testing DNS sinkhole blocking..."
-          
+
           $acrylicPath = "C:\Program Files (x86)\Acrylic DNS Proxy"
           $hostsFile = "$acrylicPath\AcrylicHosts.txt"
-          
+
           if (Test-Path $hostsFile) {
               # Backup original
               Copy-Item $hostsFile "$hostsFile.bak" -Force
@@ -309,12 +308,12 @@ jobs:
           } else {
               Write-Host "⚠ Acrylic hosts file not found, skipping sinkhole test"
           }
-      
+
       - name: Test Whitelist Update
         shell: pwsh
         run: |
           Write-Host "📥 Testing whitelist update mechanism..."
-          
+
           # Create test whitelist file
           $testFile = "C:\OpenPath\data\test-whitelist.txt"
           @(
@@ -327,18 +326,18 @@ jobs:
             "ads.example.com",
             "tracking.example.com"
           ) | Set-Content -Path $testFile -Encoding UTF8
-          
+
           Write-Host "✓ Test whitelist created"
           Write-Host "Content:"
           Get-Content $testFile
-          
+
           # Verify parsing (if module available)
           if (Get-Command "Parse-Whitelist" -ErrorAction SilentlyContinue) {
               $parsed = Parse-Whitelist -Path $testFile
               Write-Host ""
               Write-Host "Parsed: $($parsed.Whitelist.Count) allowed, $($parsed.BlockedSubdomains.Count) blocked"
           }
-          
+
           # Cleanup
           Remove-Item $testFile -ErrorAction SilentlyContinue
 
@@ -346,13 +345,13 @@ jobs:
         shell: pwsh
         run: |
           Import-Module "C:\OpenPath\lib\Firewall.psm1" -Force
-          
+
           Write-Host "🔍 Testing firewall functions..."
-          
+
           # Check if firewall is active
           $active = Test-FirewallActive
           Write-Host "Firewall Active: $active"
-          
+
           # Try to create test rule (will be cleaned up)
           Write-Host ""
           Write-Host "Creating test firewall rule..."
@@ -373,31 +372,31 @@ jobs:
           catch {
               Write-Host "⚠ Test rule creation failed (may require elevated privileges): $_"
           }
-      
+
       - name: Run Pester E2E tests
         shell: pwsh
         run: |
           Write-Host "🧪 Running Pester E2E tests..."
-          
+
           $config = New-PesterConfiguration
           $config.Run.Path = "tests/e2e/Windows-E2E.Tests.ps1"
           $config.Output.Verbosity = "Detailed"
           $config.Run.PassThru = $true
-          
+
           $result = Invoke-Pester -Configuration $config
-          
+
           Write-Host ""
           Write-Host "Results: $($result.PassedCount) passed, $($result.FailedCount) failed"
-          
+
           if ($result.FailedCount -gt 0) {
               Write-Host "⚠ Some tests failed (expected in CI environment)"
           }
-      
+
       - name: Verify scheduled tasks API
         shell: pwsh
         run: |
           Write-Host "🔍 Testing scheduled tasks API..."
-          
+
           try {
               # Create a test task
               $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-Command 'echo test'"
@@ -419,23 +418,23 @@ jobs:
           catch {
               Write-Host "⚠ Scheduled task test failed: $_"
           }
-      
+
       - name: Cleanup
         shell: pwsh
         if: always()
         run: |
           Write-Host "🧹 Cleaning up..."
-          
+
           # Remove test directories
           if (Test-Path "C:\OpenPath") {
               Remove-Item "C:\OpenPath" -Recurse -Force -ErrorAction SilentlyContinue
               Write-Host "✓ Test directories removed"
           }
-          
+
           # Remove any test firewall rules
           Get-NetFirewallRule -DisplayName "OpenPath-*" -ErrorAction SilentlyContinue | 
               Remove-NetFirewallRule -ErrorAction SilentlyContinue
-          
+
           # Remove any test scheduled tasks
           Get-ScheduledTask -TaskName "OpenPath-*" -ErrorAction SilentlyContinue | 
               Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue
@@ -448,31 +447,31 @@ jobs:
     runs-on: ubuntu-latest
     needs: [linux-e2e, windows-e2e]
     if: always()
-    
+
     steps:
       - name: Check results
         run: |
           echo "📊 E2E Test Summary"
           echo "===================="
-          
+
           if [[ "${{ needs.linux-e2e.result }}" == "success" ]]; then
             echo "✅ Linux E2E: PASSED"
           else
             echo "❌ Linux E2E: ${{ needs.linux-e2e.result }}"
           fi
-          
+
           if [[ "${{ needs.windows-e2e.result }}" == "success" ]]; then
             echo "✅ Windows E2E: PASSED"
           else
             echo "⚠️ Windows E2E: ${{ needs.windows-e2e.result }} (may have limitations)"
           fi
-          
+
           # Fail only if Linux fails (Windows has continue-on-error)
           if [[ "${{ needs.linux-e2e.result }}" == "failure" ]]; then
             echo ""
             echo "❌ E2E Tests FAILED"
             exit 1
           fi
-          
+
           echo ""
           echo "✅ E2E Tests Complete"

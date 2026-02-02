@@ -35,6 +35,7 @@ cp .env.example .env
 ```
 
 Required settings:
+
 - `ADMIN_TOKEN`: Secret token for admin endpoints
 - `GITHUB_TOKEN`: GitHub Personal Access Token (with repo write access)
 - `GITHUB_OWNER`: GitHub username/org owning the whitelist repo
@@ -76,6 +77,7 @@ http://localhost:3000/api-docs
 ```
 
 Features:
+
 - Browse all endpoints with descriptions
 - Try API calls directly from the browser
 - View request/response schemas
@@ -92,36 +94,36 @@ The server exposes two types of interfaces:
 
 ### Setup Endpoints (First-time Configuration)
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| GET | `/api/setup/status` | None | Check if initial setup is needed |
-| POST | `/api/setup/first-admin` | None | Create first admin user (one-time) |
-| POST | `/api/setup/validate-token` | None | Validate registration token |
-| GET | `/api/setup/registration-token` | Admin | Get current registration token |
-| POST | `/api/setup/regenerate-token` | Admin | Generate new registration token |
+| Method | Endpoint                        | Auth  | Description                        |
+| ------ | ------------------------------- | ----- | ---------------------------------- |
+| GET    | `/api/setup/status`             | None  | Check if initial setup is needed   |
+| POST   | `/api/setup/first-admin`        | None  | Create first admin user (one-time) |
+| POST   | `/api/setup/validate-token`     | None  | Validate registration token        |
+| GET    | `/api/setup/registration-token` | Admin | Get current registration token     |
+| POST   | `/api/setup/regenerate-token`   | Admin | Generate new registration token    |
 
 ### Public Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check (liveness probe) |
-| GET | `/health/ready` | Readiness probe |
-| GET | `/api` | API endpoint listing |
-| GET | `/api-docs` | Swagger UI documentation |
-| GET | `/api-docs.json` | OpenAPI 3.0 spec (JSON) |
-| POST | `/api/requests` | Submit domain request |
-| GET | `/api/requests/status/:id` | Check request status |
+| Method | Endpoint                   | Description                   |
+| ------ | -------------------------- | ----------------------------- |
+| GET    | `/health`                  | Health check (liveness probe) |
+| GET    | `/health/ready`            | Readiness probe               |
+| GET    | `/api`                     | API endpoint listing          |
+| GET    | `/api-docs`                | Swagger UI documentation      |
+| GET    | `/api-docs.json`           | OpenAPI 3.0 spec (JSON)       |
+| POST   | `/api/requests`            | Submit domain request         |
+| GET    | `/api/requests/status/:id` | Check request status          |
 
 ### Admin Endpoints (require `Authorization: Bearer <token>`)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/requests` | List all requests |
-| GET | `/api/requests/:id` | Get request details |
-| POST | `/api/requests/:id/approve` | Approve & push to GitHub |
-| POST | `/api/requests/:id/reject` | Reject request |
-| DELETE | `/api/requests/:id` | Delete request |
-| GET | `/api/requests/groups/list` | List whitelist groups |
+| Method | Endpoint                    | Description              |
+| ------ | --------------------------- | ------------------------ |
+| GET    | `/api/requests`             | List all requests        |
+| GET    | `/api/requests/:id`         | Get request details      |
+| POST   | `/api/requests/:id/approve` | Approve & push to GitHub |
+| POST   | `/api/requests/:id/reject`  | Reject request           |
+| DELETE | `/api/requests/:id`         | Delete request           |
+| GET    | `/api/requests/groups/list` | List whitelist groups    |
 
 ## Initial Setup Flow
 
@@ -137,6 +139,7 @@ npm start
 ### 2. Create First Admin
 
 Navigate to `http://your-server:3000/` - the setup wizard will appear automatically:
+
 1. Enter admin email, name, and password (min 8 characters)
 2. Click "Create Administrator"
 3. **Save the Registration Token** - you'll need it to register client PCs
@@ -185,6 +188,7 @@ curl -X POST http://localhost:3000/api/requests \
 ```
 
 Response:
+
 ```json
 {
   "success": true,
@@ -206,6 +210,7 @@ curl -X POST http://localhost:3000/api/requests/req_a1b2c3d4/approve \
 ```
 
 Response:
+
 ```json
 {
   "success": true,
@@ -262,6 +267,7 @@ WantedBy=multi-user.target
 ```
 
 Then:
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable openpath-api
@@ -308,11 +314,13 @@ api/
 ### Token Generation
 
 1. **ADMIN_TOKEN**: Generate a secure token:
+
    ```bash
    node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
    ```
 
 2. **JWT_SECRET** (required in production):
+
    ```bash
    node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
    ```
@@ -339,6 +347,7 @@ api/
 ## Continuous Deployment
 
 This API is automatically deployed to production on every push to `main` that modifies files in `api/`. The GitHub Actions workflow handles:
+
 - Pulling latest code
 - Installing dependencies
 - Restarting the service

@@ -15,26 +15,28 @@ import * as healthReports from '../lib/health-reports.js';
 // =============================================================================
 
 export interface SubmitHealthReportInput {
-    hostname: string;
-    status?: string | undefined;
-    dnsmasqRunning?: boolean | undefined;
-    dnsResolving?: boolean | undefined;
-    failCount?: number | undefined;
-    actions?: string | undefined;
-    version?: string | undefined;
+  hostname: string;
+  status?: string | undefined;
+  dnsmasqRunning?: boolean | undefined;
+  dnsResolving?: boolean | undefined;
+  failCount?: number | undefined;
+  actions?: string | undefined;
+  version?: string | undefined;
 }
 
 export interface SubmitHealthReportResult {
-    success: true;
-    message: string;
+  success: true;
+  message: string;
 }
 
-export type HealthReportServiceError =
-    | { code: 'HOSTNAME_REQUIRED'; message: string };
+export interface HealthReportServiceError {
+  code: 'HOSTNAME_REQUIRED';
+  message: string;
+}
 
 export type HealthReportResult<T> =
-    | { ok: true; data: T }
-    | { ok: false; error: HealthReportServiceError };
+  | { ok: true; data: T }
+  | { ok: false; error: HealthReportServiceError };
 
 // =============================================================================
 // Service Implementation
@@ -44,33 +46,33 @@ export type HealthReportResult<T> =
  * Submit a health report from a client machine
  */
 export async function submitHealthReport(
-    input: SubmitHealthReportInput
+  input: SubmitHealthReportInput
 ): Promise<HealthReportResult<SubmitHealthReportResult>> {
-    // Validate hostname
-    if (!input.hostname || input.hostname.trim() === '') {
-        return {
-            ok: false,
-            error: { code: 'HOSTNAME_REQUIRED', message: 'Hostname required' }
-        };
-    }
-
-    // Save the health report with normalized values
-    await healthReports.saveHealthReport(input.hostname, {
-        status: input.status ?? 'unknown',
-        dnsmasqRunning: input.dnsmasqRunning ?? null,
-        dnsResolving: input.dnsResolving ?? null,
-        failCount: input.failCount ?? 0,
-        actions: input.actions ?? '',
-        version: input.version ?? 'unknown',
-    });
-
+  // Validate hostname
+  if (!input.hostname || input.hostname.trim() === '') {
     return {
-        ok: true,
-        data: {
-            success: true,
-            message: 'Health report received'
-        }
+      ok: false,
+      error: { code: 'HOSTNAME_REQUIRED', message: 'Hostname required' },
     };
+  }
+
+  // Save the health report with normalized values
+  await healthReports.saveHealthReport(input.hostname, {
+    status: input.status ?? 'unknown',
+    dnsmasqRunning: input.dnsmasqRunning ?? null,
+    dnsResolving: input.dnsResolving ?? null,
+    failCount: input.failCount ?? 0,
+    actions: input.actions ?? '',
+    version: input.version ?? 'unknown',
+  });
+
+  return {
+    ok: true,
+    data: {
+      success: true,
+      message: 'Health report received',
+    },
+  };
 }
 
 // =============================================================================
@@ -78,5 +80,5 @@ export async function submitHealthReport(
 // =============================================================================
 
 export default {
-    submitHealthReport,
+  submitHealthReport,
 };

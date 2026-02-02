@@ -19,7 +19,6 @@ The open-source version of OpenPath is licensed under the **GNU Affero General P
 - Internal use in companies
 - Individuals and hobbyists
 
-
 ---
 
 ## Contributing

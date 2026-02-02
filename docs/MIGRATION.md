@@ -4,17 +4,18 @@ This guide covers upgrading between OpenPath versions.
 
 ## Version Compatibility
 
-| From Version | To Version | Migration Path |
-|--------------|------------|----------------|
-| 3.0 - 3.4    | 3.5        | Standard upgrade |
+| From Version | To Version | Migration Path            |
+| ------------ | ---------- | ------------------------- |
+| 3.0 - 3.4    | 3.5        | Standard upgrade          |
 | 2.x          | 3.5        | Fresh install recommended |
-| 1.x          | 3.5        | Fresh install required |
+| 1.x          | 3.5        | Fresh install required    |
 
 ## Standard Upgrade (3.0+ to 3.5)
 
 ### Prerequisites
 
 1. **Backup current configuration:**
+
    ```bash
    sudo tar -czvf openpath-backup.tar.gz \
        /etc/openpath/ \
@@ -31,16 +32,19 @@ This guide covers upgrading between OpenPath versions.
 ### Upgrade Steps
 
 1. **Get the latest code:**
+
    ```bash
    cd /path/to/whitelist
    git pull origin main
    ```
 
 2. **Run the installer:**
+
    ```bash
    cd linux
    sudo ./install.sh
    ```
+
    The installer will detect the existing installation and preserve configuration.
 
 3. **Verify the upgrade:**
@@ -52,11 +56,13 @@ This guide covers upgrading between OpenPath versions.
 ### Breaking Changes in 3.5
 
 **Configuration Paths:**
+
 - Configuration files now in `/etc/openpath/` (previously `/var/lib/openpath/`)
 - State files remain in `/var/lib/openpath/`
 - The installer migrates these automatically
 
 **New Environment Variables:**
+
 - Shell libraries now respect environment overrides:
   - `LOG_FILE` - Log file path
   - `ETC_CONFIG_DIR` - Configuration directory
@@ -64,6 +70,7 @@ This guide covers upgrading between OpenPath versions.
   - `DNSMASQ_CONF` - dnsmasq config path
 
 **API Changes:**
+
 - Test scripts now require `NODE_ENV=test` for rate limiting bypass
 - All API test scripts updated automatically
 
@@ -74,6 +81,7 @@ Older versions have incompatible configurations. A fresh install is recommended.
 ### Steps
 
 1. **Uninstall old version:**
+
    ```bash
    # Stop services
    sudo systemctl stop dnsmasq-url-whitelist.timer 2>/dev/null
@@ -86,6 +94,7 @@ Older versions have incompatible configurations. A fresh install is recommended.
    ```
 
 2. **Clean up old configurations:**
+
    ```bash
    sudo rm -rf /var/lib/dnsmasq-whitelist
    sudo rm -rf /etc/dnsmasq-whitelist
@@ -104,6 +113,7 @@ Older versions have incompatible configurations. A fresh install is recommended.
 The whitelist URL is now stored in `/etc/openpath/whitelist-url.conf`.
 
 **Manual migration:**
+
 ```bash
 # If you have a custom whitelist URL
 echo "https://your-custom-url/whitelist.txt" | sudo tee /etc/openpath/whitelist-url.conf
@@ -138,11 +148,13 @@ cp /etc/firefox/policies/policies.json ~/policies-backup.json
 If the upgrade fails:
 
 1. **Restore from backup:**
+
    ```bash
    sudo tar -xzvf openpath-backup.tar.gz -C /
    ```
 
 2. **Restore old scripts (if needed):**
+
    ```bash
    git checkout v3.4  # or previous version tag
    cd linux
@@ -211,6 +223,7 @@ sudo activate_firewall
 ## Version History
 
 ### 3.5 (Current)
+
 - Security hardening for shell scripts
 - Improved input validation
 - Comprehensive health check command
@@ -218,26 +231,31 @@ sudo activate_firewall
 - Configurable paths for testing
 
 ### 3.4
+
 - Captive portal detection
 - Systemd timer-based updates
 - Firefox extension support
 
 ### 3.3
+
 - Browser policy enforcement
 - Search engine restrictions
 - Connection flushing
 
 ### 3.2
+
 - Watchdog service
 - Automatic recovery
 - Improved logging
 
 ### 3.1
+
 - Initial multi-section whitelist
 - Blocked subdomain support
 - Blocked paths support
 
 ### 3.0
+
 - Architecture rewrite
 - Modular library structure
 - FHS-compliant paths

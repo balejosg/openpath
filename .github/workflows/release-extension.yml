@@ -17,7 +17,7 @@ jobs:
   release:
     name: Build and Release XPI
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -40,52 +40,52 @@ jobs:
         id: vars
         run: |
           echo "📦 Extracting version from manifest.json..."
-          
+
           VERSION=$(jq -r '.version' firefox-extension/manifest.json)
           SHORT_SHA=$(git rev-parse --short HEAD)
           TAG="extension-v${VERSION}-${SHORT_SHA}"
-          
+
           echo "  Version: $VERSION"
           echo "  Short SHA: $SHORT_SHA"
           echo "  Tag: $TAG"
-          
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "release_name=Extension v${VERSION} (${SHORT_SHA})" >> $GITHUB_OUTPUT
-      
+
       - name: Create and push tag
         continue-on-error: true
         run: |
           echo "🏷️  Creating tag: ${{ steps.vars.outputs.tag }}"
           git tag "${{ steps.vars.outputs.tag }}"
           git push origin "${{ steps.vars.outputs.tag }}" || echo "Tag already exists or push failed, continuing..."
-      
+
       - name: Build XPI package
         run: |
           echo "🔨 Building XPI package..."
-          
+
           BUILD_DIR="firefox-extension/build"
           XPI_NAME="monitor-bloqueos-red"
           VERSION="${{ steps.vars.outputs.version }}"
-          
+
           # Create clean build directory
           rm -rf "$BUILD_DIR"
           mkdir -p "$BUILD_DIR"
-          
+
           # Copy extension files
           echo "  → Copying extension files..."
           cp firefox-extension/manifest.json "$BUILD_DIR/"
           cp -r firefox-extension/dist "$BUILD_DIR/"
           cp -r firefox-extension/popup "$BUILD_DIR/"
           cp -r firefox-extension/icons "$BUILD_DIR/"
-          
+
           # Create XPI (ZIP with .xpi extension)
           echo "  → Creating XPI archive..."
           cd "$BUILD_DIR"
           zip -r -q "../${XPI_NAME}-${VERSION}.xpi" ./*
           cd ..
-          
+
           # Verify
           if [ -f "${XPI_NAME}-${VERSION}.xpi" ]; then
             SIZE=$(du -h "${XPI_NAME}-${VERSION}.xpi" | cut -f1)
@@ -94,22 +94,22 @@ jobs:
             echo "  ✗ Error: XPI file not created"
             exit 1
           fi
-          
+
           # Cleanup
           rm -rf "$BUILD_DIR"
-      
+
       - name: Package native host files
         run: |
           echo "📦 Packaging native host files..."
-          
+
           VERSION="${{ steps.vars.outputs.version }}"
           NATIVE_DIR="firefox-extension/native"
           PACKAGE_NAME="native-host-${VERSION}.tar.gz"
-          
+
           # Create tarball of native messaging host
           echo "  → Creating tarball..."
           tar -czf "$PACKAGE_NAME" -C firefox-extension native/
-          
+
           # Verify
           if [ -f "$PACKAGE_NAME" ]; then
             SIZE=$(du -h "$PACKAGE_NAME" | cut -f1)
@@ -118,7 +118,7 @@ jobs:
             echo "  ✗ Error: Native host package not created"
             exit 1
           fi
-      
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -131,31 +131,31 @@ jobs:
             native-host-${{ steps.vars.outputs.version }}.tar.gz
           body: |
             ## 🦊 Firefox Extension Release
-            
+
             **Version:** ${{ steps.vars.outputs.version }}  
             **Commit:** ${{ steps.vars.outputs.short_sha }}
-            
+
             ### 📦 Assets
-            
+
             - **`monitor-bloqueos-red-${{ steps.vars.outputs.version }}.xpi`** - Firefox extension (unsigned)
             - **`native-host-${{ steps.vars.outputs.version }}.tar.gz`** - Native messaging host files
-            
+
             ### 📝 Installation
-            
+
             **Extension (XPI):**
             1. Download the `.xpi` file
             2. Open Firefox Developer Edition/Nightly
             3. Set `xpinstall.signatures.required = false` in `about:config`
             4. Drag and drop the `.xpi` file into Firefox
-            
+
             **Native Host (optional):**
             1. Extract `native-host-*.tar.gz`
             2. Run `native/install-native-host.sh`
-            
+
             ---
-            
+
             ⚠️ **Note:** This is a pre-release for internal use. The extension is unsigned and requires Firefox Developer Edition or Nightly.
-      
+
       - name: Release summary
         if: success()
         run: |

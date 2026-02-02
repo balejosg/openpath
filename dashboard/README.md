@@ -72,14 +72,17 @@ npm start
 Environment variables:
 
 ### Required
+
 - `API_URL`: URL to OpenPath API (default: `http://localhost:3000`)
 - `COOKIE_SECRET`: Secret for signing auth cookies (generate with `openssl rand -hex 32`)
 
 ### Optional
+
 - `PORT`: Port for dashboard service (default: `3001`)
 - `NODE_ENV`: Environment (`development`, `production`, `test`)
 
 ### Removed (No Longer Needed)
+
 - ~~`DATABASE_URL`~~: Dashboard no longer accesses database
 - ~~`SESSION_SECRET`~~: Replaced by `COOKIE_SECRET`
 - ~~`ADMIN_PASSWORD`~~: Users managed in API
@@ -104,28 +107,33 @@ Tests use `supertest` for HTTP testing and mock the tRPC client where necessary.
 All endpoints require authentication via signed cookies (except `/export/*`).
 
 ### Authentication
+
 - `POST /api/auth/login` - Login and receive JWT tokens
 - `POST /api/auth/logout` - Logout and clear cookies
 - `GET /api/auth/check` - Check authentication status
 
 ### Groups Management
+
 - `GET /api/groups` - List all groups
 - `POST /api/groups` - Create new group
 - `PATCH /api/groups/:id` - Update group
 - `DELETE /api/groups/:id` - Delete group
 
 ### Rules Management
+
 - `GET /api/groups/:id/rules` - List rules for group
 - `POST /api/groups/:id/rules` - Add rule to group
 - `DELETE /api/rules/:id` - Delete rule
 - `POST /api/groups/:id/rules/bulk` - Bulk add rules
 
 ### System
+
 - `GET /api/stats` - Get system statistics
 - `GET /api/system/status` - Get system status
 - `POST /api/system/toggle` - Toggle system enable/disable
 
 ### Export
+
 - `GET /export/:name.txt` - Redirect to API export endpoint
 
 ## Migration from Previous Version
@@ -133,6 +141,7 @@ All endpoints require authentication via signed cookies (except `/export/*`).
 If upgrading from the old architecture:
 
 1. **Migrate dashboard users to API**:
+
    ```bash
    npm run db:migrate-dashboard-users --workspace=@openpath/api
    ```
@@ -143,10 +152,11 @@ If upgrading from the old architecture:
    - Remove `DATABASE_URL`, `SESSION_SECRET`, `ADMIN_PASSWORD`
 
 3. **Restart services**:
+
    ```bash
    # Start API first
    npm start --workspace=@openpath/api
-   
+
    # Then start Dashboard
    npm start --workspace=@openpath/dashboard
    ```

@@ -20,8 +20,8 @@ const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ onSuccess, disabl
 
   return (
     <div className="w-full flex justify-center my-4">
-      <div 
-        id="google-signin-btn" 
+      <div
+        id="google-signin-btn"
         className={`${disabled ? 'opacity-50 pointer-events-none' : ''} w-full flex justify-center`}
       >
         {!isLoaded && !disabled && (

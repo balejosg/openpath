@@ -10,28 +10,28 @@ Routers (tRPC) → Services (business logic) → Storage (Drizzle ORM)
 
 ## tRPC Routers (10)
 
-| Router | Procedures | Purpose |
-|--------|------------|---------|
-| `auth` | public/protected | Login, register, refresh, logout |
-| `users` | admin | User CRUD, role assignment |
-| `requests` | mixed | Domain whitelist requests workflow |
-| `classrooms` | teacher | Classroom/machine registration |
-| `schedules` | teacher | Time-based classroom reservations |
-| `push` | protected | Web push notification subscriptions |
-| `healthReports` | sharedSecret | Endpoint health monitoring |
-| `setup` | public | First-time admin creation |
-| `healthcheck` | public | Liveness/readiness probes |
-| `groups` | admin | Whitelist group/rule management |
+| Router          | Procedures       | Purpose                             |
+| --------------- | ---------------- | ----------------------------------- |
+| `auth`          | public/protected | Login, register, refresh, logout    |
+| `users`         | admin            | User CRUD, role assignment          |
+| `requests`      | mixed            | Domain whitelist requests workflow  |
+| `classrooms`    | teacher          | Classroom/machine registration      |
+| `schedules`     | teacher          | Time-based classroom reservations   |
+| `push`          | protected        | Web push notification subscriptions |
+| `healthReports` | sharedSecret     | Endpoint health monitoring          |
+| `setup`         | public           | First-time admin creation           |
+| `healthcheck`   | public           | Liveness/readiness probes           |
+| `groups`        | admin            | Whitelist group/rule management     |
 
 ## Procedure Types
 
-| Type | Auth | Use Case |
-|------|------|----------|
-| `publicProcedure` | None | Health, setup, auth endpoints |
-| `protectedProcedure` | JWT | Any authenticated user |
-| `adminProcedure` | JWT+admin | User management, groups |
-| `teacherProcedure` | JWT+teacher/admin | Classroom management |
-| `sharedSecretProcedure` | Machine secret | Endpoint-to-server auth |
+| Type                    | Auth              | Use Case                      |
+| ----------------------- | ----------------- | ----------------------------- |
+| `publicProcedure`       | None              | Health, setup, auth endpoints |
+| `protectedProcedure`    | JWT               | Any authenticated user        |
+| `adminProcedure`        | JWT+admin         | User management, groups       |
+| `teacherProcedure`      | JWT+teacher/admin | Classroom management          |
+| `sharedSecretProcedure` | Machine secret    | Endpoint-to-server auth       |
 
 ## Database (13 tables)
 
@@ -43,15 +43,15 @@ Migrations: `drizzle/` via `drizzle-kit`
 
 ## Key Files
 
-| Path | Purpose |
-|------|---------|
-| `src/server.ts` | Express entry, middleware stack |
-| `src/trpc/trpc.ts` | Procedure definitions, middleware |
-| `src/trpc/context.ts` | Request context, JWT extraction |
-| `src/trpc/routers/index.ts` | Main AppRouter aggregation |
-| `src/services/` | Business logic (8 services) |
-| `src/lib/auth.ts` | JWT management, blacklist |
-| `src/lib/logger.ts` | Winston structured logging |
+| Path                        | Purpose                           |
+| --------------------------- | --------------------------------- |
+| `src/server.ts`             | Express entry, middleware stack   |
+| `src/trpc/trpc.ts`          | Procedure definitions, middleware |
+| `src/trpc/context.ts`       | Request context, JWT extraction   |
+| `src/trpc/routers/index.ts` | Main AppRouter aggregation        |
+| `src/services/`             | Business logic (8 services)       |
+| `src/lib/auth.ts`           | JWT management, blacklist         |
+| `src/lib/logger.ts`         | Winston structured logging        |
 
 ## Conventions
 

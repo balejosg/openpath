@@ -15,14 +15,15 @@ OpenPath needs to support both Linux and Windows workstations in educational env
 
 Implement parallel native solutions for each platform:
 
-| Component | Linux | Windows |
-|-----------|-------|---------|
-| DNS Sinkhole | dnsmasq | Acrylic DNS Proxy |
-| Firewall | iptables | Windows Firewall |
-| Scheduler | systemd timers | Task Scheduler |
-| Installer | Bash scripts | PowerShell scripts |
+| Component    | Linux          | Windows            |
+| ------------ | -------------- | ------------------ |
+| DNS Sinkhole | dnsmasq        | Acrylic DNS Proxy  |
+| Firewall     | iptables       | Windows Firewall   |
+| Scheduler    | systemd timers | Task Scheduler     |
+| Installer    | Bash scripts   | PowerShell scripts |
 
 Shared components remain platform-agnostic:
+
 - **API**: Node.js Express (Docker or native)
 - **SPA**: Static HTML/JS/CSS
 - **Firefox Extension**: WebExtensions API

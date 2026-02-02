@@ -107,17 +107,17 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ### Types
 
-| Type | Description |
-|------|-------------|
-| `feat` | New feature |
-| `fix` | Bug fix |
-| `docs` | Documentation only |
-| `style` | Formatting, no code change |
+| Type       | Description                                     |
+| ---------- | ----------------------------------------------- |
+| `feat`     | New feature                                     |
+| `fix`      | Bug fix                                         |
+| `docs`     | Documentation only                              |
+| `style`    | Formatting, no code change                      |
 | `refactor` | Code change that neither fixes nor adds feature |
-| `perf` | Performance improvement |
-| `test` | Adding or updating tests |
-| `chore` | Maintenance tasks |
-| `ci` | CI/CD changes |
+| `perf`     | Performance improvement                         |
+| `test`     | Adding or updating tests                        |
+| `chore`    | Maintenance tasks                               |
+| `ci`       | CI/CD changes                                   |
 
 ### Scopes
 
@@ -157,6 +157,7 @@ docker-compose up -d db
 ```
 
 By default the compose DB uses:
+
 - DB: `openpath`
 - User: `openpath`
 - Password: `openpath_dev`
@@ -211,10 +212,10 @@ npx playwright test --grep "login"
 
 #### CI Workflows
 
-| Workflow | Tests | Trigger |
-|----------|-------|---------|
-| `ci.yml` | @smoke only (14 tests) | Every PR/push |
-| `e2e-comprehensive.yml` | All tests (279+) | Push to main, nightly, `e2e` label on PR |
+| Workflow                | Tests                  | Trigger                                  |
+| ----------------------- | ---------------------- | ---------------------------------------- |
+| `ci.yml`                | @smoke only (14 tests) | Every PR/push                            |
+| `e2e-comprehensive.yml` | All tests (279+)       | Push to main, nightly, `e2e` label on PR |
 
 To run full E2E on a PR, add the `e2e` or `full-test` label.
 
@@ -224,7 +225,7 @@ Tag critical path tests with `@smoke` for fast CI feedback:
 
 ```typescript
 test('critical feature works', { tag: '@smoke' }, async ({ page }) => {
-    // ...
+  // ...
 });
 ```
 

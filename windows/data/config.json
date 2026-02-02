@@ -1,10 +1,10 @@
 {
-    "whitelistUrl": "",
-    "updateIntervalMinutes": 5,
-    "watchdogIntervalMinutes": 1,
-    "primaryDNS": "8.8.8.8",
-    "acrylicPath": "C:\\Program Files (x86)\\Acrylic DNS Proxy",
-    "enableFirewall": true,
-    "enableBrowserPolicies": true,
-    "logLevel": "INFO"
+  "whitelistUrl": "",
+  "updateIntervalMinutes": 5,
+  "watchdogIntervalMinutes": 1,
+  "primaryDNS": "8.8.8.8",
+  "acrylicPath": "C:\\Program Files (x86)\\Acrylic DNS Proxy",
+  "enableFirewall": true,
+  "enableBrowserPolicies": true,
+  "logLevel": "INFO"
 }

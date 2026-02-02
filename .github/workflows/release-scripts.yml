@@ -23,38 +23,38 @@ jobs:
   release:
     name: Build and Release Scripts
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Extract version and prepare variables
         id: vars
         run: |
           echo "📦 Extracting version from VERSION file..."
-          
+
           VERSION=$(cat VERSION 2>/dev/null || echo "4.1.0")
           SHORT_SHA=$(git rev-parse --short HEAD)
           TAG="scripts-v${VERSION}-${SHORT_SHA}"
-          
+
           echo "  Version: $VERSION"
           echo "  Short SHA: $SHORT_SHA"
           echo "  Tag: $TAG"
-          
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "release_name=Installation Scripts v${VERSION} (${SHORT_SHA})" >> $GITHUB_OUTPUT
-      
+
       - name: Create and push tag
         continue-on-error: true
         run: |
           echo "🏷️  Creating tag: ${{ steps.vars.outputs.tag }}"
           git tag "${{ steps.vars.outputs.tag }}"
           git push origin "${{ steps.vars.outputs.tag }}" || echo "Tag already exists or push failed, continuing..."
-      
+
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
@@ -70,14 +70,14 @@ jobs:
           echo "🔍 Validating package structure before creating release..."
           chmod +x tests/e2e/pre-install-validation.sh
           ./tests/e2e/pre-install-validation.sh
-      
+
       - name: Package Linux scripts
         run: |
           echo "🐧 Packaging Linux installation scripts..."
-          
+
           VERSION="${{ steps.vars.outputs.version }}"
           PACKAGE_NAME="openpath-linux-v${VERSION}.tar.gz"
-          
+
           # Create tarball with all necessary Linux files
           echo "  → Creating tarball..."
           tar -czf "$PACKAGE_NAME" \
@@ -86,7 +86,7 @@ jobs:
             linux/lib/ \
             linux/scripts/ \
             firefox-extension/
-          
+
           # Verify
           if [ -f "$PACKAGE_NAME" ]; then
             SIZE=$(du -h "$PACKAGE_NAME" | cut -f1)
@@ -99,18 +99,18 @@ jobs:
             echo "  ✗ Error: Linux package not created"
             exit 1
           fi
-      
+
       - name: Package Windows scripts
         run: |
           echo "🪟 Packaging Windows installation scripts..."
-          
+
           VERSION="${{ steps.vars.outputs.version }}"
           PACKAGE_NAME="windows-v${VERSION}.zip"
-          
+
           # Create ZIP with all Windows files
           echo "  → Creating ZIP archive..."
           zip -r -q "$PACKAGE_NAME" windows/
-          
+
           # Verify
           if [ -f "$PACKAGE_NAME" ]; then
             SIZE=$(du -h "$PACKAGE_NAME" | cut -f1)
@@ -123,7 +123,7 @@ jobs:
             echo "  ✗ Error: Windows package not created"
             exit 1
           fi
-      
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -136,58 +136,58 @@ jobs:
             windows-v${{ steps.vars.outputs.version }}.zip
           body: |
             ## 🚀 Installation Scripts Release
-            
+
             **Version:** ${{ steps.vars.outputs.version }}  
             **Commit:** ${{ steps.vars.outputs.short_sha }}
-            
+
             ### 📦 Assets
-            
+
             - **`openpath-linux-v${{ steps.vars.outputs.version }}.tar.gz`** - Linux installation scripts
             - **`windows-v${{ steps.vars.outputs.version }}.zip`** - Windows installation scripts
-            
+
             ### 📝 Installation
-            
+
             **Linux:**
             ```bash
             # Download and extract
             wget https://github.com/balejosg/openpath/releases/download/${{ steps.vars.outputs.tag }}/openpath-linux-v${{ steps.vars.outputs.version }}.tar.gz
             tar -xzf openpath-linux-v${{ steps.vars.outputs.version }}.tar.gz
-            
+
             # Run installer
             cd linux && sudo bash install.sh
             ```
-            
+
             **Windows (PowerShell as Administrator):**
             ```powershell
             # Download and extract
             Invoke-WebRequest -Uri "https://github.com/balejosg/openpath/releases/download/${{ steps.vars.outputs.tag }}/windows-v${{ steps.vars.outputs.version }}.zip" -OutFile "windows.zip"
             Expand-Archive -Path "windows.zip" -DestinationPath "."
-            
+
             # Run installer
             cd windows
             .\Install-OpenPath.ps1
             ```
-            
+
             ### 📋 What's Included
-            
+
             **Linux Package:**
             - Main installer (`install.sh`)
             - Uninstaller (`uninstall.sh`)
             - Library modules (`lib/`)
             - Runtime scripts (`scripts/`)
             - Firefox extension (`firefox-extension/`)
-            
+
             **Windows Package:**
             - PowerShell installer (`Install-OpenPath.ps1`)
             - PowerShell uninstaller (`Uninstall-OpenPath.ps1`)
             - Library modules (`lib/*.psm1`)
             - Runtime scripts (`scripts/*.ps1`)
             - Configuration files
-            
+
             ---
-            
+
             ⚠️ **Note:** This is a pre-release. Please test in a non-production environment first.
-      
+
       - name: Release summary
         if: success()
         run: |

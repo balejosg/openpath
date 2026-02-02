@@ -1,0 +1,23 @@
+# Docker Compose for local E2E testing
+# Usage: docker compose -f docker-compose.test.yml up -d
+
+services:
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: openpath-test-db
+    environment:
+      POSTGRES_USER: openpath
+      POSTGRES_PASSWORD: openpath_test
+      POSTGRES_DB: openpath_test
+    ports:
+      - '5433:5432'
+    volumes:
+      - openpath-test-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U openpath -d openpath_test']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  openpath-test-data:

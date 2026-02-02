@@ -1,5 +1,15 @@
 import React, { useState } from 'react';
-import { Shield, ArrowLeft, Key, Lock, Eye, EyeOff, CheckCircle, AlertCircle, Mail } from 'lucide-react';
+import {
+  Shield,
+  ArrowLeft,
+  Key,
+  Lock,
+  Eye,
+  EyeOff,
+  CheckCircle,
+  AlertCircle,
+  Mail,
+} from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
 interface ResetPasswordProps {
@@ -25,9 +35,10 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigateToLogin, onNavi
     { label: 'Un número', met: /\d/.test(password) },
   ];
 
-  const allRequirementsMet = passwordRequirements.every(r => r.met);
+  const allRequirementsMet = passwordRequirements.every((r) => r.met);
   const passwordsMatch = password === confirmPassword && confirmPassword.length > 0;
-  const canSubmit = email.length > 0 && token.length > 0 && allRequirementsMet && passwordsMatch && !isLoading;
+  const canSubmit =
+    email.length > 0 && token.length > 0 && allRequirementsMet && passwordsMatch && !isLoading;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +51,11 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigateToLogin, onNavi
       await trpc.auth.resetPassword.mutate({ email, token, newPassword: password });
       setSuccess(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al restablecer la contraseña. Verifica el token.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Error al restablecer la contraseña. Verifica el token.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -95,11 +110,12 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigateToLogin, onNavi
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">
-                Email
-              </label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <Mail
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={18}
+                />
                 <input
                   type="email"
                   value={email}
@@ -116,7 +132,10 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigateToLogin, onNavi
                 Token de recuperación
               </label>
               <div className="relative">
-                <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <Key
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={18}
+                />
                 <input
                   type="text"
                   value={token}
@@ -133,7 +152,10 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigateToLogin, onNavi
                 Nueva contraseña
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <Lock
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={18}
+                />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
@@ -149,7 +171,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigateToLogin, onNavi
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              
+
               {/* Password requirements */}
               <div className="mt-2 grid grid-cols-2 gap-1">
                 {passwordRequirements.map((req, i) => (
@@ -172,7 +194,10 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigateToLogin, onNavi
                 Confirmar contraseña
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <Lock
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  size={18}
+                />
                 <input
                   type={showConfirm ? 'text' : 'password'}
                   value={confirmPassword}
@@ -182,8 +207,8 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigateToLogin, onNavi
                     confirmPassword && !passwordsMatch
                       ? 'border-red-300 bg-red-50'
                       : passwordsMatch
-                      ? 'border-green-300 bg-green-50'
-                      : 'border-slate-300'
+                        ? 'border-green-300 bg-green-50'
+                        : 'border-slate-300'
                   }`}
                 />
                 <button

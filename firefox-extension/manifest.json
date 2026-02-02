@@ -15,16 +15,8 @@
       "strict_min_version": "109.0"
     }
   },
-  "permissions": [
-    "webRequest",
-    "webNavigation",
-    "tabs",
-    "clipboardWrite",
-    "nativeMessaging"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "permissions": ["webRequest", "webNavigation", "tabs", "clipboardWrite", "nativeMessaging"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "scripts": ["dist/background.js"],
     "type": "module"

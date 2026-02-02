@@ -3,7 +3,7 @@
  * Copyright (C) 2025 OpenPath Authors
  *
  * Dashboard tRPC Client
- * 
+ *
  * Provides type-safe API communication with the OpenPath API server.
  */
 
@@ -22,21 +22,21 @@ const API_URL = process.env.API_URL ?? 'http://localhost:3000';
 
 /**
  * Create a tRPC client with the provided authentication token.
- * 
+ *
  * @param token - JWT access token for authentication
  * @returns Configured tRPC client
  */
 export function createTRPCWithAuth(token: string): ReturnType<typeof createTRPCClient<AppRouter>> {
-    return createTRPCClient<AppRouter>({
-        links: [
-            httpBatchLink({
-                url: `${API_URL}/trpc`,
-                headers: () => ({
-                    Authorization: `Bearer ${token}`,
-                }),
-            }),
-        ],
-    });
+  return createTRPCClient<AppRouter>({
+    links: [
+      httpBatchLink({
+        url: `${API_URL}/trpc`,
+        headers: () => ({
+          Authorization: `Bearer ${token}`,
+        }),
+      }),
+    ],
+  });
 }
 
 /**
@@ -44,13 +44,13 @@ export function createTRPCWithAuth(token: string): ReturnType<typeof createTRPCC
  * Used for login and other public endpoints.
  */
 export function createTRPCPublic(): ReturnType<typeof createTRPCClient<AppRouter>> {
-    return createTRPCClient<AppRouter>({
-        links: [
-            httpBatchLink({
-                url: `${API_URL}/trpc`,
-            }),
-        ],
-    });
+  return createTRPCClient<AppRouter>({
+    links: [
+      httpBatchLink({
+        url: `${API_URL}/trpc`,
+      }),
+    ],
+  });
 }
 
 // =============================================================================
@@ -61,46 +61,46 @@ export function createTRPCPublic(): ReturnType<typeof createTRPCClient<AppRouter
  * Check if an error is a tRPC client error.
  */
 export function isTRPCError(error: unknown): error is TRPCClientError<AppRouter> {
-    return error instanceof TRPCClientError;
+  return error instanceof TRPCClientError;
 }
 
 /**
  * Extract error message from tRPC error or unknown error.
  */
 export function getTRPCErrorMessage(error: unknown): string {
-    if (isTRPCError(error)) {
-        return error.message;
-    }
-    if (error instanceof Error) {
-        return error.message;
-    }
-    return String(error);
+  if (isTRPCError(error)) {
+    return error.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
 
 /**
  * Get HTTP-like status code from tRPC error.
  */
 export function getTRPCErrorStatus(error: unknown): number {
-    if (!isTRPCError(error)) {
-        return 500;
-    }
-    
-    switch (error.data?.code) {
-        case 'BAD_REQUEST':
-            return 400;
-        case 'UNAUTHORIZED':
-            return 401;
-        case 'FORBIDDEN':
-            return 403;
-        case 'NOT_FOUND':
-            return 404;
-        case 'CONFLICT':
-            return 409;
-        case 'TOO_MANY_REQUESTS':
-            return 429;
-        default:
-            return 500;
-    }
+  if (!isTRPCError(error)) {
+    return 500;
+  }
+
+  switch (error.data?.code) {
+    case 'BAD_REQUEST':
+      return 400;
+    case 'UNAUTHORIZED':
+      return 401;
+    case 'FORBIDDEN':
+      return 403;
+    case 'NOT_FOUND':
+      return 404;
+    case 'CONFLICT':
+      return 409;
+    case 'TOO_MANY_REQUESTS':
+      return 429;
+    default:
+      return 500;
+  }
 }
 
 // =============================================================================

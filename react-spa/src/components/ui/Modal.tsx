@@ -40,13 +40,13 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, classNa
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Overlay */}
-      <div 
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity animate-in fade-in duration-200" 
+      <div
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
         onClick={onClose}
       />
-      
+
       {/* Content */}
-      <div 
+      <div
         className={cn(
           'relative w-full max-w-lg rounded-xl bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-200',
           className
@@ -65,10 +65,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, classNa
             <X size={18} />
           </Button>
         </div>
-        
-        <div className="p-6">
-          {children}
-        </div>
+
+        <div className="p-6">{children}</div>
       </div>
     </div>,
     document.body

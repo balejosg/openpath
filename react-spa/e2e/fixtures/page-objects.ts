@@ -1,6 +1,6 @@
 /**
  * Page Object Models for OpenPath E2E Tests
- * 
+ *
  * Provides reusable abstractions for common UI interactions.
  */
 

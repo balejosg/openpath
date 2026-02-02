@@ -11,12 +11,12 @@ services:
       - JWT_SECRET=test-secret-for-e2e
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/openpath_test
     ports:
-      - "3001:3001"
+      - '3001:3001'
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:3001/health']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -28,7 +28,7 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=openpath_test
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 2s
       timeout: 2s
       retries: 10
@@ -67,7 +67,7 @@ services:
     volumes:
       - ../../tests:/tests:ro
       - ./results:/results
-    command: ["bats", "--formatter", "tap", "/tests/e2e/agent-integration.bats"]
+    command: ['bats', '--formatter', 'tap', '/tests/e2e/agent-integration.bats']
 
 volumes:
   test-results:

@@ -23,26 +23,26 @@ jobs:
     name: CodeQL Analysis
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    
+
     strategy:
       fail-fast: false
       matrix:
         language: ['javascript']
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
           queries: security-extended,security-and-quality
-      
+
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:${{ matrix.language }}"
+          category: '/language:${{ matrix.language }}'
 
   # ============================================
   # Shellcheck Security Patterns
@@ -50,15 +50,15 @@ jobs:
   shellcheck-security:
     name: Shell Script Security
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Run shellcheck with security focus
         run: |
           echo "🔍 Scanning shell scripts for security issues..."
-          
+
           # Check for common security issues
           find . -type f -name "*.sh" ! -path "./node_modules/*" | while read script; do
             echo "Checking: $script"
@@ -76,13 +76,13 @@ jobs:
               echo "⚠️  WARNING: Use of eval detected in $script"
             fi
           done
-          
+
           echo "✓ Security scan complete"
-      
+
       - name: Check for sensitive files
         run: |
           echo "🔍 Checking for accidentally committed secrets..."
-          
+
           SENSITIVE_FILES=(
             "*.pem"
             "*.key"
@@ -95,7 +95,7 @@ jobs:
             ".env.production"
             "*.env"
           )
-          
+
           FOUND=0
           for pattern in "${SENSITIVE_FILES[@]}"; do
             if find . -name "$pattern" ! -path "./node_modules/*" ! -path "./.git/*" | grep -q .; then
@@ -104,7 +104,7 @@ jobs:
               FOUND=1
             fi
           done
-          
+
           if [ $FOUND -eq 0 ]; then
             echo "✓ No sensitive files found"
           fi
@@ -115,15 +115,15 @@ jobs:
   trivy-scan:
     name: Container Security Scan
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Build Docker image
         run: |
           docker build -t openpath-api:scan -f api/Dockerfile .
-      
+
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
@@ -131,13 +131,13 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: 'CRITICAL,HIGH'
-      
+
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
-      
+
       - name: Run Trivy for human-readable output
         uses: aquasecurity/trivy-action@master
         with:
@@ -151,37 +151,37 @@ jobs:
   npm-audit:
     name: NPM Audit
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         package:
           - api
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
+
       - name: Run npm audit
         working-directory: ${{ matrix.package }}
         run: |
           echo "🔍 Running npm audit for ${{ matrix.package }}..."
-          
+
           # Install dependencies first
           npm ci || npm install
-          
+
           # Run audit (allow moderate/low to not fail CI)
           npm audit --audit-level=high || true
-          
+
           # Generate JSON report
           npm audit --json > audit-report.json || true
-          
+
           echo "✓ Audit complete"
-      
+
       - name: Upload audit report
         uses: actions/upload-artifact@v4
         if: always()
@@ -196,13 +196,13 @@ jobs:
   secret-scan:
     name: Secret Scanning
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
@@ -217,13 +217,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: [codeql, shellcheck-security, trivy-scan, npm-audit, secret-scan]
     if: always()
-    
+
     steps:
       - name: Check results
         run: |
           echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| CodeQL Analysis | ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
@@ -231,7 +231,7 @@ jobs:
           echo "| Container Scan (Trivy) | ${{ needs.trivy-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| NPM Audit | ${{ needs.npm-audit.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Secret Scanning | ${{ needs.secret-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          
+
           # Check if any critical jobs failed
           if [[ "${{ needs.codeql.result }}" == "failure" ]] || \
              [[ "${{ needs.secret-scan.result }}" == "failure" ]]; then
@@ -239,6 +239,6 @@ jobs:
             echo "❌ **Critical security issues detected!**" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
-          
+
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ Security scans complete" >> $GITHUB_STEP_SUMMARY

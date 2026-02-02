@@ -11,16 +11,16 @@ import { healthcheckRouter } from './healthcheck.js';
 import { groupsRouter } from './groups.js';
 
 export const appRouter = router({
-    auth: authRouter,
-    users: usersRouter,
-    requests: requestsRouter,
-    classrooms: classroomsRouter,
-    schedules: schedulesRouter,
-    push: pushRouter,
-    healthReports: healthReportsRouter,
-    setup: setupRouter,
-    healthcheck: healthcheckRouter,
-    groups: groupsRouter,
+  auth: authRouter,
+  users: usersRouter,
+  requests: requestsRouter,
+  classrooms: classroomsRouter,
+  schedules: schedulesRouter,
+  push: pushRouter,
+  healthReports: healthReportsRouter,
+  setup: setupRouter,
+  healthcheck: healthcheckRouter,
+  groups: groupsRouter,
 });
 
 export type AppRouter = typeof appRouter;

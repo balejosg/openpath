@@ -16,24 +16,24 @@ graph TB
         WEB["🌐 Web App<br/>(dashboard)"]
         EXT["🦊 Firefox Extension"]
     end
-    
+
     subgraph "Capa de Control"
         DNSMASQ["📡 dnsmasq<br/>DNS Sinkhole"]
         IPTABLES["🔥 iptables<br/>Firewall"]
         BROWSER["🌍 Browser<br/>Policies"]
     end
-    
+
     subgraph "Capa de Automatización"
         WHITELIST["📋 openpath-update.sh<br/>Actualización cada 5 min"]
         WATCHDOG["🔍 dnsmasq-watchdog.sh<br/>Health check cada 1 min"]
         CAPTIVE["📶 captive-portal-detector.sh"]
     end
-    
+
     subgraph "Capa de Datos"
         REMOTE["☁️ GitHub/URL Remoto<br/>whitelist.txt"]
         LOCAL["/etc/openpath/<br/>Estado local"]
     end
-    
+
     WEB --> REMOTE
     EXT --> WHITELIST
     WHITELIST --> REMOTE
@@ -49,9 +49,11 @@ graph TB
 ## Contexto y Problema
 
 ### Problema
+
 En entornos educativos (aulas de informática), es necesario restringir el acceso a internet para evitar distracciones y contenido inapropiado, permitiendo solo recursos educativos específicos.
 
 ### Restricciones
+
 - Los estudiantes tienen acceso físico a las máquinas
 - Deben poder usar navegadores web para recursos educativos
 - La administración debe ser centralizada y remota
@@ -74,6 +76,7 @@ En entornos educativos (aulas de informática), es necesario restringir el acces
 | DNS Sinkhole ✓ | Ligero, efectivo, difícil bypass | Requiere capas adicionales |
 
 **Consecuencias**:
+
 - ✅ Bajo consumo de recursos
 - ✅ Cobertura total del sistema
 - ⚠️ Requiere capas adicionales (firewall, browser policies)
@@ -91,13 +94,13 @@ flowchart LR
         B -->|Sí| C[Resolver Normal]
         B -->|No| D["NXDOMAIN (Bloqueado)"]
     end
-    
+
     subgraph "Capa 2: Firewall"
         E[Tráfico Saliente] --> F{¿Puerto Permitido?}
         F -->|HTTP/HTTPS| G[Permitir]
         F -->|DNS/VPN/Tor| H[Bloquear]
     end
-    
+
     subgraph "Capa 3: Browser"
         I[Navegador] --> J{¿Ruta Bloqueada?}
         J -->|No| K[Cargar Página]
@@ -106,15 +109,18 @@ flowchart LR
 ```
 
 #### Capa 1: DNS (`lib/dns.sh`)
+
 - Bloquea resolución de dominios no permitidos
 - Vulnerabilidad: Bypass por IP directa
 
 #### Capa 2: Firewall (`lib/firewall.sh`)
+
 - Bloquea puertos: 53 (DNS externo), 853 (DoT), VPN, Tor
 - Permite: HTTP/HTTPS, ICMP, NTP, DHCP, LAN
 - Vulnerabilidad: IPs hardcodeadas
 
 #### Capa 3: Browser (`lib/browser.sh`)
+
 - Firefox: `policies.json` con `WebsiteFilter`
 - Chromium: `URLBlocklist` en managed policies
 - Bloquea rutas específicas (`/ads/`, `/tracking/`)
@@ -151,6 +157,7 @@ lib/
 ```
 
 **Beneficios**:
+
 - Código testeable por módulo
 - Reutilización entre scripts
 - Mantenimiento simplificado
@@ -168,7 +175,7 @@ sequenceDiagram
     participant GitHub as GitHub Raw
     participant dnsmasq as dnsmasq
     participant Browser as Navegadores
-    
+
     Timer->>Script: Ejecutar
     Script->>GitHub: GET whitelist.txt
     GitHub-->>Script: Contenido
@@ -180,6 +187,7 @@ sequenceDiagram
 ```
 
 **Formato de Whitelist**:
+
 ```
 ## WHITELIST
 google.com
@@ -201,6 +209,7 @@ ads.google.com
 **Problema Resuelto**: Los usuarios no saben qué dominios faltan en la whitelist cuando una página no carga correctamente.
 
 **Arquitectura**:
+
 ```
 firefox-extension/
 ├── manifest.json       # Manifest V2
@@ -210,6 +219,7 @@ firefox-extension/
 ```
 
 **Flujo**:
+
 1. Usuario navega a `ejemplo.com`
 2. Página carga recursos de `cdn.tercero.com` (no whitelisteado)
 3. dnsmasq devuelve NXDOMAIN
@@ -233,6 +243,7 @@ firefox-extension/
 | Despliegue | Docker |
 
 **Arquitectura**:
+
 ```
 dashboard/
 ├── server/
@@ -248,6 +259,7 @@ dashboard/
 ```
 
 **Endpoints API**:
+
 - `POST /api/auth/login` - Autenticación
 - `GET /api/groups` - Listar grupos de reglas
 - `GET /api/rules/:group` - Reglas por grupo
@@ -270,6 +282,7 @@ dashboard/
 | Despliegue | Servidor local (home server) |
 
 **Arquitectura**:
+
 ```
 api/
 ├── routes/
@@ -283,6 +296,7 @@ api/
 ```
 
 **Endpoints API**:
+
 - `POST /api/request` - Solicitar nuevo dominio
 - `GET /api/requests` - Listar solicitudes pendientes
 - `POST /api/approve/:id` - Aprobar solicitud
@@ -298,20 +312,20 @@ La extensión detecta dominios bloqueados y permite al usuario solicitar su incl
 
 ### Resumen de Componentes
 
-| Componente | Ubicación | Propósito |
-|------------|-----------|-----------|
-| `install.sh` | Raíz | Instalación completa del sistema |
-| `uninstall.sh` | Raíz | Desinstalación limpia |
-| `lib/*.sh` | `/usr/local/lib/openpath/lib/` | Módulos de funcionalidad |
-| `openpath-update.sh` | `/usr/local/bin/` | Actualización periódica |
-| `dnsmasq-watchdog.sh` | `/usr/local/bin/` | Monitoreo de salud |
-| `captive-portal-detector.sh` | `/usr/local/bin/` | Detección WiFi portales |
-| `openpath-cmd.sh` | `/usr/local/bin/openpath` | CLI para usuarios |
-| Firefox Extension | `firefox-extension/` | Diagnóstico de bloqueos |
-| Web App | `dashboard/` | Administración centralizada |
-| Request API | `api/` | API para solicitudes de dominios |
-| Static SPA | `spa/` | SPA en GitHub Pages |
-| OAuth Worker | `auth-worker/` | Backend OAuth para SPA |
+| Componente                   | Ubicación                      | Propósito                        |
+| ---------------------------- | ------------------------------ | -------------------------------- |
+| `install.sh`                 | Raíz                           | Instalación completa del sistema |
+| `uninstall.sh`               | Raíz                           | Desinstalación limpia            |
+| `lib/*.sh`                   | `/usr/local/lib/openpath/lib/` | Módulos de funcionalidad         |
+| `openpath-update.sh`         | `/usr/local/bin/`              | Actualización periódica          |
+| `dnsmasq-watchdog.sh`        | `/usr/local/bin/`              | Monitoreo de salud               |
+| `captive-portal-detector.sh` | `/usr/local/bin/`              | Detección WiFi portales          |
+| `openpath-cmd.sh`            | `/usr/local/bin/openpath`      | CLI para usuarios                |
+| Firefox Extension            | `firefox-extension/`           | Diagnóstico de bloqueos          |
+| Web App                      | `dashboard/`                   | Administración centralizada      |
+| Request API                  | `api/`                         | API para solicitudes de dominios |
+| Static SPA                   | `spa/`                         | SPA en GitHub Pages              |
+| OAuth Worker                 | `auth-worker/`                 | Backend OAuth para SPA           |
 
 ### Servicios systemd
 
@@ -322,13 +336,13 @@ graph LR
         TIMER2["dnsmasq-watchdog.timer<br/>OnCalendar=*-*-* *:*:00"]
         CAPTIVE["captive-portal-detector.service"]
     end
-    
+
     subgraph "Ejecución"
         S1["openpath-dnsmasq.service"]
         S2["dnsmasq-watchdog.service"]
         DNSMASQ["dnsmasq.service"]
     end
-    
+
     TIMER1 --> S1
     TIMER2 --> S2
     S1 --> DNSMASQ
@@ -398,21 +412,21 @@ flowchart TD
 
 ### Vectores de Ataque Mitigados
 
-| Vector | Mitigación |
-|--------|------------|
-| DNS alternativo | iptables bloquea puerto 53/853 externo |
-| DoH (DNS over HTTPS) | Bloqueo de dominios DoH conocidos |
-| VPN | iptables bloquea puertos OpenVPN, WireGuard |
-| Tor | iptables bloquea puertos Tor |
-| Edición local | Archivos requieren root |
+| Vector               | Mitigación                                  |
+| -------------------- | ------------------------------------------- |
+| DNS alternativo      | iptables bloquea puerto 53/853 externo      |
+| DoH (DNS over HTTPS) | Bloqueo de dominios DoH conocidos           |
+| VPN                  | iptables bloquea puertos OpenVPN, WireGuard |
+| Tor                  | iptables bloquea puertos Tor                |
+| Edición local        | Archivos requieren root                     |
 
 ### Vulnerabilidades Conocidas
 
-| Vulnerabilidad | Riesgo | Estado |
-|----------------|--------|--------|
-| IPs hardcodeadas | Medio | No mitigado |
-| Dispositivos USB con Tor | Medio | Fuera de alcance |
-| Live USB bypass | Alto | Requiere BIOS lock |
+| Vulnerabilidad           | Riesgo | Estado             |
+| ------------------------ | ------ | ------------------ |
+| IPs hardcodeadas         | Medio  | No mitigado        |
+| Dispositivos USB con Tor | Medio  | Fuera de alcance   |
+| Live USB bypass          | Alto   | Requiere BIOS lock |
 
 ---
 
@@ -456,14 +470,14 @@ flowchart TD
 
 ## Requisitos del Sistema
 
-| Requisito | Detalle |
-|-----------|---------|
-| OS | Ubuntu 20.04+ / Debian 10+ |
-| Arquitectura | x86_64 (amd64) |
-| Init System | systemd |
-| Acceso | root/sudo |
+| Requisito    | Detalle                                                                                        |
+| ------------ | ---------------------------------------------------------------------------------------------- |
+| OS           | Ubuntu 20.04+ / Debian 10+                                                                     |
+| Arquitectura | x86_64 (amd64)                                                                                 |
+| Init System  | systemd                                                                                        |
+| Acceso       | root/sudo                                                                                      |
 | Dependencias | dnsmasq, iptables, iptables-persistent, ipset, curl, libcap2-bin, dnsutils, conntrack, python3 |
-| Puerto | 53 disponible (systemd-resolved deshabilitado) |
+| Puerto       | 53 disponible (systemd-resolved deshabilitado)                                                 |
 
 ---
 

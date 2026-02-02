@@ -17,7 +17,7 @@ import crypto from 'node:crypto';
  * @returns The token in cleartext (store only the hash!)
  */
 export function generateMachineToken(): string {
-    return crypto.randomBytes(32).toString('base64url');
+  return crypto.randomBytes(32).toString('base64url');
 }
 
 /**
@@ -28,7 +28,7 @@ export function generateMachineToken(): string {
  * @returns SHA-256 hash as lowercase hex (64 characters)
  */
 export function hashMachineToken(token: string): string {
-    return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
 /**
@@ -39,13 +39,13 @@ export function hashMachineToken(token: string): string {
  * @returns Full URL for whitelist download
  */
 export function buildWhitelistUrl(publicUrl: string, token: string): string {
-    // Ensure no trailing slash on publicUrl
-    const baseUrl = publicUrl.replace(/\/+$/, '');
-    return `${baseUrl}/w/${token}/whitelist.txt`;
+  // Ensure no trailing slash on publicUrl
+  const baseUrl = publicUrl.replace(/\/+$/, '');
+  return `${baseUrl}/w/${token}/whitelist.txt`;
 }
 
 export default {
-    generateMachineToken,
-    hashMachineToken,
-    buildWhitelistUrl,
+  generateMachineToken,
+  hashMachineToken,
+  buildWhitelistUrl,
 };

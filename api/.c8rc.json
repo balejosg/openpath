@@ -1,42 +1,24 @@
 {
-    "all": true,
-    "include": [
-        "src/**/*.ts"
-    ],
-    "exclude": [
-        "tests/**",
-        "node_modules/**",
-        "coverage/**",
-        "src/lib/swagger.ts",
-        "src/lib/logger.ts"
-    ],
-    "reporter": [
-        "text",
-        "lcov",
-        "html"
-    ],
-    "report-dir": "coverage",
-    "check-coverage": true,
-    "lines": 65,
-    "branches": 50,
-    "functions": 60,
-    "statements": 65,
-    "watermarks": {
-        "lines": [
-            65,
-            90
-        ],
-        "branches": [
-            50,
-            80
-        ],
-        "functions": [
-            60,
-            90
-        ],
-        "statements": [
-            65,
-            90
-        ]
-    }
+  "all": true,
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "tests/**",
+    "node_modules/**",
+    "coverage/**",
+    "src/lib/swagger.ts",
+    "src/lib/logger.ts"
+  ],
+  "reporter": ["text", "lcov", "html"],
+  "report-dir": "coverage",
+  "check-coverage": true,
+  "lines": 65,
+  "branches": 50,
+  "functions": 60,
+  "statements": 65,
+  "watermarks": {
+    "lines": [65, 90],
+    "branches": [50, 80],
+    "functions": [60, 90],
+    "statements": [65, 90]
+  }
 }

@@ -18,7 +18,7 @@
 
 /**
  * Configuration for OpenPath Firefox Extension
- * 
+ *
  * Settings can be overridden via browser.storage.sync
  * Use the extension options page to configure.
  */
@@ -31,30 +31,30 @@ import { logger } from './lib/logger.js';
 // Config interface is defined in types.d.ts
 
 const DEFAULT_CONFIG: Config = {
-    // API endpoint - MUST be configured via browser.storage.sync for production
-    // Set via extension options page before use
-    requestApiUrl: '',
+  // API endpoint - MUST be configured via browser.storage.sync for production
+  // Set via extension options page before use
+  requestApiUrl: '',
 
-    // Fallback API URLs (tried in order if primary fails)
-    fallbackApiUrls: [],
+  // Fallback API URLs (tried in order if primary fails)
+  fallbackApiUrls: [],
 
-    // Timeout for API requests (in milliseconds)
-    requestTimeout: 10000,
+  // Timeout for API requests (in milliseconds)
+  requestTimeout: 10000,
 
-    // Default group for requests (if not specified)
-    defaultGroup: 'informatica-3',
+  // Default group for requests (if not specified)
+  defaultGroup: 'informatica-3',
 
-    // Enable/disable request feature
-    enableRequests: true,
+  // Enable/disable request feature
+  enableRequests: true,
 
-    // Show detailed error messages
-    debugMode: false,
+  // Show detailed error messages
+  debugMode: false,
 
-    // Shared secret for machine auto-registration
-    // SECURITY: This MUST be configured via browser.storage.sync in production
-    // Set via extension options page or programmatically before enabling auto-include
-    // Default empty string disables auto-registration until properly configured
-    sharedSecret: ''
+  // Shared secret for machine auto-registration
+  // SECURITY: This MUST be configured via browser.storage.sync in production
+  // Set via extension options page or programmatically before enabling auto-include
+  // Default empty string disables auto-registration until properly configured
+  sharedSecret: '',
 };
 
 // Runtime config (merged with stored settings)
@@ -67,17 +67,19 @@ let CONFIG: Config = { ...DEFAULT_CONFIG };
  */
 
 async function loadConfig(): Promise<Config> {
-    try {
-        if (typeof browser !== 'undefined') {
-            const stored = await browser.storage.sync.get('config');
-            if (stored.config) {
-                CONFIG = { ...DEFAULT_CONFIG, ...(stored.config as Partial<Config>) };
-            }
-        }
-    } catch (error) {
-        logger.warn('[Config] Failed to load stored config', { error: error instanceof Error ? error.message : String(error) });
+  try {
+    if (typeof browser !== 'undefined') {
+      const stored = await browser.storage.sync.get('config');
+      if (stored.config) {
+        CONFIG = { ...DEFAULT_CONFIG, ...(stored.config as Partial<Config>) };
+      }
     }
-    return CONFIG;
+  } catch (error) {
+    logger.warn('[Config] Failed to load stored config', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return CONFIG;
 }
 
 /**
@@ -86,15 +88,17 @@ async function loadConfig(): Promise<Config> {
  */
 
 async function saveConfig(newConfig: Partial<Config>): Promise<void> {
-    try {
-        CONFIG = { ...DEFAULT_CONFIG, ...newConfig };
-        if (typeof browser !== 'undefined') {
-            await browser.storage.sync.set({ config: CONFIG });
-        }
-    } catch (error) {
-        logger.error('[Config] Failed to save config', { error: error instanceof Error ? error.message : String(error) });
-        throw error;
+  try {
+    CONFIG = { ...DEFAULT_CONFIG, ...newConfig };
+    if (typeof browser !== 'undefined') {
+      await browser.storage.sync.set({ config: CONFIG });
     }
+  } catch (error) {
+    logger.error('[Config] Failed to save config', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 /**
@@ -102,7 +106,7 @@ async function saveConfig(newConfig: Partial<Config>): Promise<void> {
  * @returns {string} Current API URL
  */
 function getApiUrl(): string {
-    return CONFIG.requestApiUrl;
+  return CONFIG.requestApiUrl;
 }
 
 /**
@@ -110,16 +114,16 @@ function getApiUrl(): string {
  * @returns {string[]} List of API URLs to try
  */
 function getAllApiUrls(): string[] {
-    return [CONFIG.requestApiUrl, ...CONFIG.fallbackApiUrls].filter(Boolean);
+  return [CONFIG.requestApiUrl, ...CONFIG.fallbackApiUrls].filter(Boolean);
 }
 
 // Window interface is extended in types.d.ts for type-safe global access
 
 // Make config available globally
 if (typeof window !== 'undefined') {
-    window.OPENPATH_CONFIG = CONFIG;
-    window.loadOpenPathConfig = loadConfig;
-    window.saveOpenPathConfig = saveConfig;
-    window.getApiUrl = getApiUrl;
-    window.getAllApiUrls = getAllApiUrls;
+  window.OPENPATH_CONFIG = CONFIG;
+  window.loadOpenPathConfig = loadConfig;
+  window.saveOpenPathConfig = saveConfig;
+  window.getApiUrl = getApiUrl;
+  window.getAllApiUrls = getAllApiUrls;
 }

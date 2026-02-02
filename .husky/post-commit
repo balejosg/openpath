@@ -1,0 +1,26 @@
+# Post-commit hook: Verification reminder
+# This hook runs AFTER a commit succeeds to remind agents of the policy
+
+# Check if HUSKY was bypassed (it shouldn't be possible if pre-commit ran)
+if [ "${HUSKY-}" = "0" ]; then
+    echo ""
+    echo "=============================================="
+    echo "  VIOLATION DETECTED: HUSKY=0 was used"
+    echo "=============================================="
+    echo "  This bypass is PROHIBITED."
+    echo "  The commit was made WITHOUT running tests."
+    echo ""
+    echo "  REQUIRED ACTIONS:"
+    echo "  1. git reset --soft HEAD~1"
+    echo "  2. npm run verify:full"
+    echo "  3. Fix any failures"
+    echo "  4. Commit again properly"
+    echo "=============================================="
+    echo ""
+    exit 0  # Don't fail post-commit, but warn loudly
+fi
+
+# Success message confirming pre-commit ran
+echo ""
+echo "[OK] Commit verified: pre-commit hook executed verify:full"
+echo ""

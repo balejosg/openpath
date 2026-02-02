@@ -17,7 +17,7 @@ import type { ITokenStore } from '../types/storage.js';
 // =============================================================================
 
 interface DecodedTokenBase {
-    exp?: number;
+  exp?: number;
 }
 
 // =============================================================================
@@ -25,7 +25,7 @@ interface DecodedTokenBase {
 // =============================================================================
 
 function hashToken(token: string): string {
-    return crypto.createHash('sha256').update(token).digest('hex');
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 // =============================================================================
@@ -33,47 +33,44 @@ function hashToken(token: string): string {
 // =============================================================================
 
 export async function blacklistToken(token: string, expiresAt: Date): Promise<void> {
-    const decoded = jwt.decode(token) as DecodedTokenBase & { sub?: string } | null;
-    const userId = decoded?.sub ?? 'unknown';
+  const decoded = jwt.decode(token) as (DecodedTokenBase & { sub?: string }) | null;
+  const userId = decoded?.sub ?? 'unknown';
 
-    const tokenHash = hashToken(token);
-    // Use first 32 chars of hash as ID (deterministic and unique enough)
-    const id = tokenHash.substring(0, 32);
+  const tokenHash = hashToken(token);
+  // Use first 32 chars of hash as ID (deterministic and unique enough)
+  const id = tokenHash.substring(0, 32);
 
-    logger.debug('Blacklisting token', { userId, tokenId: id });
+  logger.debug('Blacklisting token', { userId, tokenId: id });
 
-    await db.insert(tokens)
-        .values({
-            id,
-            userId,
-            tokenHash,
-            expiresAt,
-        })
-        .onConflictDoNothing();
+  await db
+    .insert(tokens)
+    .values({
+      id,
+      userId,
+      tokenHash,
+      expiresAt,
+    })
+    .onConflictDoNothing();
 }
 
 export async function isBlacklisted(token: string): Promise<boolean> {
-    const tokenHash = hashToken(token);
-    const id = tokenHash.substring(0, 32);
+  const tokenHash = hashToken(token);
+  const id = tokenHash.substring(0, 32);
 
-    const result = await db.select()
-        .from(tokens)
-        .where(eq(tokens.id, id))
-        .limit(1);
+  const result = await db.select().from(tokens).where(eq(tokens.id, id)).limit(1);
 
-    if (result.length === 0) {
-        return false;
-    }
+  if (result.length === 0) {
+    return false;
+  }
 
-    const tokenRecord = result[0];
-    return tokenRecord !== undefined && tokenRecord.expiresAt > new Date();
+  const tokenRecord = result[0];
+  return tokenRecord !== undefined && tokenRecord.expiresAt > new Date();
 }
 
 export async function cleanup(): Promise<number> {
-    const result = await db.delete(tokens)
-        .where(lt(tokens.expiresAt, new Date()));
+  const result = await db.delete(tokens).where(lt(tokens.expiresAt, new Date()));
 
-    return result.rowCount ?? 0;
+  return result.rowCount ?? 0;
 }
 
 // =============================================================================
@@ -81,9 +78,9 @@ export async function cleanup(): Promise<number> {
 // =============================================================================
 
 export const tokenStore: ITokenStore = {
-    blacklist: blacklistToken,
-    isBlacklisted,
-    cleanup
+  blacklist: blacklistToken,
+  isBlacklisted,
+  cleanup,
 };
 
 export default tokenStore;
@@ -93,9 +90,9 @@ export default tokenStore;
 // =============================================================================
 
 export function getTokenStore(): ITokenStore {
-    return tokenStore;
+  return tokenStore;
 }
 
 export function resetTokenStore(): void {
-    // No-op for DB-based store
+  // No-op for DB-based store
 }

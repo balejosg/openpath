@@ -28,6 +28,7 @@ Extensión de Firefox para detectar y listar dominios bloqueados por sistemas de
 ```
 
 Para instalar el XPI:
+
 1. Firefox → `about:addons`
 2. Engranaje → "Instalar complemento desde archivo..."
 3. Selecciona el archivo XPI
@@ -88,11 +89,11 @@ Una vez instalado, aparecerá un botón **"🔍 Verificar"** en el popup. Al hac
 
 ## Errores Detectados
 
-| Error | Causa Típica |
-|-------|--------------|
-| `NS_ERROR_UNKNOWN_HOST` | Bloqueo DNS (NXDOMAIN) |
-| `NS_ERROR_CONNECTION_REFUSED` | Bloqueo por Firewall |
-| `NS_ERROR_NET_TIMEOUT` | Paquetes descartados (DROP) |
+| Error                         | Causa Típica                |
+| ----------------------------- | --------------------------- |
+| `NS_ERROR_UNKNOWN_HOST`       | Bloqueo DNS (NXDOMAIN)      |
+| `NS_ERROR_CONNECTION_REFUSED` | Bloqueo por Firewall        |
+| `NS_ERROR_NET_TIMEOUT`        | Paquetes descartados (DROP) |
 
 ## Estructura
 
@@ -130,4 +131,3 @@ firefox-extension/
 - **No se envía** ningún dato a servidores externos
 - Los datos se eliminan al cerrar la pestaña o navegar a otra página
 - Native Messaging solo se comunica con scripts locales
-

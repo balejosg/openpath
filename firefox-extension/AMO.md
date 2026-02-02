@@ -31,7 +31,7 @@ CASOS DE USO:
 ✓ Facilitar la gestión de whitelists DNS
 
 PRIVACIDAD:
-Esta extensión funciona 100% localmente. No envía ningún dato a servidores externos. 
+Esta extensión funciona 100% localmente. No envía ningún dato a servidores externos.
 Todos los datos se almacenan en memoria volátil y se eliminan al cerrar la pestaña.
 
 CÓDIGO ABIERTO:
@@ -72,21 +72,27 @@ Source code is available on GitHub for review.
 For the AMO review process, here are justifications for each permission:
 
 ### `<all_urls>`
+
 > **Required** to detect blocked third-party resources on any website. Blocked resources can come from any domain (CDNs, APIs, analytics services, etc.). Without this permission, the extension cannot fulfill its core purpose of detecting all blocked domains.
 
 ### `webRequest`
+
 > **Required** to intercept and monitor network request errors. This is the only way to detect NS_ERROR_UNKNOWN_HOST and similar errors that indicate blocked domains.
 
 ### `webNavigation`
+
 > **Required** to reset the blocked domains list when navigating to a new page, ensuring accurate per-page tracking.
 
 ### `tabs`
+
 > **Required** to update the badge counter showing the number of blocked domains for each tab.
 
 ### `clipboardWrite`
+
 > **Required** to allow users to copy the list of blocked domains to the clipboard for use with external tools.
 
 ### `nativeMessaging`
+
 > **Optional feature** that allows communication with a local Python script to verify domains against the local whitelist system. No external communication occurs.
 
 ---
@@ -94,7 +100,7 @@ For the AMO review process, here are justifications for each permission:
 ## Reviewer Notes
 
 ```
-This extension is designed for network administrators and users of DNS whitelist 
+This extension is designed for network administrators and users of DNS whitelist
 systems who need to identify blocked resources.
 
 Key points for review:
@@ -103,7 +109,7 @@ Key points for review:
 3. NO tracking or analytics
 4. Open source - full code available for review
 
-The native messaging feature is optional and only communicates with a local 
+The native messaging feature is optional and only communicates with a local
 Python script installed on the user's system.
 ```
 

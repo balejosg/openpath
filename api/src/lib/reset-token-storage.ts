@@ -9,46 +9,43 @@ import bcrypt from 'bcrypt';
 import { config } from '../config.js';
 
 export async function createResetToken(userId: string): Promise<string> {
-    const token = uuidv4().replace(/-/g, '').slice(0, 12); // Short, human-readable-ish token
-    const tokenHash = await bcrypt.hash(token, config.bcryptRounds);
-    const id = `reset_${uuidv4().slice(0, 8)}`;
+  const token = uuidv4().replace(/-/g, '').slice(0, 12); // Short, human-readable-ish token
+  const tokenHash = await bcrypt.hash(token, config.bcryptRounds);
+  const id = `reset_${uuidv4().slice(0, 8)}`;
 
-    // Tokens expire in 1 hour
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 1);
+  // Tokens expire in 1 hour
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 1);
 
-    await db.insert(passwordResetTokens)
-        .values({
-            id,
-            userId,
-            tokenHash,
-            expiresAt,
-        });
+  await db.insert(passwordResetTokens).values({
+    id,
+    userId,
+    tokenHash,
+    expiresAt,
+  });
 
-    return token;
+  return token;
 }
 
 export async function verifyToken(userId: string, token: string): Promise<boolean> {
-    const results = await db.select()
-        .from(passwordResetTokens)
-        .where(and(
-            eq(passwordResetTokens.userId, userId),
-            gt(passwordResetTokens.expiresAt, new Date())
-        ));
+  const results = await db
+    .select()
+    .from(passwordResetTokens)
+    .where(
+      and(eq(passwordResetTokens.userId, userId), gt(passwordResetTokens.expiresAt, new Date()))
+    );
 
-    for (const row of results) {
-        if (await bcrypt.compare(token, row.tokenHash)) {
-            // Delete all tokens for this user once verified (or just this one)
-            await db.delete(passwordResetTokens)
-                .where(eq(passwordResetTokens.userId, userId));
-            return true;
-        }
+  for (const row of results) {
+    if (await bcrypt.compare(token, row.tokenHash)) {
+      // Delete all tokens for this user once verified (or just this one)
+      await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
+      return true;
     }
+  }
 
-    return false;
+  return false;
 }
 
 export async function deleteUserTokens(userId: string): Promise<void> {
-    await db.delete(passwordResetTokens)
-        .where(eq(passwordResetTokens.userId, userId));
+  await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
 }

@@ -4,7 +4,7 @@ export enum UserRole {
   ADMIN = 'admin',
   OPENPATH_ADMIN = 'openpath-admin',
   USER = 'user',
-  NO_ROLES = 'no roles'
+  NO_ROLES = 'no roles',
 }
 
 // Note: This User type is for display purposes in the UI.

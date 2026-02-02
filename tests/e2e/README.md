@@ -7,6 +7,7 @@ This directory contains End-to-End tests for the whitelist DNS system.
 **File:** `linux-e2e-tests.sh`
 
 Validates the complete Linux installation:
+
 - dnsmasq service status
 - Port 53 listening
 - Whitelisted domains resolve correctly
@@ -16,6 +17,7 @@ Validates the complete Linux installation:
 - Firewall rules configured
 
 **Usage:**
+
 ```bash
 sudo ./linux-e2e-tests.sh
 ```
@@ -25,6 +27,7 @@ sudo ./linux-e2e-tests.sh
 **File:** `Windows-E2E.Tests.ps1`
 
 Pester tests validating the Windows installation:
+
 - Directory structure
 - Configuration file validity
 - PowerShell modules load correctly
@@ -33,6 +36,7 @@ Pester tests validating the Windows installation:
 - Scheduled tasks API
 
 **Usage:**
+
 ```powershell
 Invoke-Pester -Path .\Windows-E2E.Tests.ps1 -Verbose
 ```
@@ -40,6 +44,7 @@ Invoke-Pester -Path .\Windows-E2E.Tests.ps1 -Verbose
 ## CI Integration
 
 These tests are automatically run by `.github/workflows/e2e-tests.yml` on:
+
 - Push to main/master (when relevant files change)
 - Pull requests
 - Manual dispatch

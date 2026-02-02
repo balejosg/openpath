@@ -19,7 +19,7 @@ describe('Auth functions', () => {
         id: '1',
         email: 'test@example.com',
         name: 'Test User',
-        roles: [{ role: 'user' }]
+        roles: [{ role: 'user' }],
       };
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       expect(getCurrentUser()).toEqual(user);
@@ -37,7 +37,7 @@ describe('Auth functions', () => {
         id: '1',
         email: 'admin@example.com',
         name: 'Admin',
-        roles: [{ role: 'admin' }]
+        roles: [{ role: 'admin' }],
       };
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       expect(isAdmin()).toBe(true);
@@ -48,7 +48,7 @@ describe('Auth functions', () => {
         id: '1',
         email: 'user@example.com',
         name: 'User',
-        roles: [{ role: 'teacher' }]
+        roles: [{ role: 'teacher' }],
       };
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       expect(isAdmin()).toBe(false);
@@ -61,7 +61,7 @@ describe('Auth functions', () => {
         id: '1',
         email: 'teacher@example.com',
         name: 'Teacher',
-        roles: [{ role: 'teacher' }]
+        roles: [{ role: 'teacher' }],
       };
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       expect(isTeacher()).toBe(true);
@@ -74,7 +74,7 @@ describe('Auth functions', () => {
         id: '1',
         email: 'student@example.com',
         name: 'Student',
-        roles: [{ role: 'student' }]
+        roles: [{ role: 'student' }],
       };
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       expect(isStudent()).toBe(true);
@@ -87,7 +87,7 @@ describe('Auth functions', () => {
         id: '1',
         email: 'admin@example.com',
         name: 'Admin',
-        roles: [{ role: 'admin' }]
+        roles: [{ role: 'admin' }],
       };
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       expect(getTeacherGroups()).toEqual([]);
@@ -100,8 +100,8 @@ describe('Auth functions', () => {
         name: 'Teacher',
         roles: [
           { role: 'teacher', groupIds: ['g1', 'g2'] },
-          { role: 'teacher', groupIds: ['g2', 'g3'] }
-        ]
+          { role: 'teacher', groupIds: ['g2', 'g3'] },
+        ],
       };
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       const groups = getTeacherGroups();

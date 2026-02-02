@@ -83,7 +83,7 @@ cmd_status() {
     echo -e "${YELLOW}Whitelist:${NC}"
     if [ -f "$WHITELIST_FILE" ]; then
         local domains
-        domains=$(grep -v "^#" "$WHITELIST_FILE" 2>/dev/null | grep -v "^$" | wc -l)
+        domains=$(grep -cv "^#\|^$" "$WHITELIST_FILE" 2>/dev/null || echo "0")
         echo "  Dominios: $domains"
     fi
     echo ""
@@ -225,7 +225,7 @@ cmd_health() {
         local age
         age=$(($(date +%s) - $(stat -c %Y "$WHITELIST_FILE")))
         local domains
-        domains=$(grep -v "^#" "$WHITELIST_FILE" 2>/dev/null | grep -v "^$" | wc -l)
+        domains=$(grep -cv "^#\|^$" "$WHITELIST_FILE" 2>/dev/null || echo "0")
         echo "  Domains: $domains"
         if [ "$age" -lt 600 ]; then
             echo -e "  Freshness: ${GREEN}✓ fresh (${age}s old)${NC}"
@@ -245,7 +245,7 @@ cmd_health() {
     else
         echo -e "  Firefox policies: ${YELLOW}⚠ not found${NC}"
     fi
-    if ls /etc/chromium/policies/managed/openpath.json /etc/chromium-browser/policies/managed/openpath.json /etc/google-chrome/policies/managed/openpath.json 2>/dev/null | head -1 | grep -q .; then
+    if find /etc/chromium/policies/managed/openpath.json /etc/chromium-browser/policies/managed/openpath.json /etc/google-chrome/policies/managed/openpath.json -maxdepth 0 2>/dev/null | head -1 | grep -q .; then
         echo -e "  Chromium policies: ${GREEN}✓ present${NC}"
     else
         echo -e "  Chromium policies: ${YELLOW}⚠ not found${NC}"
@@ -316,7 +316,7 @@ no-resolv
 resolv-file=/run/dnsmasq/resolv.conf
 listen-address=127.0.0.1
 bind-interfaces
-server=$(cat "$ORIGINAL_DNS_FILE" 2>/dev/null | head -1 || echo "8.8.8.8")
+server=$(head -1 "$ORIGINAL_DNS_FILE" 2>/dev/null || echo "8.8.8.8")
 EOF
     
     systemctl restart dnsmasq

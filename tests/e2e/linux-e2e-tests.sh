@@ -125,7 +125,7 @@ test_config_files_exist() {
     # Check whitelist was downloaded
     if [ -f "/var/lib/openpath/whitelist.txt" ]; then
         local count
-        count=$(grep -v "^#" /var/lib/openpath/whitelist.txt 2>/dev/null | grep -v "^$" | wc -l)
+        count=$(grep -cv "^#\|^$" /var/lib/openpath/whitelist.txt 2>/dev/null || echo "0")
         test_pass "Whitelist downloaded ($count entries)"
     else
         echo -e "  ${YELLOW}⚠${NC} Whitelist not yet downloaded (timer will fetch)"
@@ -371,7 +371,8 @@ test_watchdog_recovery() {
         test_pass "Health status file exists"
         
         # Parse status
-        local status=$(grep -o '"status": "[^"]*"' "$health_file" | cut -d'"' -f4)
+        local status
+        status=$(grep -o '"status": "[^"]*"' "$health_file" | cut -d'"' -f4)
         if [ "$status" = "OK" ] || [ "$status" = "RECOVERED" ]; then
             test_pass "Watchdog reports healthy status: $status"
         else
@@ -384,7 +385,8 @@ test_watchdog_recovery() {
     # Check checkpoint directory exists
     local checkpoint_dir="/var/lib/openpath/checkpoints"
     if [ -d "$checkpoint_dir" ]; then
-        local checkpoint_count=$(ls -d "$checkpoint_dir"/checkpoint-* 2>/dev/null | wc -l)
+        local checkpoint_count
+        checkpoint_count=$(find "$checkpoint_dir" -maxdepth 1 -name "checkpoint-*" -type d 2>/dev/null | wc -l)
         if [ "$checkpoint_count" -gt 0 ]; then
             test_pass "Rollback checkpoints available: $checkpoint_count"
         else

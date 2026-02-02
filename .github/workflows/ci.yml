@@ -25,11 +25,11 @@ permissions:
 # All lint, typecheck, unit tests, and E2E tests MUST be run locally
 # before pushing (via `npm run verify:full`).
 #
-# This CI only runs tests that REQUIRE specific OS environments:
+# This CI ONLY runs tests that REQUIRE specific OS environments:
 # - Linux dnsmasq tests (require Ubuntu with dnsmasq/systemd)
 # - Windows agent tests (require Windows with Pester)
 #
-# See AGENTS.md for the mandatory local verification protocol.
+# Local verification is MANDATORY before commit. See AGENTS.md.
 # ============================================
 
 jobs:

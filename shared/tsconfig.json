@@ -7,10 +7,6 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "tests"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["tests"]
 }

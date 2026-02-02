@@ -14,22 +14,22 @@ The extension operates entirely locally within your browser and does not transmi
 
 ## Data Storage
 
-| Data Type | Storage Location | Retention |
-|-----------|------------------|-----------|
+| Data Type            | Storage Location     | Retention               |
+| -------------------- | -------------------- | ----------------------- |
 | Blocked domains list | Browser memory (RAM) | Cleared when tab closes |
-| Tab-specific state | Browser memory (RAM) | Cleared on navigation |
-| User preferences | None stored | N/A |
+| Tab-specific state   | Browser memory (RAM) | Cleared on navigation   |
+| User preferences     | None stored          | N/A                     |
 
 ## Permissions Explained
 
-| Permission | Purpose |
-|------------|---------|
-| `webRequest` | Monitor network errors to detect blocked domains |
-| `webNavigation` | Reset state when navigating to new pages |
-| `tabs` | Display blocked domain count per tab |
-| `clipboardWrite` | Allow copying domain list to clipboard |
+| Permission        | Purpose                                            |
+| ----------------- | -------------------------------------------------- |
+| `webRequest`      | Monitor network errors to detect blocked domains   |
+| `webNavigation`   | Reset state when navigating to new pages           |
+| `tabs`            | Display blocked domain count per tab               |
+| `clipboardWrite`  | Allow copying domain list to clipboard             |
 | `nativeMessaging` | Optional local communication with whitelist system |
-| `<all_urls>` | Monitor all websites for blocked resources |
+| `<all_urls>`      | Monitor all websites for blocked resources         |
 
 ### Why `<all_urls>`?
 

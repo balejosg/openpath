@@ -1,5 +1,14 @@
 import React from 'react';
-import { LayoutDashboard, Users, MonitorPlay, FolderTree, ShieldAlert, LogOut, Settings, Shield } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Users,
+  MonitorPlay,
+  FolderTree,
+  ShieldAlert,
+  LogOut,
+  Settings,
+  Shield,
+} from 'lucide-react';
 import { NavItem } from '../types';
 import { logout } from '../lib/auth';
 
@@ -19,7 +28,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen }) =>
   ];
 
   return (
-    <aside 
+    <aside
       className={`fixed top-0 left-0 z-40 h-screen transition-transform duration-300 ease-out ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       } md:translate-x-0 w-64 bg-slate-900 text-white flex flex-col border-r border-slate-800 shadow-xl`}
@@ -28,9 +37,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen }) =>
       <div className="h-16 flex items-center px-6 bg-slate-950 border-b border-slate-800">
         <div className="flex items-center gap-3">
           <Shield className="text-blue-500" size={24} strokeWidth={2.5} />
-          <span className="text-lg font-semibold tracking-wide text-slate-100">
-            OpenPath
-          </span>
+          <span className="text-lg font-semibold tracking-wide text-slate-100">OpenPath</span>
         </div>
       </div>
 
@@ -49,7 +56,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen }) =>
                 : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
             }`}
           >
-            <span className={activeTab === item.id ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}>
+            <span
+              className={
+                activeTab === item.id ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'
+              }
+            >
               {item.icon}
             </span>
             <span className="font-medium text-sm">{item.label}</span>
@@ -59,18 +70,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen }) =>
 
       {/* User Profile / Bottom */}
       <div className="p-4 bg-slate-950 border-t border-slate-800">
-        <button 
+        <button
           onClick={() => setActiveTab('settings')}
           className={`flex items-center gap-3 px-3 py-2 w-full transition-colors rounded-lg mb-1 ${
-            activeTab === 'settings' 
-              ? 'text-white bg-slate-800' 
+            activeTab === 'settings'
+              ? 'text-white bg-slate-800'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
         >
           <Settings size={18} />
           <span className="text-sm">Configuración</span>
         </button>
-        <button 
+        <button
           onClick={() => logout()}
           className="flex items-center gap-3 px-3 py-2 w-full text-red-400 hover:text-red-300 transition-colors rounded-lg hover:bg-red-950/30"
         >
