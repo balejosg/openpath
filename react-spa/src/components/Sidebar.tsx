@@ -1,6 +1,7 @@
 import React from 'react';
 import { LayoutDashboard, Users, MonitorPlay, FolderTree, ShieldAlert, LogOut, Settings, Shield } from 'lucide-react';
 import { NavItem } from '../types';
+import { logout } from '../lib/auth';
 
 interface SidebarProps {
   activeTab: string;
@@ -58,11 +59,21 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen }) =>
 
       {/* User Profile / Bottom */}
       <div className="p-4 bg-slate-950 border-t border-slate-800">
-        <button className="flex items-center gap-3 px-3 py-2 w-full text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-slate-800 mb-1">
+        <button 
+          onClick={() => setActiveTab('settings')}
+          className={`flex items-center gap-3 px-3 py-2 w-full transition-colors rounded-lg mb-1 ${
+            activeTab === 'settings' 
+              ? 'text-white bg-slate-800' 
+              : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          }`}
+        >
           <Settings size={18} />
           <span className="text-sm">Configuración</span>
         </button>
-        <button className="flex items-center gap-3 px-3 py-2 w-full text-red-400 hover:text-red-300 transition-colors rounded-lg hover:bg-red-950/30">
+        <button 
+          onClick={() => logout()}
+          className="flex items-center gap-3 px-3 py-2 w-full text-red-400 hover:text-red-300 transition-colors rounded-lg hover:bg-red-950/30"
+        >
           <LogOut size={18} />
           <span className="text-sm">Cerrar Sesión</span>
         </button>

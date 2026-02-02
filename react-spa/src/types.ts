@@ -19,7 +19,7 @@ export interface Classroom {
   id: string;
   name: string;
   computerCount: number;
-  activeGroup: string;
+  activeGroup: string | null;
 }
 
 export interface Group {

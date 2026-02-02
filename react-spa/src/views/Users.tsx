@@ -1,5 +1,5 @@
-import React from 'react';
-import { Search, Filter, Mail, Edit2, Trash, Key } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, Filter, Mail, Edit2, Trash, Key, X } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 const mockUsers: User[] = [
@@ -26,6 +26,15 @@ const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
 };
 
 const UsersView = () => {
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  const handleEdit = (user: User) => {
+    setSelectedUser(user);
+    setShowEditModal(true);
+  };
+
   return (
     <div className="space-y-6">
         {/* Toolbar */}
@@ -34,7 +43,10 @@ const UsersView = () => {
                  <h2 className="text-xl font-bold text-slate-900">Gestión de Usuarios</h2>
                  <p className="text-slate-500 text-sm">Administra los accesos y roles de la plataforma.</p>
             </div>
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
+            <button 
+                onClick={() => setShowNewModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+            >
                 + Nuevo Usuario
             </button>
         </div>
@@ -105,7 +117,11 @@ const UsersView = () => {
                                 </td>
                                 <td className="px-6 py-3 text-right">
                                     <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                        <button className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Editar">
+                                        <button 
+                                            onClick={() => handleEdit(user)}
+                                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" 
+                                            title="Editar"
+                                        >
                                             <Edit2 size={16} />
                                         </button>
                                         <button className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" title="Restablecer Contraseña">
@@ -128,9 +144,88 @@ const UsersView = () => {
                 <div className="flex gap-2">
                     <button className="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors shadow-sm">Anterior</button>
                     <button className="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors shadow-sm">Siguiente</button>
+</div>
+        </div>
+        </div>
+
+        {/* Modal: Editar Usuario */}
+        {showEditModal && selectedUser && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Editar Usuario</h3>
+                        <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+                            <input type="text" defaultValue={selectedUser.name} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                            <input type="email" defaultValue={selectedUser.email} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Roles</label>
+                            <div className="flex flex-wrap gap-2">
+                                {Object.values(UserRole).map(role => (
+                                    <label key={role} className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-lg text-sm cursor-pointer hover:bg-slate-50">
+                                        <input type="checkbox" defaultChecked={selectedUser.roles.includes(role)} className="rounded" />
+                                        {role}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="flex gap-3 pt-2">
+                            <button onClick={() => setShowEditModal(false)} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50">
+                                Cancelar
+                            </button>
+                            <button onClick={() => setShowEditModal(false)} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                                Guardar Cambios
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
+        )}
+
+        {/* Modal: Nuevo Usuario */}
+        {showNewModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-bold text-slate-800">Nuevo Usuario</h3>
+                        <button onClick={() => setShowNewModal(false)} className="text-slate-400 hover:text-slate-600">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+                            <input type="text" placeholder="Nombre completo" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                            <input type="email" placeholder="usuario@dominio.com" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña Temporal</label>
+                            <input type="text" placeholder="Se enviará por email" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
+                        <div className="flex gap-3 pt-2">
+                            <button onClick={() => setShowNewModal(false)} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50">
+                                Cancelar
+                            </button>
+                            <button onClick={() => setShowNewModal(false)} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                                Crear Usuario
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
     </div>
   );
 };

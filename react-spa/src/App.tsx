@@ -7,10 +7,13 @@ import Groups from './views/Groups';
 import UsersView from './views/Users';
 import Login from './views/Login';
 import Register from './views/Register';
+import ForgotPassword from './views/ForgotPassword';
+import ResetPassword from './views/ResetPassword';
+import Settings from './views/Settings';
 import { ShieldAlert, CheckCircle } from 'lucide-react';
 import { isAuthenticated, onAuthChange } from './lib/auth';
 
-type AuthView = 'login' | 'register';
+type AuthView = 'login' | 'register' | 'forgot-password' | 'reset-password';
 
 const App: React.FC = () => {
   const [isAuth, setIsAuth] = useState(isAuthenticated());
@@ -34,6 +37,7 @@ const App: React.FC = () => {
       case 'classrooms': return <Classrooms />;
       case 'groups': return <Groups />;
       case 'users': return <UsersView />;
+      case 'settings': return <Settings />;
       case 'domains':
         return (
              <div className="flex flex-col items-center justify-center h-[60vh] bg-white rounded-lg border border-slate-200 shadow-sm text-slate-500">
@@ -55,15 +59,38 @@ const App: React.FC = () => {
         case 'groups': return 'Grupos y Políticas';
         case 'users': return 'Administración de Usuarios';
         case 'domains': return 'Solicitudes de Acceso';
+        case 'settings': return 'Configuración';
         default: return 'OpenPath';
      }
   };
 
   if (!isAuth) {
-    if (authView === 'register') {
+    switch (authView) {
+      case 'register':
         return <Register onRegister={handleRegister} onNavigateToLogin={() => setAuthView('login')} />;
+      case 'forgot-password':
+        return (
+          <ForgotPassword 
+            onNavigateToLogin={() => setAuthView('login')} 
+            onNavigateToReset={() => setAuthView('reset-password')} 
+          />
+        );
+      case 'reset-password':
+        return (
+          <ResetPassword 
+            onNavigateToLogin={() => setAuthView('login')} 
+            onNavigateToForgot={() => setAuthView('forgot-password')} 
+          />
+        );
+      default:
+        return (
+          <Login 
+            onLogin={handleLogin} 
+            onNavigateToRegister={() => setAuthView('register')} 
+            onNavigateToForgot={() => setAuthView('forgot-password')}
+          />
+        );
     }
-    return <Login onLogin={handleLogin} onNavigateToRegister={() => setAuthView('register')} />;
   }
 
   return (

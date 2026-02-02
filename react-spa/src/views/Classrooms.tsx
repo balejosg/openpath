@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { Monitor, Calendar, Plus, Trash2, Search, Clock, Laptop } from 'lucide-react';
+import { Monitor, Calendar, Plus, Trash2, Search, Clock, Laptop, X } from 'lucide-react';
 import { Classroom } from '../types';
 
 const mockClassrooms: Classroom[] = [
   { id: '1', name: 'Aula QA 1', computerCount: 24, activeGroup: 'grupo-qa-1' },
   { id: '2', name: 'Laboratorio B', computerCount: 15, activeGroup: 'test-group-final' },
-  { id: '3', name: 'Aula Informática 3', computerCount: 30, activeGroup: 'None' },
+  { id: '3', name: 'Aula Informática 3', computerCount: 30, activeGroup: null },
 ];
 
 const Classrooms = () => {
   const [selectedClassroom, setSelectedClassroom] = useState<Classroom>(mockClassrooms[0]);
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-6">
@@ -17,7 +20,10 @@ const Classrooms = () => {
       <div className="w-full md:w-1/3 flex flex-col gap-4">
         <div className="flex justify-between items-center px-1">
             <h2 className="text-lg font-bold text-slate-800">Aulas</h2>
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium">
+            <button 
+                onClick={() => setShowNewModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium"
+              >
                 <Plus size={16} /> Nueva
             </button>
         </div>
@@ -44,8 +50,8 @@ const Classrooms = () => {
               </div>
               <div className="flex items-center gap-4 text-xs text-slate-500">
                 <span className="flex items-center gap-1"><Laptop size={12} /> {room.computerCount} Equipos</span>
-                <span className={`px-2 py-0.5 rounded-full border ${room.activeGroup !== 'None' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                    {room.activeGroup}
+                <span className={`px-2 py-0.5 rounded-full border ${room.activeGroup ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
+                    {room.activeGroup || 'Sin grupo'}
                 </span>
               </div>
             </div>
@@ -63,7 +69,11 @@ const Classrooms = () => {
                     <p className="text-slate-500 text-sm">Configuración y estado del aula</p>
                 </div>
                 <div className="flex gap-2">
-                    <button className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" title="Eliminar Aula">
+                    <button 
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100" 
+                        title="Eliminar Aula"
+                    >
                         <Trash2 size={18} />
                     </button>
                 </div>
@@ -119,13 +129,127 @@ const Classrooms = () => {
                 <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500">
                     <Calendar size={48} className="text-slate-300 mb-3" />
                     <p className="text-sm">Sin horarios configurados.</p>
-                    <button className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline">
+                    <button 
+                        onClick={() => setShowScheduleModal(true)}
+                        className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium hover:underline"
+                    >
                         Configurar Horario
                     </button>
                 </div>
             </div>
         </div>
       </div>
+
+      {/* Modal: Nueva Aula */}
+      {showNewModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Nueva Aula</h3>
+              <button onClick={() => setShowNewModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del Aula</label>
+                <input type="text" placeholder="Ej: Laboratorio C" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Grupo Inicial</label>
+                <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                  <option value="">Sin grupo</option>
+                  <option value="grupo-qa-1">grupo-qa-1</option>
+                  <option value="test-group">test-group-verification</option>
+                </select>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setShowNewModal(false)} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={() => setShowNewModal(false)} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                  Crear Aula
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Configurar Horario */}
+      {showScheduleModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Configurar Horario - {selectedClassroom.name}</h3>
+              <button onClick={() => setShowScheduleModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">Configura los bloques horarios en los que esta aula estará activa.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Hora Inicio</label>
+                  <input type="time" defaultValue="08:00" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Hora Fin</label>
+                  <input type="time" defaultValue="14:00" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Días Activos</label>
+                <div className="flex gap-2">
+                  {['L', 'M', 'X', 'J', 'V'].map(day => (
+                    <button key={day} className="w-10 h-10 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 font-medium hover:bg-blue-100 transition-colors">
+                      {day}
+                    </button>
+                  ))}
+                  {['S', 'D'].map(day => (
+                    <button key={day} className="w-10 h-10 rounded-lg border border-slate-200 bg-slate-50 text-slate-400 font-medium hover:bg-slate-100 transition-colors">
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setShowScheduleModal(false)} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={() => setShowScheduleModal(false)} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+                  Guardar Horario
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmar Eliminación */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
+            <div className="text-center">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="text-red-600" size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-slate-800 mb-2">Eliminar Aula</h3>
+              <p className="text-sm text-slate-600 mb-6">
+                ¿Estás seguro de que quieres eliminar <strong>{selectedClassroom.name}</strong>? Esta acción no se puede deshacer.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

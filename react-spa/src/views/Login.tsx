@@ -6,9 +6,10 @@ import GoogleLoginButton from '../components/GoogleLoginButton';
 interface LoginProps {
   onLogin: () => void;
   onNavigateToRegister: () => void;
+  onNavigateToForgot: () => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigateToForgot }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [email, setEmail] = useState('');
@@ -121,7 +122,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister }) => {
                   <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 mr-2" />
                   Mantener sesión
                </label>
-               <a href="#" className="text-blue-600 hover:text-blue-800 font-medium">Recuperar clave</a>
+               <button 
+                  type="button"
+                  onClick={onNavigateToForgot} 
+                  className="text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Recuperar clave
+                </button>
             </div>
 
             <button

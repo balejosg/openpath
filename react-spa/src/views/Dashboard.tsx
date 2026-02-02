@@ -1,5 +1,5 @@
-import React from 'react';
-import { Folder, CheckCircle, Ban, Server, TrendingUp, Shield } from 'lucide-react';
+import React, { useState } from 'react';
+import { Folder, CheckCircle, Ban, Server, TrendingUp, Shield, X } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const data = [
@@ -30,6 +30,8 @@ const StatCard = ({ title, value, icon, color, subtext }: any) => (
 );
 
 const Dashboard = () => {
+  const [showAuditModal, setShowAuditModal] = useState(false);
+
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
@@ -128,11 +130,50 @@ const Dashboard = () => {
               </div>
             ))}
           </div>
-          <button className="w-full mt-4 text-center text-sm text-blue-600 hover:text-blue-700 font-medium py-2 border border-blue-100 rounded bg-blue-50/50 hover:bg-blue-50 transition-colors">
-            Ver Registro Completo
-          </button>
+          <button 
+              onClick={() => setShowAuditModal(true)}
+              className="w-full mt-4 text-center text-sm text-blue-600 hover:text-blue-700 font-medium py-2 border border-blue-100 rounded bg-blue-50/50 hover:bg-blue-50 transition-colors"
+            >
+              Ver Registro Completo
+            </button>
         </div>
       </div>
+
+      {/* Modal: Registro de Auditoría */}
+      {showAuditModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Registro de Auditoría</h3>
+              <button onClick={() => setShowAuditModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-3">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="flex gap-3 py-3 border-b border-slate-100 last:border-0">
+                  <div className="mt-1">
+                    <div className={`w-2 h-2 rounded-full ${i % 3 === 0 ? 'bg-green-500' : i % 3 === 1 ? 'bg-blue-500' : 'bg-amber-500'}`}></div>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-slate-700">
+                      {i % 3 === 0 && <>Dominio <span className="font-semibold">google.com</span> añadido a whitelist</>}
+                      {i % 3 === 1 && <>Cambio de política en <span className="font-semibold">Grupo QA-1</span></>}
+                      {i % 3 === 2 && <>Usuario <span className="font-semibold">teacher@school.edu</span> desactivado</>}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">Usuario: admin@local • Hace {i + 1}h</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="pt-4 border-t border-slate-200 mt-4">
+              <button onClick={() => setShowAuditModal(false)} className="w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
