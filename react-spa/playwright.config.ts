@@ -9,6 +9,15 @@ import { defineConfig, devices } from '@playwright/test';
  * - Only Chromium (no Firefox/WebKit) for speed
  * - Shorter timeouts locally
  * - No retries locally (fast feedback)
+ * 
+ * Test Tags:
+ * - @smoke: Quick sanity tests (run on every commit)
+ * - @auth: Authentication flow tests
+ * - @domains: Domain management tests
+ * - @dashboard: Dashboard functionality tests
+ * - @visual: Visual regression tests
+ * - @performance: Performance/speed tests
+ * - @slow: Tests that take longer to run
  */
 
 const isCI = !!process.env.CI;
@@ -30,10 +39,10 @@ export default defineConfig({
   retries: isCI ? 2 : 0,
   
   /* Use all CPU cores locally, limit in CI */
-  workers: isCI ? 1 : undefined,
+  workers: isCI ? 2 : undefined,
   
   /* Reporter: minimal locally for speed, html in CI */
-  reporter: isCI ? 'html' : 'list',
+  reporter: isCI ? [['html'], ['junit', { outputFile: 'e2e/test-results/results.xml' }]] : 'list',
   
   /* Shared settings for all the projects below. */
   use: {
@@ -53,13 +62,34 @@ export default defineConfig({
   /* Faster expect timeouts locally */
   expect: {
     timeout: isCI ? 10000 : 5000,
+    /* Visual regression settings */
+    toHaveScreenshot: {
+      maxDiffPixelRatio: 0.01,
+      animations: 'disabled',
+    },
+    toMatchSnapshot: {
+      maxDiffPixelRatio: 0.01,
+    },
   },
 
-  /* Configure projects for major browsers - only Chromium for speed */
+  /* Configure projects for different test types */
   projects: [
+    /* Default: Chromium for speed */
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+    /* Mobile viewport for responsive tests */
+    {
+      name: 'mobile',
+      use: { ...devices['iPhone 13'] },
+      grep: /@responsive|@mobile/,
+    },
+    /* Tablet viewport */
+    {
+      name: 'tablet',
+      use: { ...devices['iPad Pro'] },
+      grep: /@responsive|@tablet/,
     },
   ],
 
@@ -82,4 +112,10 @@ export default defineConfig({
   
   /* Output directory for test artifacts */
   outputDir: './e2e/test-results',
+  
+  /* Snapshot directory for visual regression */
+  snapshotDir: './e2e/snapshots',
+  
+  /* Global timeout for each test */
+  timeout: isCI ? 60000 : 30000,
 });

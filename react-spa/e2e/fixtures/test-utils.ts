@@ -1,0 +1,238 @@
+/**
+ * Test Utilities for OpenPath E2E Tests
+ * 
+ * Provides test data factories, helpers, and common setup functions.
+ */
+
+import { Page, BrowserContext } from '@playwright/test';
+
+// ============================================================================
+// Test Data Factories
+// ============================================================================
+
+export interface TestUser {
+  email: string;
+  password: string;
+  name: string;
+}
+
+export interface TestGroup {
+  name: string;
+  description: string;
+}
+
+export interface TestDomain {
+  domain: string;
+  reason: string;
+}
+
+/**
+ * Creates a unique test user with timestamp-based email
+ */
+export function createTestUser(overrides: Partial<TestUser> = {}): TestUser {
+  const timestamp = Date.now();
+  return {
+    email: `test-${timestamp}@e2e-openpath.local`,
+    password: 'SecurePassword123!',
+    name: `E2E User ${timestamp}`,
+    ...overrides,
+  };
+}
+
+/**
+ * Creates a unique test group
+ */
+export function createTestGroup(overrides: Partial<TestGroup> = {}): TestGroup {
+  const timestamp = Date.now();
+  return {
+    name: `Test Group ${timestamp}`,
+    description: `E2E test group created at ${new Date().toISOString()}`,
+    ...overrides,
+  };
+}
+
+/**
+ * Creates a test domain request
+ */
+export function createTestDomain(overrides: Partial<TestDomain> = {}): TestDomain {
+  const timestamp = Date.now();
+  return {
+    domain: `test-${timestamp}.example.com`,
+    reason: 'Needed for E2E testing purposes',
+    ...overrides,
+  };
+}
+
+// ============================================================================
+// Authentication Helpers
+// ============================================================================
+
+/**
+ * Admin credentials for test environment
+ */
+export const ADMIN_CREDENTIALS = {
+  email: 'admin@openpath.local',
+  password: 'AdminPassword123!',
+};
+
+/**
+ * Teacher credentials for test environment
+ */
+export const TEACHER_CREDENTIALS = {
+  email: 'teacher@openpath.local',
+  password: 'TeacherPassword123!',
+};
+
+/**
+ * Logs in as admin user - assumes test database is seeded
+ */
+export async function loginAsAdmin(page: Page): Promise<void> {
+  await page.goto('./');
+  await page.waitForLoadState('networkidle');
+  await page.locator('input[type="email"]').fill(ADMIN_CREDENTIALS.email);
+  await page.locator('input[type="password"]').fill(ADMIN_CREDENTIALS.password);
+  await page.getByRole('button', { name: 'Entrar' }).click();
+  await page.waitForURL(/\/(dashboard|groups|requests)/);
+}
+
+/**
+ * Logs in as teacher user - assumes test database is seeded
+ */
+export async function loginAsTeacher(page: Page): Promise<void> {
+  await page.goto('./');
+  await page.waitForLoadState('networkidle');
+  await page.locator('input[type="email"]').fill(TEACHER_CREDENTIALS.email);
+  await page.locator('input[type="password"]').fill(TEACHER_CREDENTIALS.password);
+  await page.getByRole('button', { name: 'Entrar' }).click();
+  await page.waitForURL(/\/(dashboard|groups|requests)/);
+}
+
+/**
+ * Logs out the current user
+ */
+export async function logout(page: Page): Promise<void> {
+  const userMenu = page.locator('[data-testid="user-menu"]');
+  if (await userMenu.isVisible()) {
+    await userMenu.click();
+    await page.getByRole('menuitem', { name: /Cerrar sesión|Logout/i }).click();
+    await page.waitForURL(/\/login|\//);
+  }
+}
+
+/**
+ * Clears authentication state
+ */
+export async function clearAuth(context: BrowserContext): Promise<void> {
+  await context.clearCookies();
+  await context.storageState({ path: undefined as unknown as string });
+}
+
+// ============================================================================
+// Wait Helpers
+// ============================================================================
+
+/**
+ * Waits for network to be idle (no pending requests)
+ */
+export async function waitForNetworkIdle(page: Page, timeout = 5000): Promise<void> {
+  await page.waitForLoadState('networkidle', { timeout });
+}
+
+/**
+ * Waits for a toast/notification to appear
+ */
+export async function waitForToast(page: Page, text: string): Promise<void> {
+  await page.getByText(text).waitFor({ state: 'visible', timeout: 5000 });
+}
+
+/**
+ * Waits for loading spinner to disappear
+ */
+export async function waitForLoadingComplete(page: Page): Promise<void> {
+  const spinner = page.locator('.animate-spin');
+  if (await spinner.isVisible()) {
+    await spinner.waitFor({ state: 'hidden', timeout: 10000 });
+  }
+}
+
+// ============================================================================
+// API Helpers (for test setup/teardown)
+// ============================================================================
+
+const API_BASE = process.env.API_URL || 'http://localhost:3000';
+
+/**
+ * Resets test database via API (if endpoint available)
+ */
+export async function resetTestDatabase(): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/api/test/reset`, { method: 'POST' });
+  } catch {
+    // Endpoint may not exist in production
+  }
+}
+
+/**
+ * Seeds test data via API (if endpoint available)
+ */
+export async function seedTestData(): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/api/test/seed`, { method: 'POST' });
+  } catch {
+    // Endpoint may not exist in production
+  }
+}
+
+// ============================================================================
+// Assertion Helpers
+// ============================================================================
+
+/**
+ * Checks if current URL matches expected pattern
+ */
+export async function expectUrl(page: Page, pattern: string | RegExp): Promise<void> {
+  const url = page.url();
+  if (typeof pattern === 'string') {
+    if (!url.includes(pattern)) {
+      throw new Error(`Expected URL to contain "${pattern}", got "${url}"`);
+    }
+  } else {
+    if (!pattern.test(url)) {
+      throw new Error(`Expected URL to match ${pattern}, got "${url}"`);
+    }
+  }
+}
+
+// ============================================================================
+// Performance Helpers
+// ============================================================================
+
+/**
+ * Measures page load time
+ */
+export async function measurePageLoad(page: Page, url: string): Promise<number> {
+  const start = Date.now();
+  await page.goto(url);
+  await page.waitForLoadState('networkidle');
+  return Date.now() - start;
+}
+
+/**
+ * Collects performance metrics
+ */
+export async function getPerformanceMetrics(page: Page): Promise<{
+  domContentLoaded: number;
+  loadComplete: number;
+  firstPaint: number;
+}> {
+  const metrics = await page.evaluate(() => {
+    const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+    const paint = performance.getEntriesByType('paint').find(p => p.name === 'first-paint');
+    return {
+      domContentLoaded: navigation?.domContentLoadedEventEnd || 0,
+      loadComplete: navigation?.loadEventEnd || 0,
+      firstPaint: paint?.startTime || 0,
+    };
+  });
+  return metrics;
+}
