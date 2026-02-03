@@ -20,6 +20,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "NODE_ENV=test PORT=3006 node --import tsx --test --test-force-exit tests/api.test.ts",
+    "test:watch": "NODE_ENV=test PORT=3006 node --import tsx --test --watch tests/api.test.ts",
     "test:auth": "NODE_ENV=test PORT=3001 node --import tsx --test --test-force-exit tests/auth.test.ts",
     "test:google-auth": "NODE_ENV=test PORT=3010 node --import tsx --test --test-force-exit tests/google-auth.test.ts",
     "test:setup": "NODE_ENV=test PORT=3005 node --import tsx --test --test-force-exit tests/setup.test.ts",

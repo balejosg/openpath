@@ -20,6 +20,7 @@
     "test:e2e": "npm run test:e2e --workspace=@openpath/react-spa",
     "test:e2e:smoke": "npm run test:e2e --workspace=@openpath/react-spa -- --grep @smoke",
     "test:watch:spa": "npm run test --workspace=@openpath/react-spa -- --watch",
+    "test:watch:api": "npm run test:watch --workspace=@openpath/api",
     "e2e:setup": "docker compose -f docker-compose.test.yml up -d && sleep 3 && npm run db:setup:e2e --workspace=@openpath/api",
     "e2e:teardown": "docker compose -f docker-compose.test.yml down",
     "e2e:run": "npm run test:e2e --workspace=@openpath/react-spa",
