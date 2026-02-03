@@ -162,7 +162,9 @@ const UsersView = () => {
                   <td className="px-6 py-3 text-right">
                     <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       <button
-                        onClick={() => handleEdit(user)}
+                        onClick={() => {
+                          handleEdit(user);
+                        }}
                         className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                         title="Editar"
                       >

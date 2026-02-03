@@ -65,7 +65,7 @@ const Classrooms = () => {
                 <span
                   className={`px-2 py-0.5 rounded-full border ${room.activeGroup ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}
                 >
-                  {room.activeGroup || 'Sin grupo'}
+                  {room.activeGroup ?? 'Sin grupo'}
                 </span>
               </div>
             </div>

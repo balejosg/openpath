@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useGoogleAuth } from '../hooks/useGoogleAuth';
+import { useGoogleAuth, GoogleCredentialResponse } from '../hooks/useGoogleAuth';
+import '../types/google.d'; // Import for global Window type augmentation
 
 interface GoogleLoginButtonProps {
   onSuccess: (idToken: string) => void;
@@ -12,19 +13,22 @@ const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ onSuccess, disabl
 
   useEffect(() => {
     if (isLoaded && !disabled) {
-      initGoogleAuth((response: any) => {
+      initGoogleAuth((response: GoogleCredentialResponse) => {
         onSuccess(response.credential);
       });
       renderGoogleButton('google-signin-btn');
       // Give Google a moment to render
       const checkRendered = setTimeout(() => {
         const container = document.getElementById('google-signin-btn');
-        if (container && container.querySelector('iframe, div[role="button"]')) {
+        if (container?.querySelector('iframe, div[role="button"]')) {
           setButtonRendered(true);
         }
       }, 500);
-      return () => clearTimeout(checkRendered);
+      return () => {
+        clearTimeout(checkRendered);
+      };
     }
+    return undefined;
   }, [isLoaded, initGoogleAuth, renderGoogleButton, onSuccess, disabled]);
 
   // Show fallback button if Google button doesn't render within timeout
@@ -35,23 +39,21 @@ const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ onSuccess, disabl
       <div
         id="google-signin-btn"
         data-testid="google-signin-btn"
-        className={`${disabled ? 'opacity-50 pointer-events-none' : ''} w-full flex justify-center`}
+        className={`${disabled === true ? 'opacity-50 pointer-events-none' : ''} w-full flex justify-center`}
       >
-        {!isLoaded && !disabled && (
+        {!isLoaded && disabled !== true && (
           <div
             className="w-full h-10 bg-slate-100 animate-pulse rounded-lg border border-slate-200"
             aria-label="Cargando botón de Google..."
           />
         )}
-        {showFallback && !buttonRendered && (
+        {showFallback && (
           <button
             type="button"
             className="w-full h-10 flex items-center justify-center gap-2 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors text-slate-700 font-medium"
             onClick={() => {
               // Trigger Google One Tap as fallback
-              if (window.google?.accounts?.id) {
-                window.google.accounts.id.prompt();
-              }
+              window.google?.accounts.id.prompt();
             }}
             data-testid="google-fallback-btn"
             aria-label="Iniciar sesión con Google"

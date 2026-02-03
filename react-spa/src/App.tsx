@@ -11,7 +11,6 @@ import ForgotPassword from './views/ForgotPassword';
 import ResetPassword from './views/ResetPassword';
 import Settings from './views/Settings';
 import DomainRequests from './views/DomainRequests';
-import { ShieldAlert } from 'lucide-react';
 import { isAuthenticated, onAuthChange } from './lib/auth';
 
 type AuthView = 'login' | 'register' | 'forgot-password' | 'reset-password';

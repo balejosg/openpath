@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MoreHorizontal, ShieldCheck, Folder, ArrowRight, X, Plus } from 'lucide-react';
+import { MoreHorizontal, ShieldCheck, Folder, ArrowRight, X } from 'lucide-react';
 import { Group } from '../types';
 
 const mockGroups: Group[] = [
@@ -97,7 +97,9 @@ const Groups = () => {
                   {group.status === 'Active' ? 'Activo' : 'Inactivo'}
                 </span>
                 <button
-                  onClick={() => handleConfigure(group)}
+                  onClick={() => {
+                    handleConfigure(group);
+                  }}
                   className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium transition-opacity"
                 >
                   Configurar <ArrowRight size={12} />

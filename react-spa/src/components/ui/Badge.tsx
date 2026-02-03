@@ -5,7 +5,7 @@ interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: 'default' | 'success' | 'warning' | 'error' | 'outline';
 }
 
-const Badge: React.FC<BadgeProps> = ({ className, variant, ...props }) => {
+const Badge: React.FC<BadgeProps> = ({ className, variant = 'default', ...props }) => {
   const variants = {
     default: 'bg-slate-100 text-slate-800 border-transparent',
     success: 'bg-green-100 text-green-700 border-green-200',

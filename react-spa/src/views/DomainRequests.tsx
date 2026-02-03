@@ -99,7 +99,7 @@ export default function DomainRequests() {
         setLoading(false);
       }
     };
-    fetchData();
+    void fetchData();
   }, [statusFilter]);
 
   // Filter requests by search term
@@ -112,7 +112,7 @@ export default function DomainRequests() {
   // Get group name by path
   const getGroupName = (groupId: string) => {
     const group = groups.find((g) => g.path === groupId);
-    return group?.name || groupId;
+    return group?.name ?? groupId;
   };
 
   // Format date
@@ -137,7 +137,7 @@ export default function DomainRequests() {
       });
       setRequests((prev) =>
         prev.map((r) =>
-          r.id === approveModal.request!.id ? { ...r, status: 'approved' as RequestStatus } : r
+          r.id === approveModal.request?.id ? { ...r, status: 'approved' as RequestStatus } : r
         )
       );
       setApproveModal({ open: false, request: null });
@@ -160,7 +160,7 @@ export default function DomainRequests() {
       });
       setRequests((prev) =>
         prev.map((r) =>
-          r.id === rejectModal.request!.id ? { ...r, status: 'rejected' as RequestStatus } : r
+          r.id === rejectModal.request?.id ? { ...r, status: 'rejected' as RequestStatus } : r
         )
       );
       setRejectModal({ open: false, request: null });
@@ -178,7 +178,7 @@ export default function DomainRequests() {
     setActionLoading(true);
     try {
       await trpc.requests.delete.mutate({ id: deleteModal.request.id });
-      setRequests((prev) => prev.filter((r) => r.id !== deleteModal.request!.id));
+      setRequests((prev) => prev.filter((r) => r.id !== deleteModal.request?.id));
       setDeleteModal({ open: false, request: null });
     } catch (err) {
       console.error('Error deleting request:', err);
@@ -421,7 +421,9 @@ export default function DomainRequests() {
                 Cancelar
               </button>
               <button
-                onClick={handleApprove}
+                onClick={() => {
+                  void handleApprove();
+                }}
                 disabled={!selectedGroupId || actionLoading}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -472,7 +474,9 @@ export default function DomainRequests() {
                 Cancelar
               </button>
               <button
-                onClick={handleReject}
+                onClick={() => {
+                  void handleReject();
+                }}
                 disabled={actionLoading}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >
@@ -510,7 +514,9 @@ export default function DomainRequests() {
                 Cancelar
               </button>
               <button
-                onClick={handleDelete}
+                onClick={() => {
+                  void handleDelete();
+                }}
                 disabled={actionLoading}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >

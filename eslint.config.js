@@ -16,6 +16,7 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/no-confusing-void-expression': ['error', { ignoreArrowShorthand: true }],
       'no-console': 'off',
       semi: ['error', 'always'],
       quotes: ['error', 'single', { avoidEscape: true }],
@@ -37,6 +38,8 @@ export default tseslint.config(
       '**/__tests__/**',
       'shared/tests/**',
       'spa/js/**',
+      'react-spa/e2e/**',
+      'tests/selenium/**',
     ],
   }
 );

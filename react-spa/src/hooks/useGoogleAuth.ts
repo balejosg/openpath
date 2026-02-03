@@ -1,9 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
+import type { GoogleCredentialResponse } from '../types/google.d';
 
-declare global {
-  interface Window {
-    google: any;
-  }
+interface ConfigResponse {
+  googleClientId?: string;
 }
 
 export const useGoogleAuth = () => {
@@ -15,7 +14,7 @@ export const useGoogleAuth = () => {
     const fetchConfig = async () => {
       try {
         const response = await fetch('/api/config');
-        const config = await response.json();
+        const config = (await response.json()) as ConfigResponse;
         if (config.googleClientId) {
           setGoogleClientId(config.googleClientId);
         }
@@ -24,25 +23,25 @@ export const useGoogleAuth = () => {
       }
     };
 
-    fetchConfig();
+    void fetchConfig();
 
-    const interval = setInterval(() => {
-      if (window.google?.accounts?.id) {
+    const interval = window.setInterval(() => {
+      if (window.google?.accounts.id) {
         setIsLoaded(true);
-        clearInterval(interval);
+        window.clearInterval(interval);
       }
     }, 100);
 
     return () => {
-      clearInterval(interval);
+      window.clearInterval(interval);
     };
   }, []);
 
   const initGoogleAuth = useCallback(
-    (onSuccess: (response: any) => void) => {
+    (onSuccess: (response: GoogleCredentialResponse) => void) => {
       if (!isLoaded || !googleClientId) return;
 
-      window.google.accounts.id.initialize({
+      window.google?.accounts.id.initialize({
         client_id: googleClientId,
         callback: onSuccess,
         auto_select: false,
@@ -58,7 +57,7 @@ export const useGoogleAuth = () => {
 
       const element = document.getElementById(elementId);
       if (element) {
-        window.google.accounts.id.renderButton(element, {
+        window.google?.accounts.id.renderButton(element, {
           theme: 'outline',
           size: 'large',
           width: '100%',
@@ -73,3 +72,5 @@ export const useGoogleAuth = () => {
 
   return { isLoaded: isLoaded && !!googleClientId, initGoogleAuth, renderGoogleButton };
 };
+
+export type { GoogleCredentialResponse };

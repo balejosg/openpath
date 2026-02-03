@@ -15,7 +15,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
@@ -37,8 +37,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
     try {
       await loginWithGoogle(idToken);
       onLogin();
-    } catch (err: any) {
-      setError(err.message || 'Error al iniciar sesión con Google');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error al iniciar sesión con Google';
+      setError(message);
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -95,7 +96,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form
+            onSubmit={(e) => {
+              void handleSubmit(e);
+            }}
+            className="space-y-5"
+          >
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
                 Correo Electrónico
@@ -168,7 +174,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
               </div>
             </div>
 
-            <GoogleLoginButton onSuccess={handleGoogleSuccess} disabled={isLoading} />
+            <GoogleLoginButton
+              onSuccess={(token) => {
+                void handleGoogleSuccess(token);
+              }}
+              disabled={isLoading}
+            />
           </form>
 
           <div className="mt-6 pt-6 border-t border-slate-100 text-center text-sm">

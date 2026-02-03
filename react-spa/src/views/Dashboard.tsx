@@ -20,7 +20,22 @@ const data = [
   { name: 'Dom', requests: 2 },
 ];
 
-const StatCard = ({ title, value, icon, color, subtext }: any) => (
+interface StatCardColor {
+  bg: string;
+  text: string;
+  badgeBg: string;
+  badgeText: string;
+}
+
+interface StatCardProps {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+  color: StatCardColor;
+  subtext: string;
+}
+
+const StatCard = ({ title, value, icon, color, subtext }: StatCardProps) => (
   <div className="bg-white border border-slate-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow">
     <div className="flex justify-between items-start mb-4">
       <div className={`p-2 rounded-lg ${color.bg} ${color.text}`}>{icon}</div>
@@ -211,7 +226,7 @@ const Dashboard = () => {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto space-y-3">
-              {[...Array(10)].map((_, i) => (
+              {Array.from({ length: 10 }, (_, i) => (
                 <div key={i} className="flex gap-3 py-3 border-b border-slate-100 last:border-0">
                   <div className="mt-1">
                     <div

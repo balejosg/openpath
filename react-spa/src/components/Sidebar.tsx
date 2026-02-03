@@ -82,7 +82,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen }) =>
           <span className="text-sm">Configuración</span>
         </button>
         <button
-          onClick={() => logout()}
+          onClick={() => {
+            logout();
+          }}
           className="flex items-center gap-3 px-3 py-2 w-full text-red-400 hover:text-red-300 transition-colors rounded-lg hover:bg-red-950/30"
         >
           <LogOut size={18} />

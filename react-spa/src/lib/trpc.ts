@@ -58,11 +58,19 @@ export const trpc = createTRPCClient<AppRouter>({
       },
       // Interceptar respuestas 401 (UNAUTHORIZED) para limpiar auth y redirigir
       fetch(url, options) {
-        return fetch(url, options).then(async (res) => {
+        return fetch(url, options).then((res) => {
           if (res.status === 401) {
             // No redirigir si el error ocurre durante el login o registro
-            const urlString =
-              res.url || (typeof url === 'string' ? url : (url as any).href || url.toString());
+            let urlString = res.url;
+            if (!urlString) {
+              if (typeof url === 'string') {
+                urlString = url;
+              } else if (url instanceof URL) {
+                urlString = url.href;
+              } else if (url instanceof Request) {
+                urlString = url.url;
+              }
+            }
             const isAuthRoute =
               urlString.includes('auth.login') || urlString.includes('auth.register');
             if (!isAuthRoute) {

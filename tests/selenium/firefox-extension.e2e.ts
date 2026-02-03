@@ -37,7 +37,7 @@ async function setup(): Promise<void> {
   options.setPreference('network.dns.disablePrefetch', true);
 
   // Headless for CI
-  if (process.env['CI']) {
+  if (process.env.CI) {
     options.addArguments('-headless');
   }
 

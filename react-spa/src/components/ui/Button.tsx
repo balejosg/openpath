@@ -8,7 +8,10 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, isLoading, children, disabled, ...props }, ref) => {
+  (
+    { className, variant = 'primary', size = 'md', isLoading, children, disabled, ...props },
+    ref
+  ) => {
     const variants = {
       primary: 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm',
       secondary: 'bg-slate-100 text-slate-900 hover:bg-slate-200',
@@ -27,7 +30,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <button
         ref={ref}
-        disabled={isLoading || disabled}
+        disabled={isLoading === true || disabled === true}
         className={cn(
           'inline-flex items-center justify-center rounded-lg font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98]',
           variants[variant],
@@ -36,7 +39,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         {...props}
       >
-        {isLoading ? (
+        {isLoading === true ? (
           <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
         ) : null}
         {children}

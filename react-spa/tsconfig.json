@@ -16,7 +16,8 @@
       "@/*": ["./*"]
     },
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "strict": true
   },
   "exclude": ["e2e", "playwright.config.ts"]
 }

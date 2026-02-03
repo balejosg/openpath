@@ -22,7 +22,7 @@ export function getCurrentUser(): User | null {
   const userJson = localStorage.getItem(USER_KEY);
   if (!userJson) return null;
   try {
-    return JSON.parse(userJson);
+    return JSON.parse(userJson) as User;
   } catch {
     return null;
   }

@@ -40,7 +40,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigateToLogin, onNavi
   const canSubmit =
     email.length > 0 && token.length > 0 && allRequirementsMet && passwordsMatch && !isLoading;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canSubmit) return;
 
@@ -107,7 +107,12 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onNavigateToLogin, onNavi
             Volver
           </button>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form
+            onSubmit={(e) => {
+              void handleSubmit(e);
+            }}
+            className="space-y-5"
+          >
             {/* Email */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
