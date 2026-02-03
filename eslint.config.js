@@ -40,6 +40,7 @@ export default tseslint.config(
       'spa/js/**',
       'react-spa/e2e/**',
       'tests/selenium/**',
+      'scripts/**',
     ],
   }
 );

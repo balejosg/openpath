@@ -192,6 +192,47 @@ CI runs `@smoke` tests on every PR. Full suite runs on main/nightly/`e2e` label.
 
 **All agents MUST run full verification locally before ANY commit.**
 
+### Verification Layers (Use the Right Level)
+
+For **fast feedback during development**, use the layered verification system:
+
+| Command                   | Time    | What It Runs                              | When to Use                           |
+| ------------------------- | ------- | ----------------------------------------- | ------------------------------------- |
+| `npm run verify:agent`    | ~5-30s  | Auto-detects changes, runs minimal checks | **Default for iterative development** |
+| `npm run verify:quick`    | ~15-30s | Typecheck + ESLint + Prettier             | After code changes, before deep dive  |
+| `npm run verify:affected` | ~30-60s | Quick + tests for affected workspaces     | After changing tests or shared/       |
+| `npm run verify:full`     | ~3-5min | **COMPLETE suite (MANDATORY for commit)** | **Before ANY commit**                 |
+
+#### verify:agent (Recommended for Agents)
+
+Automatically chooses the fastest verification based on what changed:
+
+- Docs only → `format:check` (~2s)
+- Code changes → `verify:quick` (~15s)
+- Test/shared changes → `verify:affected` (~30s)
+
+```bash
+# During iterative development:
+npm run verify:agent
+
+# Before commit (MANDATORY):
+npm run verify:full
+```
+
+#### Watch Mode (Continuous Feedback)
+
+For continuous feedback while coding:
+
+```bash
+npm run test:watch:spa    # Vitest watch for react-spa
+```
+
+#### E2E Smoke Tests (Quick Sanity Check)
+
+```bash
+npm run test:e2e:smoke    # Only @smoke tagged tests (~20s vs ~2min)
+```
+
 ### The Rule
 
 ```bash

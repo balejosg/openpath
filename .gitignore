@@ -51,3 +51,7 @@ usb-package/
 test-results/
 playwright-report/
 blob-report/
+
+# Caches (local dev acceleration)
+.eslintcache
+.turbo/
