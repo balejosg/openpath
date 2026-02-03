@@ -10,7 +10,6 @@ COPY package*.json ./
 COPY tsconfig.base.json ./
 COPY api/package*.json ./api/
 COPY shared/package*.json ./shared/
-COPY spa/package*.json ./spa/
 COPY react-spa/package*.json ./react-spa/
 
 # Install all dependencies
