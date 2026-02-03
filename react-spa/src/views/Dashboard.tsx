@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-const data = [
+const weekData = [
   { name: 'Lun', requests: 4 },
   { name: 'Mar', requests: 3 },
   { name: 'Mie', requests: 2 },
@@ -18,6 +18,13 @@ const data = [
   { name: 'Vie', requests: 5 },
   { name: 'Sab', requests: 1 },
   { name: 'Dom', requests: 2 },
+];
+
+const monthData = [
+  { name: 'Sem 1', requests: 24 },
+  { name: 'Sem 2', requests: 18 },
+  { name: 'Sem 3', requests: 32 },
+  { name: 'Sem 4', requests: 21 },
 ];
 
 interface StatCardColor {
@@ -54,6 +61,9 @@ const StatCard = ({ title, value, icon, color, subtext }: StatCardProps) => (
 
 const Dashboard = () => {
   const [showAuditModal, setShowAuditModal] = useState(false);
+  const [chartPeriod, setChartPeriod] = useState<'week' | 'month'>('week');
+
+  const chartData = chartPeriod === 'week' ? weekData : monthData;
 
   return (
     <div className="space-y-6">
@@ -131,17 +141,31 @@ const Dashboard = () => {
               Tráfico de Solicitudes
             </h3>
             <div className="flex gap-2">
-              <span className="text-xs font-medium px-2 py-1 bg-slate-100 text-slate-600 rounded">
+              <button
+                onClick={() => setChartPeriod('week')}
+                className={`text-xs font-medium px-2 py-1 rounded transition-colors ${
+                  chartPeriod === 'week'
+                    ? 'bg-slate-100 text-slate-600'
+                    : 'text-slate-400 hover:bg-slate-50 cursor-pointer'
+                }`}
+              >
                 Semana
-              </span>
-              <span className="text-xs font-medium px-2 py-1 text-slate-400 hover:bg-slate-50 rounded cursor-pointer">
+              </button>
+              <button
+                onClick={() => setChartPeriod('month')}
+                className={`text-xs font-medium px-2 py-1 rounded transition-colors ${
+                  chartPeriod === 'month'
+                    ? 'bg-slate-100 text-slate-600'
+                    : 'text-slate-400 hover:bg-slate-50 cursor-pointer'
+                }`}
+              >
                 Mes
-              </span>
+              </button>
             </div>
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
+              <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />

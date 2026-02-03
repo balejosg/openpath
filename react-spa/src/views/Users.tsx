@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Search, Filter, Mail, Edit2, Trash, Key, X } from 'lucide-react';
 import { User, UserRole } from '../types';
 
-const mockUsers: User[] = [
+const initialUsers: User[] = [
   {
     id: '1',
     name: 'Bruno Alejos Gomez',
@@ -64,13 +64,51 @@ const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
 };
 
 const UsersView = () => {
+  const [users, setUsers] = useState<User[]>(initialUsers);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Edit form state
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editRoles, setEditRoles] = useState<UserRole[]>([]);
+
+  // Filter users based on search
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return users;
+    const query = searchQuery.toLowerCase();
+    return users.filter(
+      (user) => user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query)
+    );
+  }, [users, searchQuery]);
 
   const handleEdit = (user: User) => {
     setSelectedUser(user);
+    setEditName(user.name);
+    setEditEmail(user.email);
+    setEditRoles([...user.roles]);
     setShowEditModal(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!selectedUser) return;
+
+    setUsers(
+      users.map((u) =>
+        u.id === selectedUser.id ? { ...u, name: editName, email: editEmail, roles: editRoles } : u
+      )
+    );
+    setShowEditModal(false);
+  };
+
+  const toggleRole = (role: UserRole) => {
+    if (editRoles.includes(role)) {
+      setEditRoles(editRoles.filter((r) => r !== role));
+    } else {
+      setEditRoles([...editRoles, role]);
+    }
   };
 
   return (
@@ -96,6 +134,8 @@ const UsersView = () => {
           <input
             type="text"
             placeholder="Buscar por nombre o email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-slate-50 border border-slate-300 rounded-lg py-2 pl-10 pr-4 text-sm text-slate-900 focus:border-blue-500 focus:bg-white outline-none transition-all"
           />
         </div>
@@ -123,76 +163,84 @@ const UsersView = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {mockUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-6 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200">
-                        {user.name.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{user.name}</p>
-                        <p className="text-[10px] text-slate-400 font-mono">ID: {user.id}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-3 text-sm text-slate-600">
-                    <div className="flex items-center gap-2">
-                      <Mail size={14} className="text-slate-400" />
-                      {user.email}
-                    </div>
-                  </td>
-                  <td className="px-6 py-3">
-                    <div className="flex gap-1">
-                      {user.roles.map((role) => (
-                        <RoleBadge key={role} role={role} />
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-6 py-3">
-                    <div
-                      className={`flex items-center gap-2 text-xs font-medium ${user.status === 'Active' ? 'text-green-700' : 'text-slate-500'}`}
-                    >
-                      <div
-                        className={`w-1.5 h-1.5 rounded-full ${user.status === 'Active' ? 'bg-green-500' : 'bg-slate-400'}`}
-                      ></div>
-                      {user.status === 'Active' ? 'Activo' : 'Inactivo'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => {
-                          handleEdit(user);
-                        }}
-                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Editar"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
-                        title="Restablecer Contraseña"
-                      >
-                        <Key size={16} />
-                      </button>
-                      <button
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Desactivar"
-                      >
-                        <Trash size={16} />
-                      </button>
-                    </div>
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500 text-sm">
+                    No se encontraron usuarios
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
+                    <td className="px-6 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200">
+                          {user.name.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{user.name}</p>
+                          <p className="text-[10px] text-slate-400 font-mono">ID: {user.id}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-3 text-sm text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <Mail size={14} className="text-slate-400" />
+                        {user.email}
+                      </div>
+                    </td>
+                    <td className="px-6 py-3">
+                      <div className="flex gap-1">
+                        {user.roles.map((role) => (
+                          <RoleBadge key={role} role={role} />
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-6 py-3">
+                      <div
+                        className={`flex items-center gap-2 text-xs font-medium ${user.status === 'Active' ? 'text-green-700' : 'text-slate-500'}`}
+                      >
+                        <div
+                          className={`w-1.5 h-1.5 rounded-full ${user.status === 'Active' ? 'bg-green-500' : 'bg-slate-400'}`}
+                        ></div>
+                        {user.status === 'Active' ? 'Activo' : 'Inactivo'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => handleEdit(user)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Editar"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                          title="Restablecer Contraseña"
+                        >
+                          <Key size={16} />
+                        </button>
+                        <button
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Desactivar"
+                        >
+                          <Trash size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Pagination Mock */}
         <div className="px-6 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 bg-slate-50">
-          <span>Mostrando 1-6 de 24 usuarios</span>
+          <span>
+            Mostrando 1-{filteredUsers.length} de {users.length} usuarios
+          </span>
           <div className="flex gap-2">
             <button className="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors shadow-sm">
               Anterior
@@ -222,7 +270,8 @@ const UsersView = () => {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
                 <input
                   type="text"
-                  defaultValue={selectedUser.name}
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
@@ -230,7 +279,8 @@ const UsersView = () => {
                 <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
                 <input
                   type="email"
-                  defaultValue={selectedUser.email}
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
@@ -244,7 +294,8 @@ const UsersView = () => {
                     >
                       <input
                         type="checkbox"
-                        defaultChecked={selectedUser.roles.includes(role)}
+                        checked={editRoles.includes(role)}
+                        onChange={() => toggleRole(role)}
                         className="rounded"
                       />
                       {role}
@@ -260,7 +311,7 @@ const UsersView = () => {
                   Cancelar
                 </button>
                 <button
-                  onClick={() => setShowEditModal(false)}
+                  onClick={handleSaveEdit}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
                 >
                   Guardar Cambios
