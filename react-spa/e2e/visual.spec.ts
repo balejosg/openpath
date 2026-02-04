@@ -9,7 +9,7 @@ import { test, expect } from '@playwright/test';
 import { loginAsAdmin, waitForNetworkIdle } from './fixtures/test-utils';
 
 test.describe('Visual Regression - Login Page', () => {
-  test('login page desktop @visual @smoke', async ({ page }) => {
+  test('login page desktop @visual', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('./');
     await page.waitForLoadState('networkidle');
@@ -78,7 +78,7 @@ test.describe('Visual Regression - Register Page', () => {
     await page.waitForLoadState('networkidle');
 
     // Navigate to register
-    await page.getByText('Solicitar acceso').click();
+    await page.getByRole('button', { name: 'Solicitar acceso' }).click();
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('register-desktop.png', {
@@ -90,7 +90,7 @@ test.describe('Visual Regression - Register Page', () => {
   test('register page mobile @visual', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('./');
-    await page.getByText('Solicitar acceso').click();
+    await page.getByRole('button', { name: 'Solicitar acceso' }).click();
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('register-mobile.png', {

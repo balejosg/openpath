@@ -24,7 +24,7 @@ test.describe('Dashboard Display', () => {
     await waitForNetworkIdle(page);
   });
 
-  test('should display all stat cards @dashboard @smoke', async ({ page }) => {
+  test('should display all stat cards @dashboard @seeded', async ({ page }) => {
     // Check for main statistics
     await expect(page.getByText(/Grupos Activos|Active Groups/i)).toBeVisible();
     await expect(page.getByText(/Dominios Permitidos|Allowed Domains/i)).toBeVisible();

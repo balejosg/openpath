@@ -24,7 +24,7 @@ test.describe('Authentication Flows', () => {
     await loginPage.goto();
   });
 
-  test('should login with valid credentials @auth @smoke', async ({ page }) => {
+  test('should login with valid credentials @auth @seeded', async ({ page }) => {
     await loginPage.expectLoaded();
 
     // Use admin credentials (assuming seeded test data)
@@ -37,7 +37,7 @@ test.describe('Authentication Flows', () => {
     await expect(page.getByRole('heading', { name: /Vista General/i })).toBeVisible();
   });
 
-  test('should show error with invalid credentials @auth @smoke', async ({ page }) => {
+  test('should show error with invalid credentials @auth', async ({ page }) => {
     await loginPage.expectLoaded();
 
     // Login with wrong password
@@ -52,7 +52,7 @@ test.describe('Authentication Flows', () => {
     await expect(loginPage.emailInput).toBeVisible();
   });
 
-  test('should logout and clear session @auth @smoke', async ({ page }) => {
+  test('should logout and clear session @auth @seeded', async ({ page }) => {
     // First login
     await loginAsAdmin(page);
     await waitForNetworkIdle(page);
@@ -103,7 +103,7 @@ test.describe('Authentication Flows', () => {
     await loginPage.navigateToRegister();
 
     // Should show registration form - use heading to be specific
-    await expect(page.getByRole('heading', { name: /Registro Institucional/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Registro Institucional' })).toBeVisible();
     await expect(page.locator('input[type="email"]')).toBeVisible();
   });
 
@@ -142,12 +142,12 @@ test.describe('Registration Flow', () => {
     await page.goto('./');
     await page.waitForLoadState('networkidle');
 
-    // Navigate to register - look for any register link
-    const registerLink = page.getByText(/Crear cuenta|Regístrate|Solicitar acceso/i).first();
+    // Navigate to register - look for the register button
+    const registerLink = page.getByRole('button', { name: 'Solicitar acceso' });
     await registerLink.click();
 
     // Wait for register form - use heading to be specific
-    await expect(page.getByRole('heading', { name: /Registro Institucional/i })).toBeVisible({
+    await expect(page.getByRole('heading', { name: 'Registro Institucional' })).toBeVisible({
       timeout: 5000,
     });
 
@@ -194,7 +194,7 @@ test.describe('Registration Flow', () => {
     await registerLink.click();
 
     // Wait for register form - use heading to be specific
-    await expect(page.getByRole('heading', { name: /Registro Institucional/i })).toBeVisible({
+    await expect(page.getByRole('heading', { name: 'Registro Institucional' })).toBeVisible({
       timeout: 5000,
     });
 
@@ -209,7 +209,7 @@ test.describe('Registration Flow', () => {
     await registerLink.click();
 
     // Wait for form - use heading to be specific
-    await expect(page.getByRole('heading', { name: /Registro Institucional/i })).toBeVisible({
+    await expect(page.getByRole('heading', { name: 'Registro Institucional' })).toBeVisible({
       timeout: 5000,
     });
 

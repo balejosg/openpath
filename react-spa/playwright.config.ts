@@ -97,7 +97,8 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: [
     {
-      command: 'cd ../api && npm run dev',
+      // Use test database (Docker on port 5433) for E2E tests
+      command: 'bash ../scripts/start-api-e2e.sh',
       port: apiPort,
       reuseExistingServer: !isCI,
       timeout: 120000,

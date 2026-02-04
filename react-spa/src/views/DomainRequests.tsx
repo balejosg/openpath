@@ -406,7 +406,7 @@ export default function DomainRequests() {
               >
                 <option value="">Seleccionar grupo...</option>
                 {groups.map((group) => (
-                  <option key={group.name} value={group.name}>
+                  <option key={group.path} value={group.path}>
                     {group.name}
                   </option>
                 ))}

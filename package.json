@@ -30,7 +30,7 @@
     "verify:quick": "npm run typecheck && npm run lint && npm run format:check",
     "verify:affected": "npm run verify:quick && node scripts/affected-workspaces.js --run-tests",
     "verify:agent": "node scripts/agent-verify.js",
-    "verify:full": "npm run verify && npm run lint:shell && npm run format:check && npm run test:local && npm run test:e2e && npm run security:audit && npm run security:secrets && npm run size:check",
+    "verify:full": "npm run verify && npm run lint:shell && npm run format:check && npm run test:local && npm run e2e:full && npm run security:audit && npm run security:secrets && npm run size:check",
     "format:check": "prettier --check .",
     "format:fix": "prettier --write .",
     "security:secrets": "secretlint '**/*.{js,ts,tsx,json,yml,yaml,env,env.*}'",

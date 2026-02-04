@@ -17,8 +17,8 @@ test.describe('React App Smoke Tests', () => {
     await page.goto('./');
     await page.waitForLoadState('networkidle');
 
-    // Check for actual React app login page elements
-    await expect(page.getByText('Acceso Seguro')).toBeVisible();
+    // Check for actual React app login page elements (UI shows "Acceso" heading)
+    await expect(page.getByRole('heading', { name: 'Acceso Seguro' })).toBeVisible();
     await expect(page.locator('input[type="email"]')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Entrar' })).toBeVisible();
@@ -28,12 +28,12 @@ test.describe('React App Smoke Tests', () => {
     await page.goto('./');
     await page.waitForLoadState('networkidle');
 
-    // React app has "Solicitar acceso" instead of "Primera configuración"
-    const registerLink = page.getByText('Solicitar acceso');
-    await expect(registerLink).toBeVisible();
-    await registerLink.click();
+    // Click "Regístrate" button (accessible name contains "registro")
+    const registerButton = page.getByRole('button', { name: 'Solicitar acceso' });
+    await expect(registerButton).toBeVisible();
+    await registerButton.click();
 
     // Should show registration form
-    await expect(page.getByText('Registro Institucional')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Registro Institucional' })).toBeVisible();
   });
 });

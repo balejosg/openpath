@@ -22,7 +22,7 @@ export class LoginPage {
     this.passwordInput = page.locator('input[type="password"]');
     this.loginButton = page.getByRole('button', { name: 'Entrar' });
     this.googleLoginButton = page.getByRole('button', { name: /Google/i });
-    this.registerLink = page.getByText('Solicitar acceso');
+    this.registerLink = page.getByRole('button', { name: 'Solicitar acceso' });
     this.errorMessage = page.getByText('Credenciales inválidas');
     this.loadingSpinner = page.locator('.animate-spin');
   }
@@ -39,7 +39,7 @@ export class LoginPage {
   }
 
   async expectLoaded() {
-    await expect(this.page.getByText('Acceso Seguro')).toBeVisible();
+    await expect(this.page.getByRole('heading', { name: 'Acceso Seguro' })).toBeVisible();
     await expect(this.emailInput).toBeVisible();
     await expect(this.passwordInput).toBeVisible();
   }
@@ -50,7 +50,7 @@ export class LoginPage {
 
   async navigateToRegister() {
     await this.registerLink.click();
-    await expect(this.page.getByText('Registro Institucional')).toBeVisible();
+    await expect(this.page.getByRole('heading', { name: 'Registro Institucional' })).toBeVisible();
   }
 }
 

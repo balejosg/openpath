@@ -95,7 +95,7 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Entrar' }).click();
   // Wait for dashboard content to appear (state-based navigation)
   await page
-    .getByText(/Panel de Control|Vista General|Aulas Seguras/i)
+    .getByText(/Estado del Sistema|Grupos Activos|Dominios Permitidos/i)
     .first()
     .waitFor({ timeout: 15000 });
 }
@@ -111,7 +111,7 @@ export async function loginAsTeacher(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Entrar' }).click();
   // Wait for dashboard content to appear (state-based navigation)
   await page
-    .getByText(/Panel de Control|Vista General|Aulas Seguras/i)
+    .getByText(/Estado del Sistema|Grupos Activos|Dominios Permitidos/i)
     .first()
     .waitFor({ timeout: 15000 });
 }
@@ -156,8 +156,9 @@ export async function clearAuth(context: BrowserContext): Promise<void> {
  * Use this instead of waitForURL since SPA uses state-based navigation
  */
 export async function waitForDashboard(page: Page, timeout = 15000): Promise<void> {
+  // Dashboard has "Estado del Sistema" banner and stat cards like "Grupos Activos"
   await page
-    .getByText(/Panel de Control|Vista General|Aulas Seguras/i)
+    .getByText(/Estado del Sistema|Grupos Activos|Dominios Permitidos/i)
     .first()
     .waitFor({ timeout });
 }
@@ -174,10 +175,7 @@ export async function waitForLoginPage(page: Page, timeout = 10000): Promise<voi
  * Waits for register page to appear
  */
 export async function waitForRegisterPage(page: Page, timeout = 10000): Promise<void> {
-  await page
-    .getByText(/Registro Institucional|Crear cuenta|Registrarse/i)
-    .first()
-    .waitFor({ timeout });
+  await page.getByRole('heading', { name: 'Registro Institucional' }).first().waitFor({ timeout });
 }
 
 /**
