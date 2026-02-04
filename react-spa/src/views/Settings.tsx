@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Settings as SettingsIcon,
   Bell,
@@ -18,12 +18,32 @@ const Settings: React.FC = () => {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
+  const passwordResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPasswordResetTimer = () => {
+    if (!passwordResetTimerRef.current) return;
+    clearTimeout(passwordResetTimerRef.current);
+    passwordResetTimerRef.current = null;
+  };
+
+  useEffect(() => {
+    return () => {
+      clearPasswordResetTimer();
+    };
+  }, []);
+
   // Notification preferences state
   const [securityAlerts, setSecurityAlerts] = useState(true);
   const [domainRequests, setDomainRequests] = useState(true);
   const [weeklyReports, setWeeklyReports] = useState(false);
 
+  const closePasswordModal = () => {
+    clearPasswordResetTimer();
+    setShowPasswordModal(false);
+  };
+
   const handleChangePassword = () => {
+    clearPasswordResetTimer();
     setPasswordError('');
 
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -43,16 +63,18 @@ const Settings: React.FC = () => {
 
     // Simulate success
     setPasswordSuccess(true);
-    setTimeout(() => {
+    passwordResetTimerRef.current = setTimeout(() => {
       setShowPasswordModal(false);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setPasswordSuccess(false);
+      passwordResetTimerRef.current = null;
     }, 1500);
   };
 
   const openPasswordModal = () => {
+    clearPasswordResetTimer();
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
@@ -205,10 +227,7 @@ const Settings: React.FC = () => {
           <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-slate-800">Cambiar Contraseña</h3>
-              <button
-                onClick={() => setShowPasswordModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
+              <button onClick={closePasswordModal} className="text-slate-400 hover:text-slate-600">
                 <X size={20} />
               </button>
             </div>
@@ -267,7 +286,7 @@ const Settings: React.FC = () => {
 
                 <div className="flex gap-3 pt-2">
                   <button
-                    onClick={() => setShowPasswordModal(false)}
+                    onClick={closePasswordModal}
                     className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
                   >
                     Cancelar
