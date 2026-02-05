@@ -1,31 +1,13 @@
-import React, { useState } from 'react';
-import { Folder, CheckCircle, Ban, Server, TrendingUp, Shield, X } from 'lucide-react';
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
+import React, { useState, useEffect } from 'react';
+import { Folder, CheckCircle, Ban, Server, Shield, Loader2 } from 'lucide-react';
+import { trpc } from '../lib/trpc';
 
-const weekData = [
-  { name: 'Lun', requests: 4 },
-  { name: 'Mar', requests: 3 },
-  { name: 'Mie', requests: 2 },
-  { name: 'Jue', requests: 7 },
-  { name: 'Vie', requests: 5 },
-  { name: 'Sab', requests: 1 },
-  { name: 'Dom', requests: 2 },
-];
-
-const monthData = [
-  { name: 'Sem 1', requests: 24 },
-  { name: 'Sem 2', requests: 18 },
-  { name: 'Sem 3', requests: 32 },
-  { name: 'Sem 4', requests: 21 },
-];
+interface StatsData {
+  groupCount: number;
+  whitelistCount: number;
+  blockedCount: number;
+  pendingRequests: number;
+}
 
 interface StatCardColor {
   bg: string;
@@ -60,10 +42,34 @@ const StatCard = ({ title, value, icon, color, subtext }: StatCardProps) => (
 );
 
 const Dashboard = () => {
-  const [showAuditModal, setShowAuditModal] = useState(false);
-  const [chartPeriod, setChartPeriod] = useState<'week' | 'month'>('week');
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const chartData = chartPeriod === 'week' ? weekData : monthData;
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        const [groupStats, requestStats] = await Promise.all([
+          trpc.groups.stats.query(),
+          trpc.requests.stats.query(),
+        ]);
+        setStats({
+          groupCount: groupStats.groupCount,
+          whitelistCount: groupStats.whitelistCount,
+          blockedCount: groupStats.blockedCount,
+          pendingRequests: requestStats.pending,
+        });
+        setError(null);
+      } catch (err) {
+        console.error('Failed to fetch dashboard stats:', err);
+        setError('Error al cargar estadísticas');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -84,7 +90,7 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Grupos Activos"
-          value="6"
+          value={loading ? '...' : String(stats?.groupCount ?? 0)}
           icon={<Folder size={20} />}
           color={{
             bg: 'bg-blue-50',
@@ -96,7 +102,7 @@ const Dashboard = () => {
         />
         <StatCard
           title="Dominios Permitidos"
-          value="124"
+          value={loading ? '...' : String(stats?.whitelistCount ?? 0)}
           icon={<CheckCircle size={20} />}
           color={{
             bg: 'bg-emerald-50',
@@ -104,11 +110,11 @@ const Dashboard = () => {
             badgeBg: 'bg-emerald-50',
             badgeText: 'text-emerald-700',
           }}
-          subtext="+5 este mes"
+          subtext="Whitelist"
         />
         <StatCard
           title="Sitios Bloqueados"
-          value="18"
+          value={loading ? '...' : String(stats?.blockedCount ?? 0)}
           icon={<Ban size={20} />}
           color={{
             bg: 'bg-slate-100',
@@ -120,7 +126,7 @@ const Dashboard = () => {
         />
         <StatCard
           title="Solicitudes Pendientes"
-          value="3"
+          value={loading ? '...' : String(stats?.pendingRequests ?? 0)}
           icon={<Server size={20} />}
           color={{
             bg: 'bg-amber-50',
@@ -128,171 +134,22 @@ const Dashboard = () => {
             badgeBg: 'bg-amber-50',
             badgeText: 'text-amber-700',
           }}
-          subtext="Atención req."
+          subtext={stats?.pendingRequests ? 'Atención req.' : 'Sin pendientes'}
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Chart */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-              <TrendingUp size={18} className="text-slate-400" />
-              Tráfico de Solicitudes
-            </h3>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setChartPeriod('week')}
-                className={`text-xs font-medium px-2 py-1 rounded transition-colors ${
-                  chartPeriod === 'week'
-                    ? 'bg-slate-100 text-slate-600'
-                    : 'text-slate-400 hover:bg-slate-50 cursor-pointer'
-                }`}
-              >
-                Semana
-              </button>
-              <button
-                onClick={() => setChartPeriod('month')}
-                className={`text-xs font-medium px-2 py-1 rounded transition-colors ${
-                  chartPeriod === 'month'
-                    ? 'bg-slate-100 text-slate-600'
-                    : 'text-slate-400 hover:bg-slate-50 cursor-pointer'
-                }`}
-              >
-                Mes
-              </button>
-            </div>
-          </div>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorRequests" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                <XAxis
-                  dataKey="name"
-                  stroke="#94a3b8"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                  dy={10}
-                />
-                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} dx={-10} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    borderColor: '#e2e8f0',
-                    color: '#1e293b',
-                    borderRadius: '6px',
-                    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-                  }}
-                  itemStyle={{ color: '#2563eb' }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="requests"
-                  stroke="#2563eb"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#colorRequests)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+      {/* Error message if stats failed to load */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">
+          {error}
         </div>
+      )}
 
-        {/* Activity Feed */}
-        <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
-          <h3 className="font-semibold text-slate-800 mb-4">Auditoría Reciente</h3>
-          <div className="space-y-0">
-            {[1, 2, 3].map((i) => (
-              <div
-                key={i}
-                className="flex gap-3 py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors -mx-2 px-2 rounded"
-              >
-                <div className="mt-1">
-                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                </div>
-                <div>
-                  <p className="text-sm text-slate-700">
-                    Cambio de política en{' '}
-                    <span className="font-semibold text-slate-900">Grupo QA-1</span>
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">Usuario: admin@local • Hace 2h</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button
-            onClick={() => setShowAuditModal(true)}
-            className="w-full mt-4 text-center text-sm text-blue-600 hover:text-blue-700 font-medium py-2 border border-blue-100 rounded bg-blue-50/50 hover:bg-blue-50 transition-colors"
-          >
-            Ver Registro Completo
-          </button>
-        </div>
-      </div>
-
-      {/* Modal: Registro de Auditoría */}
-      {showAuditModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-xl max-h-[80vh] flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Registro de Auditoría</h3>
-              <button
-                onClick={() => setShowAuditModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto space-y-3">
-              {Array.from({ length: 10 }, (_, i) => (
-                <div key={i} className="flex gap-3 py-3 border-b border-slate-100 last:border-0">
-                  <div className="mt-1">
-                    <div
-                      className={`w-2 h-2 rounded-full ${i % 3 === 0 ? 'bg-green-500' : i % 3 === 1 ? 'bg-blue-500' : 'bg-amber-500'}`}
-                    ></div>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-slate-700">
-                      {i % 3 === 0 && (
-                        <>
-                          Dominio <span className="font-semibold">google.com</span> añadido a
-                          whitelist
-                        </>
-                      )}
-                      {i % 3 === 1 && (
-                        <>
-                          Cambio de política en <span className="font-semibold">Grupo QA-1</span>
-                        </>
-                      )}
-                      {i % 3 === 2 && (
-                        <>
-                          Usuario <span className="font-semibold">teacher@school.edu</span>{' '}
-                          desactivado
-                        </>
-                      )}
-                    </p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      Usuario: admin@local • Hace {i + 1}h
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="pt-4 border-t border-slate-200 mt-4">
-              <button
-                onClick={() => setShowAuditModal(false)}
-                className="w-full px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
+      {/* Loading indicator */}
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+          <span className="ml-2 text-slate-500">Cargando estadísticas...</span>
         </div>
       )}
     </div>

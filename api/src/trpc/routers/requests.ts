@@ -102,6 +102,14 @@ export const requestsRouter = router({
     return result.data;
   }),
 
+  /**
+   * Get request statistics.
+   * Admin endpoint.
+   */
+  stats: adminProcedure.query(async () => {
+    return await storage.getStats();
+  }),
+
   // Protected: List groups
   listGroups: protectedProcedure.query(async ({ ctx }) => {
     const allGroups = await groupsStorage.getAllGroups();
