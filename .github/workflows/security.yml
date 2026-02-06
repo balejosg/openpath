@@ -15,6 +15,21 @@ permissions:
   security-events: write
   actions: read
 
+# ============================================
+# NOTE: Local Verification Policy
+# ============================================
+# The following checks run LOCALLY via pre-commit hooks:
+# - ShellCheck (npm run lint:shell)
+# - npm audit (npm run security:audit)
+# - secretlint (npm run security:secrets)
+# - Sensitive files check (npm run security:files)
+#
+# This workflow only runs checks that REQUIRE GitHub integration:
+# - CodeQL (uploads to GitHub Security tab)
+# - Trivy container scan (uploads SARIF to GitHub)
+# - Gitleaks (requires GitHub token)
+# ============================================
+
 jobs:
   # ============================================
   # CodeQL Analysis for JavaScript/TypeScript
@@ -43,71 +58,6 @@ jobs:
         uses: github/codeql-action/analyze@v3
         with:
           category: '/language:${{ matrix.language }}'
-
-  # ============================================
-  # Shellcheck Security Patterns
-  # ============================================
-  shellcheck-security:
-    name: Shell Script Security
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run shellcheck with security focus
-        run: |
-          echo "🔍 Scanning shell scripts for security issues..."
-
-          # Check for common security issues
-          find . -type f -name "*.sh" ! -path "./node_modules/*" | while read script; do
-            echo "Checking: $script"
-            
-            # Run shellcheck with extended checks
-            shellcheck --severity=warning "$script" || true
-            
-            # Check for hardcoded credentials
-            if grep -iE "(password|passwd|pwd|secret|token|api_key).*=.*['\"]" "$script" 2>/dev/null; then
-              echo "⚠️  WARNING: Potential hardcoded credentials in $script"
-            fi
-            
-            # Check for eval usage
-            if grep -E "eval\s" "$script" 2>/dev/null; then
-              echo "⚠️  WARNING: Use of eval detected in $script"
-            fi
-          done
-
-          echo "✓ Security scan complete"
-
-      - name: Check for sensitive files
-        run: |
-          echo "🔍 Checking for accidentally committed secrets..."
-
-          SENSITIVE_FILES=(
-            "*.pem"
-            "*.key"
-            "*.p12"
-            "*.pfx"
-            "id_rsa"
-            "id_dsa"
-            ".env"
-            ".env.local"
-            ".env.production"
-            "*.env"
-          )
-
-          FOUND=0
-          for pattern in "${SENSITIVE_FILES[@]}"; do
-            if find . -name "$pattern" ! -path "./node_modules/*" ! -path "./.git/*" | grep -q .; then
-              echo "⚠️  WARNING: Found files matching: $pattern"
-              find . -name "$pattern" ! -path "./node_modules/*" ! -path "./.git/*"
-              FOUND=1
-            fi
-          done
-
-          if [ $FOUND -eq 0 ]; then
-            echo "✓ No sensitive files found"
-          fi
 
   # ============================================
   # Docker Image Scanning with Trivy (API image)
@@ -146,51 +96,6 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM'
 
   # ============================================
-  # Dependency Vulnerability Check
-  # ============================================
-  npm-audit:
-    name: NPM Audit
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        package:
-          - api
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Run npm audit
-        working-directory: ${{ matrix.package }}
-        run: |
-          echo "🔍 Running npm audit for ${{ matrix.package }}..."
-
-          # Install dependencies first
-          npm ci || npm install
-
-          # Run audit (allow moderate/low to not fail CI)
-          npm audit --audit-level=high || true
-
-          # Generate JSON report
-          npm audit --json > audit-report.json || true
-
-          echo "✓ Audit complete"
-
-      - name: Upload audit report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: npm-audit-${{ matrix.package }}
-          path: ${{ matrix.package }}/audit-report.json
-          retention-days: 30
-
-  # ============================================
   # Secret Scanning (gitleaks)
   # ============================================
   secret-scan:
@@ -215,7 +120,7 @@ jobs:
   security-summary:
     name: Security Summary
     runs-on: ubuntu-latest
-    needs: [codeql, shellcheck-security, trivy-scan, npm-audit, secret-scan]
+    needs: [codeql, trivy-scan, secret-scan]
     if: always()
 
     steps:
@@ -223,14 +128,13 @@ jobs:
         run: |
           echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| CodeQL Analysis | ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Shell Script Security | ${{ needs.shellcheck-security.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Container Scan (Trivy) | ${{ needs.trivy-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| NPM Audit | ${{ needs.npm-audit.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Secret Scanning | ${{ needs.secret-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** ShellCheck, npm audit, and sensitive file checks run locally via pre-commit hooks." >> $GITHUB_STEP_SUMMARY
 
           # Check if any critical jobs failed
           if [[ "${{ needs.codeql.result }}" == "failure" ]] || \
