@@ -1,5 +1,13 @@
-# Pre-commit hook: Full verification before every commit
-# Runs: typecheck + lint + shellcheck + prettier + tests + e2e + security
-# Policy: If this fails, FIX IT. No --no-verify allowed.
+#!/usr/bin/env sh
 
+. "$(dirname -- "$0")/_/husky.sh"
+
+set -e
+
+# Pre-commit hook: Full verification before every commit
+
+# Fast staged-files gate first.
+npm run security:files
+
+# Full verification suite.
 npm run verify:full

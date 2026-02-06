@@ -21,6 +21,24 @@ if [ "${HUSKY-}" = "0" ]; then
 fi
 
 # Success message confirming pre-commit ran
+msg=$(git log -1 --format=%B 2>/dev/null || true)
+echo "$msg" | grep -q '^Verified-by: pre-commit$' || {
+    echo ""
+    echo "=============================================="
+    echo "  VIOLATION DETECTED: Missing verification marker"
+    echo "=============================================="
+    echo "  Commit message does not contain: Verified-by: pre-commit"
+    echo "  This usually means hooks were bypassed (e.g. --no-verify)."
+    echo ""
+    echo "  REQUIRED ACTIONS:"
+    echo "  1. git reset --soft HEAD~1"
+    echo "  2. npm run verify:full"
+    echo "  3. Commit again properly"
+    echo "=============================================="
+    echo ""
+    exit 0
+}
+
 echo ""
 echo "[OK] Commit verified: pre-commit hook executed verify:full"
 echo ""

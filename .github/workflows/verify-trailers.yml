@@ -1,0 +1,37 @@
+name: Verify Local Gates Marker
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify-trailers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify commit verification marker
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_ref="origin/${{ github.base_ref }}"
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          commits=$(git rev-list --no-merges "$base_ref"..HEAD)
+
+          if [ -z "$commits" ]; then
+            echo "No commits to check"
+            exit 0
+          fi
+
+          for c in $commits; do
+            if ! git log -1 --format=%B "$c" | grep -q '^Verified-by: pre-commit$'; then
+              echo "::error::Commit $c missing verification marker (Verified-by: pre-commit)"
+              exit 1
+            fi
+          done
+
+          echo "All commits contain verification marker"

@@ -68,7 +68,7 @@ const Dashboard = () => {
         setLoading(false);
       }
     };
-    fetchStats();
+    void fetchStats();
   }, []);
 
   return (

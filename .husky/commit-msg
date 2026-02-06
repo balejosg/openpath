@@ -1,3 +1,10 @@
 # Commit-msg hook: Validate commit message format (conventional commits)
 
+set -e
+
 npx --no -- commitlint --edit "$1"
+
+# Add a verification marker so CI can detect bypasses.
+if ! grep -q '^Verified-by: pre-commit$' "$1"; then
+  printf '\nVerified-by: pre-commit\n' >> "$1"
+fi
