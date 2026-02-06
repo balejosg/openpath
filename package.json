@@ -30,7 +30,11 @@
     "verify:quick": "npm run typecheck && npm run lint && npm run format:check",
     "verify:affected": "npm run verify:quick && node scripts/affected-workspaces.js --run-tests",
     "verify:agent": "node scripts/agent-verify.js",
-    "verify:full": "npm run verify && npm run lint:shell && npm run format:check && npm run test:local && npm run e2e:full && npm run security:audit && npm run security:secrets && npm run security:files && npm run size:check",
+    "verify:static": "turbo run typecheck lint --parallel",
+    "verify:checks": "concurrently --group --names 'shell,format,files' 'npm:lint:shell' 'npm:format:check' 'npm:security:files'",
+    "verify:unit": "turbo run test --parallel",
+    "verify:security": "concurrently --group --names 'audit,secrets,size' 'npm:security:audit' 'npm:security:secrets' 'npm:size:check'",
+    "verify:full": "npm run verify:static && npm run verify:checks && npm run verify:unit && npm run e2e:full && npm run verify:security",
     "format:check": "prettier --check .",
     "format:fix": "prettier --write .",
     "security:secrets": "secretlint '**/*.{js,ts,tsx,json,yml,yaml,env,env.*}'",
@@ -44,12 +48,14 @@
     "@eslint/js": "^9.17.0",
     "@secretlint/secretlint-rule-preset-recommend": "^11.3.1",
     "@size-limit/preset-app": "^12.0.0",
+    "concurrently": "^9.2.1",
     "eslint": "^9.17.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.10",
     "prettier": "^3.8.1",
     "secretlint": "^11.3.1",
     "size-limit": "^12.0.0",
+    "turbo": "^2.8.3",
     "typescript-eslint": "^8.20.0"
   },
   "lint-staged": {
@@ -68,6 +74,7 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "packageManager": "npm@10.9.3",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/balejosg/openpath.git"

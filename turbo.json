@@ -1,0 +1,36 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "globalDependencies": ["tsconfig.base.json", ".env.test"],
+  "globalEnv": ["NODE_ENV", "DATABASE_URL", "TEST_DATABASE_URL"],
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "build/**"],
+      "inputs": ["src/**", "tsconfig.json", "package.json"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "inputs": ["src/**/*.ts", "src/**/*.tsx", "tsconfig.json"]
+    },
+    "lint": {
+      "outputs": [],
+      "inputs": ["src/**", ".eslintrc*", "eslint.config.*"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "inputs": ["src/**", "test/**", "tests/**"],
+      "env": ["TEST_DATABASE_URL", "NODE_ENV"]
+    },
+    "test:e2e": {
+      "dependsOn": ["build"],
+      "cache": false
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
