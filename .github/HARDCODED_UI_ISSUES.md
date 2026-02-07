@@ -10,9 +10,9 @@
 
 | Status      | Count |
 | ----------- | ----- |
-| Pending     | 4     |
+| Pending     | 2     |
 | In Progress | 0     |
-| Completed   | 6     |
+| Completed   | 8     |
 
 ---
 
@@ -34,12 +34,12 @@
   - **Complexity:** Low
   - **Status:** ✅ COMPLETED - Added to `systemInfo` endpoint with human-readable format
 
-- [ ] **#3 - Last backup shows "Hace 2 horas"** (line 188)
+- [x] **#3 - Last backup shows "Hace 2 horas"** (line 188)
   - **Current:** Hardcoded fake timestamp
   - **Solution:** Create system info endpoint with backup metadata
   - **API needed:** `system.info` or `system.health` query
   - **Complexity:** Medium (needs backup tracking)
-  - **Status:** ⏸️ DEFERRED - Changed to "No disponible" until backup system exists
+  - **Status:** ✅ COMPLETED - Added backup router with status/record endpoints, Settings.tsx shows real data
 
 - [x] **#4 - Database status always shows "Conectada"** (line 179)
   - **Current:** Static green indicator regardless of actual state
@@ -64,12 +64,12 @@
 
 ### Classrooms Page (`react-spa/src/views/Classrooms.tsx`)
 
-- [ ] **#7 - Computer count always shows 0** (lines 58, 94)
+- [x] **#7 - Computer count always shows 0** (lines 58, 94)
   - **Current:** `computerCount: 0` with TODO comment
   - **Solution:** Count registered machines per classroom
   - **API needed:** `machines.countByClassroom` or extend `classrooms.list`
   - **Complexity:** Medium (needs machines relationship)
-  - **Status:** ⏸️ DEFERRED - Requires machines aggregation endpoint
+  - **Status:** ✅ COMPLETED - ClassroomService already returns machineCount, updated Classrooms.tsx to use it
 
 - [ ] **#8 - Status always shows "Operativo"** (line 326)
   - **Current:** Static green "Operativo" badge for all classrooms
@@ -116,18 +116,18 @@
 
 ### Phase 3 - Feature Development (Future Work)
 
-9. ⏸️ #3 Last backup - requires backup tracking system
-10. ⏸️ #6 API Token management - full new feature
+9. ⏸️ #6 API Token management - full new feature
 
 ---
 
 ## Completion Log
 
-| Issue          | Date       | Commit    |
-| -------------- | ---------- | --------- |
-| #1, #2, #4, #5 | 2026-02-07 | (pending) |
-| #9             | 2026-02-07 | (pending) |
-| #10            | 2026-02-07 | (pending) |
+| Issue          | Date       | Commit  |
+| -------------- | ---------- | ------- |
+| #1, #2, #4, #5 | 2026-02-07 | c23ea6a |
+| #9             | 2026-02-07 | c23ea6a |
+| #10            | 2026-02-07 | c23ea6a |
+| #3             | 2026-02-07 | f2f1b9b |
 
 ---
 
