@@ -73,10 +73,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
 
           <div className="mt-12 flex items-center gap-4 text-sm font-medium text-slate-500">
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div> Encriptación E2E
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div> Conexión Segura
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full"></div> 99.9% Uptime
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div> Código Abierto
             </div>
           </div>
         </div>

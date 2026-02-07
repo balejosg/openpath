@@ -8,7 +8,24 @@ import {
   Info,
   X,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
+import { trpc } from '../lib/trpc';
+
+interface SystemInfo {
+  version: string;
+  database: {
+    connected: boolean;
+    type: string;
+  };
+  session: {
+    accessTokenExpiry: string;
+    accessTokenExpiryHuman: string;
+    refreshTokenExpiry: string;
+    refreshTokenExpiryHuman: string;
+  };
+  uptime: number;
+}
 
 const Settings: React.FC = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -17,6 +34,10 @@ const Settings: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  // System info from API
+  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+  const [systemInfoLoading, setSystemInfoLoading] = useState(true);
 
   const passwordResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -27,6 +48,20 @@ const Settings: React.FC = () => {
   };
 
   useEffect(() => {
+    // Fetch system info on mount
+    const fetchSystemInfo = async () => {
+      try {
+        setSystemInfoLoading(true);
+        const info = await trpc.healthcheck.systemInfo.query();
+        setSystemInfo(info);
+      } catch (err) {
+        console.error('Failed to fetch system info:', err);
+      } finally {
+        setSystemInfoLoading(false);
+      }
+    };
+    void fetchSystemInfo();
+
     return () => {
       clearPasswordResetTimer();
     };
@@ -153,7 +188,9 @@ const Settings: React.FC = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-600">Tiempo de sesión</span>
-              <span className="text-sm text-slate-800 font-medium">8 horas</span>
+              <span className="text-sm text-slate-800 font-medium">
+                {systemInfoLoading ? '...' : (systemInfo?.session.accessTokenExpiryHuman ?? 'N/A')}
+              </span>
             </div>
             <button
               onClick={openPasswordModal}
@@ -175,17 +212,27 @@ const Settings: React.FC = () => {
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-slate-500">Estado</span>
-              <span className="flex items-center gap-1 text-green-600 font-medium">
-                <span className="w-2 h-2 bg-green-500 rounded-full"></span> Conectada
-              </span>
+              {systemInfoLoading ? (
+                <Loader2 size={16} className="animate-spin text-slate-400" />
+              ) : systemInfo?.database.connected ? (
+                <span className="flex items-center gap-1 text-green-600 font-medium">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span> Conectada
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-red-600 font-medium">
+                  <span className="w-2 h-2 bg-red-500 rounded-full"></span> Desconectada
+                </span>
+              )}
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Tipo</span>
-              <span className="text-slate-800">PostgreSQL</span>
+              <span className="text-slate-800">
+                {systemInfoLoading ? '...' : (systemInfo?.database.type ?? 'N/A')}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Último backup</span>
-              <span className="text-slate-800">Hace 2 horas</span>
+              <span className="text-slate-400 text-xs">No disponible</span>
             </div>
           </div>
         </div>
@@ -218,7 +265,10 @@ const Settings: React.FC = () => {
       {/* Footer info */}
       <div className="flex items-center gap-2 text-sm text-slate-400 pt-4">
         <Info size={16} />
-        <span>OpenPath v4.1.0 - Los cambios se guardan automáticamente</span>
+        <span>
+          OpenPath v{systemInfoLoading ? '...' : (systemInfo?.version ?? '?')} - Los cambios se
+          guardan automáticamente
+        </span>
       </div>
 
       {/* Modal: Cambiar Contraseña */}

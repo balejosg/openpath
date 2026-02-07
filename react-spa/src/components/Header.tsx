@@ -45,9 +45,12 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, title }) => {
 
         {/* User */}
         <div className="flex items-center gap-4">
-          <button className="relative text-slate-400 hover:text-blue-600 transition-colors">
+          <button
+            className="relative text-slate-400 hover:text-blue-600 transition-colors"
+            title="Notificaciones (próximamente)"
+          >
             <Bell size={20} />
-            <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+            {/* Notification badge - hidden until notifications feature is implemented */}
           </button>
 
           <div className="flex items-center gap-3">
