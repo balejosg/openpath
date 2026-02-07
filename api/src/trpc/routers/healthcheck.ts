@@ -4,12 +4,42 @@ import { logger } from '../../lib/logger.js';
 import { getErrorMessage } from '@openpath/shared';
 import { testConnection } from '../../db/index.js';
 import { config } from '../../config.js';
-import { createRequire } from 'node:module';
 import { getBackupInfo } from '../../lib/settings-storage.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 // Load package.json to get version
-const require = createRequire(import.meta.url);
-const packageJson = require('../../../package.json') as { version: string };
+// Use dynamic path resolution to work in both source and compiled contexts
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+function loadPackageJson(): { version: string } {
+  // Try paths from current module location up to api/package.json
+  // Source: src/trpc/routers/ -> 3 levels up
+  // Compiled: dist/src/trpc/routers/ -> 4 levels up
+  const possiblePaths = [
+    join(__dirname, '..', '..', '..', 'package.json'), // From source
+    join(__dirname, '..', '..', '..', '..', 'package.json'), // From dist
+  ];
+
+  for (const pkgPath of possiblePaths) {
+    try {
+      const content = readFileSync(pkgPath, 'utf-8');
+      const pkg = JSON.parse(content) as { version?: string; name?: string };
+      if (pkg.name === '@openpath/api' && pkg.version) {
+        return { version: pkg.version };
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  logger.warn('Could not find package.json, using fallback version');
+  return { version: '0.0.0' };
+}
+
+const packageJson = loadPackageJson();
 
 /**
  * Parse JWT expiry string (e.g., "15m", "8h", "7d") to human-readable format
