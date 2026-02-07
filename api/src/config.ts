@@ -25,6 +25,36 @@ function parseListEnv(value: string | undefined, fallback: string[]): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Parse DATABASE_URL into individual components
+ * Format: postgres://user:password@host:port/database
+ */
+function parseDatabaseUrl(url: string | undefined): {
+  host: string;
+  port: number;
+  name: string;
+  user: string;
+  password: string;
+} | null {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    return {
+      host: parsed.hostname,
+      port: parseInt(parsed.port, 10) || 5432,
+      name: parsed.pathname.slice(1), // Remove leading /
+      user: parsed.username,
+      password: decodeURIComponent(parsed.password),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Parse DATABASE_URL if provided, otherwise use individual env vars
+const parsedDbUrl = parseDatabaseUrl(process.env.DATABASE_URL);
+
 export const config = {
   // ==========================================================================
   // Server Configuration
@@ -128,13 +158,13 @@ export const config = {
   /** PostgreSQL connection URL */
   databaseUrl: process.env.DATABASE_URL ?? 'postgres://openpath:openpath@localhost:5432/openpath',
 
-  /** Database settings */
+  /** Database settings - uses DATABASE_URL if provided, otherwise individual env vars */
   database: {
-    host: process.env.DB_HOST ?? 'localhost',
-    port: parseIntEnv(process.env.DB_PORT, 5432),
-    name: process.env.DB_NAME ?? 'openpath',
-    user: process.env.DB_USER ?? 'openpath',
-    password: process.env.DB_PASSWORD ?? 'openpath_dev',
+    host: parsedDbUrl?.host ?? process.env.DB_HOST ?? 'localhost',
+    port: parsedDbUrl?.port ?? parseIntEnv(process.env.DB_PORT, 5432),
+    name: parsedDbUrl?.name ?? process.env.DB_NAME ?? 'openpath',
+    user: parsedDbUrl?.user ?? process.env.DB_USER ?? 'openpath',
+    password: parsedDbUrl?.password ?? process.env.DB_PASSWORD ?? 'openpath_dev',
     poolMax: parseIntEnv(process.env.DB_POOL_MAX, 20),
   },
 
