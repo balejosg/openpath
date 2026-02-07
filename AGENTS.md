@@ -319,6 +319,71 @@ git commit -m "your message"
 
 **NEVER use `--no-verify`.** If the hook fails, fix the issue.
 
+## 🧪 Mandatory Test Requirements (NEW)
+
+**Every new source file MUST have a corresponding test file.**
+
+### Test File Mapping
+
+| Source Location              | Test Location                               |
+| ---------------------------- | ------------------------------------------- |
+| `api/src/*.ts`               | `api/tests/*.test.ts`                       |
+| `api/src/services/foo.ts`    | `api/tests/foo.test.ts`                     |
+| `react-spa/src/lib/utils.ts` | `react-spa/src/lib/__tests__/utils.test.ts` |
+| `shared/src/*.ts`            | `shared/tests/*.test.ts`                    |
+| `dashboard/src/*.ts`         | `dashboard/tests/*.test.ts`                 |
+| `firefox-extension/src/*.ts` | `firefox-extension/tests/*.test.ts`         |
+
+### Excluded from Test Requirement
+
+These files don't require tests:
+
+- `index.ts` (barrel/re-export files)
+- `types.ts`, `*.types.ts` (type-only files)
+- `constants.ts`, `*.constants.ts` (pure data)
+- `*.d.ts` (type declarations)
+- `*.config.ts` (configuration)
+- `main.ts`, `App.tsx` (entry points)
+- Files in `drizzle/`, `migrations/`, `generated/`
+
+### Coverage Threshold
+
+**New/modified files must have 80%+ line coverage.**
+
+The pre-commit hook runs `scripts/check-new-file-coverage.js` which:
+
+1. Identifies files changed in the commit
+2. Checks their coverage from JSON reports
+3. Fails if any file is below 80%
+
+### ESLint Test Rules
+
+The following test anti-patterns are **blocked by ESLint**:
+
+| Pattern           | Rule                          | Effect                        |
+| ----------------- | ----------------------------- | ----------------------------- |
+| `test.only()`     | `no-only-tests/no-only-tests` | Prevents skipping other tests |
+| `it.only()`       | `no-only-tests/no-only-tests` | Prevents skipping other tests |
+| `describe.only()` | `no-only-tests/no-only-tests` | Prevents skipping other tests |
+
+### Pre-commit Verification Flow
+
+```
+1. Check sensitive files     (security:files)
+2. Check test files exist    (scripts/check-test-files.sh)
+3. Full verification suite   (verify:full)
+4. Check 80% coverage        (scripts/check-new-file-coverage.js)
+```
+
+### Policy Violations
+
+| Violation                        | Consequence                       |
+| -------------------------------- | --------------------------------- |
+| Missing test file for new source | **Commit blocked**                |
+| Using `test.skip()`              | **Commit blocked** (ESLint error) |
+| Using `.only()`                  | **Commit blocked** (ESLint error) |
+| Coverage < 80% on new file       | **Commit blocked**                |
+
 ## Code Style (TypeScript)
 
 Keep changes consistent with ESLint + tsconfig settings.
