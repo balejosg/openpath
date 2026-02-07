@@ -234,6 +234,24 @@ export const whitelistRules = pgTable(
 );
 
 // =============================================================================
+// API Tokens Table (User-generated API keys)
+// =============================================================================
+
+export const apiTokens = pgTable('api_tokens', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  userId: varchar('user_id', { length: 50 })
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: varchar('name', { length: 100 }).notNull(),
+  tokenHash: varchar('token_hash', { length: 255 }).notNull(),
+  lastFour: varchar('last_four', { length: 4 }).notNull(), // Last 4 chars for display
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+});
+
+// =============================================================================
 // Dashboard Users Table (Legacy dashboard auth)
 // =============================================================================
 
@@ -288,3 +306,6 @@ export type NewWhitelistRule = typeof whitelistRules.$inferInsert;
 
 export type DashboardUser = typeof dashboardUsers.$inferSelect;
 export type NewDashboardUser = typeof dashboardUsers.$inferInsert;
+
+export type ApiToken = typeof apiTokens.$inferSelect;
+export type NewApiToken = typeof apiTokens.$inferInsert;

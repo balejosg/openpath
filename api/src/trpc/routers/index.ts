@@ -10,6 +10,7 @@ import { setupRouter } from './setup.js';
 import { healthcheckRouter } from './healthcheck.js';
 import { groupsRouter } from './groups.js';
 import { backupRouter } from './backup.js';
+import { apiTokensRouter } from './api-tokens.js';
 
 export const appRouter = router({
   auth: authRouter,
@@ -23,6 +24,7 @@ export const appRouter = router({
   healthcheck: healthcheckRouter,
   groups: groupsRouter,
   backup: backupRouter,
+  apiTokens: apiTokensRouter,
 });
 
 export type AppRouter = typeof appRouter;

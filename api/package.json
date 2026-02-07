@@ -31,6 +31,7 @@
     "test:push": "NODE_ENV=test PORT=3003 node --import tsx --test --test-force-exit tests/push.test.ts",
     "test:security": "NODE_ENV=test PORT=3004 node --import tsx --test --test-force-exit tests/security.test.ts",
     "test:token-delivery": "NODE_ENV=test node --import tsx --test --test-force-exit tests/token-delivery.test.ts",
+    "test:api-tokens": "NODE_ENV=test node --import tsx --test --test-force-exit tests/api-tokens.test.ts",
     "test:frontend": "node --test ../spa/tests/frontend.test.js",
     "test:all": "NODE_ENV=test node --import tsx tests/run-all.ts",
     "test:coverage": "NODE_ENV=test c8 node --import tsx --test --test-force-exit --test-concurrency=1 tests/*.test.ts",

@@ -28,5 +28,6 @@ export default defineConfig({
     'whitelist_groups',
     'whitelist_rules',
     'dashboard_users',
+    'api_tokens',
   ],
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Settings as SettingsIcon,
   Bell,
@@ -9,6 +9,11 @@ import {
   X,
   AlertCircle,
   Loader2,
+  Plus,
+  Trash2,
+  RefreshCw,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
@@ -32,6 +37,24 @@ interface SystemInfo {
   uptime: number;
 }
 
+interface ApiToken {
+  id: string;
+  name: string;
+  maskedToken: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string | null;
+  isExpired: boolean;
+}
+
+interface NewTokenResponse {
+  id: string;
+  name: string;
+  token: string;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
 const Settings: React.FC = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -44,6 +67,17 @@ const Settings: React.FC = () => {
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
   const [systemInfoLoading, setSystemInfoLoading] = useState(true);
 
+  // API Tokens state
+  const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(true);
+  const [showCreateTokenModal, setShowCreateTokenModal] = useState(false);
+  const [newTokenName, setNewTokenName] = useState('');
+  const [newTokenExpiry, setNewTokenExpiry] = useState<number | null>(null);
+  const [createdToken, setCreatedToken] = useState<NewTokenResponse | null>(null);
+  const [tokenError, setTokenError] = useState('');
+  const [tokenActionLoading, setTokenActionLoading] = useState<string | null>(null);
+  const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
+
   const passwordResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clearPasswordResetTimer = () => {
@@ -51,6 +85,19 @@ const Settings: React.FC = () => {
     clearTimeout(passwordResetTimerRef.current);
     passwordResetTimerRef.current = null;
   };
+
+  // Fetch API tokens
+  const fetchTokens = useCallback(async () => {
+    try {
+      setTokensLoading(true);
+      const tokens = await trpc.apiTokens.list.query();
+      setApiTokens(tokens);
+    } catch (err) {
+      console.error('Failed to fetch API tokens:', err);
+    } finally {
+      setTokensLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     // Fetch system info on mount
@@ -66,11 +113,12 @@ const Settings: React.FC = () => {
       }
     };
     void fetchSystemInfo();
+    void fetchTokens();
 
     return () => {
       clearPasswordResetTimer();
     };
-  }, []);
+  }, [fetchTokens]);
 
   // Notification preferences state
   const [securityAlerts, setSecurityAlerts] = useState(true);
@@ -121,6 +169,92 @@ const Settings: React.FC = () => {
     setPasswordError('');
     setPasswordSuccess(false);
     setShowPasswordModal(true);
+  };
+
+  // API Token handlers
+  const handleCreateToken = async () => {
+    if (!newTokenName.trim()) {
+      setTokenError('El nombre es obligatorio');
+      return;
+    }
+    if (newTokenName.length > 100) {
+      setTokenError('El nombre es demasiado largo (máx. 100 caracteres)');
+      return;
+    }
+
+    try {
+      setTokenError('');
+      setTokenActionLoading('create');
+      const result = await trpc.apiTokens.create.mutate({
+        name: newTokenName.trim(),
+        expiresInDays: newTokenExpiry ?? undefined,
+      });
+      setCreatedToken(result);
+      void fetchTokens();
+    } catch (err) {
+      console.error('Failed to create token:', err);
+      setTokenError('Error al crear el token');
+    } finally {
+      setTokenActionLoading(null);
+    }
+  };
+
+  const handleRevokeToken = async (tokenId: string) => {
+    if (
+      !confirm('¿Estás seguro de que deseas revocar este token? Esta acción no se puede deshacer.')
+    ) {
+      return;
+    }
+
+    try {
+      setTokenActionLoading(tokenId);
+      await trpc.apiTokens.revoke.mutate({ id: tokenId });
+      void fetchTokens();
+    } catch (err) {
+      console.error('Failed to revoke token:', err);
+    } finally {
+      setTokenActionLoading(null);
+    }
+  };
+
+  const handleRegenerateToken = async (tokenId: string) => {
+    if (
+      !confirm(
+        '¿Estás seguro de que deseas regenerar este token? El token anterior dejará de funcionar.'
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setTokenActionLoading(tokenId);
+      const result = await trpc.apiTokens.regenerate.mutate({ id: tokenId });
+      setCreatedToken(result);
+      setShowCreateTokenModal(true);
+      void fetchTokens();
+    } catch (err) {
+      console.error('Failed to regenerate token:', err);
+    } finally {
+      setTokenActionLoading(null);
+    }
+  };
+
+  const copyToClipboard = async (text: string, tokenId: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedTokenId(tokenId);
+      setTimeout(() => setCopiedTokenId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  const closeTokenModal = () => {
+    setShowCreateTokenModal(false);
+    setNewTokenName('');
+    setNewTokenExpiry(null);
+    setCreatedToken(null);
+    setTokenError('');
   };
 
   return (
@@ -254,25 +388,85 @@ const Settings: React.FC = () => {
 
         {/* API Keys */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-orange-50 rounded-lg">
-              <Key className="text-orange-600" size={20} />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-50 rounded-lg">
+                <Key className="text-orange-600" size={20} />
+              </div>
+              <h2 className="font-semibold text-slate-800">API Keys</h2>
             </div>
-            <h2 className="font-semibold text-slate-800">API Keys</h2>
+            <button
+              onClick={() => setShowCreateTokenModal(true)}
+              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
+            >
+              <Plus size={16} /> Crear token
+            </button>
           </div>
           <div className="space-y-3">
-            <div className="p-3 bg-slate-50 rounded-lg">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-slate-700">Token principal</span>
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                  Activo
-                </span>
+            {tokensLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 size={24} className="animate-spin text-slate-400" />
               </div>
-              <code className="text-xs text-slate-500 mt-1 block">••••••••••••••••</code>
-            </div>
-            <button className="w-full text-sm text-blue-600 hover:text-blue-800 font-medium py-2 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
-              Regenerar token
-            </button>
+            ) : apiTokens.length === 0 ? (
+              <div className="text-center py-6 text-slate-500 text-sm">
+                No tienes tokens API. Crea uno para acceder a la API.
+              </div>
+            ) : (
+              apiTokens.map((token) => (
+                <div key={token.id} className="p-3 bg-slate-50 rounded-lg">
+                  <div className="flex justify-between items-center">
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-slate-700">{token.name}</span>
+                      {token.isExpired ? (
+                        <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
+                          Expirado
+                        </span>
+                      ) : (
+                        <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                          Activo
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => void handleRegenerateToken(token.id)}
+                        disabled={tokenActionLoading === token.id}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors disabled:opacity-50"
+                        title="Regenerar token"
+                      >
+                        {tokenActionLoading === token.id ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <RefreshCw size={16} />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => void handleRevokeToken(token.id)}
+                        disabled={tokenActionLoading === token.id}
+                        className="p-1.5 text-slate-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                        title="Revocar token"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  <code className="text-xs text-slate-500 mt-1 block font-mono">
+                    {token.maskedToken}
+                  </code>
+                  <div className="flex gap-4 mt-1 text-xs text-slate-400">
+                    {token.createdAt && (
+                      <span>Creado: {new Date(token.createdAt).toLocaleDateString()}</span>
+                    )}
+                    {token.expiresAt && (
+                      <span>Expira: {new Date(token.expiresAt).toLocaleDateString()}</span>
+                    )}
+                    {token.lastUsedAt && (
+                      <span>Último uso: {new Date(token.lastUsedAt).toLocaleDateString()}</span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -361,6 +555,137 @@ const Settings: React.FC = () => {
                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
                   >
                     Cambiar Contraseña
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Crear/Ver Token API */}
+      {showCreateTokenModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-800">
+                {createdToken ? 'Token Creado' : 'Crear Token API'}
+              </h3>
+              <button onClick={closeTokenModal} className="text-slate-400 hover:text-slate-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            {createdToken ? (
+              <div className="space-y-4">
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="text-amber-600 flex-shrink-0 mt-0.5" size={16} />
+                    <p className="text-sm text-amber-800">
+                      <strong>¡Importante!</strong> Copia este token ahora. No podrás verlo de
+                      nuevo.
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+                  <p className="text-sm text-slate-800">{createdToken.name}</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Token</label>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 p-2 bg-slate-100 rounded text-xs font-mono break-all">
+                      {createdToken.token}
+                    </code>
+                    <button
+                      onClick={() => void copyToClipboard(createdToken.token, createdToken.id)}
+                      className="p-2 text-slate-500 hover:text-blue-600 transition-colors"
+                      title="Copiar token"
+                    >
+                      {copiedTokenId === createdToken.id ? (
+                        <Check size={18} className="text-green-600" />
+                      ) : (
+                        <Copy size={18} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {createdToken.expiresAt && (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Expira</label>
+                    <p className="text-sm text-slate-800">
+                      {new Date(createdToken.expiresAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  onClick={closeTokenModal}
+                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  Entendido
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Nombre del token
+                  </label>
+                  <input
+                    type="text"
+                    value={newTokenName}
+                    onChange={(e) => setNewTokenName(e.target.value)}
+                    placeholder="Ej: API de producción"
+                    maxLength={100}
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Expiración (opcional)
+                  </label>
+                  <select
+                    value={newTokenExpiry ?? ''}
+                    onChange={(e) =>
+                      setNewTokenExpiry(e.target.value ? Number(e.target.value) : null)
+                    }
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="">Sin expiración</option>
+                    <option value="7">7 días</option>
+                    <option value="30">30 días</option>
+                    <option value="90">90 días</option>
+                    <option value="365">1 año</option>
+                  </select>
+                </div>
+
+                {tokenError && (
+                  <p className="text-red-500 text-xs flex items-center gap-1">
+                    <AlertCircle size={12} /> {tokenError}
+                  </p>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={closeTokenModal}
+                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => void handleCreateToken()}
+                    disabled={tokenActionLoading === 'create'}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {tokenActionLoading === 'create' && (
+                      <Loader2 size={16} className="animate-spin" />
+                    )}
+                    Crear Token
                   </button>
                 </div>
               </div>
