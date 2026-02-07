@@ -24,7 +24,7 @@
     "eslint": "^9.17.0",
     "tsx": "^4.21.0",
     "typescript": "^5.7.2",
-    "typescript-eslint": "^8.20.0",
+    "typescript-eslint": "^8.54.0",
     "webextension-polyfill": "^0.12.0"
   },
   "c8": {
