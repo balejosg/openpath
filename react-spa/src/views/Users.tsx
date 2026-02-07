@@ -1,51 +1,21 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Filter, Mail, Edit2, Trash, Key, X } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { Search, Filter, Mail, Edit2, Trash, Key, X, Loader2, AlertCircle } from 'lucide-react';
 import { User, UserRole } from '../types';
+import { trpc } from '../lib/trpc';
 
-const initialUsers: User[] = [
-  {
-    id: '1',
-    name: 'Bruno Alejos Gomez',
-    email: 'bruno.ag@educa.madrid.org',
-    roles: [UserRole.ADMIN],
-    status: 'Active',
-  },
-  {
-    id: '2',
-    name: 'IT QA 20260111',
-    email: 'it.qa+20260111@pruebas.local',
-    roles: [UserRole.ADMIN],
-    status: 'Active',
-  },
-  {
-    id: '3',
-    name: 'Test User',
-    email: 'test.user@pruebas.local',
-    roles: [UserRole.OPENPATH_ADMIN],
-    status: 'Inactive',
-  },
-  {
-    id: '4',
-    name: 'Sisyphus Test Admin',
-    email: 'sisyphus.test@test.local',
-    roles: [UserRole.ADMIN],
-    status: 'Active',
-  },
-  {
-    id: '5',
-    name: 'Regular Teacher',
-    email: 'teacher@school.edu',
-    roles: [UserRole.USER],
-    status: 'Active',
-  },
-  {
-    id: '6',
-    name: 'Lab Assistant',
-    email: 'assistant@school.edu',
-    roles: [UserRole.NO_ROLES],
-    status: 'Active',
-  },
-];
+// Map API user role to frontend UserRole enum
+function mapApiRole(role: string): UserRole {
+  switch (role) {
+    case 'admin':
+      return UserRole.ADMIN;
+    case 'teacher':
+      return UserRole.OPENPATH_ADMIN;
+    case 'user':
+      return UserRole.USER;
+    default:
+      return UserRole.NO_ROLES;
+  }
+}
 
 const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
   const styles = {
@@ -64,7 +34,9 @@ const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
 };
 
 const UsersView = () => {
-  const [users, setUsers] = useState<User[]>(initialUsers);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -74,6 +46,43 @@ const UsersView = () => {
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editRoles, setEditRoles] = useState<UserRole[]>([]);
+
+  // New user form state
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newError, setNewError] = useState('');
+
+  // Mutation loading states
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Fetch users from API
+  const fetchUsers = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const apiUsers = await trpc.users.list.query();
+      setUsers(
+        apiUsers.map((u) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          roles: u.roles.map((r) => mapApiRole(r.role)),
+          status: u.isActive ? 'Active' : 'Inactive',
+        })) as User[]
+      );
+    } catch (err) {
+      console.error('Failed to fetch users:', err);
+      setError('Error al cargar usuarios');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchUsers();
+  }, [fetchUsers]);
 
   // Filter users based on search
   const filteredUsers = useMemo(() => {
@@ -92,15 +101,76 @@ const UsersView = () => {
     setShowEditModal(true);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!selectedUser) return;
 
-    setUsers(
-      users.map((u) =>
-        u.id === selectedUser.id ? { ...u, name: editName, email: editEmail, roles: editRoles } : u
-      )
-    );
-    setShowEditModal(false);
+    try {
+      setSaving(true);
+      await trpc.users.update.mutate({
+        id: selectedUser.id,
+        name: editName,
+        email: editEmail,
+      });
+      // Refetch to get updated data
+      await fetchUsers();
+      setShowEditModal(false);
+    } catch (err) {
+      console.error('Failed to update user:', err);
+      // Show error inline or via toast
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateUser = async () => {
+    if (!newName.trim()) {
+      setNewError('El nombre es obligatorio');
+      return;
+    }
+    if (!newEmail.trim()) {
+      setNewError('El email es obligatorio');
+      return;
+    }
+    if (!newPassword.trim() || newPassword.length < 8) {
+      setNewError('La contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setNewError('');
+      await trpc.users.create.mutate({
+        name: newName.trim(),
+        email: newEmail.trim(),
+        password: newPassword,
+      });
+      // Refetch to get updated list
+      await fetchUsers();
+      setNewName('');
+      setNewEmail('');
+      setNewPassword('');
+      setShowNewModal(false);
+    } catch (err) {
+      console.error('Failed to create user:', err);
+      setNewError('Error al crear usuario. El email puede ya existir.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este usuario?')) return;
+
+    try {
+      setDeleting(true);
+      await trpc.users.delete.mutate({ id: userId });
+      await fetchUsers();
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+      alert('Error al eliminar usuario');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const toggleRole = (role: UserRole) => {
@@ -163,7 +233,27 @@ const UsersView = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredUsers.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-400 mx-auto" />
+                    <span className="text-slate-500 text-sm mt-2 block">Cargando usuarios...</span>
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center">
+                    <AlertCircle className="w-6 h-6 text-red-400 mx-auto" />
+                    <span className="text-red-500 text-sm mt-2 block">{error}</span>
+                    <button
+                      onClick={() => void fetchUsers()}
+                      className="text-blue-600 hover:text-blue-800 text-sm mt-2"
+                    >
+                      Reintentar
+                    </button>
+                  </td>
+                </tr>
+              ) : filteredUsers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-slate-500 text-sm">
                     No se encontraron usuarios
@@ -222,8 +312,10 @@ const UsersView = () => {
                           <Key size={16} />
                         </button>
                         <button
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Desactivar"
+                          onClick={() => void handleDeleteUser(user.id)}
+                          disabled={deleting}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                          title="Eliminar"
                         >
                           <Trash size={16} />
                         </button>
@@ -306,14 +398,17 @@ const UsersView = () => {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowEditModal(false)}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={handleSaveEdit}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  onClick={() => void handleSaveEdit()}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {saving && <Loader2 size={16} className="animate-spin" />}
                   Guardar Cambios
                 </button>
               </div>
@@ -341,6 +436,11 @@ const UsersView = () => {
                 <input
                   type="text"
                   placeholder="Nombre completo"
+                  value={newName}
+                  onChange={(e) => {
+                    setNewName(e.target.value);
+                    if (newError) setNewError('');
+                  }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
@@ -349,30 +449,52 @@ const UsersView = () => {
                 <input
                   type="email"
                   placeholder="usuario@dominio.com"
+                  value={newEmail}
+                  onChange={(e) => {
+                    setNewEmail(e.target.value);
+                    if (newError) setNewError('');
+                  }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Contraseña Temporal
-                </label>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
                 <input
-                  type="text"
-                  placeholder="Se enviará por email"
+                  type="password"
+                  placeholder="Mínimo 8 caracteres"
+                  value={newPassword}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    if (newError) setNewError('');
+                  }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
+              {newError && (
+                <p className="text-red-500 text-xs flex items-center gap-1">
+                  <AlertCircle size={12} /> {newError}
+                </p>
+              )}
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={() => setShowNewModal(false)}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
+                  onClick={() => {
+                    setShowNewModal(false);
+                    setNewName('');
+                    setNewEmail('');
+                    setNewPassword('');
+                    setNewError('');
+                  }}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={() => setShowNewModal(false)}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  onClick={() => void handleCreateUser()}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {saving && <Loader2 size={16} className="animate-spin" />}
                   Crear Usuario
                 </button>
               </div>

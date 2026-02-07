@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   Monitor,
   Calendar,
@@ -9,20 +9,24 @@ import {
   Laptop,
   X,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { Classroom } from '../types';
+import { trpc } from '../lib/trpc';
 
-const initialClassrooms: Classroom[] = [
-  { id: '1', name: 'Aula QA 1', computerCount: 24, activeGroup: 'grupo-qa-1' },
-  { id: '2', name: 'Laboratorio B', computerCount: 15, activeGroup: 'test-group-final' },
-  { id: '3', name: 'Aula Informática 3', computerCount: 30, activeGroup: null },
-];
+// Type for API group used in dropdown
+interface GroupOption {
+  id: string;
+  name: string;
+  displayName: string;
+}
 
 const Classrooms = () => {
-  const [classrooms, setClassrooms] = useState<Classroom[]>(initialClassrooms);
-  const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(
-    initialClassrooms[0] ?? null
-  );
+  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+  const [groups, setGroups] = useState<GroupOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -32,6 +36,71 @@ const Classrooms = () => {
   const [newName, setNewName] = useState('');
   const [newGroup, setNewGroup] = useState('');
   const [newError, setNewError] = useState('');
+
+  // Mutation loading states
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Fetch classrooms and groups from API
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [apiClassrooms, apiGroups] = await Promise.all([
+        trpc.classrooms.list.query(),
+        trpc.groups.list.query(),
+      ]);
+
+      // Map classrooms
+      const mappedClassrooms = apiClassrooms.map((c) => ({
+        id: c.id,
+        name: c.name,
+        computerCount: 0, // Will be updated when we have machines endpoint
+        activeGroup: c.activeGroupId ?? null,
+      })) as Classroom[];
+
+      setClassrooms(mappedClassrooms);
+      setGroups(
+        apiGroups.map((g) => ({
+          id: g.id,
+          name: g.name,
+          displayName: g.displayName || g.name,
+        }))
+      );
+
+      // Select first classroom if none selected
+      if (mappedClassrooms.length > 0 && !selectedClassroom) {
+        setSelectedClassroom(mappedClassrooms[0]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch classrooms:', err);
+      setError('Error al cargar aulas');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedClassroom]);
+
+  useEffect(() => {
+    void fetchData();
+  }, []);
+
+  // Refetch when needed (without dependency on selectedClassroom)
+  const refetchClassrooms = useCallback(async () => {
+    try {
+      const apiClassrooms = await trpc.classrooms.list.query();
+      const mappedClassrooms = apiClassrooms.map((c) => ({
+        id: c.id,
+        name: c.name,
+        computerCount: 0,
+        activeGroup: c.activeGroupId ?? null,
+      })) as Classroom[];
+      setClassrooms(mappedClassrooms);
+      return mappedClassrooms;
+    } catch (err) {
+      console.error('Failed to refetch classrooms:', err);
+      return [];
+    }
+  }, []);
 
   // Filter classrooms based on search
   const filteredClassrooms = useMemo(() => {
@@ -44,34 +113,65 @@ const Classrooms = () => {
     );
   }, [classrooms, searchQuery]);
 
-  const handleCreateClassroom = () => {
+  const handleCreateClassroom = async () => {
     if (!newName.trim()) {
       setNewError('El nombre del aula es obligatorio');
       return;
     }
 
-    const newClassroom: Classroom = {
-      id: String(Date.now()),
-      name: newName.trim(),
-      computerCount: 0,
-      activeGroup: newGroup || null,
-    };
-
-    setClassrooms([...classrooms, newClassroom]);
-    setSelectedClassroom(newClassroom);
-    setNewName('');
-    setNewGroup('');
-    setNewError('');
-    setShowNewModal(false);
+    try {
+      setSaving(true);
+      setNewError('');
+      const created = await trpc.classrooms.create.mutate({
+        name: newName.trim(),
+        defaultGroupId: newGroup || undefined,
+      });
+      const updated = await refetchClassrooms();
+      const newClassroom = updated.find((c) => c.id === created.id);
+      if (newClassroom) {
+        setSelectedClassroom(newClassroom);
+      }
+      setNewName('');
+      setNewGroup('');
+      setShowNewModal(false);
+    } catch (err) {
+      console.error('Failed to create classroom:', err);
+      setNewError('Error al crear aula');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDeleteClassroom = () => {
+  const handleDeleteClassroom = async () => {
     if (!selectedClassroom) return;
 
-    const updated = classrooms.filter((c) => c.id !== selectedClassroom.id);
-    setClassrooms(updated);
-    setSelectedClassroom(updated[0] ?? null);
-    setShowDeleteConfirm(false);
+    try {
+      setDeleting(true);
+      await trpc.classrooms.delete.mutate({ id: selectedClassroom.id });
+      const updated = await refetchClassrooms();
+      setSelectedClassroom(updated[0] ?? null);
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      console.error('Failed to delete classroom:', err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleGroupChange = async (groupId: string) => {
+    if (!selectedClassroom) return;
+
+    try {
+      await trpc.classrooms.setActiveGroup.mutate({
+        id: selectedClassroom.id,
+        groupId: groupId || null,
+      });
+      await refetchClassrooms();
+      // Update local selected classroom
+      setSelectedClassroom((prev) => (prev ? { ...prev, activeGroup: groupId || null } : null));
+    } catch (err) {
+      console.error('Failed to update active group:', err);
+    }
   };
 
   const openNewModal = () => {
@@ -107,7 +207,23 @@ const Classrooms = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-          {filteredClassrooms.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+              <span className="ml-2 text-slate-500 text-sm">Cargando aulas...</span>
+            </div>
+          ) : error ? (
+            <div className="text-center py-8">
+              <AlertCircle className="w-6 h-6 text-red-400 mx-auto" />
+              <span className="text-red-500 text-sm mt-2 block">{error}</span>
+              <button
+                onClick={() => void fetchData()}
+                className="text-blue-600 hover:text-blue-800 text-sm mt-2"
+              >
+                Reintentar
+              </button>
+            </div>
+          ) : filteredClassrooms.length === 0 ? (
             <div className="text-center py-8 text-slate-500 text-sm">No se encontraron aulas</div>
           ) : (
             filteredClassrooms.map((room) => (
@@ -188,10 +304,17 @@ const Classrooms = () => {
                   <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">
                     Grupo Activo
                   </label>
-                  <select className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm">
-                    <option value="grupo-qa-1">grupo-qa-1</option>
-                    <option value="test-group">test-group-verification</option>
-                    <option value="none">Sin grupo activo</option>
+                  <select
+                    value={selectedClassroom.activeGroup ?? ''}
+                    onChange={(e) => void handleGroupChange(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
+                  >
+                    <option value="">Sin grupo activo</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.displayName}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 flex items-center justify-between">
@@ -300,21 +423,27 @@ const Classrooms = () => {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 >
                   <option value="">Sin grupo</option>
-                  <option value="grupo-qa-1">grupo-qa-1</option>
-                  <option value="test-group">test-group-verification</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.displayName}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowNewModal(false)}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={handleCreateClassroom}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  onClick={() => void handleCreateClassroom()}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {saving && <Loader2 size={16} className="animate-spin" />}
                   Crear Aula
                 </button>
               </div>
@@ -420,14 +549,17 @@ const Classrooms = () => {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors"
+                  disabled={deleting}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={handleDeleteClassroom}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  onClick={() => void handleDeleteClassroom()}
+                  disabled={deleting}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {deleting && <Loader2 size={16} className="animate-spin" />}
                   Eliminar
                 </button>
               </div>

@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Folder, CheckCircle, Ban, Server, Shield, Loader2 } from 'lucide-react';
+import {
+  Folder,
+  CheckCircle,
+  Ban,
+  Server,
+  Shield,
+  Loader2,
+  ShieldCheck,
+  ShieldOff,
+} from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
 interface StatsData {
@@ -7,6 +16,11 @@ interface StatsData {
   whitelistCount: number;
   blockedCount: number;
   pendingRequests: number;
+}
+
+interface SystemStatus {
+  enabled: boolean;
+  lastChecked: Date;
 }
 
 interface StatCardColor {
@@ -43,6 +57,7 @@ const StatCard = ({ title, value, icon, color, subtext }: StatCardProps) => (
 
 const Dashboard = () => {
   const [stats, setStats] = useState<StatsData | null>(null);
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,15 +65,20 @@ const Dashboard = () => {
     const fetchStats = async () => {
       try {
         setLoading(true);
-        const [groupStats, requestStats] = await Promise.all([
+        const [groupStats, requestStats, sysStatus] = await Promise.all([
           trpc.groups.stats.query(),
           trpc.requests.stats.query(),
+          trpc.groups.systemStatus.query(),
         ]);
         setStats({
           groupCount: groupStats.groupCount,
           whitelistCount: groupStats.whitelistCount,
           blockedCount: groupStats.blockedCount,
           pendingRequests: requestStats.pending,
+        });
+        setSystemStatus({
+          enabled: sysStatus.enabled,
+          lastChecked: new Date(),
         });
         setError(null);
       } catch (err) {
@@ -76,9 +96,35 @@ const Dashboard = () => {
       {/* Welcome Banner */}
       <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-slate-800">Estado del Sistema: Seguro</h2>
+          <h2 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
+            {loading ? (
+              <>
+                <Loader2 size={20} className="animate-spin text-slate-400" />
+                Verificando estado...
+              </>
+            ) : systemStatus?.enabled ? (
+              <>
+                <ShieldCheck size={20} className="text-green-600" />
+                Estado del Sistema: Seguro
+              </>
+            ) : (
+              <>
+                <ShieldOff size={20} className="text-amber-600" />
+                Estado del Sistema: Deshabilitado
+              </>
+            )}
+          </h2>
           <p className="text-slate-500 text-sm mt-1">
-            Todos los servicios operan con normalidad. Última verificación: Hace 2 min.
+            {loading
+              ? 'Cargando información del sistema...'
+              : systemStatus?.enabled
+                ? 'Todos los servicios operan con normalidad.'
+                : 'El sistema de filtrado está desactivado.'}
+            {systemStatus?.lastChecked && !loading && (
+              <span className="ml-1">
+                Última verificación: {systemStatus.lastChecked.toLocaleTimeString()}
+              </span>
+            )}
           </p>
         </div>
         <div className="hidden sm:block">

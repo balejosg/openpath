@@ -1,5 +1,6 @@
 import React from 'react';
-import { Bell, Menu, Search, ShieldCheck } from 'lucide-react';
+import { Bell, Menu, Search, ShieldCheck, Loader2 } from 'lucide-react';
+import { useCurrentUser, getRoleDisplayLabel } from '../hooks/useCurrentUser';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -7,6 +8,8 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ onMenuClick, title }) => {
+  const { user, loading: userLoading } = useCurrentUser();
+
   return (
     <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-30 px-4 md:px-8 flex items-center justify-between shadow-sm">
       <div className="flex items-center gap-4">
@@ -48,13 +51,23 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, title }) => {
           </button>
 
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-bold border border-blue-200">
-              BA
-            </div>
-            <div className="text-sm hidden md:block">
-              <p className="font-medium text-slate-700 leading-none">Bruno Alejos</p>
-              <p className="text-xs text-slate-500 mt-0.5">Admin</p>
-            </div>
+            {userLoading ? (
+              <Loader2 size={20} className="animate-spin text-slate-400" />
+            ) : (
+              <>
+                <div className="w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-sm font-bold border border-blue-200">
+                  {user?.initials ?? '??'}
+                </div>
+                <div className="text-sm hidden md:block">
+                  <p className="font-medium text-slate-700 leading-none">
+                    {user?.name ?? 'Usuario'}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {user?.primaryRole ? getRoleDisplayLabel(user.primaryRole) : 'Sin rol'}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -1,41 +1,20 @@
-import React, { useState } from 'react';
-import { MoreHorizontal, ShieldCheck, Folder, ArrowRight, X, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  MoreHorizontal,
+  ShieldCheck,
+  Folder,
+  ArrowRight,
+  X,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react';
 import { Group } from '../types';
-
-const initialGroups: Group[] = [
-  { id: '1', name: 'cc', description: 'Acceso Controlado Común', domainCount: 0, status: 'Active' },
-  {
-    id: '2',
-    name: 'test-group-verification',
-    description: 'Grupo para pruebas de verificación',
-    domainCount: 2,
-    status: 'Active',
-  },
-  {
-    id: '3',
-    name: 'grupo-qa-1',
-    description: 'QA Environment Alpha',
-    domainCount: 5,
-    status: 'Active',
-  },
-  {
-    id: '4',
-    name: 'grupo-qa-test-20260111',
-    description: 'Test temporal expira 2026',
-    domainCount: 0,
-    status: 'Active',
-  },
-  {
-    id: '5',
-    name: 'test-e2e-group',
-    description: 'Automation E2E',
-    domainCount: 1,
-    status: 'Inactive',
-  },
-];
+import { trpc } from '../lib/trpc';
 
 const Groups = () => {
-  const [groups, setGroups] = useState<Group[]>(initialGroups);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
@@ -49,38 +28,78 @@ const Groups = () => {
   const [configDescription, setConfigDescription] = useState('');
   const [configStatus, setConfigStatus] = useState<'Active' | 'Inactive'>('Active');
 
-  const handleCreateGroup = () => {
+  // Mutation loading states
+  const [saving, setSaving] = useState(false);
+
+  // Fetch groups from API
+  const fetchGroups = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const apiGroups = await trpc.groups.list.query();
+      setGroups(
+        apiGroups.map((g) => ({
+          id: g.id,
+          name: g.name,
+          description: g.displayName || g.name,
+          domainCount: g.whitelistCount + g.blockedSubdomainCount + g.blockedPathCount,
+          status: g.enabled ? 'Active' : 'Inactive',
+        })) as Group[]
+      );
+    } catch (err) {
+      console.error('Failed to fetch groups:', err);
+      setError('Error al cargar grupos');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchGroups();
+  }, [fetchGroups]);
+
+  const handleCreateGroup = async () => {
     if (!newGroupName.trim()) {
       setNewGroupError('El nombre del grupo es obligatorio');
       return;
     }
 
-    const newGroup: Group = {
-      id: String(Date.now()),
-      name: newGroupName.trim(),
-      description: newGroupDescription.trim(),
-      domainCount: 0,
-      status: 'Active',
-    };
-
-    setGroups([...groups, newGroup]);
-    setNewGroupName('');
-    setNewGroupDescription('');
-    setNewGroupError('');
-    setShowNewModal(false);
+    try {
+      setSaving(true);
+      setNewGroupError('');
+      await trpc.groups.create.mutate({
+        name: newGroupName.trim().toLowerCase().replace(/\s+/g, '-'),
+        displayName: newGroupDescription.trim() || newGroupName.trim(),
+      });
+      await fetchGroups();
+      setNewGroupName('');
+      setNewGroupDescription('');
+      setShowNewModal(false);
+    } catch (err) {
+      console.error('Failed to create group:', err);
+      setNewGroupError('Error al crear grupo. El nombre puede ya existir.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleSaveConfig = () => {
+  const handleSaveConfig = async () => {
     if (!selectedGroup) return;
 
-    setGroups(
-      groups.map((g) =>
-        g.id === selectedGroup.id
-          ? { ...g, description: configDescription, status: configStatus }
-          : g
-      )
-    );
-    setShowConfigModal(false);
+    try {
+      setSaving(true);
+      await trpc.groups.update.mutate({
+        id: selectedGroup.id,
+        displayName: configDescription,
+        enabled: configStatus === 'Active',
+      });
+      await fetchGroups();
+      setShowConfigModal(false);
+    } catch (err) {
+      console.error('Failed to update group:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const openNewModal = () => {
@@ -113,53 +132,75 @@ const Groups = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {groups.map((group) => (
-          <div
-            key={group.id}
-            className="bg-white border border-slate-200 rounded-lg p-5 hover:border-blue-300 transition-all group relative shadow-sm hover:shadow-md"
-          >
-            <div className="absolute top-4 right-4 opacity-100">
-              <button className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded">
-                <MoreHorizontal size={18} />
-              </button>
-            </div>
-
-            <div className="flex items-start gap-4 mb-4">
-              <div
-                className={`p-3 rounded-lg ${group.status === 'Active' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'}`}
-              >
-                <Folder size={20} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-slate-900 text-sm">{group.name}</h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-1">{group.description}</p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex justify-between items-center text-sm py-2 border-t border-slate-100 border-b">
-                <span className="text-slate-500 flex items-center gap-2 text-xs">
-                  <ShieldCheck size={14} /> Dominios
-                </span>
-                <span className="font-medium text-slate-900">{group.domainCount}</span>
-              </div>
-
-              <div className="flex justify-between items-center pt-1">
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full border font-medium ${group.status === 'Active' ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-slate-100 text-slate-500'}`}
-                >
-                  {group.status === 'Active' ? 'Activo' : 'Inactivo'}
-                </span>
-                <button
-                  onClick={() => openConfigModal(group)}
-                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium transition-opacity"
-                >
-                  Configurar <ArrowRight size={12} />
+        {loading ? (
+          <div className="col-span-full flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            <span className="ml-2 text-slate-500">Cargando grupos...</span>
+          </div>
+        ) : error ? (
+          <div className="col-span-full text-center py-12">
+            <AlertCircle className="w-6 h-6 text-red-400 mx-auto" />
+            <span className="text-red-500 text-sm mt-2 block">{error}</span>
+            <button
+              onClick={() => void fetchGroups()}
+              className="text-blue-600 hover:text-blue-800 text-sm mt-2"
+            >
+              Reintentar
+            </button>
+          </div>
+        ) : groups.length === 0 ? (
+          <div className="col-span-full text-center py-12 text-slate-500">
+            No hay grupos configurados. Crea uno nuevo para empezar.
+          </div>
+        ) : (
+          groups.map((group) => (
+            <div
+              key={group.id}
+              className="bg-white border border-slate-200 rounded-lg p-5 hover:border-blue-300 transition-all group relative shadow-sm hover:shadow-md"
+            >
+              <div className="absolute top-4 right-4 opacity-100">
+                <button className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-100 rounded">
+                  <MoreHorizontal size={18} />
                 </button>
               </div>
+
+              <div className="flex items-start gap-4 mb-4">
+                <div
+                  className={`p-3 rounded-lg ${group.status === 'Active' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'}`}
+                >
+                  <Folder size={20} />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-slate-900 text-sm">{group.name}</h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-1">{group.description}</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-sm py-2 border-t border-slate-100 border-b">
+                  <span className="text-slate-500 flex items-center gap-2 text-xs">
+                    <ShieldCheck size={14} /> Dominios
+                  </span>
+                  <span className="font-medium text-slate-900">{group.domainCount}</span>
+                </div>
+
+                <div className="flex justify-between items-center pt-1">
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full border font-medium ${group.status === 'Active' ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-slate-100 text-slate-500'}`}
+                  >
+                    {group.status === 'Active' ? 'Activo' : 'Inactivo'}
+                  </span>
+                  <button
+                    onClick={() => openConfigModal(group)}
+                    className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium transition-opacity"
+                  >
+                    Configurar <ArrowRight size={12} />
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Modal: Nuevo Grupo - OUTSIDE the map loop */}
@@ -206,14 +247,17 @@ const Groups = () => {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowNewModal(false)}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={handleCreateGroup}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  onClick={() => void handleCreateGroup()}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {saving && <Loader2 size={16} className="animate-spin" />}
                   Crear Grupo
                 </button>
               </div>
@@ -275,14 +319,17 @@ const Groups = () => {
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setShowConfigModal(false)}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={handleSaveConfig}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  onClick={() => void handleSaveConfig()}
+                  disabled={saving}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
+                  {saving && <Loader2 size={16} className="animate-spin" />}
                   Guardar Cambios
                 </button>
               </div>
