@@ -15,11 +15,15 @@ export interface User {
   status: 'Active' | 'Inactive';
 }
 
+export type ClassroomStatus = 'operational' | 'degraded' | 'offline';
+
 export interface Classroom {
   id: string;
   name: string;
   computerCount: number;
   activeGroup: string | null;
+  status: ClassroomStatus;
+  onlineMachineCount: number;
 }
 
 export interface Group {

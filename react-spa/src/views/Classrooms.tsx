@@ -57,6 +57,8 @@ const Classrooms = () => {
         name: c.name,
         computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
+        status: c.status,
+        onlineMachineCount: c.onlineMachineCount,
       })) as Classroom[];
 
       setClassrooms(mappedClassrooms);
@@ -322,10 +324,28 @@ const Classrooms = () => {
                     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1 block">
                       Estado
                     </label>
-                    <span className="text-green-700 font-medium flex items-center gap-2 text-sm">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div> Operativo
-                    </span>
+                    {selectedClassroom.status === 'operational' && (
+                      <span className="text-green-700 font-medium flex items-center gap-2 text-sm">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div> Operativo
+                      </span>
+                    )}
+                    {selectedClassroom.status === 'degraded' && (
+                      <span className="text-yellow-700 font-medium flex items-center gap-2 text-sm">
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full"></div> Degradado
+                      </span>
+                    )}
+                    {selectedClassroom.status === 'offline' && (
+                      <span className="text-red-700 font-medium flex items-center gap-2 text-sm">
+                        <div className="w-2 h-2 bg-red-500 rounded-full"></div> Sin conexión
+                      </span>
+                    )}
                   </div>
+                  {selectedClassroom.computerCount > 0 && (
+                    <span className="text-xs text-slate-500">
+                      {selectedClassroom.onlineMachineCount}/{selectedClassroom.computerCount} en
+                      línea
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

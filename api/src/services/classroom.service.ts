@@ -19,10 +19,46 @@ export interface RegisterMachineInput {
   version?: string | undefined;
 }
 
+export type MachineStatus = 'online' | 'stale' | 'offline';
+export type ClassroomStatus = 'operational' | 'degraded' | 'offline';
+
 export interface MachineInfo {
   hostname: string;
   lastSeen: string | null;
-  status: 'unknown';
+  status: MachineStatus;
+}
+
+// Thresholds for machine status (in minutes)
+const ONLINE_THRESHOLD_MINUTES = 5;
+const STALE_THRESHOLD_MINUTES = 15;
+
+/**
+ * Calculate machine status based on lastSeen timestamp
+ */
+function calculateMachineStatus(lastSeen: Date | null): MachineStatus {
+  if (!lastSeen) return 'offline';
+
+  const now = new Date();
+  const diffMs = now.getTime() - lastSeen.getTime();
+  const diffMinutes = diffMs / (1000 * 60);
+
+  if (diffMinutes <= ONLINE_THRESHOLD_MINUTES) return 'online';
+  if (diffMinutes <= STALE_THRESHOLD_MINUTES) return 'stale';
+  return 'offline';
+}
+
+/**
+ * Calculate classroom status based on machine statuses
+ */
+function calculateClassroomStatus(machines: MachineInfo[]): ClassroomStatus {
+  if (machines.length === 0) return 'operational'; // No machines = operational by default
+
+  const onlineCount = machines.filter((m) => m.status === 'online').length;
+  const offlineCount = machines.filter((m) => m.status === 'offline').length;
+
+  if (onlineCount === machines.length) return 'operational';
+  if (offlineCount === machines.length) return 'offline';
+  return 'degraded';
 }
 
 export interface MachineRegistrationResult {
@@ -44,6 +80,8 @@ export interface ClassroomWithMachines {
   currentGroupId: string | null;
   machines: MachineInfo[];
   machineCount: number;
+  status: ClassroomStatus;
+  onlineMachineCount: number;
 }
 
 export interface UpdateClassroomData {
@@ -79,12 +117,16 @@ export async function listClassrooms(): Promise<ClassroomWithMachines[]> {
       const machines: MachineInfo[] = rawMachines.map((m) => ({
         hostname: m.hostname,
         lastSeen: m.lastSeen?.toISOString() ?? null,
-        status: 'unknown' as const,
+        status: calculateMachineStatus(m.lastSeen),
       }));
 
       // Use schedule service for current group
       const currentSchedule = await scheduleStorage.getCurrentSchedule(c.id);
       const currentGroupId = c.activeGroupId ?? currentSchedule?.groupId ?? c.defaultGroupId;
+
+      // Calculate classroom status based on machine health
+      const status = calculateClassroomStatus(machines);
+      const onlineMachineCount = machines.filter((m) => m.status === 'online').length;
 
       return {
         id: c.id,
@@ -97,6 +139,8 @@ export async function listClassrooms(): Promise<ClassroomWithMachines[]> {
         currentGroupId,
         machines,
         machineCount: machines.length,
+        status,
+        onlineMachineCount,
       };
     })
   );
@@ -114,12 +158,16 @@ export async function getClassroom(id: string): Promise<ClassroomResult<Classroo
   const machines: MachineInfo[] = rawMachines.map((m) => ({
     hostname: m.hostname,
     lastSeen: m.lastSeen?.toISOString() ?? null,
-    status: 'unknown' as const,
+    status: calculateMachineStatus(m.lastSeen),
   }));
 
   const currentSchedule = await scheduleStorage.getCurrentSchedule(id);
   const currentGroupId =
     classroom.activeGroupId ?? currentSchedule?.groupId ?? classroom.defaultGroupId;
+
+  // Calculate classroom status based on machine health
+  const status = calculateClassroomStatus(machines);
+  const onlineMachineCount = machines.filter((m) => m.status === 'online').length;
 
   return {
     ok: true,
@@ -134,6 +182,8 @@ export async function getClassroom(id: string): Promise<ClassroomResult<Classroo
       currentGroupId,
       machines,
       machineCount: machines.length,
+      status,
+      onlineMachineCount,
     },
   };
 }
