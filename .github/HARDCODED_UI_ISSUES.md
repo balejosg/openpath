@@ -10,9 +10,9 @@
 
 | Status      | Count |
 | ----------- | ----- |
-| Pending     | 1     |
+| Pending     | 0     |
 | In Progress | 0     |
-| Completed   | 9     |
+| Completed   | 10    |
 
 ---
 
@@ -71,12 +71,12 @@
   - **Complexity:** Medium (needs machines relationship)
   - **Status:** ✅ COMPLETED - ClassroomService already returns machineCount, updated Classrooms.tsx to use it
 
-- [ ] **#8 - Status always shows "Operativo"** (line 326)
+- [x] **#8 - Status always shows "Operativo"** (line 326)
   - **Current:** Static green "Operativo" badge for all classrooms
   - **Solution:** Calculate from agent health/last-seen data
   - **API needed:** Aggregate machine status per classroom
   - **Complexity:** Medium
-  - **Status:** ⏸️ DEFERRED - Requires agent health tracking
+  - **Status:** ✅ COMPLETED - Added real-time status based on machine lastSeen timestamps
 
 ### Header (`react-spa/src/components/Header.tsx`)
 
@@ -130,6 +130,7 @@
 | #3             | 2026-02-07 | f2f1b9b |
 | #7             | 2026-02-07 | 171cbdb |
 | #6             | 2026-02-07 | 6ced069 |
+| #8             | 2026-02-07 | a8d7c51 |
 
 ---
 
