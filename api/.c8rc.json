@@ -8,7 +8,7 @@
     "src/lib/swagger.ts",
     "src/lib/logger.ts"
   ],
-  "reporter": ["text", "lcov", "html"],
+  "reporter": ["text", "lcov", "html", "json"],
   "report-dir": "coverage",
   "check-coverage": true,
   "lines": 65,

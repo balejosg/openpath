@@ -1,5 +1,6 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import noOnlyTests from 'eslint-plugin-no-only-tests';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
@@ -38,12 +39,20 @@ export default tseslint.config(
       quotes: ['error', 'single', { avoidEscape: true }],
     },
   },
+  // Test anti-pattern rules
   {
     files: ['tests/**/*.ts'],
+    plugins: {
+      'no-only-tests': noOnlyTests,
+    },
     languageOptions: {
       parserOptions: {
         tsconfigRootDir: __dirname,
       },
+    },
+    rules: {
+      // Prevent .only() which would skip other tests
+      'no-only-tests/no-only-tests': 'error',
     },
   },
   {

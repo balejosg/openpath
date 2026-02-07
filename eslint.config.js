@@ -1,5 +1,6 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import noOnlyTests from 'eslint-plugin-no-only-tests';
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -22,6 +23,17 @@ export default tseslint.config(
       quotes: ['error', 'single', { avoidEscape: true }],
     },
   },
+  // Test anti-pattern rules for all test files
+  {
+    files: ['**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'],
+    plugins: {
+      'no-only-tests': noOnlyTests,
+    },
+    rules: {
+      // Prevent .only() which would skip other tests
+      'no-only-tests/no-only-tests': 'error',
+    },
+  },
   {
     ignores: [
       '**/node_modules/**',
@@ -35,7 +47,6 @@ export default tseslint.config(
       '**/*.config.js',
       '**/*.config.ts',
       '**/*.config.mjs',
-      '**/__tests__/**',
       'shared/tests/**',
       'spa/js/**',
       'react-spa/e2e/**',

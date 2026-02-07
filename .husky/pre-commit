@@ -1,9 +1,35 @@
 set -e
 
 # Pre-commit hook: Full verification before every commit
+# This enforces the mandatory test policy.
 
-# Fast staged-files gate first.
+echo ""
+echo "=========================================="
+echo "  Pre-commit Verification Starting"
+echo "=========================================="
+echo ""
+
+# 1. FAST: Check for sensitive files
+echo "[1/4] Checking for sensitive files..."
 npm run security:files
 
-# Full verification suite.
+# 2. FAST: Check test files exist for all source files
+echo ""
+echo "[2/4] Checking test file coverage..."
+bash scripts/check-test-files.sh
+
+# 3. SLOW: Full verification suite (typecheck, lint, tests, e2e)
+echo ""
+echo "[3/4] Running full verification suite..."
 npm run verify:full
+
+# 4. FAST: Check coverage on new/modified files (80% threshold)
+echo ""
+echo "[4/4] Checking coverage on changed files..."
+node scripts/check-new-file-coverage.js
+
+echo ""
+echo "=========================================="
+echo "  All Checks Passed!"
+echo "=========================================="
+echo ""

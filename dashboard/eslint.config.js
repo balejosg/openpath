@@ -1,5 +1,6 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import noOnlyTests from 'eslint-plugin-no-only-tests';
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -26,6 +27,16 @@ export default tseslint.config(
           caughtErrorsIgnorePattern: '^_',
         },
       ],
+    },
+  },
+  // Test anti-pattern rules
+  {
+    files: ['tests/**/*.ts'],
+    plugins: {
+      'no-only-tests': noOnlyTests,
+    },
+    rules: {
+      'no-only-tests/no-only-tests': 'error',
     },
   },
   {

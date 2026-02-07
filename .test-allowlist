@@ -1,0 +1,83 @@
+# Test Coverage Allowlist (Grandfathered Files)
+#
+# These files existed before the mandatory test policy was implemented.
+# They are exempt from the test-file requirement but should be addressed over time.
+#
+# DO NOT ADD NEW FILES TO THIS LIST.
+# New source files must have corresponding test files.
+#
+# Format: One file path per line (relative to repo root)
+# Lines starting with # are comments
+#
+# Last updated: 2026-02-07
+
+# API - Server/Infrastructure
+api/src/server.ts
+api/src/trpc/trpc.ts
+api/src/trpc/context.ts
+
+# API - Routers (tested via integration tests, not unit tests)
+api/src/trpc/routers/requests.ts
+api/src/trpc/routers/health-reports.ts
+api/src/trpc/routers/users.ts
+api/src/trpc/routers/backup.ts
+
+# API - Storage layers
+api/src/lib/reset-token-storage.ts
+api/src/lib/health-reports.ts
+api/src/lib/machine-download-token.ts
+api/src/lib/schedule-storage.ts
+api/src/lib/user-storage.ts
+api/src/lib/classroom-storage.ts
+api/src/lib/error-tracking.ts
+api/src/lib/role-storage.ts
+api/src/lib/groups-storage.ts
+api/src/lib/setup-storage.ts
+api/src/lib/settings-storage.ts
+api/src/lib/utils.ts
+
+# API - Services
+api/src/services/classroom.service.ts
+api/src/services/request.service.ts
+api/src/services/groups.service.ts
+api/src/services/setup.service.ts
+api/src/services/health-report.service.ts
+api/src/services/auth.service.ts
+api/src/services/user.service.ts
+api/src/services/schedule.service.ts
+
+# API - Database (schema files, tested implicitly)
+api/src/db/relations.ts
+api/src/db/schema.ts
+
+# React SPA - Components
+react-spa/src/components/Sidebar.tsx
+react-spa/src/components/GoogleLoginButton.tsx
+react-spa/src/components/Header.tsx
+
+# React SPA - Views (tested via E2E)
+react-spa/src/views/Users.tsx
+react-spa/src/views/Classrooms.tsx
+react-spa/src/views/Dashboard.tsx
+react-spa/src/views/DomainRequests.tsx
+react-spa/src/views/Groups.tsx
+react-spa/src/views/Settings.tsx
+react-spa/src/views/Login.tsx
+react-spa/src/views/ResetPassword.tsx
+react-spa/src/views/Register.tsx
+react-spa/src/views/ForgotPassword.tsx
+
+# React SPA - Lib/Hooks
+react-spa/src/lib/openpath-parser.ts
+react-spa/src/lib/trpc.ts
+react-spa/src/lib/QueryProvider.tsx
+react-spa/src/lib/utils.ts
+react-spa/src/hooks/useGoogleAuth.ts
+react-spa/src/hooks/useCurrentUser.ts
+
+# Shared
+shared/src/utils.ts
+
+# Dashboard
+dashboard/src/trpc.ts
+dashboard/src/api-client.ts
