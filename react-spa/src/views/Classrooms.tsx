@@ -55,7 +55,7 @@ const Classrooms = () => {
       const mappedClassrooms = apiClassrooms.map((c) => ({
         id: c.id,
         name: c.name,
-        computerCount: c.machineCount ?? 0,
+        computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
       })) as Classroom[];
 
@@ -91,7 +91,7 @@ const Classrooms = () => {
       const mappedClassrooms = apiClassrooms.map((c) => ({
         id: c.id,
         name: c.name,
-        computerCount: c.machineCount ?? 0,
+        computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
       })) as Classroom[];
       setClassrooms(mappedClassrooms);

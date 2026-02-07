@@ -241,9 +241,9 @@ const Settings: React.FC = () => {
                 <Loader2 size={16} className="animate-spin text-slate-400" />
               ) : systemInfo?.backup?.lastBackupHuman ? (
                 <span
-                  className={`text-sm ${systemInfo.backup?.lastBackupStatus === 'failed' ? 'text-red-600' : 'text-slate-800'}`}
+                  className={`text-sm ${systemInfo.backup.lastBackupStatus === 'failed' ? 'text-red-600' : 'text-slate-800'}`}
                 >
-                  {systemInfo.backup?.lastBackupHuman}
+                  {systemInfo.backup.lastBackupHuman}
                 </span>
               ) : (
                 <span className="text-slate-400 text-xs">No disponible</span>
