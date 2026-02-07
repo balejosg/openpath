@@ -5,6 +5,7 @@ import { getErrorMessage } from '@openpath/shared';
 import { testConnection } from '../../db/index.js';
 import { config } from '../../config.js';
 import { createRequire } from 'node:module';
+import { getBackupInfo } from '../../lib/settings-storage.js';
 
 // Load package.json to get version
 const require = createRequire(import.meta.url);
@@ -70,7 +71,7 @@ export const healthcheckRouter = router({
 
   /**
    * System information endpoint for the Settings page.
-   * Returns version, database status, and session configuration.
+   * Returns version, database status, session configuration, and backup info.
    */
   systemInfo: publicProcedure.query(async () => {
     // Check database connection
@@ -79,6 +80,30 @@ export const healthcheckRouter = router({
       dbConnected = await testConnection();
     } catch {
       dbConnected = false;
+    }
+
+    // Get backup info
+    const backupInfo = await getBackupInfo();
+
+    // Calculate human-readable backup time
+    let lastBackupHuman: string | null = null;
+    if (backupInfo.lastBackupAt) {
+      const backupDate = new Date(backupInfo.lastBackupAt);
+      const now = new Date();
+      const diffMs = now.getTime() - backupDate.getTime();
+      const diffMinutes = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMinutes / 60);
+      const diffDays = Math.floor(diffHours / 24);
+
+      if (diffMinutes < 1) {
+        lastBackupHuman = 'Hace menos de un minuto';
+      } else if (diffMinutes < 60) {
+        lastBackupHuman = `Hace ${String(diffMinutes)} ${diffMinutes === 1 ? 'minuto' : 'minutos'}`;
+      } else if (diffHours < 24) {
+        lastBackupHuman = `Hace ${String(diffHours)} ${diffHours === 1 ? 'hora' : 'horas'}`;
+      } else {
+        lastBackupHuman = `Hace ${String(diffDays)} ${diffDays === 1 ? 'día' : 'días'}`;
+      }
     }
 
     return {
@@ -92,6 +117,11 @@ export const healthcheckRouter = router({
         accessTokenExpiryHuman: parseExpiryToHuman(config.jwtAccessExpiry),
         refreshTokenExpiry: config.jwtRefreshExpiry,
         refreshTokenExpiryHuman: parseExpiryToHuman(config.jwtRefreshExpiry),
+      },
+      backup: {
+        lastBackupAt: backupInfo.lastBackupAt,
+        lastBackupHuman,
+        lastBackupStatus: backupInfo.lastBackupStatus,
       },
       uptime: process.uptime(),
     };

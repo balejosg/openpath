@@ -9,6 +9,7 @@ import { healthReportsRouter } from './health-reports.js';
 import { setupRouter } from './setup.js';
 import { healthcheckRouter } from './healthcheck.js';
 import { groupsRouter } from './groups.js';
+import { backupRouter } from './backup.js';
 
 export const appRouter = router({
   auth: authRouter,
@@ -21,6 +22,7 @@ export const appRouter = router({
   setup: setupRouter,
   healthcheck: healthcheckRouter,
   groups: groupsRouter,
+  backup: backupRouter,
 });
 
 export type AppRouter = typeof appRouter;

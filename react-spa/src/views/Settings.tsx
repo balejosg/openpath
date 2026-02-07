@@ -24,6 +24,11 @@ interface SystemInfo {
     refreshTokenExpiry: string;
     refreshTokenExpiryHuman: string;
   };
+  backup?: {
+    lastBackupAt: string | null;
+    lastBackupHuman: string | null;
+    lastBackupStatus: 'success' | 'failed' | null;
+  };
   uptime: number;
 }
 
@@ -232,7 +237,17 @@ const Settings: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Último backup</span>
-              <span className="text-slate-400 text-xs">No disponible</span>
+              {systemInfoLoading ? (
+                <Loader2 size={16} className="animate-spin text-slate-400" />
+              ) : systemInfo?.backup?.lastBackupHuman ? (
+                <span
+                  className={`text-sm ${systemInfo.backup?.lastBackupStatus === 'failed' ? 'text-red-600' : 'text-slate-800'}`}
+                >
+                  {systemInfo.backup?.lastBackupHuman}
+                </span>
+              ) : (
+                <span className="text-slate-400 text-xs">No disponible</span>
+              )}
             </div>
           </div>
         </div>

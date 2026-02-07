@@ -50,6 +50,11 @@ interface SystemInfoResponse {
     refreshTokenExpiry: string;
     refreshTokenExpiryHuman: string;
   };
+  backup: {
+    lastBackupAt: string | null;
+    lastBackupHuman: string | null;
+    lastBackupStatus: 'success' | 'failed' | null;
+  };
   uptime: number;
 }
 
@@ -105,7 +110,7 @@ await describe('Healthcheck Router Tests', { timeout: 30000 }, async () => {
       };
       assert.ok(data !== undefined, 'Expected data in response');
       assert.strictEqual(data.status, 'alive');
-      assert.ok(data.timestamp !== undefined, 'Expected timestamp');
+      assert.ok(data.timestamp, 'Expected timestamp');
       // Validate timestamp is ISO format
       assert.ok(!isNaN(Date.parse(data.timestamp)), 'Timestamp should be valid ISO date');
     });
@@ -129,8 +134,8 @@ await describe('Healthcheck Router Tests', { timeout: 30000 }, async () => {
       assert.ok(['ok', 'degraded'].includes(data.status), 'Status should be ok or degraded');
       assert.strictEqual(data.service, 'openpath-api');
       assert.ok(typeof data.uptime === 'number', 'Uptime should be a number');
-      assert.ok(data.checks !== undefined, 'Expected checks object');
-      assert.ok(data.responseTime !== undefined, 'Expected responseTime');
+      assert.ok('checks' in data, 'Expected checks object');
+      assert.ok('responseTime' in data, 'Expected responseTime');
     });
   });
 
@@ -150,7 +155,7 @@ await describe('Healthcheck Router Tests', { timeout: 30000 }, async () => {
 
       const { data } = (await parseTRPC(response)) as { data?: SystemInfoResponse };
       assert.ok(data !== undefined, 'Expected data in response');
-      assert.ok(data.database !== undefined, 'Expected database object');
+      assert.ok('database' in data, 'Expected database object');
       assert.strictEqual(typeof data.database.connected, 'boolean', 'connected should be boolean');
       assert.strictEqual(data.database.type, 'PostgreSQL', 'Database type should be PostgreSQL');
     });
@@ -171,7 +176,7 @@ await describe('Healthcheck Router Tests', { timeout: 30000 }, async () => {
 
       const { data } = (await parseTRPC(response)) as { data?: SystemInfoResponse };
       assert.ok(data !== undefined, 'Expected data in response');
-      assert.ok(data.session !== undefined, 'Expected session object');
+      assert.ok('session' in data, 'Expected session object');
 
       // Access token expiry
       assert.ok(
