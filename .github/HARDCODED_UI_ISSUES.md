@@ -10,9 +10,9 @@
 
 | Status      | Count |
 | ----------- | ----- |
-| Pending     | 2     |
+| Pending     | 1     |
 | In Progress | 0     |
-| Completed   | 8     |
+| Completed   | 9     |
 
 ---
 
@@ -55,12 +55,12 @@
   - **Complexity:** Low
   - **Status:** ✅ COMPLETED - Returns from `systemInfo` endpoint
 
-- [ ] **#6 - API Token section is completely mock** (lines 204-209)
+- [x] **#6 - API Token section is completely mock** (lines 204-209)
   - **Current:** Fake masked token "••••••••" with static "Activo" badge
   - **Solution:** Implement token management (list, revoke, regenerate)
   - **API needed:** Full `tokens` CRUD router
   - **Complexity:** High (new feature)
-  - **Status:** ⏸️ DEFERRED - Requires full feature implementation
+  - **Status:** ✅ COMPLETED - Added apiTokens tRPC router with full CRUD, Settings.tsx shows real token list
 
 ### Classrooms Page (`react-spa/src/views/Classrooms.tsx`)
 
@@ -116,7 +116,7 @@
 
 ### Phase 3 - Feature Development (Future Work)
 
-9. ⏸️ #6 API Token management - full new feature
+9. ✅ #6 API Token management - COMPLETED (6ced069)
 
 ---
 
@@ -128,6 +128,8 @@
 | #9             | 2026-02-07 | c23ea6a |
 | #10            | 2026-02-07 | c23ea6a |
 | #3             | 2026-02-07 | f2f1b9b |
+| #7             | 2026-02-07 | 171cbdb |
+| #6             | 2026-02-07 | 6ced069 |
 
 ---
 
