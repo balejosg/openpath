@@ -12,7 +12,8 @@
     }
   },
   "scripts": {
-    "clean": "rm -rf dist *.tsbuildinfo",
+    "clean": "rm -rf dist",
+    "clean:all": "rm -rf dist *.tsbuildinfo",
     "prebuild": "npm run clean",
     "build": "tsc",
     "typecheck": "tsc --noEmit",

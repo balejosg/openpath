@@ -6,7 +6,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "clean": "rm -rf dist *.tsbuildinfo",
+    "clean": "rm -rf dist",
+    "clean:all": "rm -rf dist *.tsbuildinfo",
     "prebuild": "npm run clean",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",

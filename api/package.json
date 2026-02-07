@@ -15,7 +15,8 @@
   "scripts": {
     "start": "node dist/src/server.js",
     "dev": "tsx watch src/server.ts",
-    "clean": "rm -rf dist coverage *.tsbuildinfo",
+    "clean": "rm -rf dist coverage",
+    "clean:all": "rm -rf dist coverage *.tsbuildinfo",
     "prebuild": "npm run clean",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",

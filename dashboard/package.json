@@ -8,7 +8,8 @@
   "scripts": {
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "clean": "rm -rf dist coverage *.tsbuildinfo",
+    "clean": "rm -rf dist coverage",
+    "clean:all": "rm -rf dist coverage *.tsbuildinfo",
     "prebuild": "npm run clean",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
