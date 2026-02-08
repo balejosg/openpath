@@ -84,6 +84,7 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
   const [inputError, setInputError] = useState('');
   const [adding, setAdding] = useState(false);
   const isSubmittingRef = useRef(false);
+  const pendingValuesRef = useRef<Set<string>>(new Set());
 
   // Fetch all rules when modal opens
   const fetchRules = useCallback(async () => {
@@ -197,12 +198,24 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
       return;
     }
 
-    // Check for duplicates
+    // Create a unique key for this rule (type + value)
+    const ruleKey = `${type}:${cleanedValue}`;
+
+    // Check for duplicates in existing rules
     if (allRules.some((r) => r.value === cleanedValue && r.type === type)) {
       setInputError(`"${cleanedValue}" ya existe`);
       isSubmittingRef.current = false;
       return;
     }
+
+    // Check for duplicates in pending submissions (prevents rapid double-clicks)
+    if (pendingValuesRef.current.has(ruleKey)) {
+      isSubmittingRef.current = false;
+      return;
+    }
+
+    // Mark this value as pending BEFORE any async operation
+    pendingValuesRef.current.add(ruleKey);
 
     // Clear input IMMEDIATELY to prevent re-submission on rapid events
     setNewValue('');
@@ -226,6 +239,7 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
     } finally {
       setAdding(false);
       isSubmittingRef.current = false;
+      pendingValuesRef.current.delete(ruleKey);
     }
   };
 
