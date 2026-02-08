@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { Group } from '../types';
 import { trpc } from '../lib/trpc';
+import { DomainManagementModal } from '../components/DomainManagementModal';
+import { useToast } from '../components/ui/Toast';
 
 const Groups = () => {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -18,6 +20,12 @@ const Groups = () => {
   const [showNewModal, setShowNewModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+
+  // Domain management modal state
+  const [showDomainModal, setShowDomainModal] = useState(false);
+
+  // Toast hook
+  const { success, error: toastError, ToastContainer } = useToast();
 
   // New group form state
   const [newGroupName, setNewGroupName] = useState('');
@@ -311,7 +319,10 @@ const Groups = () => {
                 </label>
                 <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 text-sm text-slate-600">
                   {selectedGroup.domainCount} dominios configurados
-                  <button className="ml-2 text-blue-600 hover:text-blue-800 font-medium">
+                  <button
+                    onClick={() => setShowDomainModal(true)}
+                    className="ml-2 text-blue-600 hover:text-blue-800 font-medium"
+                  >
                     Gestionar
                   </button>
                 </div>
@@ -337,6 +348,27 @@ const Groups = () => {
           </div>
         </div>
       )}
+
+      {/* Domain Management Modal */}
+      {selectedGroup && (
+        <DomainManagementModal
+          isOpen={showDomainModal}
+          onClose={() => setShowDomainModal(false)}
+          groupId={selectedGroup.id}
+          groupName={selectedGroup.name}
+          onDomainsChanged={() => void fetchGroups()}
+          onToast={(message, type, undoAction) => {
+            if (type === 'success') {
+              success(message, undoAction);
+            } else {
+              toastError(message);
+            }
+          }}
+        />
+      )}
+
+      {/* Toast notifications */}
+      <ToastContainer />
     </div>
   );
 };
