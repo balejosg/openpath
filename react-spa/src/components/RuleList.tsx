@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Trash2, Plus, Loader2, AlertCircle, Info } from 'lucide-react';
+import { Search, Trash2, Plus, Loader2, AlertCircle, Info, Check, Ban } from 'lucide-react';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
 import { trpc } from '../lib/trpc';
+import { getRuleTypeBadge } from '../lib/ruleDetection';
 
 // Domain validation regex (exact domain)
 const DOMAIN_REGEX =
@@ -36,6 +37,7 @@ interface RuleListProps {
   emptyMessage: string;
   tipText?: string;
   validatePattern?: (value: string) => { valid: boolean; warning?: string };
+  showTypeIndicator?: boolean;
 }
 
 export const RuleList: React.FC<RuleListProps> = ({
@@ -51,6 +53,7 @@ export const RuleList: React.FC<RuleListProps> = ({
   emptyMessage,
   tipText,
   validatePattern,
+  showTypeIndicator = false,
 }) => {
   const [search, setSearch] = useState('');
   const [newValue, setNewValue] = useState('');
@@ -323,10 +326,25 @@ export const RuleList: React.FC<RuleListProps> = ({
                 key={rule.id}
                 className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 group"
               >
-                <span className="text-sm text-slate-700 font-mono">{rule.value}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  {showTypeIndicator && (
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full flex-shrink-0',
+                        rule.type === 'whitelist'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      )}
+                    >
+                      {rule.type === 'whitelist' ? <Check size={10} /> : <Ban size={10} />}
+                      {getRuleTypeBadge(rule.type)}
+                    </span>
+                  )}
+                  <span className="text-sm text-slate-700 font-mono truncate">{rule.value}</span>
+                </div>
                 <button
                   onClick={() => void handleDeleteRule(rule)}
-                  className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+                  className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
                   title="Eliminar"
                 >
                   <Trash2 size={14} />

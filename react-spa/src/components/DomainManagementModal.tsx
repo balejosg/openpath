@@ -1,8 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Modal } from './ui/Modal';
+import { FilterChips } from './ui/FilterChips';
 import { cn } from '../lib/utils';
 import { trpc } from '../lib/trpc';
-import { RuleList, RuleType } from './RuleList';
+import { RuleType } from './RuleList';
+import { Search, Trash2, Plus, Loader2, AlertCircle, Check, Ban, Info } from 'lucide-react';
+import { Button } from './ui/Button';
+import { detectRuleType, getRuleTypeBadge } from '../lib/ruleDetection';
 
 interface Rule {
   id: string;
@@ -22,122 +26,46 @@ interface DomainManagementModalProps {
   onToast: (message: string, type: 'success' | 'error', undoAction?: () => void) => void;
 }
 
-type TabType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
+type FilterType = 'all' | 'allowed' | 'blocked';
 
-interface TabConfig {
-  id: TabType;
-  label: string;
-  helpText?: string;
-  placeholder: string;
-  emptyMessage: string;
-  tipText?: string;
-  allowBulkAdd: boolean;
-}
+// Domain validation regex
+const DOMAIN_REGEX =
+  /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
 
-const TABS: TabConfig[] = [
-  {
-    id: 'whitelist',
-    label: 'Dominios',
-    placeholder: 'Añadir dominio (o pega varios)',
-    emptyMessage: 'No hay dominios configurados',
-    tipText: 'Tip: Pega una lista de dominios separados por líneas, comas o espacios',
-    allowBulkAdd: true,
-  },
-  {
-    id: 'blocked_subdomain',
-    label: 'Subdominios bloqueados',
-    helpText:
-      'Los dominios en la lista blanca permiten automáticamente todos sus subdominios. ' +
-      'Usa esta sección para bloquear subdominios específicos dentro de dominios permitidos. ' +
-      'Ejemplo: Si google.com está permitido, puedes bloquear ads.google.com aquí. ' +
-      'Soporta wildcards: *.tracking.example.com bloqueará cualquier subdominio de tracking.example.com',
-    placeholder: 'Añadir subdominio (ej: ads.google.com o *.tracking.com)',
-    emptyMessage: 'No hay subdominios bloqueados',
-    tipText: 'Soporta wildcards: *.subdomain.com',
-    allowBulkAdd: true,
-  },
-  {
-    id: 'blocked_path',
-    label: 'Rutas bloqueadas',
-    helpText:
-      'Bloquea URLs específicas dentro de dominios permitidos. ' +
-      'Útil para bloquear secciones específicas como juegos o anuncios. ' +
-      'Formato: dominio.com/ruta o */ruta (bloquea en todos los sitios). ' +
-      'Soporta wildcards: *.example.com/ads/* bloquea rutas /ads/ en subdominios.',
-    placeholder: 'Añadir ruta (ej: facebook.com/gaming o */tracking.js)',
-    emptyMessage: 'No hay rutas bloqueadas',
-    tipText: 'Solo funciona en navegadores (Firefox, Chrome, Edge)',
-    allowBulkAdd: true,
-  },
-];
+// Subdomain validation regex (supports wildcards like *.example.com)
+const SUBDOMAIN_REGEX =
+  /^(?:\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
 
-// Subdomain validation - supports wildcards like *.example.com
-const validateSubdomain = (value: string): { valid: boolean; warning?: string } => {
-  // Pattern: optional *. prefix, then standard domain
-  const SUBDOMAIN_REGEX =
-    /^(?:\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
-
-  if (!SUBDOMAIN_REGEX.test(value)) {
-    return { valid: false };
-  }
-
-  // Warn if it looks like a root domain (no subdomain part beyond TLD)
-  const cleanValue = value.replace(/^\*\./, '');
-  const parts = cleanValue.split('.');
-  if (parts.length === 2) {
-    return {
-      valid: true,
-      warning: 'Este parece un dominio raíz. ¿Debería estar en la lista blanca en su lugar?',
-    };
-  }
-
-  return { valid: true };
-};
-
-// Path validation - strict format: domain.com/path or */path
-const validatePath = (value: string): { valid: boolean; warning?: string } => {
-  // Auto-strip protocol if present
+// Path validation
+const validatePath = (value: string): boolean => {
   const cleaned = value.replace(/^https?:\/\//, '').replace(/^\*:\/\//, '');
+  if (!cleaned.includes('/')) return false;
 
-  // Must contain a /
-  if (!cleaned.includes('/')) {
-    return { valid: false };
-  }
-
-  // Split into domain and path parts
   const slashIndex = cleaned.indexOf('/');
   const domainPart = cleaned.substring(0, slashIndex);
   const pathPart = cleaned.substring(slashIndex);
 
-  // Validate domain part: must be * or valid domain (with optional *. prefix)
   if (domainPart !== '*') {
-    const DOMAIN_REGEX =
-      /^(?:\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
-    if (!DOMAIN_REGEX.test(domainPart)) {
-      return { valid: false };
-    }
+    if (!SUBDOMAIN_REGEX.test(domainPart)) return false;
   }
 
-  // Validate path part: at least "/x", no spaces, no double slashes
-  if (pathPart.length < 2) {
-    return { valid: false };
-  }
-  if (/\s/.test(pathPart)) {
-    return { valid: false };
-  }
-  if (pathPart.includes('//')) {
-    return { valid: false };
-  }
+  if (pathPart.length < 2) return false;
+  if (/\s/.test(pathPart)) return false;
+  if (pathPart.includes('//')) return false;
 
-  // Warn if domain-agnostic (blocks on ALL sites)
-  if (domainPart === '*') {
-    return {
-      valid: true,
-      warning: 'Esta regla bloqueará esta ruta en TODOS los sitios web',
-    };
-  }
+  return true;
+};
 
-  return { valid: true };
+// Validate based on detected type
+const validateForType = (value: string, type: RuleType): boolean => {
+  switch (type) {
+    case 'whitelist':
+      return DOMAIN_REGEX.test(value);
+    case 'blocked_subdomain':
+      return SUBDOMAIN_REGEX.test(value);
+    case 'blocked_path':
+      return validatePath(value);
+  }
 };
 
 export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
@@ -148,13 +76,13 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
   onDomainsChanged,
   onToast,
 }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('whitelist');
-  const [rules, setRules] = useState<Record<TabType, Rule[]>>({
-    whitelist: [],
-    blocked_subdomain: [],
-    blocked_path: [],
-  });
+  const [allRules, setAllRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [search, setSearch] = useState('');
+  const [newValue, setNewValue] = useState('');
+  const [inputError, setInputError] = useState('');
+  const [adding, setAdding] = useState(false);
 
   // Fetch all rules when modal opens
   const fetchRules = useCallback(async () => {
@@ -166,11 +94,15 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
         trpc.groups.listRules.query({ groupId, type: 'blocked_subdomain' }),
         trpc.groups.listRules.query({ groupId, type: 'blocked_path' }),
       ]);
-      setRules({
-        whitelist,
-        blocked_subdomain: subdomains,
-        blocked_path: paths,
+      // Combine all rules into a single array
+      const combined = [...whitelist, ...subdomains, ...paths];
+      // Sort by type (whitelist first), then by value
+      combined.sort((a, b) => {
+        if (a.type === 'whitelist' && b.type !== 'whitelist') return -1;
+        if (a.type !== 'whitelist' && b.type === 'whitelist') return 1;
+        return a.value.localeCompare(b.value);
       });
+      setAllRules(combined);
     } catch (err) {
       console.error('Failed to fetch rules:', err);
       onToast('Error al cargar reglas', 'error');
@@ -182,27 +114,160 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       void fetchRules();
-      setActiveTab('whitelist');
+      setActiveFilter('all');
+      setSearch('');
+      setNewValue('');
+      setInputError('');
     }
   }, [isOpen, fetchRules]);
 
-  // Handle rules changed - refetch and notify parent
+  // Get whitelist domains for detection
+  const whitelistDomains = useMemo(
+    () => allRules.filter((r) => r.type === 'whitelist').map((r) => r.value),
+    [allRules]
+  );
+
+  // Detect type for current input
+  const detectedType = useMemo(() => {
+    if (!newValue.trim()) return null;
+    return detectRuleType(newValue, whitelistDomains);
+  }, [newValue, whitelistDomains]);
+
+  // Filter counts
+  const counts = useMemo(() => {
+    const allowed = allRules.filter((r) => r.type === 'whitelist').length;
+    const blocked = allRules.filter((r) => r.type !== 'whitelist').length;
+    return { all: allRules.length, allowed, blocked };
+  }, [allRules]);
+
+  // Filtered rules
+  const filteredRules = useMemo(() => {
+    let filtered = allRules;
+
+    // Apply category filter
+    if (activeFilter === 'allowed') {
+      filtered = filtered.filter((r) => r.type === 'whitelist');
+    } else if (activeFilter === 'blocked') {
+      filtered = filtered.filter((r) => r.type !== 'whitelist');
+    }
+
+    // Apply search filter
+    if (search.trim()) {
+      const searchLower = search.toLowerCase();
+      filtered = filtered.filter((r) => r.value.toLowerCase().includes(searchLower));
+    }
+
+    return filtered;
+  }, [allRules, activeFilter, search]);
+
+  // Handle rules changed
   const handleRulesChanged = async () => {
     await fetchRules();
     onDomainsChanged();
   };
 
-  // Get tab config
-  const getTabConfig = (tabId: TabType): TabConfig => {
-    return TABS.find((t) => t.id === tabId) ?? TABS[0];
+  // Add rule with auto-detected type
+  const handleAddRule = async () => {
+    if (!detectedType) {
+      setInputError('Introduce un valor válido');
+      return;
+    }
+
+    const { type, cleanedValue } = detectedType;
+
+    // Validate
+    if (!validateForType(cleanedValue, type)) {
+      setInputError(`"${cleanedValue}" no es un formato válido`);
+      return;
+    }
+
+    // Check for duplicates
+    if (allRules.some((r) => r.value === cleanedValue && r.type === type)) {
+      setInputError(`"${cleanedValue}" ya existe`);
+      return;
+    }
+
+    try {
+      setAdding(true);
+      setInputError('');
+
+      await trpc.groups.createRule.mutate({
+        groupId,
+        type,
+        value: cleanedValue,
+      });
+
+      onToast(`"${cleanedValue}" añadido como ${getRuleTypeBadge(type)}`, 'success');
+      setNewValue('');
+      await handleRulesChanged();
+    } catch (err) {
+      console.error('Failed to add rule:', err);
+      onToast('Error al añadir regla', 'error');
+    } finally {
+      setAdding(false);
+    }
   };
 
-  // Get count badge for tab
-  const getTabCount = (tabId: TabType): number => {
-    return rules[tabId].length;
+  // Delete rule with undo
+  const handleDeleteRule = async (rule: Rule) => {
+    try {
+      await trpc.groups.deleteRule.mutate({ id: rule.id });
+
+      onToast(`"${rule.value}" eliminado`, 'success', () => {
+        void (async () => {
+          try {
+            await trpc.groups.createRule.mutate({
+              groupId: rule.groupId,
+              type: rule.type,
+              value: rule.value,
+              comment: rule.comment ?? undefined,
+            });
+            await handleRulesChanged();
+            onToast(`"${rule.value}" restaurado`, 'success');
+          } catch (err) {
+            console.error('Failed to undo delete:', err);
+            onToast('Error al restaurar elemento', 'error');
+          }
+        })();
+      });
+
+      await handleRulesChanged();
+    } catch (err) {
+      console.error('Failed to delete rule:', err);
+      onToast('Error al eliminar elemento', 'error');
+    }
   };
 
-  const currentTab = getTabConfig(activeTab);
+  // Handle Enter key
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !adding && newValue.trim()) {
+      e.preventDefault();
+      void handleAddRule();
+    }
+  };
+
+  // Handle input change
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewValue(e.target.value);
+    if (inputError) setInputError('');
+  };
+
+  // Filter options for chips
+  const filterOptions = [
+    { id: 'all' as FilterType, label: 'Todos', count: counts.all },
+    {
+      id: 'allowed' as FilterType,
+      label: 'Permitidos',
+      count: counts.allowed,
+      icon: <Check size={12} />,
+    },
+    {
+      id: 'blocked' as FilterType,
+      label: 'Bloqueados',
+      count: counts.blocked,
+      icon: <Ban size={12} />,
+    },
+  ];
 
   return (
     <Modal
@@ -212,60 +277,131 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
       className="max-w-2xl"
     >
       <div className="space-y-4">
-        {/* Tabs */}
-        <div className="flex border-b border-slate-200">
-          {TABS.map((tab) => {
-            const count = getTabCount(tab.id);
-            const isActive = activeTab === tab.id;
+        {/* Filter Chips */}
+        <FilterChips
+          options={filterOptions}
+          activeId={activeFilter}
+          onChange={(id) => setActiveFilter(id as FilterType)}
+        />
 
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
-                  isActive
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                )}
-              >
-                {tab.label}
-                {count > 0 && (
-                  <span
-                    className={cn(
-                      'ml-2 px-1.5 py-0.5 text-xs rounded-full',
-                      isActive ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'
-                    )}
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        {/* Search */}
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder={`Buscar en ${allRules.length.toString()} reglas...`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          />
         </div>
 
-        {/* Tab Content */}
-        <RuleList
-          groupId={groupId}
-          ruleType={activeTab}
-          rules={rules[activeTab]}
-          loading={loading}
-          onRulesChanged={handleRulesChanged}
-          onToast={onToast}
-          placeholder={currentTab.placeholder}
-          helpText={currentTab.helpText}
-          allowBulkAdd={currentTab.allowBulkAdd}
-          emptyMessage={currentTab.emptyMessage}
-          tipText={currentTab.tipText}
-          validatePattern={
-            activeTab === 'blocked_subdomain'
-              ? validateSubdomain
-              : activeTab === 'blocked_path'
-                ? validatePath
-                : undefined
-          }
-        />
+        {/* Rules List */}
+        <div className="border border-slate-200 rounded-lg overflow-hidden">
+          {loading ? (
+            <div className="flex items-center justify-center py-12 text-slate-400">
+              <Loader2 size={20} className="animate-spin mr-2" />
+              Cargando...
+            </div>
+          ) : filteredRules.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-sm">
+              {search ? 'No se encontraron resultados' : 'No hay reglas configuradas'}
+            </div>
+          ) : (
+            <ul className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+              {filteredRules.map((rule) => (
+                <li
+                  key={rule.id}
+                  className="flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 group"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full flex-shrink-0',
+                        rule.type === 'whitelist'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-red-100 text-red-700'
+                      )}
+                    >
+                      {rule.type === 'whitelist' ? <Check size={10} /> : <Ban size={10} />}
+                      {getRuleTypeBadge(rule.type)}
+                    </span>
+                    <span className="text-sm text-slate-700 font-mono truncate">{rule.value}</span>
+                  </div>
+                  <button
+                    onClick={() => void handleDeleteRule(rule)}
+                    className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                    title="Eliminar"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Add Input (Omnibar) */}
+        <div className="space-y-1">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                placeholder="Añadir regla (dominio, subdominio o ruta)..."
+                value={newValue}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                className={cn(
+                  'w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none',
+                  inputError ? 'border-red-300 focus:ring-red-500' : 'border-slate-200'
+                )}
+              />
+            </div>
+            <Button
+              onClick={() => void handleAddRule()}
+              disabled={adding || !newValue.trim()}
+              isLoading={adding}
+              size="md"
+            >
+              <Plus size={16} className="mr-1" />
+              Añadir
+            </Button>
+          </div>
+
+          {/* Error message */}
+          {inputError && (
+            <p className="text-red-500 text-xs flex items-center gap-1">
+              <AlertCircle size={12} />
+              {inputError}
+            </p>
+          )}
+
+          {/* Auto-detection hint */}
+          {detectedType && !inputError && (
+            <p className="text-xs text-slate-500 flex items-center gap-1">
+              <Info size={12} />
+              Se añadirá como:{' '}
+              <span
+                className={cn(
+                  'font-medium',
+                  detectedType.type === 'whitelist' ? 'text-green-600' : 'text-red-600'
+                )}
+              >
+                {getRuleTypeBadge(detectedType.type)}
+              </span>
+              {detectedType.confidence === 'medium' && (
+                <span className="text-amber-600"> (sugerido)</span>
+              )}
+            </p>
+          )}
+
+          {/* Collapsed help */}
+          {!newValue.trim() && (
+            <p className="text-xs text-slate-400">
+              Escribe un dominio, subdominio (ej: ads.google.com) o ruta (ej: facebook.com/gaming)
+            </p>
+          )}
+        </div>
       </div>
     </Modal>
   );
