@@ -220,7 +220,7 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
   // Delete rule with undo
   const handleDeleteRule = async (rule: Rule) => {
     try {
-      await trpc.groups.deleteRule.mutate({ id: rule.id });
+      await trpc.groups.deleteRule.mutate({ id: rule.id, groupId: rule.groupId });
 
       onToast(`"${rule.value}" eliminado`, 'success', () => {
         void (async () => {

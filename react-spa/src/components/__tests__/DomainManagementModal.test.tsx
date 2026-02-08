@@ -546,7 +546,7 @@ describe('DomainManagementModal', () => {
       fireEvent.click(deleteButton);
 
       await waitFor(() => {
-        expect(mockDeleteRule).toHaveBeenCalledWith({ id: '1' });
+        expect(mockDeleteRule).toHaveBeenCalledWith({ id: '1', groupId: 'group-1' });
       });
     });
 
