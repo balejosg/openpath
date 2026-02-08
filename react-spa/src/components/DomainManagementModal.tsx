@@ -170,22 +170,32 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
 
   // Add rule with auto-detected type
   const handleAddRule = async () => {
-    // Prevent double submission via ref AND state (belt and suspenders)
-    if (isSubmittingRef.current || adding) return;
-    isSubmittingRef.current = true;
-
-    // Capture and validate input immediately
+    // CRITICAL: Capture input and check pending FIRST, before ANY other logic
+    // This prevents race conditions from multiple rapid event sources
     const inputValue = newValue.trim();
-    if (!inputValue) {
-      isSubmittingRef.current = false;
+    if (!inputValue) return;
+
+    // Check if this exact input is already being processed (use raw input as key)
+    if (pendingValuesRef.current.has(inputValue)) {
+      return; // Silently ignore - already processing this exact input
+    }
+
+    // Mark as pending IMMEDIATELY - before any other checks or state reads
+    pendingValuesRef.current.add(inputValue);
+
+    // Now safe to do other checks
+    if (isSubmittingRef.current || adding) {
+      pendingValuesRef.current.delete(inputValue);
       return;
     }
+    isSubmittingRef.current = true;
 
     // Detect type for the captured value
     const detected = detectRuleType(inputValue, whitelistDomains);
     if (!detected) {
       setInputError('Introduce un valor válido');
       isSubmittingRef.current = false;
+      pendingValuesRef.current.delete(inputValue);
       return;
     }
 
@@ -195,27 +205,17 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
     if (!validateForType(cleanedValue, type)) {
       setInputError(`"${cleanedValue}" no es un formato válido`);
       isSubmittingRef.current = false;
+      pendingValuesRef.current.delete(inputValue);
       return;
     }
-
-    // Create a unique key for this rule (type + value)
-    const ruleKey = `${type}:${cleanedValue}`;
 
     // Check for duplicates in existing rules
     if (allRules.some((r) => r.value === cleanedValue && r.type === type)) {
       setInputError(`"${cleanedValue}" ya existe`);
       isSubmittingRef.current = false;
+      pendingValuesRef.current.delete(inputValue);
       return;
     }
-
-    // Check for duplicates in pending submissions (prevents rapid double-clicks)
-    if (pendingValuesRef.current.has(ruleKey)) {
-      isSubmittingRef.current = false;
-      return;
-    }
-
-    // Mark this value as pending BEFORE any async operation
-    pendingValuesRef.current.add(ruleKey);
 
     // Clear input IMMEDIATELY to prevent re-submission on rapid events
     setNewValue('');
@@ -239,7 +239,7 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
     } finally {
       setAdding(false);
       isSubmittingRef.current = false;
-      pendingValuesRef.current.delete(ruleKey);
+      pendingValuesRef.current.delete(inputValue);
     }
   };
 
