@@ -59,9 +59,15 @@ const TABS: TabConfig[] = [
   {
     id: 'blocked_path',
     label: 'Rutas bloqueadas',
-    placeholder: '',
-    emptyMessage: '',
-    allowBulkAdd: false,
+    helpText:
+      'Bloquea URLs específicas dentro de dominios permitidos. ' +
+      'Útil para bloquear secciones específicas como juegos o anuncios. ' +
+      'Formato: dominio.com/ruta o */ruta (bloquea en todos los sitios). ' +
+      'Soporta wildcards: *.example.com/ads/* bloquea rutas /ads/ en subdominios.',
+    placeholder: 'Añadir ruta (ej: facebook.com/gaming o */tracking.js)',
+    emptyMessage: 'No hay rutas bloqueadas',
+    tipText: 'Solo funciona en navegadores (Firefox, Chrome, Edge)',
+    allowBulkAdd: true,
   },
 ];
 
@@ -82,6 +88,52 @@ const validateSubdomain = (value: string): { valid: boolean; warning?: string } 
     return {
       valid: true,
       warning: 'Este parece un dominio raíz. ¿Debería estar en la lista blanca en su lugar?',
+    };
+  }
+
+  return { valid: true };
+};
+
+// Path validation - strict format: domain.com/path or */path
+const validatePath = (value: string): { valid: boolean; warning?: string } => {
+  // Auto-strip protocol if present
+  const cleaned = value.replace(/^https?:\/\//, '').replace(/^\*:\/\//, '');
+
+  // Must contain a /
+  if (!cleaned.includes('/')) {
+    return { valid: false };
+  }
+
+  // Split into domain and path parts
+  const slashIndex = cleaned.indexOf('/');
+  const domainPart = cleaned.substring(0, slashIndex);
+  const pathPart = cleaned.substring(slashIndex);
+
+  // Validate domain part: must be * or valid domain (with optional *. prefix)
+  if (domainPart !== '*') {
+    const DOMAIN_REGEX =
+      /^(?:\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
+    if (!DOMAIN_REGEX.test(domainPart)) {
+      return { valid: false };
+    }
+  }
+
+  // Validate path part: at least "/x", no spaces, no double slashes
+  if (pathPart.length < 2) {
+    return { valid: false };
+  }
+  if (/\s/.test(pathPart)) {
+    return { valid: false };
+  }
+  if (pathPart.includes('//')) {
+    return { valid: false };
+  }
+
+  // Warn if domain-agnostic (blocks on ALL sites)
+  if (domainPart === '*') {
+    return {
+      valid: true,
+      warning: 'Esta regla bloqueará esta ruta en TODOS los sitios web',
     };
   }
 
@@ -165,20 +217,16 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
           {TABS.map((tab) => {
             const count = getTabCount(tab.id);
             const isActive = activeTab === tab.id;
-            const isDisabled = tab.id === 'blocked_path';
 
             return (
               <button
                 key={tab.id}
-                onClick={() => !isDisabled && setActiveTab(tab.id)}
-                disabled={isDisabled}
+                onClick={() => setActiveTab(tab.id)}
                 className={cn(
                   'px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
                   isActive
                     ? 'border-blue-500 text-blue-600'
-                    : isDisabled
-                      ? 'border-transparent text-slate-300 cursor-not-allowed'
-                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
                 )}
               >
                 {tab.label}
@@ -186,49 +234,38 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
                   <span
                     className={cn(
                       'ml-2 px-1.5 py-0.5 text-xs rounded-full',
-                      isActive
-                        ? 'bg-blue-100 text-blue-600'
-                        : isDisabled
-                          ? 'bg-slate-100 text-slate-300'
-                          : 'bg-slate-100 text-slate-500'
+                      isActive ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-500'
                     )}
                   >
                     {count}
                   </span>
                 )}
-                {isDisabled && <span className="ml-2 text-xs text-slate-300">(Próximamente)</span>}
               </button>
             );
           })}
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'blocked_path' ? (
-          // Placeholder for path rules
-          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-            <span className="text-4xl mb-4">🚧</span>
-            <h3 className="text-lg font-medium text-slate-600">Próximamente</h3>
-            <p className="text-sm text-center max-w-md mt-2">
-              El bloqueo de rutas específicas estará disponible en una próxima versión. Esta función
-              solo funcionará en navegadores (Firefox y Chrome).
-            </p>
-          </div>
-        ) : (
-          <RuleList
-            groupId={groupId}
-            ruleType={activeTab}
-            rules={rules[activeTab]}
-            loading={loading}
-            onRulesChanged={handleRulesChanged}
-            onToast={onToast}
-            placeholder={currentTab.placeholder}
-            helpText={currentTab.helpText}
-            allowBulkAdd={currentTab.allowBulkAdd}
-            emptyMessage={currentTab.emptyMessage}
-            tipText={currentTab.tipText}
-            validatePattern={activeTab === 'blocked_subdomain' ? validateSubdomain : undefined}
-          />
-        )}
+        <RuleList
+          groupId={groupId}
+          ruleType={activeTab}
+          rules={rules[activeTab]}
+          loading={loading}
+          onRulesChanged={handleRulesChanged}
+          onToast={onToast}
+          placeholder={currentTab.placeholder}
+          helpText={currentTab.helpText}
+          allowBulkAdd={currentTab.allowBulkAdd}
+          emptyMessage={currentTab.emptyMessage}
+          tipText={currentTab.tipText}
+          validatePattern={
+            activeTab === 'blocked_subdomain'
+              ? validateSubdomain
+              : activeTab === 'blocked_path'
+                ? validatePath
+                : undefined
+          }
+        />
       </div>
     </Modal>
   );

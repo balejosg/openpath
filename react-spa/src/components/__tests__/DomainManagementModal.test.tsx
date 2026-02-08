@@ -112,22 +112,32 @@ describe('DomainManagementModal', () => {
       });
     });
 
-    it('shows Próximamente for Rutas bloqueadas tab', async () => {
+    it('switches to Rutas bloqueadas tab when clicked', async () => {
       render(<DomainManagementModal {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText(/Próximamente/)).toBeInTheDocument();
+        expect(screen.getByText('Dominios')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        // Check that help text for paths is shown
+        expect(screen.getByText(/Bloquea URLs específicas/)).toBeInTheDocument();
       });
     });
 
-    it('shows placeholder content when Rutas bloqueadas would be selected', async () => {
-      // The tab is disabled, but we can verify the placeholder text exists
+    it('shows path placeholder when Rutas bloqueadas tab is active', async () => {
       render(<DomainManagementModal {...defaultProps} />);
 
       await waitFor(() => {
-        // The "Próximamente" text should be visible in the tab
-        const rutasTab = screen.getByText(/Rutas bloqueadas/);
-        expect(rutasTab).toBeInTheDocument();
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir ruta/)).toBeInTheDocument();
       });
     });
 
@@ -532,6 +542,249 @@ describe('DomainManagementModal', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/Debería estar en la lista blanca/)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Path Rules Tab (Rutas bloqueadas)', () => {
+    it('shows help text when path tab is active', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Bloquea URLs específicas/)).toBeInTheDocument();
+      });
+    });
+
+    it('shows browser-only tip text', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Solo funciona en navegadores/)).toBeInTheDocument();
+      });
+    });
+
+    it('adds a path rule with domain', async () => {
+      mockCreateRule.mockResolvedValue({ id: 'new-1' });
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir ruta/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir ruta/);
+      fireEvent.change(input, { target: { value: 'facebook.com/gaming' } });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(mockCreateRule).toHaveBeenCalledWith({
+          groupId: 'group-1',
+          type: 'blocked_path',
+          value: 'facebook.com/gaming',
+        });
+      });
+    });
+
+    it('adds a domain-agnostic path rule', async () => {
+      mockCreateRule.mockResolvedValue({ id: 'new-1' });
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir ruta/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir ruta/);
+      fireEvent.change(input, { target: { value: '*/tracking.js' } });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(mockCreateRule).toHaveBeenCalledWith({
+          groupId: 'group-1',
+          type: 'blocked_path',
+          value: '*/tracking.js',
+        });
+      });
+    });
+
+    it('shows warning for domain-agnostic path rule', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir ruta/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir ruta/);
+      fireEvent.change(input, { target: { value: '*/ads/*' } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/bloqueará esta ruta en TODOS los sitios/)).toBeInTheDocument();
+      });
+    });
+
+    it('rejects path without slash', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir ruta/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir ruta/);
+      fireEvent.change(input, { target: { value: 'facebook.com' } });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/no es un patrón válido/)).toBeInTheDocument();
+      });
+    });
+
+    it('adds a wildcard subdomain path rule', async () => {
+      mockCreateRule.mockResolvedValue({ id: 'new-1' });
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir ruta/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir ruta/);
+      fireEvent.change(input, { target: { value: '*.example.com/ads/*' } });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(mockCreateRule).toHaveBeenCalledWith({
+          groupId: 'group-1',
+          type: 'blocked_path',
+          value: '*.example.com/ads/*',
+        });
+      });
+    });
+
+    it('strips protocol from pasted path URLs', async () => {
+      mockCreateRule.mockResolvedValue({ id: 'new-1' });
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir ruta/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir ruta/);
+      fireEvent.change(input, { target: { value: 'https://facebook.com/gaming' } });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(mockCreateRule).toHaveBeenCalledWith({
+          groupId: 'group-1',
+          type: 'blocked_path',
+          value: 'facebook.com/gaming',
+        });
+      });
+    });
+
+    it('bulk adds multiple path rules', async () => {
+      mockBulkCreateRules.mockResolvedValue({ count: 2 });
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir ruta/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir ruta/);
+      fireEvent.change(input, {
+        target: { value: 'facebook.com/gaming, youtube.com/shorts' },
+      });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(mockBulkCreateRules).toHaveBeenCalledWith({
+          groupId: 'group-1',
+          type: 'blocked_path',
+          values: ['facebook.com/gaming', 'youtube.com/shorts'],
+        });
+      });
+    });
+
+    it('displays existing path rules', async () => {
+      mockListRules
+        .mockResolvedValueOnce([]) // whitelist
+        .mockResolvedValueOnce([]) // blocked_subdomain
+        .mockResolvedValueOnce([
+          {
+            id: '1',
+            groupId: 'group-1',
+            type: 'blocked_path',
+            value: 'facebook.com/gaming',
+            comment: null,
+            createdAt: '2024-01-01',
+          },
+        ]); // blocked_path
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText(/Rutas bloqueadas/));
+
+      await waitFor(() => {
+        expect(screen.getByText('facebook.com/gaming')).toBeInTheDocument();
       });
     });
   });

@@ -80,7 +80,11 @@ export const RuleList: React.FC<RuleListProps> = ({
     if (!trimmed) return { valid: false };
 
     // Remove protocol if accidentally pasted
-    const cleaned = trimmed.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    // For paths, preserve the /path portion; for domains, strip it
+    let cleaned = trimmed.replace(/^https?:\/\//, '');
+    if (ruleType !== 'blocked_path') {
+      cleaned = cleaned.replace(/\/.*$/, '');
+    }
 
     // Use custom validation if provided
     if (validatePattern) {
@@ -107,17 +111,25 @@ export const RuleList: React.FC<RuleListProps> = ({
     return { valid: true };
   };
 
-  // Parse input for multiple values (newlines, commas, spaces)
+  // Parse input for multiple values (newlines, commas, spaces for domains; newlines/commas for paths)
   const parseValuesFromInput = (input: string): string[] => {
+    // For paths, don't split on spaces (paths might have encoded spaces or be complex)
+    // and don't strip the path portion
+    const splitRegex = ruleType === 'blocked_path' ? /[\n,]+/ : /[\n,\s]+/;
+
     return input
-      .split(/[\n,\s]+/)
-      .map((d) =>
-        d
+      .split(splitRegex)
+      .map((d) => {
+        let cleaned = d
           .trim()
           .toLowerCase()
-          .replace(/^https?:\/\//, '')
-          .replace(/\/.*$/, '')
-      )
+          .replace(/^https?:\/\//, '');
+        // Only strip path for domain-based rules
+        if (ruleType !== 'blocked_path') {
+          cleaned = cleaned.replace(/\/.*$/, '');
+        }
+        return cleaned;
+      })
       .filter((d) => d.length > 0);
   };
 
