@@ -10,10 +10,13 @@ import {
 } from 'lucide-react';
 import { Group } from '../types';
 import { trpc } from '../lib/trpc';
-import { DomainManagementModal } from '../components/DomainManagementModal';
 import { useToast } from '../components/ui/Toast';
 
-const Groups = () => {
+interface GroupsProps {
+  onNavigateToRules: (group: { id: string; name: string }) => void;
+}
+
+const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,11 +24,8 @@ const Groups = () => {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
 
-  // Domain management modal state
-  const [showDomainModal, setShowDomainModal] = useState(false);
-
   // Toast hook
-  const { success, error: toastError, ToastContainer } = useToast();
+  const { ToastContainer } = useToast();
 
   // New group form state
   const [newGroupName, setNewGroupName] = useState('');
@@ -320,7 +320,10 @@ const Groups = () => {
                 <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 text-sm text-slate-600">
                   {selectedGroup.domainCount} dominios configurados
                   <button
-                    onClick={() => setShowDomainModal(true)}
+                    onClick={() => {
+                      setShowConfigModal(false);
+                      onNavigateToRules({ id: selectedGroup.id, name: selectedGroup.name });
+                    }}
                     className="ml-2 text-blue-600 hover:text-blue-800 font-medium"
                   >
                     Gestionar
@@ -347,24 +350,6 @@ const Groups = () => {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Domain Management Modal */}
-      {selectedGroup && (
-        <DomainManagementModal
-          isOpen={showDomainModal}
-          onClose={() => setShowDomainModal(false)}
-          groupId={selectedGroup.id}
-          groupName={selectedGroup.name}
-          onDomainsChanged={() => void fetchGroups()}
-          onToast={(message, type, undoAction) => {
-            if (type === 'success') {
-              success(message, undoAction);
-            } else {
-              toastError(message);
-            }
-          }}
-        />
       )}
 
       {/* Toast notifications */}

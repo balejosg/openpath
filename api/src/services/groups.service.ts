@@ -12,6 +12,8 @@ import type {
   RuleType,
   GroupStats,
   SystemStatus,
+  PaginatedRulesResult,
+  ListRulesOptions,
 } from '../lib/groups-storage.js';
 
 // =============================================================================
@@ -49,6 +51,13 @@ export interface BulkCreateRulesInput {
   groupId: string;
   type: RuleType;
   values: string[];
+}
+
+export interface UpdateRuleInput {
+  id: string;
+  groupId: string;
+  value?: string | undefined;
+  comment?: string | null | undefined;
 }
 
 export interface ExportResult {
@@ -170,6 +179,21 @@ export async function listRules(groupId: string, type?: RuleType): Promise<Group
 }
 
 /**
+ * List rules for a group with pagination.
+ */
+export async function listRulesPaginated(
+  options: ListRulesOptions
+): Promise<GroupsResult<PaginatedRulesResult>> {
+  const group = await groupsStorage.getGroupById(options.groupId);
+  if (!group) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Group not found' } };
+  }
+
+  const result = await groupsStorage.getRulesByGroupPaginated(options);
+  return { ok: true, data: result };
+}
+
+/**
  * Create a rule.
  */
 export async function createRule(input: CreateRuleInput): Promise<GroupsResult<{ id: string }>> {
@@ -214,6 +238,46 @@ export async function createRule(input: CreateRuleInput): Promise<GroupsResult<{
 export async function deleteRule(id: string): Promise<GroupsResult<{ deleted: boolean }>> {
   const deleted = await groupsStorage.deleteRule(id);
   return { ok: true, data: { deleted } };
+}
+
+/**
+ * Update a rule.
+ */
+export async function updateRule(input: UpdateRuleInput): Promise<GroupsResult<Rule>> {
+  // Check if group exists
+  const group = await groupsStorage.getGroupById(input.groupId);
+  if (!group) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Group not found' } };
+  }
+
+  // Check if rule exists
+  const existingRule = await groupsStorage.getRuleById(input.id);
+  if (!existingRule) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Rule not found' } };
+  }
+
+  // Verify rule belongs to the group
+  if (existingRule.groupId !== input.groupId) {
+    return {
+      ok: false,
+      error: { code: 'BAD_REQUEST', message: 'Rule does not belong to this group' },
+    };
+  }
+
+  const updated = await groupsStorage.updateRule({
+    id: input.id,
+    value: input.value,
+    comment: input.comment,
+  });
+
+  if (!updated) {
+    return {
+      ok: false,
+      error: { code: 'CONFLICT', message: 'A rule with this value already exists' },
+    };
+  }
+
+  return { ok: true, data: updated };
 }
 
 /**
@@ -292,7 +356,9 @@ export const GroupsService = {
   updateGroup,
   deleteGroup,
   listRules,
+  listRulesPaginated,
   createRule,
+  updateRule,
   deleteRule,
   bulkCreateRules,
   getStats,

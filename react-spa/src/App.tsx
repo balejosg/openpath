@@ -11,9 +11,15 @@ import ForgotPassword from './views/ForgotPassword';
 import ResetPassword from './views/ResetPassword';
 import Settings from './views/Settings';
 import DomainRequests from './views/DomainRequests';
+import RulesManager from './views/RulesManager';
 import { isAuthenticated, onAuthChange } from './lib/auth';
 
 type AuthView = 'login' | 'register' | 'forgot-password' | 'reset-password';
+
+interface SelectedGroup {
+  id: string;
+  name: string;
+}
 
 const App: React.FC = () => {
   const [isAuth, setIsAuth] = useState(isAuthenticated());
@@ -21,6 +27,9 @@ const App: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // State for rules manager navigation
+  const [selectedGroup, setSelectedGroup] = useState<SelectedGroup | null>(null);
 
   useEffect(() => {
     return onAuthChange(() => {
@@ -31,6 +40,18 @@ const App: React.FC = () => {
   const handleLogin = () => setIsAuth(true);
   const handleRegister = () => setIsAuth(true);
 
+  // Handle navigation to rules manager
+  const handleNavigateToRules = (group: SelectedGroup) => {
+    setSelectedGroup(group);
+    setActiveTab('rules');
+  };
+
+  // Handle back from rules manager
+  const handleBackFromRules = () => {
+    setSelectedGroup(null);
+    setActiveTab('groups');
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -38,7 +59,17 @@ const App: React.FC = () => {
       case 'classrooms':
         return <Classrooms />;
       case 'groups':
-        return <Groups />;
+        return <Groups onNavigateToRules={handleNavigateToRules} />;
+      case 'rules':
+        return selectedGroup ? (
+          <RulesManager
+            groupId={selectedGroup.id}
+            groupName={selectedGroup.name}
+            onBack={handleBackFromRules}
+          />
+        ) : (
+          <Groups onNavigateToRules={handleNavigateToRules} />
+        );
       case 'users':
         return <UsersView />;
       case 'settings':
@@ -58,6 +89,8 @@ const App: React.FC = () => {
         return 'Gestión de Aulas';
       case 'groups':
         return 'Grupos y Políticas';
+      case 'rules':
+        return selectedGroup ? `Reglas: ${selectedGroup.name}` : 'Gestión de Reglas';
       case 'users':
         return 'Administración de Usuarios';
       case 'domains':

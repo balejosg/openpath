@@ -64,6 +64,29 @@ export interface SystemStatus {
   pausedGroups: number;
 }
 
+/** Paginated rules query options */
+export interface ListRulesOptions {
+  groupId: string;
+  type?: RuleType | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+  search?: string | undefined;
+}
+
+/** Paginated rules result */
+export interface PaginatedRulesResult {
+  rules: Rule[];
+  total: number;
+  hasMore: boolean;
+}
+
+/** Update rule input */
+export interface UpdateRuleInput {
+  id: string;
+  value?: string | undefined;
+  comment?: string | null | undefined;
+}
+
 /** Storage interface for dependency injection and testing */
 export interface IGroupsStorage {
   getAllGroups(): Promise<GroupWithCounts[]>;
@@ -73,12 +96,15 @@ export interface IGroupsStorage {
   updateGroup(id: string, displayName: string, enabled: boolean): Promise<void>;
   deleteGroup(id: string): Promise<boolean>;
   getRulesByGroup(groupId: string, type?: RuleType): Promise<Rule[]>;
+  getRulesByGroupPaginated(options: ListRulesOptions): Promise<PaginatedRulesResult>;
+  getRuleById(id: string): Promise<Rule | null>;
   createRule(
     groupId: string,
     type: RuleType,
     value: string,
     comment?: string | null
   ): Promise<CreateRuleResult>;
+  updateRule(input: UpdateRuleInput): Promise<Rule | null>;
   deleteRule(id: string): Promise<boolean>;
   bulkCreateRules(groupId: string, type: RuleType, values: string[]): Promise<number>;
   getStats(): Promise<GroupStats>;
@@ -247,6 +273,107 @@ export async function getRulesByGroup(groupId: string, type?: RuleType): Promise
   }
 
   return rules.map(dbRuleToApi).sort((a, b) => a.value.localeCompare(b.value));
+}
+
+/**
+ * Get rules for a group with pagination, filtering, and search.
+ */
+export async function getRulesByGroupPaginated(
+  options: ListRulesOptions
+): Promise<PaginatedRulesResult> {
+  const { groupId, type, limit = 50, offset = 0, search } = options;
+
+  // Get all rules for the group (we filter in memory for search)
+  let rules: WhitelistRule[];
+  if (type) {
+    rules = await db
+      .select()
+      .from(whitelistRules)
+      .where(and(eq(whitelistRules.groupId, groupId), eq(whitelistRules.type, type)));
+  } else {
+    rules = await db.select().from(whitelistRules).where(eq(whitelistRules.groupId, groupId));
+  }
+
+  // Apply search filter if provided
+  let filtered = rules;
+  if (search?.trim()) {
+    const searchLower = search.toLowerCase().trim();
+    filtered = rules.filter((r) => r.value.toLowerCase().includes(searchLower));
+  }
+
+  // Sort by value
+  filtered.sort((a, b) => a.value.localeCompare(b.value));
+
+  // Calculate total before pagination
+  const total = filtered.length;
+
+  // Apply pagination
+  const paginated = filtered.slice(offset, offset + limit);
+
+  return {
+    rules: paginated.map(dbRuleToApi),
+    total,
+    hasMore: offset + limit < total,
+  };
+}
+
+/**
+ * Get a single rule by ID.
+ */
+export async function getRuleById(id: string): Promise<Rule | null> {
+  const [rule] = await db.select().from(whitelistRules).where(eq(whitelistRules.id, id));
+  if (!rule) return null;
+  return dbRuleToApi(rule);
+}
+
+/**
+ * Update a rule's value and/or comment.
+ */
+export async function updateRule(input: UpdateRuleInput): Promise<Rule | null> {
+  const { id, value, comment } = input;
+
+  // Get existing rule
+  const [existing] = await db.select().from(whitelistRules).where(eq(whitelistRules.id, id));
+  if (!existing) return null;
+
+  // Build update object
+  const updates: Partial<{ value: string; comment: string | null }> = {};
+
+  if (value !== undefined) {
+    const normalizedValue = normalize.domain(value);
+
+    // Check for duplicates if changing value
+    const [duplicate] = await db
+      .select()
+      .from(whitelistRules)
+      .where(
+        and(
+          eq(whitelistRules.groupId, existing.groupId),
+          eq(whitelistRules.type, existing.type),
+          eq(whitelistRules.value, normalizedValue)
+        )
+      );
+
+    if (duplicate && duplicate.id !== id) {
+      // Duplicate exists with different ID, cannot update
+      return null;
+    }
+
+    updates.value = normalizedValue;
+  }
+
+  if (comment !== undefined) {
+    updates.comment = comment;
+  }
+
+  // Only update if there's something to update
+  if (Object.keys(updates).length > 0) {
+    await db.update(whitelistRules).set(updates).where(eq(whitelistRules.id, id));
+    logger.debug('Updated rule', { id, ...updates });
+  }
+
+  // Return updated rule
+  return getRuleById(id);
 }
 
 /**
@@ -501,7 +628,10 @@ export const groupsStorage: IGroupsStorage = {
   updateGroup,
   deleteGroup,
   getRulesByGroup,
+  getRulesByGroupPaginated,
+  getRuleById,
   createRule,
+  updateRule,
   deleteRule,
   bulkCreateRules,
   getStats,

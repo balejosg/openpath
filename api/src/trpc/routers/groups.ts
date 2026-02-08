@@ -33,6 +33,21 @@ const ListRulesSchema = z.object({
   type: RuleTypeSchema.optional(),
 });
 
+const ListRulesPaginatedSchema = z.object({
+  groupId: z.string().min(1),
+  type: RuleTypeSchema.optional(),
+  limit: z.number().min(1).max(100).optional().default(50),
+  offset: z.number().min(0).optional().default(0),
+  search: z.string().optional(),
+});
+
+const UpdateRuleSchema = z.object({
+  id: z.string().min(1),
+  groupId: z.string().min(1),
+  value: z.string().min(1).max(500).optional(),
+  comment: z.string().max(500).nullable().optional(),
+});
+
 const CreateRuleSchema = z.object({
   groupId: z.string().min(1),
   type: RuleTypeSchema,
@@ -150,6 +165,30 @@ export const groupsRouter = router({
   }),
 
   /**
+   * List rules for a group with pagination.
+   * @param groupId - Group ID
+   * @param type - Optional rule type filter
+   * @param limit - Max number of rules to return (default 50)
+   * @param offset - Number of rules to skip (default 0)
+   * @param search - Optional search string to filter by value
+   * @returns { rules, total, hasMore }
+   * @throws NOT_FOUND if group doesn't exist
+   */
+  listRulesPaginated: adminProcedure.input(ListRulesPaginatedSchema).query(async ({ input }) => {
+    const result = await GroupsService.listRulesPaginated({
+      groupId: input.groupId,
+      type: input.type,
+      limit: input.limit,
+      offset: input.offset,
+      search: input.search,
+    });
+    if (!result.ok) {
+      throw new TRPCError({ code: result.error.code, message: result.error.message });
+    }
+    return result.data;
+  }),
+
+  /**
    * Create a rule in a group.
    * @param groupId - Group ID
    * @param type - Rule type (whitelist, blocked_subdomain, blocked_path)
@@ -187,6 +226,29 @@ export const groupsRouter = router({
       }
       return result.data;
     }),
+
+  /**
+   * Update a rule.
+   * @param id - Rule ID
+   * @param groupId - Group ID
+   * @param value - New rule value (optional)
+   * @param comment - New comment (optional)
+   * @returns Updated rule
+   * @throws NOT_FOUND if rule or group doesn't exist
+   * @throws CONFLICT if new value already exists
+   */
+  updateRule: adminProcedure.input(UpdateRuleSchema).mutation(async ({ input }) => {
+    const result = await GroupsService.updateRule({
+      id: input.id,
+      groupId: input.groupId,
+      value: input.value,
+      comment: input.comment,
+    });
+    if (!result.ok) {
+      throw new TRPCError({ code: result.error.code, message: result.error.message });
+    }
+    return result.data;
+  }),
 
   /**
    * Bulk create rules in a group.
