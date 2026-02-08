@@ -173,7 +173,10 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
     // CRITICAL: Capture input and check pending FIRST, before ANY other logic
     // This prevents race conditions from multiple rapid event sources
     const inputValue = newValue.trim();
-    if (!inputValue) return;
+
+    if (!inputValue) {
+      return;
+    }
 
     // Check if this exact input is already being processed (use raw input as key)
     if (pendingValuesRef.current.has(inputValue)) {
@@ -393,7 +396,9 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
               />
             </div>
             <Button
-              onClick={() => void handleAddRule()}
+              onClick={() => {
+                void handleAddRule();
+              }}
               disabled={adding || !newValue.trim()}
               isLoading={adding}
               size="md"
