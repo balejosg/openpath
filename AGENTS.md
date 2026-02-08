@@ -32,31 +32,29 @@ The dependency flows ONE direction only: `ClassroomPath → OpenPath`
 | ----------------------------------------------- | -------------------- |
 | `git commit --no-verify` o `-n`                 | **SESIÓN TERMINADA** |
 | `HUSKY=0 git commit`                            | **SESIÓN TERMINADA** |
-| Commit sin ejecutar `npm run verify:full`       | **SESIÓN TERMINADA** |
 | Saltar tests porque "tardan mucho"              | **SESIÓN TERMINADA** |
 | Comentar tests que fallan                       | **SESIÓN TERMINADA** |
 | Usar `@ts-ignore` o `eslint-disable` para pasar | **SESIÓN TERMINADA** |
 
-### Proceso Obligatorio Antes de CUALQUIER Commit
+### Proceso de Commit
 
 ```bash
-# 1. EJECUTAR VERIFICACIÓN COMPLETA (SIN ATAJOS)
-npm run verify:full
-
-# 2. SI FALLA CUALQUIER TEST:
-#    - NO hacer commit
-#    - ARREGLAR el problema
-#    - VOLVER a ejecutar verify:full
-#    - REPETIR hasta que TODO PASE
-
-# 3. SOLO después de que TODO PASE:
+# 1. COMMIT NORMAL (el pre-commit hook ejecuta verify:full automáticamente)
 git add <files>
 git commit -m "mensaje"
+
+# 2. SI EL HOOK FALLA:
+#    - NO usar --no-verify
+#    - ARREGLAR el problema
+#    - REINTENTAR el commit
+#    - REPETIR hasta que PASE
 ```
+
+**⚠️ NO ejecutar `npm run verify:full` manualmente antes de commit** - el hook lo hace automáticamente. Ejecutarlo dos veces es redundante.
 
 ### ¿Por Qué Esta Política Existe?
 
-Un agente hizo commit sin ejecutar tests, causando:
+Un agente hizo commit con `--no-verify`, causando:
 
 - Código roto en producción
 - Tiempo perdido debuggeando
@@ -196,12 +194,12 @@ CI runs `@smoke` tests on every PR. Full suite runs on main/nightly/`e2e` label.
 
 For **fast feedback during development**, use the layered verification system:
 
-| Command                   | Time    | What It Runs                              | When to Use                           |
-| ------------------------- | ------- | ----------------------------------------- | ------------------------------------- |
-| `npm run verify:agent`    | ~5-30s  | Auto-detects changes, runs minimal checks | **Default for iterative development** |
-| `npm run verify:quick`    | ~15-30s | Typecheck + ESLint + Prettier             | After code changes, before deep dive  |
-| `npm run verify:affected` | ~30-60s | Quick + tests for affected workspaces     | After changing tests or shared/       |
-| `npm run verify:full`     | ~3-5min | **COMPLETE suite (MANDATORY for commit)** | **Before ANY commit**                 |
+| Command                   | Time    | What It Runs                                  | When to Use                           |
+| ------------------------- | ------- | --------------------------------------------- | ------------------------------------- |
+| `npm run verify:agent`    | ~5-30s  | Auto-detects changes, runs minimal checks     | **Default for iterative development** |
+| `npm run verify:quick`    | ~15-30s | Typecheck + ESLint + Prettier                 | After code changes, before deep dive  |
+| `npm run verify:affected` | ~30-60s | Quick + tests for affected workspaces         | After changing tests or shared/       |
+| `npm run verify:full`     | ~3-5min | **COMPLETE suite (runs via pre-commit hook)** | **Automatic on commit**               |
 
 #### verify:agent (Recommended for Agents)
 
@@ -215,8 +213,7 @@ Automatically chooses the fastest verification based on what changed:
 # During iterative development:
 npm run verify:agent
 
-# Before commit (MANDATORY):
-npm run verify:full
+# On commit: verify:full runs automatically via pre-commit hook
 ```
 
 #### Watch Mode (Continuous Feedback)
@@ -233,14 +230,9 @@ npm run test:watch:spa    # Vitest watch for react-spa
 npm run test:e2e:smoke    # Only @smoke tagged tests (~20s vs ~2min)
 ```
 
-### The Rule
+### What verify:full Runs (via pre-commit hook)
 
-```bash
-# BEFORE committing ANY changes:
-npm run verify:full
-```
-
-This command runs:
+The pre-commit hook automatically runs `verify:full`, which includes:
 
 1. `npm run verify` - Typecheck + ESLint (all workspaces)
 2. `npm run lint:shell` - Shellcheck for bash scripts
@@ -297,19 +289,17 @@ Everything else (lint, typecheck, unit tests, E2E) runs **locally only**.
 
 ```bash
 # 1. Make changes
-# 2. Run full verification
-npm run verify:full
-
-# 3. If ANY failure:
-#    - DO NOT commit
-#    - Fix the issue
-#    - Run verify:full again
-#    - Repeat until ALL PASS
-
-# 4. Only after ALL PASS:
+# 2. Commit (pre-commit hook runs verify:full automatically)
 git add .
 git commit -m "your message"
+
+# 3. If hook fails:
+#    - Fix the issue
+#    - Retry the commit
+#    - Repeat until hook passes
 ```
+
+**DO NOT run `npm run verify:full` manually before commit** - the hook does it automatically.
 
 ## Git Hooks (Enforced)
 
