@@ -61,6 +61,10 @@ const BulkCreateRulesSchema = z.object({
   values: z.array(z.string().min(1).max(500)),
 });
 
+const BulkDeleteRulesSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(100),
+});
+
 // =============================================================================
 // Router
 // =============================================================================
@@ -264,6 +268,19 @@ export const groupsRouter = router({
       type: input.type as RuleType,
       values: input.values,
     });
+    if (!result.ok) {
+      throw new TRPCError({ code: result.error.code, message: result.error.message });
+    }
+    return result.data;
+  }),
+
+  /**
+   * Bulk delete rules.
+   * @param ids - Array of rule IDs to delete (max 100)
+   * @returns { deleted: number, rules: Rule[] } - Count and deleted rules for undo
+   */
+  bulkDeleteRules: adminProcedure.input(BulkDeleteRulesSchema).mutation(async ({ input }) => {
+    const result = await GroupsService.bulkDeleteRules(input.ids);
     if (!result.ok) {
       throw new TRPCError({ code: result.error.code, message: result.error.message });
     }

@@ -98,6 +98,7 @@ export interface IGroupsStorage {
   getRulesByGroup(groupId: string, type?: RuleType): Promise<Rule[]>;
   getRulesByGroupPaginated(options: ListRulesOptions): Promise<PaginatedRulesResult>;
   getRuleById(id: string): Promise<Rule | null>;
+  getRulesByIds(ids: string[]): Promise<Rule[]>;
   createRule(
     groupId: string,
     type: RuleType,
@@ -107,6 +108,7 @@ export interface IGroupsStorage {
   updateRule(input: UpdateRuleInput): Promise<Rule | null>;
   deleteRule(id: string): Promise<boolean>;
   bulkCreateRules(groupId: string, type: RuleType, values: string[]): Promise<number>;
+  bulkDeleteRules(ids: string[]): Promise<number>;
   getStats(): Promise<GroupStats>;
   getSystemStatus(): Promise<SystemStatus>;
   toggleSystemStatus(enable: boolean): Promise<SystemStatus>;
@@ -327,6 +329,20 @@ export async function getRuleById(id: string): Promise<Rule | null> {
 }
 
 /**
+ * Get multiple rules by IDs.
+ */
+export async function getRulesByIds(ids: string[]): Promise<Rule[]> {
+  if (ids.length === 0) return [];
+
+  const rules: Rule[] = [];
+  for (const id of ids) {
+    const rule = await getRuleById(id);
+    if (rule) rules.push(rule);
+  }
+  return rules;
+}
+
+/**
  * Update a rule's value and/or comment.
  */
 export async function updateRule(input: UpdateRuleInput): Promise<Rule | null> {
@@ -422,6 +438,27 @@ export async function createRule(
 export async function deleteRule(id: string): Promise<boolean> {
   const result = await db.delete(whitelistRules).where(eq(whitelistRules.id, id));
   return (result.rowCount ?? 0) > 0;
+}
+
+/**
+ * Bulk delete rules by IDs.
+ *
+ * @param ids - Array of rule IDs to delete
+ * @returns Number of rules deleted
+ */
+export async function bulkDeleteRules(ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+
+  let deletedCount = 0;
+  for (const id of ids) {
+    const result = await db.delete(whitelistRules).where(eq(whitelistRules.id, id));
+    if ((result.rowCount ?? 0) > 0) {
+      deletedCount++;
+    }
+  }
+
+  logger.debug('Bulk deleted rules', { count: deletedCount, requested: ids.length });
+  return deletedCount;
 }
 
 /**
@@ -630,10 +667,12 @@ export const groupsStorage: IGroupsStorage = {
   getRulesByGroup,
   getRulesByGroupPaginated,
   getRuleById,
+  getRulesByIds,
   createRule,
   updateRule,
   deleteRule,
   bulkCreateRules,
+  bulkDeleteRules,
   getStats,
   getSystemStatus,
   toggleSystemStatus,

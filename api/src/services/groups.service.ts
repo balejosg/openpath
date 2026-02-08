@@ -241,6 +241,23 @@ export async function deleteRule(id: string): Promise<GroupsResult<{ deleted: bo
 }
 
 /**
+ * Bulk delete rules.
+ */
+export async function bulkDeleteRules(
+  ids: string[]
+): Promise<GroupsResult<{ deleted: number; rules: Rule[] }>> {
+  if (ids.length === 0) {
+    return { ok: true, data: { deleted: 0, rules: [] } };
+  }
+
+  // Get the rules before deleting (for undo functionality)
+  const rules = await groupsStorage.getRulesByIds(ids);
+
+  const deleted = await groupsStorage.bulkDeleteRules(ids);
+  return { ok: true, data: { deleted, rules } };
+}
+
+/**
  * Update a rule.
  */
 export async function updateRule(input: UpdateRuleInput): Promise<GroupsResult<Rule>> {
@@ -361,6 +378,7 @@ export const GroupsService = {
   updateRule,
   deleteRule,
   bulkCreateRules,
+  bulkDeleteRules,
   getStats,
   getSystemStatus,
   toggleSystemStatus,

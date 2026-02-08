@@ -27,8 +27,17 @@ vi.mock('../../hooks/useRulesManager', () => ({
     search: '',
     setSearch: vi.fn(),
     counts: { all: 1, allowed: 1, blocked: 0 },
+    // Selection state
+    selectedIds: new Set<string>(),
+    toggleSelection: vi.fn(),
+    toggleSelectAll: vi.fn(),
+    clearSelection: vi.fn(),
+    isAllSelected: false,
+    hasSelection: false,
+    // Actions
     addRule: vi.fn().mockResolvedValue(true),
     deleteRule: vi.fn(),
+    bulkDeleteRules: vi.fn().mockResolvedValue(undefined),
     updateRule: vi.fn().mockResolvedValue(true),
     refetch: vi.fn(),
   }),

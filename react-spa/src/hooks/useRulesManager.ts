@@ -34,9 +34,18 @@ interface UseRulesManagerReturn {
   // Counts
   counts: { all: number; allowed: number; blocked: number };
 
+  // Selection
+  selectedIds: Set<string>;
+  toggleSelection: (id: string) => void;
+  toggleSelectAll: () => void;
+  clearSelection: () => void;
+  isAllSelected: boolean;
+  hasSelection: boolean;
+
   // Actions
   addRule: (value: string) => Promise<boolean>;
   deleteRule: (rule: Rule) => Promise<void>;
+  bulkDeleteRules: () => Promise<void>;
   updateRule: (id: string, data: { value?: string; comment?: string | null }) => Promise<boolean>;
   refetch: () => Promise<void>;
 }
@@ -63,6 +72,9 @@ export function useRulesManager({
 
   // Counts for tabs
   const [counts, setCounts] = useState({ all: 0, allowed: 0, blocked: 0 });
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Debounce ref for search
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -171,6 +183,38 @@ export function useRulesManager({
     setPage(1);
   }, [filter]);
 
+  // Clear selection when rules change (pagination, filter, search)
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [page, filter, search]);
+
+  // Selection handlers
+  const toggleSelection = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (selectedIds.size === rules.length) {
+      // All selected, deselect all
+      setSelectedIds(new Set());
+    } else {
+      // Select all current page rules
+      setSelectedIds(new Set(rules.map((r) => r.id)));
+    }
+  }, [rules, selectedIds.size]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
   // Add rule
   const addRule = useCallback(
     async (value: string): Promise<boolean> => {
@@ -268,9 +312,55 @@ export function useRulesManager({
     [groupId, fetchRules, onToast]
   );
 
+  // Bulk delete rules with undo
+  const bulkDeleteRules = useCallback(async (): Promise<void> => {
+    if (selectedIds.size === 0) return;
+
+    const idsToDelete = Array.from(selectedIds);
+
+    try {
+      const result = await trpc.groups.bulkDeleteRules.mutate({ ids: idsToDelete });
+
+      const deletedRules = result.rules;
+      const count = result.deleted;
+
+      clearSelection();
+
+      onToast(`${String(count)} reglas eliminadas`, 'success', () => {
+        void (async () => {
+          try {
+            // Restore all deleted rules
+            for (const rule of deletedRules) {
+              await trpc.groups.createRule.mutate({
+                groupId: rule.groupId,
+                type: rule.type,
+                value: rule.value,
+                comment: rule.comment ?? undefined,
+              });
+            }
+            await fetchRules();
+            await fetchCounts();
+            onToast(`${String(deletedRules.length)} reglas restauradas`, 'success');
+          } catch (err) {
+            console.error('Failed to undo bulk delete:', err);
+            onToast('Error al restaurar reglas', 'error');
+          }
+        })();
+      });
+
+      await fetchRules();
+      await fetchCounts();
+    } catch (err) {
+      console.error('Failed to bulk delete rules:', err);
+      onToast('Error al eliminar reglas', 'error');
+    }
+  }, [selectedIds, clearSelection, fetchRules, fetchCounts, onToast]);
+
   // Calculate derived values
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const hasMore = page < totalPages;
+  const isAllSelected = rules.length > 0 && selectedIds.size === rules.length;
+  const hasSelection = selectedIds.size > 0;
 
   return {
     // Data
@@ -294,9 +384,18 @@ export function useRulesManager({
     // Counts
     counts,
 
+    // Selection
+    selectedIds,
+    toggleSelection,
+    toggleSelectAll,
+    clearSelection,
+    isAllSelected,
+    hasSelection,
+
     // Actions
     addRule,
     deleteRule,
+    bulkDeleteRules,
     updateRule,
     refetch: fetchRules,
   };

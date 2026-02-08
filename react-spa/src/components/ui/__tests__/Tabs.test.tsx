@@ -9,8 +9,10 @@ describe('Tabs Component', () => {
     { id: 'blocked', label: 'Bloqueados', count: 45 },
   ];
 
+  const noop = vi.fn();
+
   it('renders all tabs correctly', () => {
-    render(<Tabs tabs={defaultTabs} activeTab="all" onChange={() => {}} />);
+    render(<Tabs tabs={defaultTabs} activeTab="all" onChange={noop} />);
 
     expect(screen.getByRole('tab', { name: /todos/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /permitidos/i })).toBeInTheDocument();
@@ -18,7 +20,7 @@ describe('Tabs Component', () => {
   });
 
   it('displays counts for each tab', () => {
-    render(<Tabs tabs={defaultTabs} activeTab="all" onChange={() => {}} />);
+    render(<Tabs tabs={defaultTabs} activeTab="all" onChange={noop} />);
 
     expect(screen.getByText('57')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
@@ -26,7 +28,7 @@ describe('Tabs Component', () => {
   });
 
   it('marks active tab with aria-selected', () => {
-    render(<Tabs tabs={defaultTabs} activeTab="allowed" onChange={() => {}} />);
+    render(<Tabs tabs={defaultTabs} activeTab="allowed" onChange={noop} />);
 
     const activeTab = screen.getByRole('tab', { name: /permitidos/i });
     expect(activeTab).toHaveAttribute('aria-selected', 'true');
@@ -48,14 +50,14 @@ describe('Tabs Component', () => {
       { id: 'test', label: 'Test', count: 5, icon: <span data-testid="test-icon">Icon</span> },
     ];
 
-    render(<Tabs tabs={tabsWithIcons} activeTab="test" onChange={() => {}} />);
+    render(<Tabs tabs={tabsWithIcons} activeTab="test" onChange={noop} />);
     expect(screen.getByTestId('test-icon')).toBeInTheDocument();
   });
 
   it('renders without count when not provided', () => {
     const tabsWithoutCount = [{ id: 'nocount', label: 'Sin Contador' }];
 
-    render(<Tabs tabs={tabsWithoutCount} activeTab="nocount" onChange={() => {}} />);
+    render(<Tabs tabs={tabsWithoutCount} activeTab="nocount" onChange={noop} />);
     expect(screen.getByRole('tab', { name: /sin contador/i })).toBeInTheDocument();
   });
 });

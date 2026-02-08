@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Tabs } from '../components/ui/Tabs';
 import { RulesTable } from '../components/RulesTable';
+import { BulkActionBar } from '../components/BulkActionBar';
 import { Button } from '../components/ui/Button';
 import { useRulesManager, FilterType } from '../hooks/useRulesManager';
 import { useToast } from '../components/ui/Toast';
@@ -34,6 +35,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
   const [newValue, setNewValue] = useState('');
   const [inputError, setInputError] = useState('');
   const [adding, setAdding] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const {
     rules,
@@ -48,8 +50,15 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
     search,
     setSearch,
     counts,
+    selectedIds,
+    toggleSelection,
+    toggleSelectAll,
+    clearSelection,
+    isAllSelected,
+    hasSelection,
     addRule,
     deleteRule,
+    bulkDeleteRules,
     refetch,
   } = useRulesManager({
     groupId,
@@ -100,6 +109,13 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setNewValue(e.target.value);
     if (inputError) setInputError('');
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    await bulkDeleteRules();
+    setBulkDeleting(false);
   };
 
   // Tab configuration
@@ -227,6 +243,11 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
           rules={rules}
           loading={loading}
           onDelete={(rule) => void deleteRule(rule)}
+          selectedIds={selectedIds}
+          onToggleSelection={toggleSelection}
+          onToggleSelectAll={toggleSelectAll}
+          isAllSelected={isAllSelected}
+          hasSelection={hasSelection}
           emptyMessage={
             search
               ? 'No se encontraron resultados para tu búsqueda'
@@ -269,6 +290,14 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
 
       {/* Toast notifications */}
       <ToastContainer />
+
+      {/* Bulk action bar */}
+      <BulkActionBar
+        selectedCount={selectedIds.size}
+        onDelete={() => void handleBulkDelete()}
+        onClear={clearSelection}
+        isDeleting={bulkDeleting}
+      />
     </div>
   );
 };

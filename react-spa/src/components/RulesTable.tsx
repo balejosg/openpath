@@ -1,5 +1,15 @@
 import React from 'react';
-import { Trash2, Edit2, Check, Ban, Route, Loader2 } from 'lucide-react';
+import {
+  Trash2,
+  Edit2,
+  Check,
+  Ban,
+  Route,
+  Loader2,
+  Square,
+  CheckSquare,
+  Minus,
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getRuleTypeBadge } from '../lib/ruleDetection';
 
@@ -21,6 +31,12 @@ interface RulesTableProps {
   onEdit?: (rule: Rule) => void;
   emptyMessage?: string;
   className?: string;
+  // Selection props
+  selectedIds?: Set<string>;
+  onToggleSelection?: (id: string) => void;
+  onToggleSelectAll?: () => void;
+  isAllSelected?: boolean;
+  hasSelection?: boolean;
 }
 
 /**
@@ -33,7 +49,13 @@ export const RulesTable: React.FC<RulesTableProps> = ({
   onEdit,
   emptyMessage = 'No hay reglas configuradas',
   className,
+  selectedIds,
+  onToggleSelection,
+  onToggleSelectAll,
+  isAllSelected,
+  hasSelection,
 }) => {
+  const hasSelectionFeature = selectedIds !== undefined && onToggleSelection !== undefined;
   const getTypeIcon = (type: RuleType) => {
     switch (type) {
       case 'whitelist':
@@ -89,6 +111,23 @@ export const RulesTable: React.FC<RulesTableProps> = ({
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-bold tracking-wider">
+              {hasSelectionFeature && (
+                <th className="px-4 py-3 w-10">
+                  <button
+                    onClick={onToggleSelectAll}
+                    className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                    title={isAllSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
+                  >
+                    {isAllSelected ? (
+                      <CheckSquare size={18} className="text-blue-600" />
+                    ) : hasSelection ? (
+                      <Minus size={18} className="text-blue-400" />
+                    ) : (
+                      <Square size={18} />
+                    )}
+                  </button>
+                </th>
+              )}
               <th className="px-4 py-3">Valor</th>
               <th className="px-4 py-3 w-32">Tipo</th>
               <th className="px-4 py-3 hidden md:table-cell">Comentario</th>
@@ -97,52 +136,76 @@ export const RulesTable: React.FC<RulesTableProps> = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {rules.map((rule) => (
-              <tr key={rule.id} className="hover:bg-slate-50 transition-colors group">
-                <td className="px-4 py-3">
-                  <span className="text-sm text-slate-800 font-mono break-all">{rule.value}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={cn(
-                      'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border font-medium',
-                      getTypeBadgeClass(rule.type)
-                    )}
-                  >
-                    {getTypeIcon(rule.type)}
-                    {getRuleTypeBadge(rule.type)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 hidden md:table-cell">
-                  <span className="text-sm text-slate-500 truncate max-w-xs block">
-                    {rule.comment ?? '-'}
-                  </span>
-                </td>
-                <td className="px-4 py-3 hidden sm:table-cell">
-                  <span className="text-xs text-slate-400">{formatDate(rule.createdAt)}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {onEdit && (
+            {rules.map((rule) => {
+              const isSelected = selectedIds?.has(rule.id) ?? false;
+              return (
+                <tr
+                  key={rule.id}
+                  className={cn(
+                    'hover:bg-slate-50 transition-colors group',
+                    isSelected && 'bg-blue-50 hover:bg-blue-100'
+                  )}
+                >
+                  {hasSelectionFeature && (
+                    <td className="px-4 py-3">
                       <button
-                        onClick={() => onEdit(rule)}
-                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Editar"
+                        onClick={() => onToggleSelection(rule.id)}
+                        className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                        title={isSelected ? 'Deseleccionar' : 'Seleccionar'}
                       >
-                        <Edit2 size={14} />
+                        {isSelected ? (
+                          <CheckSquare size={18} className="text-blue-600" />
+                        ) : (
+                          <Square size={18} />
+                        )}
                       </button>
-                    )}
-                    <button
-                      onClick={() => onDelete(rule)}
-                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                      title="Eliminar"
+                    </td>
+                  )}
+                  <td className="px-4 py-3">
+                    <span className="text-sm text-slate-800 font-mono break-all">{rule.value}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border font-medium',
+                        getTypeBadgeClass(rule.type)
+                      )}
                     >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                      {getTypeIcon(rule.type)}
+                      {getRuleTypeBadge(rule.type)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    <span className="text-sm text-slate-500 truncate max-w-xs block">
+                      {rule.comment ?? '-'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 hidden sm:table-cell">
+                    <span className="text-xs text-slate-400">{formatDate(rule.createdAt)}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {onEdit && (
+                        <button
+                          onClick={() => onEdit(rule)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Editar"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onDelete(rule)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
