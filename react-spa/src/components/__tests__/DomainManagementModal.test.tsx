@@ -43,321 +43,533 @@ describe('DomainManagementModal', () => {
     vi.clearAllMocks();
     document.body.innerHTML = '';
 
-    // Default mock implementations
+    // Default mock implementations - return empty arrays for all rule types
     mockListRules.mockResolvedValue([]);
   });
 
-  it('renders modal with group name in title', async () => {
-    mockListRules.mockResolvedValue([]);
+  describe('Basic Rendering', () => {
+    it('renders modal with group name in title', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
 
-    render(<DomainManagementModal {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByText(/Gestionar Reglas: test-group/)).toBeInTheDocument();
+      });
+    });
 
-    await waitFor(() => {
-      expect(screen.getByText(/Dominios Permitidos: test-group/)).toBeInTheDocument();
+    it('does not render when isOpen is false', () => {
+      render(<DomainManagementModal {...defaultProps} isOpen={false} />);
+      expect(screen.queryByText(/Gestionar Reglas/)).not.toBeInTheDocument();
+    });
+
+    it('shows loading state initially', () => {
+      // Create a promise that never resolves to keep loading state
+      mockListRules.mockReturnValue(
+        new Promise<never>(() => {
+          // Intentionally never resolves
+        })
+      );
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      expect(screen.getByText('Cargando...')).toBeInTheDocument();
     });
   });
 
-  it('shows loading state initially', () => {
-    // Create a promise that never resolves to keep loading state
-    mockListRules.mockReturnValue(
-      new Promise<never>(() => {
-        // Intentionally never resolves
-      })
-    );
+  describe('Tabs', () => {
+    it('renders all three tabs', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
 
-    render(<DomainManagementModal {...defaultProps} />);
-
-    expect(screen.getByText('Cargando dominios...')).toBeInTheDocument();
-  });
-
-  it('displays empty state when no domains', async () => {
-    mockListRules.mockResolvedValue([]);
-
-    render(<DomainManagementModal {...defaultProps} />);
-
-    await waitFor(() => {
-      expect(screen.getByText('No hay dominios configurados')).toBeInTheDocument();
-    });
-  });
-
-  it('displays list of domains', async () => {
-    mockListRules.mockResolvedValue([
-      {
-        id: '1',
-        groupId: 'group-1',
-        type: 'whitelist',
-        value: 'google.com',
-        comment: null,
-        createdAt: '2024-01-01',
-      },
-      {
-        id: '2',
-        groupId: 'group-1',
-        type: 'whitelist',
-        value: 'youtube.com',
-        comment: null,
-        createdAt: '2024-01-01',
-      },
-    ]);
-
-    render(<DomainManagementModal {...defaultProps} />);
-
-    await waitFor(() => {
-      expect(screen.getByText('google.com')).toBeInTheDocument();
-      expect(screen.getByText('youtube.com')).toBeInTheDocument();
-    });
-  });
-
-  it('filters domains by search', async () => {
-    mockListRules.mockResolvedValue([
-      {
-        id: '1',
-        groupId: 'group-1',
-        type: 'whitelist',
-        value: 'google.com',
-        comment: null,
-        createdAt: '2024-01-01',
-      },
-      {
-        id: '2',
-        groupId: 'group-1',
-        type: 'whitelist',
-        value: 'youtube.com',
-        comment: null,
-        createdAt: '2024-01-01',
-      },
-    ]);
-
-    render(<DomainManagementModal {...defaultProps} />);
-
-    await waitFor(() => {
-      expect(screen.getByText('google.com')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('Dominios')).toBeInTheDocument();
+        expect(screen.getByText('Subdominios bloqueados')).toBeInTheDocument();
+        expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
+      });
     });
 
-    const searchInput = screen.getByPlaceholderText(/Buscar en/);
-    fireEvent.change(searchInput, { target: { value: 'google' } });
+    it('starts with Dominios tab active', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
 
-    expect(screen.getByText('google.com')).toBeInTheDocument();
-    expect(screen.queryByText('youtube.com')).not.toBeInTheDocument();
-  });
-
-  it('adds a single domain', async () => {
-    mockListRules.mockResolvedValue([]);
-    mockCreateRule.mockResolvedValue({ id: 'new-1' });
-
-    render(<DomainManagementModal {...defaultProps} />);
-
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      await waitFor(() => {
+        const dominiosTab = screen.getByText('Dominios');
+        expect(dominiosTab).toHaveClass('text-blue-600');
+      });
     });
 
-    const input = screen.getByPlaceholderText(/Añadir dominio/);
-    fireEvent.change(input, { target: { value: 'example.com' } });
-    fireEvent.click(screen.getByText('Añadir'));
+    it('switches to Subdominios tab when clicked', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
 
-    await waitFor(() => {
-      expect(mockCreateRule).toHaveBeenCalledWith({
-        groupId: 'group-1',
-        type: 'whitelist',
-        value: 'example.com',
+      await waitFor(() => {
+        expect(screen.getByText('Dominios')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('Subdominios bloqueados'));
+
+      await waitFor(() => {
+        // Check that help text for subdomains is shown
+        expect(
+          screen.getByText(/Los dominios en la lista blanca permiten automáticamente/)
+        ).toBeInTheDocument();
+      });
+    });
+
+    it('shows Próximamente for Rutas bloqueadas tab', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Próximamente/)).toBeInTheDocument();
+      });
+    });
+
+    it('shows placeholder content when Rutas bloqueadas would be selected', async () => {
+      // The tab is disabled, but we can verify the placeholder text exists
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        // The "Próximamente" text should be visible in the tab
+        const rutasTab = screen.getByText(/Rutas bloqueadas/);
+        expect(rutasTab).toBeInTheDocument();
+      });
+    });
+
+    it('shows count badges on tabs when rules exist', async () => {
+      mockListRules
+        .mockResolvedValueOnce([
+          {
+            id: '1',
+            groupId: 'group-1',
+            type: 'whitelist',
+            value: 'google.com',
+            comment: null,
+            createdAt: '2024-01-01',
+          },
+          {
+            id: '2',
+            groupId: 'group-1',
+            type: 'whitelist',
+            value: 'youtube.com',
+            comment: null,
+            createdAt: '2024-01-01',
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            id: '3',
+            groupId: 'group-1',
+            type: 'blocked_subdomain',
+            value: 'ads.google.com',
+            comment: null,
+            createdAt: '2024-01-01',
+          },
+        ])
+        .mockResolvedValueOnce([]);
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('2')).toBeInTheDocument(); // whitelist count
+        expect(screen.getByText('1')).toBeInTheDocument(); // subdomain count
       });
     });
   });
 
-  it('adds domain on Enter key', async () => {
-    mockListRules.mockResolvedValue([]);
-    mockCreateRule.mockResolvedValue({ id: 'new-1' });
+  describe('Whitelist Tab (Dominios)', () => {
+    it('displays empty state when no domains', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
 
-    render(<DomainManagementModal {...defaultProps} />);
-
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('No hay dominios configurados')).toBeInTheDocument();
+      });
     });
 
-    const input = screen.getByPlaceholderText(/Añadir dominio/);
-    fireEvent.change(input, { target: { value: 'example.com' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
+    it('displays list of domains', async () => {
+      mockListRules
+        .mockResolvedValueOnce([
+          {
+            id: '1',
+            groupId: 'group-1',
+            type: 'whitelist',
+            value: 'google.com',
+            comment: null,
+            createdAt: '2024-01-01',
+          },
+          {
+            id: '2',
+            groupId: 'group-1',
+            type: 'whitelist',
+            value: 'youtube.com',
+            comment: null,
+            createdAt: '2024-01-01',
+          },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
 
-    await waitFor(() => {
-      expect(mockCreateRule).toHaveBeenCalled();
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('google.com')).toBeInTheDocument();
+        expect(screen.getByText('youtube.com')).toBeInTheDocument();
+      });
     });
-  });
 
-  it('bulk adds multiple domains', async () => {
-    mockListRules.mockResolvedValue([]);
-    mockBulkCreateRules.mockResolvedValue({ count: 3 });
+    it('filters domains by search', async () => {
+      mockListRules
+        .mockResolvedValueOnce([
+          {
+            id: '1',
+            groupId: 'group-1',
+            type: 'whitelist',
+            value: 'google.com',
+            comment: null,
+            createdAt: '2024-01-01',
+          },
+          {
+            id: '2',
+            groupId: 'group-1',
+            type: 'whitelist',
+            value: 'youtube.com',
+            comment: null,
+            createdAt: '2024-01-01',
+          },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
 
-    render(<DomainManagementModal {...defaultProps} />);
+      render(<DomainManagementModal {...defaultProps} />);
 
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('google.com')).toBeInTheDocument();
+      });
+
+      const searchInput = screen.getByPlaceholderText(/Buscar en/);
+      fireEvent.change(searchInput, { target: { value: 'google' } });
+
+      expect(screen.getByText('google.com')).toBeInTheDocument();
+      expect(screen.queryByText('youtube.com')).not.toBeInTheDocument();
     });
 
-    const input = screen.getByPlaceholderText(/Añadir dominio/);
-    // Use comma-separated domains (text inputs don't preserve newlines)
-    fireEvent.change(input, {
-      target: { value: 'google.com, youtube.com, wikipedia.org' },
+    it('adds a single domain', async () => {
+      mockCreateRule.mockResolvedValue({ id: 'new-1' });
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir dominio/);
+      fireEvent.change(input, { target: { value: 'example.com' } });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(mockCreateRule).toHaveBeenCalledWith({
+          groupId: 'group-1',
+          type: 'whitelist',
+          value: 'example.com',
+        });
+      });
     });
 
-    const addButton = screen.getByText('Añadir');
-    fireEvent.click(addButton);
+    it('adds domain on Enter key', async () => {
+      mockCreateRule.mockResolvedValue({ id: 'new-1' });
 
-    await waitFor(() => {
-      expect(mockBulkCreateRules).toHaveBeenCalledWith({
-        groupId: 'group-1',
-        type: 'whitelist',
-        values: ['google.com', 'youtube.com', 'wikipedia.org'],
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir dominio/);
+      fireEvent.change(input, { target: { value: 'example.com' } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(mockCreateRule).toHaveBeenCalled();
+      });
+    });
+
+    it('bulk adds multiple domains', async () => {
+      mockBulkCreateRules.mockResolvedValue({ count: 3 });
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir dominio/);
+      fireEvent.change(input, { target: { value: 'google.com, youtube.com, wikipedia.org' } });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(mockBulkCreateRules).toHaveBeenCalledWith({
+          groupId: 'group-1',
+          type: 'whitelist',
+          values: ['google.com', 'youtube.com', 'wikipedia.org'],
+        });
+      });
+    });
+
+    it('shows error for invalid domain format', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir dominio/);
+      fireEvent.change(input, { target: { value: 'invalid' } });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/no es un dominio válido/)).toBeInTheDocument();
+      });
+    });
+
+    it('shows error for duplicate domain', async () => {
+      mockListRules
+        .mockResolvedValueOnce([
+          {
+            id: '1',
+            groupId: 'group-1',
+            type: 'whitelist',
+            value: 'google.com',
+            comment: null,
+            createdAt: '2024-01-01',
+          },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('google.com')).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir dominio/);
+      fireEvent.change(input, { target: { value: 'google.com' } });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/ya existe/)).toBeInTheDocument();
+      });
+    });
+
+    it('deletes a domain', async () => {
+      mockListRules
+        .mockResolvedValueOnce([
+          {
+            id: '1',
+            groupId: 'group-1',
+            type: 'whitelist',
+            value: 'google.com',
+            comment: null,
+            createdAt: '2024-01-01',
+          },
+        ])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      mockDeleteRule.mockResolvedValue({ deleted: true });
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('google.com')).toBeInTheDocument();
+      });
+
+      const deleteButton = screen.getByTitle('Eliminar');
+      fireEvent.click(deleteButton);
+
+      await waitFor(() => {
+        expect(mockDeleteRule).toHaveBeenCalledWith({ id: '1' });
+      });
+    });
+
+    it('calls onDomainsChanged after adding domain', async () => {
+      mockCreateRule.mockResolvedValue({ id: 'new-1' });
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir dominio/);
+      fireEvent.change(input, { target: { value: 'example.com' } });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(defaultProps.onDomainsChanged).toHaveBeenCalled();
+      });
+    });
+
+    it('strips protocol from pasted URLs', async () => {
+      mockCreateRule.mockResolvedValue({ id: 'new-1' });
+
+      render(<DomainManagementModal {...defaultProps} />);
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir dominio/);
+      fireEvent.change(input, { target: { value: 'https://example.com/path' } });
+      fireEvent.click(screen.getByText('Añadir'));
+
+      await waitFor(() => {
+        expect(mockCreateRule).toHaveBeenCalledWith({
+          groupId: 'group-1',
+          type: 'whitelist',
+          value: 'example.com',
+        });
       });
     });
   });
 
-  it('shows error for invalid domain format', async () => {
-    mockListRules.mockResolvedValue([]);
+  describe('Subdomain Tab', () => {
+    it('shows help text when subdomain tab is active', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
 
-    render(<DomainManagementModal {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByText('Subdominios bloqueados')).toBeInTheDocument();
+      });
 
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      fireEvent.click(screen.getByText('Subdominios bloqueados'));
+
+      await waitFor(() => {
+        expect(
+          screen.getByText(/Los dominios en la lista blanca permiten automáticamente/)
+        ).toBeInTheDocument();
+      });
     });
 
-    const input = screen.getByPlaceholderText(/Añadir dominio/);
-    fireEvent.change(input, { target: { value: 'invalid' } });
-    fireEvent.click(screen.getByText('Añadir'));
+    it('shows subdomain placeholder when tab is active', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/no es un dominio válido/)).toBeInTheDocument();
-    });
-  });
+      await waitFor(() => {
+        expect(screen.getByText('Subdominios bloqueados')).toBeInTheDocument();
+      });
 
-  it('shows error for duplicate domain', async () => {
-    mockListRules.mockResolvedValue([
-      {
-        id: '1',
-        groupId: 'group-1',
-        type: 'whitelist',
-        value: 'google.com',
-        comment: null,
-        createdAt: '2024-01-01',
-      },
-    ]);
+      fireEvent.click(screen.getByText('Subdominios bloqueados'));
 
-    render(<DomainManagementModal {...defaultProps} />);
-
-    await waitFor(() => {
-      expect(screen.getByText('google.com')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir subdominio/)).toBeInTheDocument();
+      });
     });
 
-    const input = screen.getByPlaceholderText(/Añadir dominio/);
-    fireEvent.change(input, { target: { value: 'google.com' } });
-    fireEvent.click(screen.getByText('Añadir'));
+    it('adds a subdomain rule', async () => {
+      mockCreateRule.mockResolvedValue({ id: 'new-1' });
 
-    await waitFor(() => {
-      expect(screen.getByText(/ya existe/)).toBeInTheDocument();
-    });
-  });
+      render(<DomainManagementModal {...defaultProps} />);
 
-  it('deletes a domain', async () => {
-    const rule = {
-      id: '1',
-      groupId: 'group-1',
-      type: 'whitelist',
-      value: 'google.com',
-      comment: null,
-      createdAt: '2024-01-01',
-    };
-    mockListRules.mockResolvedValue([rule]);
-    mockDeleteRule.mockResolvedValue({ deleted: true });
+      await waitFor(() => {
+        expect(screen.getByText('Subdominios bloqueados')).toBeInTheDocument();
+      });
 
-    render(<DomainManagementModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Subdominios bloqueados'));
 
-    await waitFor(() => {
-      expect(screen.getByText('google.com')).toBeInTheDocument();
-    });
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir subdominio/)).toBeInTheDocument();
+      });
 
-    // Find the delete button (trash icon)
-    const deleteButton = screen.getByTitle('Eliminar');
-    fireEvent.click(deleteButton);
+      const input = screen.getByPlaceholderText(/Añadir subdominio/);
+      fireEvent.change(input, { target: { value: 'ads.google.com' } });
+      fireEvent.click(screen.getByText('Añadir'));
 
-    await waitFor(() => {
-      expect(mockDeleteRule).toHaveBeenCalledWith({ id: '1' });
-    });
-  });
-
-  it('calls onDomainsChanged after adding domain', async () => {
-    mockListRules.mockResolvedValue([]);
-    mockCreateRule.mockResolvedValue({ id: 'new-1' });
-
-    render(<DomainManagementModal {...defaultProps} />);
-
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(mockCreateRule).toHaveBeenCalledWith({
+          groupId: 'group-1',
+          type: 'blocked_subdomain',
+          value: 'ads.google.com',
+        });
+      });
     });
 
-    const input = screen.getByPlaceholderText(/Añadir dominio/);
-    fireEvent.change(input, { target: { value: 'example.com' } });
-    fireEvent.click(screen.getByText('Añadir'));
+    it('adds a wildcard subdomain rule', async () => {
+      mockCreateRule.mockResolvedValue({ id: 'new-1' });
 
-    await waitFor(() => {
-      expect(defaultProps.onDomainsChanged).toHaveBeenCalled();
-    });
-  });
+      render(<DomainManagementModal {...defaultProps} />);
 
-  it('calls onClose when modal is closed', async () => {
-    mockListRules.mockResolvedValue([]);
+      await waitFor(() => {
+        expect(screen.getByText('Subdominios bloqueados')).toBeInTheDocument();
+      });
 
-    render(<DomainManagementModal {...defaultProps} />);
+      fireEvent.click(screen.getByText('Subdominios bloqueados'));
 
-    await waitFor(() => {
-      expect(screen.getByRole('dialog')).toBeInTheDocument();
-    });
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir subdominio/)).toBeInTheDocument();
+      });
 
-    // Press escape to close
-    fireEvent.keyDown(window, { key: 'Escape' });
+      const input = screen.getByPlaceholderText(/Añadir subdominio/);
+      fireEvent.change(input, { target: { value: '*.tracking.example.com' } });
+      fireEvent.click(screen.getByText('Añadir'));
 
-    expect(defaultProps.onClose).toHaveBeenCalled();
-  });
-
-  it('strips protocol from pasted URLs', async () => {
-    mockListRules.mockResolvedValue([]);
-    mockCreateRule.mockResolvedValue({ id: 'new-1' });
-
-    render(<DomainManagementModal {...defaultProps} />);
-
-    await waitFor(() => {
-      expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      await waitFor(() => {
+        expect(mockCreateRule).toHaveBeenCalledWith({
+          groupId: 'group-1',
+          type: 'blocked_subdomain',
+          value: '*.tracking.example.com',
+        });
+      });
     });
 
-    const input = screen.getByPlaceholderText(/Añadir dominio/);
-    fireEvent.change(input, { target: { value: 'https://example.com/path' } });
-    fireEvent.click(screen.getByText('Añadir'));
+    it('shows warning for root domain in subdomain tab', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
 
-    await waitFor(() => {
-      expect(mockCreateRule).toHaveBeenCalledWith({
-        groupId: 'group-1',
-        type: 'whitelist',
-        value: 'example.com',
+      await waitFor(() => {
+        expect(screen.getByText('Subdominios bloqueados')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByText('Subdominios bloqueados'));
+
+      await waitFor(() => {
+        expect(screen.getByPlaceholderText(/Añadir subdominio/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Añadir subdominio/);
+      fireEvent.change(input, { target: { value: 'google.com' } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Debería estar en la lista blanca/)).toBeInTheDocument();
       });
     });
   });
 
-  it('shows advanced options section', async () => {
-    mockListRules.mockResolvedValue([]);
+  describe('Modal Behavior', () => {
+    it('calls onClose when modal is closed', async () => {
+      render(<DomainManagementModal {...defaultProps} />);
 
-    render(<DomainManagementModal {...defaultProps} />);
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument();
+      });
 
-    await waitFor(() => {
-      expect(screen.getByText('Opciones avanzadas')).toBeInTheDocument();
+      // Press escape to close
+      fireEvent.keyDown(window, { key: 'Escape' });
+
+      expect(defaultProps.onClose).toHaveBeenCalled();
     });
 
-    fireEvent.click(screen.getByText('Opciones avanzadas'));
+    it('resets to Dominios tab when reopened', async () => {
+      const { rerender } = render(<DomainManagementModal {...defaultProps} />);
 
-    expect(screen.getByText(/Subdominios bloqueados/)).toBeInTheDocument();
-    expect(screen.getByText(/Rutas bloqueadas/)).toBeInTheDocument();
-  });
+      await waitFor(() => {
+        expect(screen.getByText('Dominios')).toBeInTheDocument();
+      });
 
-  it('does not render when isOpen is false', () => {
-    render(<DomainManagementModal {...defaultProps} isOpen={false} />);
+      // Switch to subdomain tab
+      fireEvent.click(screen.getByText('Subdominios bloqueados'));
 
-    expect(screen.queryByText(/Dominios Permitidos/)).not.toBeInTheDocument();
+      // Close modal
+      rerender(<DomainManagementModal {...defaultProps} isOpen={false} />);
+
+      // Reopen modal
+      rerender(<DomainManagementModal {...defaultProps} isOpen={true} />);
+
+      await waitFor(() => {
+        // Should be back on Dominios tab (check for placeholder)
+        expect(screen.getByPlaceholderText(/Añadir dominio/)).toBeInTheDocument();
+      });
+    });
   });
 });
