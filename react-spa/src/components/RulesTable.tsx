@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   Trash2,
   Edit2,
@@ -9,11 +9,22 @@ import {
   Square,
   CheckSquare,
   Minus,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getRuleTypeBadge } from '../lib/ruleDetection';
 
 export type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
+
+export type SortField = 'value' | 'type' | 'createdAt';
+export type SortDirection = 'asc' | 'desc';
+
+export interface SortConfig {
+  field: SortField;
+  direction: SortDirection;
+}
 
 export interface Rule {
   id: string;
@@ -55,7 +66,77 @@ export const RulesTable: React.FC<RulesTableProps> = ({
   isAllSelected,
   hasSelection,
 }) => {
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+
   const hasSelectionFeature = selectedIds !== undefined && onToggleSelection !== undefined;
+
+  // Handle column header click for sorting
+  const handleSort = useCallback((field: SortField) => {
+    setSortConfig((current) => {
+      if (current?.field === field) {
+        // Toggle direction or clear if already desc
+        if (current.direction === 'asc') {
+          return { field, direction: 'desc' };
+        }
+        return null; // Clear sort
+      }
+      // New field, start with asc
+      return { field, direction: 'asc' };
+    });
+  }, []);
+
+  // Sort rules based on current config
+  const sortedRules = useMemo(() => {
+    if (!sortConfig) return rules;
+
+    return [...rules].sort((a, b) => {
+      const { field, direction } = sortConfig;
+      let comparison = 0;
+
+      switch (field) {
+        case 'value':
+          comparison = a.value.localeCompare(b.value);
+          break;
+        case 'type':
+          comparison = a.type.localeCompare(b.type);
+          break;
+        case 'createdAt':
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+      }
+
+      return direction === 'desc' ? -comparison : comparison;
+    });
+  }, [rules, sortConfig]);
+
+  // Render sort indicator
+  const renderSortIcon = (field: SortField) => {
+    if (sortConfig?.field !== field) {
+      return <ArrowUpDown size={14} className="text-slate-300" />;
+    }
+    return sortConfig.direction === 'asc' ? (
+      <ArrowUp size={14} className="text-blue-600" />
+    ) : (
+      <ArrowDown size={14} className="text-blue-600" />
+    );
+  };
+
+  // Render sortable header
+  const renderSortableHeader = (field: SortField, label: string, headerClassName: string) => (
+    <th className={headerClassName}>
+      <button
+        onClick={() => handleSort(field)}
+        className="flex items-center gap-1 hover:text-slate-700 transition-colors group/sort"
+        data-testid={`sort-${field}`}
+      >
+        {label}
+        <span className="opacity-50 group-hover/sort:opacity-100 transition-opacity">
+          {renderSortIcon(field)}
+        </span>
+      </button>
+    </th>
+  );
+
   const getTypeIcon = (type: RuleType) => {
     switch (type) {
       case 'whitelist':
@@ -128,15 +209,15 @@ export const RulesTable: React.FC<RulesTableProps> = ({
                   </button>
                 </th>
               )}
-              <th className="px-4 py-3">Valor</th>
-              <th className="px-4 py-3 w-32">Tipo</th>
+              {renderSortableHeader('value', 'Valor', 'px-4 py-3')}
+              {renderSortableHeader('type', 'Tipo', 'px-4 py-3 w-32')}
               <th className="px-4 py-3 hidden md:table-cell">Comentario</th>
-              <th className="px-4 py-3 w-28 hidden sm:table-cell">Fecha</th>
+              {renderSortableHeader('createdAt', 'Fecha', 'px-4 py-3 w-28 hidden sm:table-cell')}
               <th className="px-4 py-3 w-20 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {rules.map((rule) => {
+            {sortedRules.map((rule) => {
               const isSelected = selectedIds?.has(rule.id) ?? false;
               return (
                 <tr

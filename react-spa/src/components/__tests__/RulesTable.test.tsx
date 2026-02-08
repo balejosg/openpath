@@ -179,4 +179,140 @@ describe('RulesTable Component', () => {
       expect(screen.queryByTitle('Seleccionar')).not.toBeInTheDocument();
     });
   });
+
+  describe('Column Sorting', () => {
+    const sortableRules: Rule[] = [
+      {
+        id: '1',
+        groupId: 'group-1',
+        type: 'whitelist',
+        value: 'banana.com',
+        comment: null,
+        createdAt: '2024-01-15T10:00:00Z',
+      },
+      {
+        id: '2',
+        groupId: 'group-1',
+        type: 'blocked_subdomain',
+        value: 'apple.com',
+        comment: null,
+        createdAt: '2024-01-20T10:00:00Z',
+      },
+      {
+        id: '3',
+        groupId: 'group-1',
+        type: 'blocked_path',
+        value: 'cherry.com',
+        comment: null,
+        createdAt: '2024-01-10T10:00:00Z',
+      },
+    ];
+
+    it('renders sortable column headers with sort icons', () => {
+      render(<RulesTable rules={sortableRules} loading={false} onDelete={noop} />);
+
+      expect(screen.getByTestId('sort-value')).toBeInTheDocument();
+      expect(screen.getByTestId('sort-type')).toBeInTheDocument();
+      expect(screen.getByTestId('sort-createdAt')).toBeInTheDocument();
+    });
+
+    it('sorts by value ascending when clicking value header', () => {
+      render(<RulesTable rules={sortableRules} loading={false} onDelete={noop} />);
+
+      const sortButton = screen.getByTestId('sort-value');
+      fireEvent.click(sortButton);
+
+      const rows = screen.getAllByRole('row');
+      // Header row + 3 data rows
+      expect(rows).toHaveLength(4);
+
+      // Check order: apple, banana, cherry (ascending)
+      const cells = screen.getAllByText(/\.com$/);
+      expect(cells[0]).toHaveTextContent('apple.com');
+      expect(cells[1]).toHaveTextContent('banana.com');
+      expect(cells[2]).toHaveTextContent('cherry.com');
+    });
+
+    it('sorts by value descending when clicking value header twice', () => {
+      render(<RulesTable rules={sortableRules} loading={false} onDelete={noop} />);
+
+      const sortButton = screen.getByTestId('sort-value');
+      fireEvent.click(sortButton); // asc
+      fireEvent.click(sortButton); // desc
+
+      const cells = screen.getAllByText(/\.com$/);
+      expect(cells[0]).toHaveTextContent('cherry.com');
+      expect(cells[1]).toHaveTextContent('banana.com');
+      expect(cells[2]).toHaveTextContent('apple.com');
+    });
+
+    it('clears sort when clicking header three times', () => {
+      render(<RulesTable rules={sortableRules} loading={false} onDelete={noop} />);
+
+      const sortButton = screen.getByTestId('sort-value');
+      fireEvent.click(sortButton); // asc
+      fireEvent.click(sortButton); // desc
+      fireEvent.click(sortButton); // clear
+
+      // Should return to original order: banana, apple, cherry
+      const cells = screen.getAllByText(/\.com$/);
+      expect(cells[0]).toHaveTextContent('banana.com');
+      expect(cells[1]).toHaveTextContent('apple.com');
+      expect(cells[2]).toHaveTextContent('cherry.com');
+    });
+
+    it('sorts by type', () => {
+      render(<RulesTable rules={sortableRules} loading={false} onDelete={noop} />);
+
+      const sortButton = screen.getByTestId('sort-type');
+      fireEvent.click(sortButton);
+
+      // Types in order: blocked_path, blocked_subdomain, whitelist
+      const cells = screen.getAllByText(/\.com$/);
+      expect(cells[0]).toHaveTextContent('cherry.com'); // blocked_path
+      expect(cells[1]).toHaveTextContent('apple.com'); // blocked_subdomain
+      expect(cells[2]).toHaveTextContent('banana.com'); // whitelist
+    });
+
+    it('sorts by date ascending', () => {
+      render(<RulesTable rules={sortableRules} loading={false} onDelete={noop} />);
+
+      const sortButton = screen.getByTestId('sort-createdAt');
+      fireEvent.click(sortButton);
+
+      // Oldest first: cherry (Jan 10), banana (Jan 15), apple (Jan 20)
+      const cells = screen.getAllByText(/\.com$/);
+      expect(cells[0]).toHaveTextContent('cherry.com');
+      expect(cells[1]).toHaveTextContent('banana.com');
+      expect(cells[2]).toHaveTextContent('apple.com');
+    });
+
+    it('sorts by date descending', () => {
+      render(<RulesTable rules={sortableRules} loading={false} onDelete={noop} />);
+
+      const sortButton = screen.getByTestId('sort-createdAt');
+      fireEvent.click(sortButton); // asc
+      fireEvent.click(sortButton); // desc
+
+      // Newest first: apple (Jan 20), banana (Jan 15), cherry (Jan 10)
+      const cells = screen.getAllByText(/\.com$/);
+      expect(cells[0]).toHaveTextContent('apple.com');
+      expect(cells[1]).toHaveTextContent('banana.com');
+      expect(cells[2]).toHaveTextContent('cherry.com');
+    });
+
+    it('changes sort field when clicking different header', () => {
+      render(<RulesTable rules={sortableRules} loading={false} onDelete={noop} />);
+
+      // Sort by value first
+      fireEvent.click(screen.getByTestId('sort-value'));
+
+      // Then sort by type
+      fireEvent.click(screen.getByTestId('sort-type'));
+
+      // Should be sorted by type ascending
+      const cells = screen.getAllByText(/\.com$/);
+      expect(cells[0]).toHaveTextContent('cherry.com'); // blocked_path
+    });
+  });
 });
