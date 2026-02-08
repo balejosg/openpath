@@ -15,10 +15,12 @@ import { Tabs } from '../components/ui/Tabs';
 import { RulesTable } from '../components/RulesTable';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { BulkImportModal } from '../components/BulkImportModal';
+import { ExportDropdown } from '../components/ExportDropdown';
 import { Button } from '../components/ui/Button';
 import { useRulesManager, FilterType } from '../hooks/useRulesManager';
 import { useToast } from '../components/ui/Toast';
 import { detectRuleType, getRuleTypeBadge } from '../lib/ruleDetection';
+import { exportRules } from '../lib/exportRules';
 import { cn } from '../lib/utils';
 
 interface RulesManagerProps {
@@ -203,6 +205,11 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
             <Upload size={16} className="mr-1" />
             Importar
           </Button>
+          <ExportDropdown
+            onExport={(format) => exportRules(rules, format, `${groupName}-rules`)}
+            rulesCount={rules.length}
+            disabled={loading}
+          />
         </div>
       </div>
 

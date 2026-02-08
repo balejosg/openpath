@@ -1,0 +1,149 @@
+/**
+ * Export utilities for rules data.
+ * Supports CSV and JSON formats with download functionality.
+ */
+
+import type { Rule } from '../components/RulesTable';
+
+/** Rule type labels for export */
+const RULE_TYPE_LABELS: Record<string, string> = {
+  whitelist: 'Permitido',
+  blocked_subdomain: 'Subdominio bloqueado',
+  blocked_path: 'Ruta bloqueada',
+};
+
+/**
+ * Convert rules to CSV format.
+ * Columns: value, type, type_label, created_at
+ */
+export function rulesToCSV(rules: Rule[]): string {
+  const header = 'value,type,type_label,created_at';
+  const rows = rules.map((rule) => {
+    const value = escapeCSVField(rule.value);
+    const type = rule.type;
+    const typeLabel = RULE_TYPE_LABELS[rule.type] || rule.type;
+    const createdAt = rule.createdAt || '';
+    return `${value},${type},${typeLabel},${createdAt}`;
+  });
+
+  return [header, ...rows].join('\n');
+}
+
+/**
+ * Convert rules to JSON format.
+ * Returns prettified JSON array.
+ */
+export function rulesToJSON(rules: Rule[]): string {
+  const exportData = rules.map((rule) => ({
+    value: rule.value,
+    type: rule.type,
+    typeLabel: RULE_TYPE_LABELS[rule.type] || rule.type,
+    createdAt: rule.createdAt || null,
+  }));
+
+  return JSON.stringify(exportData, null, 2);
+}
+
+/**
+ * Convert rules to plain text format (one domain per line).
+ * Optionally grouped by type.
+ */
+export function rulesToText(rules: Rule[], grouped = false): string {
+  if (!grouped) {
+    return rules.map((r) => r.value).join('\n');
+  }
+
+  const whitelist = rules.filter((r) => r.type === 'whitelist');
+  const blockedSubdomain = rules.filter((r) => r.type === 'blocked_subdomain');
+  const blockedPath = rules.filter((r) => r.type === 'blocked_path');
+
+  const sections: string[] = [];
+
+  if (whitelist.length > 0) {
+    sections.push('## WHITELIST');
+    sections.push(...whitelist.map((r) => r.value));
+    sections.push('');
+  }
+
+  if (blockedSubdomain.length > 0) {
+    sections.push('## BLOCKED-SUBDOMAINS');
+    sections.push(...blockedSubdomain.map((r) => r.value));
+    sections.push('');
+  }
+
+  if (blockedPath.length > 0) {
+    sections.push('## BLOCKED-PATHS');
+    sections.push(...blockedPath.map((r) => r.value));
+    sections.push('');
+  }
+
+  return sections.join('\n').trim();
+}
+
+/**
+ * Escape a field for CSV format.
+ * Wraps in quotes if contains comma, quote, or newline.
+ */
+function escapeCSVField(field: string): string {
+  if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+    return `"${field.replace(/"/g, '""')}"`;
+  }
+  return field;
+}
+
+/**
+ * Trigger a file download in the browser.
+ */
+export function downloadFile(content: string, filename: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+
+  document.body.appendChild(link);
+  link.click();
+
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Export rules to a file and trigger download.
+ */
+export function exportRules(
+  rules: Rule[],
+  format: 'csv' | 'json' | 'txt',
+  filename?: string
+): void {
+  const timestamp = new Date().toISOString().split('T')[0];
+  const defaultFilename = `rules-${timestamp}`;
+
+  let content: string;
+  let mimeType: string;
+  let extension: string;
+
+  switch (format) {
+    case 'csv':
+      content = rulesToCSV(rules);
+      mimeType = 'text/csv;charset=utf-8';
+      extension = 'csv';
+      break;
+    case 'json':
+      content = rulesToJSON(rules);
+      mimeType = 'application/json;charset=utf-8';
+      extension = 'json';
+      break;
+    case 'txt':
+      content = rulesToText(rules, true);
+      mimeType = 'text/plain;charset=utf-8';
+      extension = 'txt';
+      break;
+  }
+
+  downloadFile(content, filename || `${defaultFilename}.${extension}`, mimeType);
+}
+
+export type ExportFormat = 'csv' | 'json' | 'txt';
