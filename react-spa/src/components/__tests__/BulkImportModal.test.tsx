@@ -185,4 +185,186 @@ describe('BulkImportModal Component', () => {
     const importButton = screen.getByRole('button', { name: /importar \(3\)/i });
     expect(importButton).toBeInTheDocument();
   });
+
+  describe('Drag and Drop', () => {
+    const createMockFile = (content: string, name: string, type = 'text/plain'): File => {
+      return new File([content], name, { type });
+    };
+
+    const createDragEvent = (files: File[]) => {
+      const dataTransfer = {
+        files,
+        items: files.map((file) => ({ kind: 'file', type: file.type, getAsFile: () => file })),
+        types: ['Files'],
+      };
+      return { dataTransfer };
+    };
+
+    it('shows drag hint text', () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      expect(screen.getByText(/arrastra archivos .txt aquí/i)).toBeInTheDocument();
+    });
+
+    it('shows drag overlay when file is dragged over', () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      const dropZone = screen.getByTestId('drop-zone');
+      const mockFile = createMockFile('google.com', 'domains.txt');
+
+      fireEvent.dragEnter(dropZone, createDragEvent([mockFile]));
+
+      expect(screen.getByTestId('drag-overlay')).toBeInTheDocument();
+      expect(screen.getByText('Suelta el archivo aquí')).toBeInTheDocument();
+    });
+
+    it('hides drag overlay when drag leaves', () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      const dropZone = screen.getByTestId('drop-zone');
+      const mockFile = createMockFile('google.com', 'domains.txt');
+
+      fireEvent.dragEnter(dropZone, createDragEvent([mockFile]));
+      expect(screen.getByTestId('drag-overlay')).toBeInTheDocument();
+
+      fireEvent.dragLeave(dropZone, createDragEvent([mockFile]));
+      expect(screen.queryByTestId('drag-overlay')).not.toBeInTheDocument();
+    });
+
+    it('reads and displays content from dropped .txt file', async () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      const dropZone = screen.getByTestId('drop-zone');
+      const fileContent = 'google.com\nyoutube.com\nexample.org';
+      const mockFile = createMockFile(fileContent, 'domains.txt');
+
+      fireEvent.drop(dropZone, createDragEvent([mockFile]));
+
+      await waitFor(() => {
+        expect(screen.getByText('3 dominios detectados')).toBeInTheDocument();
+      });
+    });
+
+    it('reads and displays content from dropped .csv file', async () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      const dropZone = screen.getByTestId('drop-zone');
+      const fileContent = 'google.com,youtube.com,example.org';
+      const mockFile = createMockFile(fileContent, 'domains.csv', 'text/csv');
+
+      fireEvent.drop(dropZone, createDragEvent([mockFile]));
+
+      await waitFor(() => {
+        expect(screen.getByText('3 dominios detectados')).toBeInTheDocument();
+      });
+    });
+
+    it('reads and displays content from dropped .list file', async () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      const dropZone = screen.getByTestId('drop-zone');
+      const fileContent = 'google.com\nyoutube.com';
+      const mockFile = createMockFile(fileContent, 'domains.list', 'application/octet-stream');
+
+      fireEvent.drop(dropZone, createDragEvent([mockFile]));
+
+      await waitFor(() => {
+        expect(screen.getByText('2 dominios detectados')).toBeInTheDocument();
+      });
+    });
+
+    it('appends dropped file content to existing text', async () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      // First type some domains
+      const textarea = screen.getByPlaceholderText(/pega los dominios/i);
+      await userEvent.type(textarea, 'existing.com');
+      expect(screen.getByText('1 dominio detectado')).toBeInTheDocument();
+
+      // Then drop a file
+      const dropZone = screen.getByTestId('drop-zone');
+      const fileContent = 'google.com\nyoutube.com';
+      const mockFile = createMockFile(fileContent, 'domains.txt');
+
+      fireEvent.drop(dropZone, createDragEvent([mockFile]));
+
+      await waitFor(() => {
+        expect(screen.getByText('3 dominios detectados')).toBeInTheDocument();
+      });
+    });
+
+    it('handles multiple dropped files', async () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      const dropZone = screen.getByTestId('drop-zone');
+      const file1 = createMockFile('google.com\nyoutube.com', 'file1.txt');
+      const file2 = createMockFile('example.org\ntest.com', 'file2.txt');
+
+      fireEvent.drop(dropZone, createDragEvent([file1, file2]));
+
+      await waitFor(() => {
+        expect(screen.getByText('4 dominios detectados')).toBeInTheDocument();
+      });
+    });
+
+    it('shows error for invalid file types', async () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      const dropZone = screen.getByTestId('drop-zone');
+      const mockFile = new File(['binary content'], 'image.png', { type: 'image/png' });
+
+      fireEvent.drop(dropZone, createDragEvent([mockFile]));
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Solo se permiten archivos de texto (.txt, .csv, .list)')
+        ).toBeInTheDocument();
+      });
+    });
+
+    it('filters comments from dropped file content', async () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      const dropZone = screen.getByTestId('drop-zone');
+      const fileContent = '# Comment line\ngoogle.com\n# Another comment\nyoutube.com';
+      const mockFile = createMockFile(fileContent, 'domains.txt');
+
+      fireEvent.drop(dropZone, createDragEvent([mockFile]));
+
+      await waitFor(() => {
+        expect(screen.getByText('2 dominios detectados')).toBeInTheDocument();
+      });
+    });
+
+    it('removes duplicates from dropped file content', async () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      const dropZone = screen.getByTestId('drop-zone');
+      const fileContent = 'google.com\ngoogle.com\nyoutube.com';
+      const mockFile = createMockFile(fileContent, 'domains.txt');
+
+      fireEvent.drop(dropZone, createDragEvent([mockFile]));
+
+      await waitFor(() => {
+        expect(screen.getByText('2 dominios detectados')).toBeInTheDocument();
+      });
+    });
+
+    it('hides overlay after drop', async () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      const dropZone = screen.getByTestId('drop-zone');
+      const mockFile = createMockFile('google.com', 'domains.txt');
+
+      // Show overlay
+      fireEvent.dragEnter(dropZone, createDragEvent([mockFile]));
+      expect(screen.getByTestId('drag-overlay')).toBeInTheDocument();
+
+      // Drop file
+      fireEvent.drop(dropZone, createDragEvent([mockFile]));
+
+      // Overlay should be hidden
+      expect(screen.queryByTestId('drag-overlay')).not.toBeInTheDocument();
+    });
+  });
 });

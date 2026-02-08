@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { Upload, FileText, AlertCircle } from 'lucide-react';
+import React, { useState, useCallback, useRef } from 'react';
+import { Upload, FileText, AlertCircle, FileUp } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
@@ -46,6 +46,9 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
   const [ruleType, setRuleType] = useState<RuleType>('whitelist');
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
+  const dragCounter = useRef(0);
 
   // Parse text into array of values
   const parseValues = useCallback((input: string): string[] => {
@@ -99,6 +102,99 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
     }
   };
 
+  // Read file contents
+  const readFileContents = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target?.result;
+        if (typeof content === 'string') {
+          resolve(content);
+        } else {
+          reject(new Error('Failed to read file'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  }, []);
+
+  // Handle dropped files
+  const handleFileDrop = useCallback(
+    async (files: FileList | null) => {
+      if (!files || files.length === 0) return;
+
+      setError(null);
+      const validFiles: File[] = [];
+
+      // Filter for text files
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (
+          file.type === 'text/plain' ||
+          file.name.endsWith('.txt') ||
+          file.name.endsWith('.csv') ||
+          file.name.endsWith('.list')
+        ) {
+          validFiles.push(file);
+        }
+      }
+
+      if (validFiles.length === 0) {
+        setError('Solo se permiten archivos de texto (.txt, .csv, .list)');
+        return;
+      }
+
+      try {
+        const contents = await Promise.all(validFiles.map(readFileContents));
+        const combinedContent = contents.join('\n');
+
+        // Append to existing text or set if empty
+        setText((prev) => (prev ? `${prev}\n${combinedContent}` : combinedContent));
+      } catch {
+        setError('Error al leer los archivos');
+      }
+    },
+    [readFileContents]
+  );
+
+  // Drag event handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      dragCounter.current = 0;
+
+      const { files } = e.dataTransfer;
+      handleFileDrop(files);
+    },
+    [handleFileDrop]
+  );
+
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Importar reglas" className="max-w-2xl">
       <div className="space-y-4">
@@ -132,29 +228,57 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
           </div>
         </div>
 
-        {/* Textarea for domains */}
+        {/* Textarea for domains with drag & drop */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
             <FileText size={14} className="inline mr-1" />
             Dominios a importar
           </label>
-          <textarea
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              setError(null);
-            }}
-            placeholder={PLACEHOLDER_TEXT}
-            className={cn(
-              'w-full h-48 px-3 py-2 text-sm font-mono',
-              'border rounded-lg resize-none',
-              'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
-              error ? 'border-red-300 bg-red-50' : 'border-slate-300'
-            )}
-            disabled={isImporting}
-          />
+          <div
+            ref={dropZoneRef}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            className="relative"
+            data-testid="drop-zone"
+          >
+            <textarea
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                setError(null);
+              }}
+              placeholder={PLACEHOLDER_TEXT}
+              className={cn(
+                'w-full h-48 px-3 py-2 text-sm font-mono',
+                'border-2 rounded-lg resize-none transition-all',
+                'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent',
+                isDragOver
+                  ? 'border-blue-400 bg-blue-50 border-dashed'
+                  : error
+                    ? 'border-red-300 bg-red-50'
+                    : 'border-slate-300'
+              )}
+              disabled={isImporting}
+            />
 
-          {/* Count indicator */}
+            {/* Drag overlay */}
+            {isDragOver && (
+              <div
+                className="absolute inset-0 flex items-center justify-center bg-blue-50/90 rounded-lg border-2 border-dashed border-blue-400 pointer-events-none"
+                data-testid="drag-overlay"
+              >
+                <div className="text-center">
+                  <FileUp size={32} className="mx-auto text-blue-500 mb-2" />
+                  <p className="text-sm font-medium text-blue-700">Suelta el archivo aquí</p>
+                  <p className="text-xs text-blue-500 mt-1">.txt, .csv, .list</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Count indicator and drag hint */}
           <div className="flex items-center justify-between mt-2">
             <div className="text-xs text-slate-500">
               {valueCount > 0 ? (
@@ -164,6 +288,10 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
               ) : (
                 'Pega o escribe los dominios arriba'
               )}
+            </div>
+            <div className="text-xs text-slate-400">
+              <FileUp size={12} className="inline mr-1" />
+              Arrastra archivos .txt aquí
             </div>
           </div>
         </div>
