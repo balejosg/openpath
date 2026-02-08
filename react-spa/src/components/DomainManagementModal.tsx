@@ -169,17 +169,26 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
 
   // Add rule with auto-detected type
   const handleAddRule = async () => {
-    // Prevent double submission via ref (state updates are async)
-    if (isSubmittingRef.current) return;
+    // Prevent double submission via ref AND state (belt and suspenders)
+    if (isSubmittingRef.current || adding) return;
     isSubmittingRef.current = true;
 
-    if (!detectedType) {
+    // Capture and validate input immediately
+    const inputValue = newValue.trim();
+    if (!inputValue) {
+      isSubmittingRef.current = false;
+      return;
+    }
+
+    // Detect type for the captured value
+    const detected = detectRuleType(inputValue, whitelistDomains);
+    if (!detected) {
       setInputError('Introduce un valor válido');
       isSubmittingRef.current = false;
       return;
     }
 
-    const { type, cleanedValue } = detectedType;
+    const { type, cleanedValue } = detected;
 
     // Validate
     if (!validateForType(cleanedValue, type)) {
@@ -195,10 +204,12 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
       return;
     }
 
-    try {
-      setAdding(true);
-      setInputError('');
+    // Clear input IMMEDIATELY to prevent re-submission on rapid events
+    setNewValue('');
+    setAdding(true);
+    setInputError('');
 
+    try {
       await trpc.groups.createRule.mutate({
         groupId,
         type,
@@ -206,11 +217,12 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
       });
 
       onToast(`"${cleanedValue}" añadido como ${getRuleTypeBadge(type)}`, 'success');
-      setNewValue('');
       await handleRulesChanged();
     } catch (err) {
       console.error('Failed to add rule:', err);
       onToast('Error al añadir regla', 'error');
+      // Restore input value on error so user can retry
+      setNewValue(inputValue);
     } finally {
       setAdding(false);
       isSubmittingRef.current = false;
