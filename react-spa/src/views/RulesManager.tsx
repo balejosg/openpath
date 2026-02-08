@@ -9,10 +9,12 @@ import {
   ChevronRight,
   AlertCircle,
   Info,
+  Upload,
 } from 'lucide-react';
 import { Tabs } from '../components/ui/Tabs';
 import { RulesTable } from '../components/RulesTable';
 import { BulkActionBar } from '../components/BulkActionBar';
+import { BulkImportModal } from '../components/BulkImportModal';
 import { Button } from '../components/ui/Button';
 import { useRulesManager, FilterType } from '../hooks/useRulesManager';
 import { useToast } from '../components/ui/Toast';
@@ -36,6 +38,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
   const [inputError, setInputError] = useState('');
   const [adding, setAdding] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const {
     rules,
@@ -59,6 +62,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
     addRule,
     deleteRule,
     bulkDeleteRules,
+    bulkCreateRules,
     refetch,
   } = useRulesManager({
     groupId,
@@ -190,6 +194,15 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
             <Plus size={16} className="mr-1" />
             Añadir
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowImportModal(true)}
+            size="md"
+            title="Importar múltiples reglas"
+          >
+            <Upload size={16} className="mr-1" />
+            Importar
+          </Button>
         </div>
       </div>
 
@@ -297,6 +310,13 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
         onDelete={() => void handleBulkDelete()}
         onClear={clearSelection}
         isDeleting={bulkDeleting}
+      />
+
+      {/* Bulk import modal */}
+      <BulkImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImport={bulkCreateRules}
       />
     </div>
   );

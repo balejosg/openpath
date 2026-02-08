@@ -46,6 +46,10 @@ interface UseRulesManagerReturn {
   addRule: (value: string) => Promise<boolean>;
   deleteRule: (rule: Rule) => Promise<void>;
   bulkDeleteRules: () => Promise<void>;
+  bulkCreateRules: (
+    values: string[],
+    type: 'whitelist' | 'blocked_subdomain' | 'blocked_path'
+  ) => Promise<{ created: number; total: number }>;
   updateRule: (id: string, data: { value?: string; comment?: string | null }) => Promise<boolean>;
   refetch: () => Promise<void>;
 }
@@ -356,6 +360,47 @@ export function useRulesManager({
     }
   }, [selectedIds, clearSelection, fetchRules, fetchCounts, onToast]);
 
+  // Bulk create rules
+  const bulkCreateRules = useCallback(
+    async (
+      values: string[],
+      type: 'whitelist' | 'blocked_subdomain' | 'blocked_path'
+    ): Promise<{ created: number; total: number }> => {
+      if (values.length === 0) return { created: 0, total: 0 };
+
+      try {
+        const result = await trpc.groups.bulkCreateRules.mutate({
+          groupId,
+          type,
+          values,
+        });
+
+        const created = result.count;
+        const total = values.length;
+
+        if (created > 0) {
+          onToast(
+            created === total
+              ? `${String(created)} reglas importadas`
+              : `${String(created)} de ${String(total)} reglas importadas (${String(total - created)} duplicadas)`,
+            'success'
+          );
+          await fetchRules();
+          await fetchCounts();
+        } else {
+          onToast('Todas las reglas ya existen', 'error');
+        }
+
+        return { created, total };
+      } catch (err) {
+        console.error('Failed to bulk create rules:', err);
+        onToast('Error al importar reglas', 'error');
+        return { created: 0, total: values.length };
+      }
+    },
+    [groupId, fetchRules, fetchCounts, onToast]
+  );
+
   // Calculate derived values
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const hasMore = page < totalPages;
@@ -396,6 +441,7 @@ export function useRulesManager({
     addRule,
     deleteRule,
     bulkDeleteRules,
+    bulkCreateRules,
     updateRule,
     refetch: fetchRules,
   };
