@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Modal } from './ui/Modal';
 import { FilterChips } from './ui/FilterChips';
 import { cn } from '../lib/utils';
@@ -83,6 +83,7 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
   const [newValue, setNewValue] = useState('');
   const [inputError, setInputError] = useState('');
   const [adding, setAdding] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Fetch all rules when modal opens
   const fetchRules = useCallback(async () => {
@@ -168,8 +169,13 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
 
   // Add rule with auto-detected type
   const handleAddRule = async () => {
+    // Prevent double submission via ref (state updates are async)
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     if (!detectedType) {
       setInputError('Introduce un valor válido');
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -178,12 +184,14 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
     // Validate
     if (!validateForType(cleanedValue, type)) {
       setInputError(`"${cleanedValue}" no es un formato válido`);
+      isSubmittingRef.current = false;
       return;
     }
 
     // Check for duplicates
     if (allRules.some((r) => r.value === cleanedValue && r.type === type)) {
       setInputError(`"${cleanedValue}" ya existe`);
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -205,6 +213,7 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
       onToast('Error al añadir regla', 'error');
     } finally {
       setAdding(false);
+      isSubmittingRef.current = false;
     }
   };
 
