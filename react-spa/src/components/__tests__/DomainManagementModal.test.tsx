@@ -58,7 +58,12 @@ describe('DomainManagementModal', () => {
   });
 
   it('shows loading state initially', () => {
-    mockListRules.mockImplementation(() => new Promise(() => {})); // Never resolves
+    // Create a promise that never resolves to keep loading state
+    mockListRules.mockReturnValue(
+      new Promise<never>(() => {
+        // Intentionally never resolves
+      })
+    );
 
     render(<DomainManagementModal {...defaultProps} />);
 

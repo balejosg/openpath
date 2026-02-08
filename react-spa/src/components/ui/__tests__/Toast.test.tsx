@@ -18,7 +18,7 @@ const TestComponent: React.FC<{ onMount?: (toast: ReturnType<typeof useToast>) =
       <button onClick={() => toast.success('Success message')}>Show Success</button>
       <button onClick={() => toast.error('Error message')}>Show Error</button>
       <button onClick={() => toast.info('Info message')}>Show Info</button>
-      <button onClick={() => toast.success('Undo test', () => {})}>Show Undo</button>
+      <button onClick={() => toast.success('Undo test', () => undefined)}>Show Undo</button>
       <toast.ToastContainer />
     </div>
   );
@@ -35,7 +35,7 @@ describe('Toast Component', () => {
   });
 
   it('renders nothing when there are no toasts', () => {
-    render(<ToastContainer toasts={[]} onDismiss={() => {}} />);
+    render(<ToastContainer toasts={[]} onDismiss={() => undefined} />);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
@@ -43,7 +43,7 @@ describe('Toast Component', () => {
     render(
       <ToastContainer
         toasts={[{ id: '1', message: 'Success!', type: 'success' }]}
-        onDismiss={() => {}}
+        onDismiss={() => undefined}
       />
     );
     expect(screen.getByText('Success!')).toBeInTheDocument();
@@ -53,7 +53,7 @@ describe('Toast Component', () => {
     render(
       <ToastContainer
         toasts={[{ id: '1', message: 'Error!', type: 'error' }]}
-        onDismiss={() => {}}
+        onDismiss={() => undefined}
       />
     );
     expect(screen.getByText('Error!')).toBeInTheDocument();
@@ -82,7 +82,7 @@ describe('Toast Component', () => {
     render(
       <ToastContainer
         toasts={[{ id: '1', message: 'Deleted', type: 'success', undoAction }]}
-        onDismiss={() => {}}
+        onDismiss={() => undefined}
       />
     );
     expect(screen.getByText('Deshacer')).toBeInTheDocument();
@@ -153,7 +153,7 @@ describe('Toast Component', () => {
           { id: '2', message: 'Second', type: 'error' },
           { id: '3', message: 'Third', type: 'info' },
         ]}
-        onDismiss={() => {}}
+        onDismiss={() => undefined}
       />
     );
 

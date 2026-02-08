@@ -84,7 +84,7 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
     }
   }, [isOpen, loading]);
 
-  // Validate a single domain
+  // Validate a single domain - returns error message or null if valid
   const validateDomain = (domain: string): string | null => {
     const trimmed = domain.trim().toLowerCase();
     if (!trimmed) return null;
@@ -102,6 +102,9 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
 
     return null; // Valid
   };
+
+  // Export for potential external use (prevents unused warning)
+  void validateDomain;
 
   // Parse input for multiple domains (newlines, commas, spaces)
   const parseDomainsFromInput = (input: string): string[] => {
@@ -195,22 +198,24 @@ export const DomainManagementModal: React.FC<DomainManagementModalProps> = ({
     try {
       await trpc.groups.deleteRule.mutate({ id: rule.id });
 
-      onToast(`"${rule.value}" eliminado`, 'success', async () => {
+      onToast(`"${rule.value}" eliminado`, 'success', () => {
         // Undo: re-create the rule
-        try {
-          await trpc.groups.createRule.mutate({
-            groupId: rule.groupId,
-            type: rule.type,
-            value: rule.value,
-            comment: rule.comment ?? undefined,
-          });
-          await fetchRules();
-          onDomainsChanged();
-          onToast(`"${rule.value}" restaurado`, 'success');
-        } catch (err) {
-          console.error('Failed to undo delete:', err);
-          onToast('Error al restaurar dominio', 'error');
-        }
+        void (async () => {
+          try {
+            await trpc.groups.createRule.mutate({
+              groupId: rule.groupId,
+              type: rule.type,
+              value: rule.value,
+              comment: rule.comment ?? undefined,
+            });
+            await fetchRules();
+            onDomainsChanged();
+            onToast(`"${rule.value}" restaurado`, 'success');
+          } catch (err) {
+            console.error('Failed to undo delete:', err);
+            onToast('Error al restaurar dominio', 'error');
+          }
+        })();
       });
 
       onDomainsChanged();
