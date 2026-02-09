@@ -1,8 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { RulesManager } from '../RulesManager';
 
 // Mock the hooks and components
+const mockBulkCreateRules = vi.fn().mockResolvedValue({ created: 5, total: 5 });
+
 vi.mock('../../hooks/useRulesManager', () => ({
   useRulesManager: () => ({
     rules: [
@@ -38,16 +40,18 @@ vi.mock('../../hooks/useRulesManager', () => ({
     addRule: vi.fn().mockResolvedValue(true),
     deleteRule: vi.fn(),
     bulkDeleteRules: vi.fn().mockResolvedValue(undefined),
+    bulkCreateRules: mockBulkCreateRules,
     updateRule: vi.fn().mockResolvedValue(true),
     refetch: vi.fn(),
   }),
   FilterType: {},
 }));
 
+const mockToastError = vi.fn();
 vi.mock('../../components/ui/Toast', () => ({
   useToast: () => ({
     success: vi.fn(),
-    error: vi.fn(),
+    error: mockToastError,
     ToastContainer: () => null,
   }),
 }));
@@ -106,5 +110,127 @@ describe('RulesManager View', () => {
     render(<RulesManager {...defaultProps} />);
 
     expect(screen.getByText('google.com')).toBeInTheDocument();
+  });
+});
+
+// Helper to create mock File objects
+function createMockFile(name: string, content: string, type: string = 'text/plain'): File {
+  const blob = new Blob([content], { type });
+  return new File([blob], name, { type });
+}
+
+// Helper to create a mock DataTransfer object
+function createMockDataTransfer(files: File[]): DataTransfer {
+  return {
+    files: files as unknown as FileList,
+    items: files.map((f) => ({
+      kind: 'file',
+      type: f.type,
+      getAsFile: () => f,
+    })) as unknown as DataTransferItemList,
+    types: ['Files'],
+    getData: () => '',
+    setData: () => {},
+    clearData: () => {},
+    setDragImage: () => {},
+    dropEffect: 'none',
+    effectAllowed: 'all',
+  } as unknown as DataTransfer;
+}
+
+describe('RulesManager - Page-level Drag and Drop', () => {
+  const defaultProps = {
+    groupId: 'test-group',
+    groupName: 'Test Group',
+    onBack: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows drag overlay when dragging file over page', () => {
+    render(<RulesManager {...defaultProps} />);
+
+    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]')!;
+
+    const file = createMockFile('domains.txt', 'google.com');
+    const dataTransfer = createMockDataTransfer([file]);
+
+    fireEvent.dragEnter(container, { dataTransfer });
+
+    expect(screen.getByTestId('page-drag-overlay')).toBeInTheDocument();
+    expect(screen.getByText('Suelta los archivos aquí')).toBeInTheDocument();
+  });
+
+  it('hides drag overlay when drag leaves', () => {
+    render(<RulesManager {...defaultProps} />);
+
+    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]')!;
+
+    const file = createMockFile('domains.txt', 'google.com');
+    const dataTransfer = createMockDataTransfer([file]);
+
+    fireEvent.dragEnter(container, { dataTransfer });
+    expect(screen.getByTestId('page-drag-overlay')).toBeInTheDocument();
+
+    fireEvent.dragLeave(container, { dataTransfer });
+    expect(screen.queryByTestId('page-drag-overlay')).not.toBeInTheDocument();
+  });
+
+  it('opens import modal with file content when valid file is dropped', async () => {
+    render(<RulesManager {...defaultProps} />);
+
+    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]')!;
+
+    const file = createMockFile('domains.txt', 'google.com\nyoutube.com');
+    const dataTransfer = createMockDataTransfer([file]);
+
+    fireEvent.drop(container, { dataTransfer });
+
+    await waitFor(() => {
+      expect(screen.getByText('Importar reglas')).toBeInTheDocument();
+    });
+  });
+
+  it('shows error toast when invalid file is dropped', async () => {
+    render(<RulesManager {...defaultProps} />);
+
+    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]')!;
+
+    const file = createMockFile('image.png', '', 'image/png');
+    const dataTransfer = createMockDataTransfer([file]);
+
+    fireEvent.drop(container, { dataTransfer });
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('Solo se permiten archivos .txt, .csv o .list');
+    });
+  });
+
+  it('shows skipped files in toast when mixed files are dropped', async () => {
+    render(<RulesManager {...defaultProps} />);
+
+    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]')!;
+
+    const validFile = createMockFile('domains.txt', 'google.com');
+    const invalidFile = createMockFile('photo.jpg', '', 'image/jpeg');
+    const dataTransfer = createMockDataTransfer([validFile, invalidFile]);
+
+    fireEvent.drop(container, { dataTransfer });
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('Archivos ignorados: photo.jpg');
+    });
+  });
+
+  it('renders import button that opens modal', () => {
+    render(<RulesManager {...defaultProps} />);
+
+    const importButton = screen.getByRole('button', { name: /importar/i });
+    expect(importButton).toBeInTheDocument();
+
+    fireEvent.click(importButton);
+    expect(screen.getByText('Importar reglas')).toBeInTheDocument();
   });
 });

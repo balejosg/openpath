@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { Upload, FileText, AlertCircle, FileUp, Table, Info } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
@@ -11,6 +11,8 @@ interface BulkImportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImport: (values: string[], type: RuleType) => Promise<{ created: number; total: number }>;
+  /** Pre-populate the textarea with this text (e.g., from a dropped file) */
+  initialText?: string;
 }
 
 const RULE_TYPE_OPTIONS: { value: RuleType; label: string; description: string }[] = [
@@ -43,14 +45,26 @@ También puedes pegar listas separadas por comas o espacios.`;
  * BulkImportModal - Modal for importing multiple rules at once.
  * Supports plain text, CSV with headers, and simple CSV formats.
  */
-export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClose, onImport }) => {
-  const [text, setText] = useState('');
+export const BulkImportModal: React.FC<BulkImportModalProps> = ({
+  isOpen,
+  onClose,
+  onImport,
+  initialText = '',
+}) => {
+  const [text, setText] = useState(initialText);
   const [ruleType, setRuleType] = useState<RuleType>('whitelist');
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const dragCounter = useRef(0);
+
+  // Sync text when initialText changes (e.g., file dropped on parent)
+  useEffect(() => {
+    if (initialText) {
+      setText(initialText);
+    }
+  }, [initialText]);
 
   // Parse text using the CSV parser
   const parseResult: CSVParseResult = useMemo(() => {

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   ArrowLeft,
   Search,
@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Info,
   Upload,
+  FileUp,
 } from 'lucide-react';
 import { Tabs } from '../components/ui/Tabs';
 import { RulesTable } from '../components/RulesTable';
@@ -21,6 +22,7 @@ import { useRulesManager, FilterType } from '../hooks/useRulesManager';
 import { useToast } from '../components/ui/Toast';
 import { detectRuleType, getRuleTypeBadge } from '../lib/ruleDetection';
 import { exportRules } from '../lib/exportRules';
+import { readMultipleFiles } from '../lib/fileReader';
 import { cn } from '../lib/utils';
 
 interface RulesManagerProps {
@@ -41,6 +43,11 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
   const [adding, setAdding] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+
+  // Page-level drag and drop state
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [importInitialText, setImportInitialText] = useState('');
+  const dragCounter = useRef(0);
 
   const {
     rules,
@@ -125,6 +132,64 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
     setBulkDeleting(false);
   };
 
+  // Page-level drag and drop handlers
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      dragCounter.current = 0;
+
+      const { files } = e.dataTransfer;
+      if (!files || files.length === 0) return;
+
+      try {
+        const result = await readMultipleFiles(files);
+        if (result.content) {
+          setImportInitialText(result.content);
+          setShowImportModal(true);
+          if (result.skippedFiles.length > 0) {
+            toastError(`Archivos ignorados: ${result.skippedFiles.join(', ')}`);
+          }
+        } else if (result.skippedFiles.length > 0) {
+          toastError('Solo se permiten archivos .txt, .csv o .list');
+        }
+      } catch {
+        toastError('Error al leer los archivos');
+      }
+    },
+    [toastError]
+  );
+
+  // Reset initial text when modal closes
+  const handleImportModalClose = useCallback(() => {
+    setShowImportModal(false);
+    setImportInitialText('');
+  }, []);
+
   // Tab configuration
   const tabs = [
     { id: 'all' as FilterType, label: 'Todos', count: counts.all },
@@ -143,7 +208,28 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
   ];
 
   return (
-    <div className="space-y-6">
+    <div
+      className="space-y-6 relative"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Page-level drag overlay */}
+      {isDragOver && (
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center bg-blue-50/95 rounded-xl border-2 border-dashed border-blue-400 pointer-events-none"
+          data-testid="page-drag-overlay"
+        >
+          <div className="text-center">
+            <FileUp size={48} className="mx-auto text-blue-500 mb-3" />
+            <p className="text-lg font-medium text-blue-700">Suelta los archivos aquí</p>
+            <p className="text-sm text-blue-500 mt-1">Se abrirá el importador con el contenido</p>
+            <p className="text-xs text-blue-400 mt-2">.txt, .csv, .list</p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-4">
         <button
@@ -324,8 +410,9 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
       {/* Bulk import modal */}
       <BulkImportModal
         isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
+        onClose={handleImportModalClose}
         onImport={bulkCreateRules}
+        initialText={importInitialText}
       />
     </div>
   );
