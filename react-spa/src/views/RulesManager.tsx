@@ -22,6 +22,7 @@ import { BulkImportModal } from '../components/BulkImportModal';
 import { ExportDropdown } from '../components/ExportDropdown';
 import { Button } from '../components/ui/Button';
 import { useRulesManager, FilterType } from '../hooks/useRulesManager';
+import { useGroupedRulesManager } from '../hooks/useGroupedRulesManager';
 import { useToast } from '../components/ui/Toast';
 import { detectRuleType, getRuleTypeBadge } from '../lib/ruleDetection';
 import { exportRules } from '../lib/exportRules';
@@ -57,6 +58,31 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
   const [importInitialText, setImportInitialText] = useState('');
   const dragCounter = useRef(0);
 
+  // Toast handler shared by both hooks
+  const handleToast = useCallback(
+    (message: string, type: 'success' | 'error', undoAction?: () => void) => {
+      if (type === 'success') {
+        success(message, undoAction);
+      } else {
+        toastError(message);
+      }
+    },
+    [success, toastError]
+  );
+
+  // Flat view hook (used for flat mode)
+  const flatHook = useRulesManager({
+    groupId,
+    onToast: handleToast,
+  });
+
+  // Grouped view hook (used for hierarchical mode)
+  const groupedHook = useGroupedRulesManager({
+    groupId,
+    onToast: handleToast,
+  });
+
+  // Use the appropriate hook based on view mode
   const {
     rules,
     total,
@@ -82,16 +108,36 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
     bulkCreateRules,
     updateRule,
     refetch,
-  } = useRulesManager({
-    groupId,
-    onToast: (message, type, undoAction) => {
-      if (type === 'success') {
-        success(message, undoAction);
-      } else {
-        toastError(message);
-      }
-    },
-  });
+  } =
+    viewMode === 'hierarchical'
+      ? {
+          // Map grouped hook to flat interface
+          rules: groupedHook.domainGroups.flatMap((g) => g.rules),
+          total: groupedHook.totalRules,
+          loading: groupedHook.loading,
+          error: groupedHook.error,
+          page: groupedHook.page,
+          setPage: groupedHook.setPage,
+          totalPages: groupedHook.totalPages,
+          filter: groupedHook.filter,
+          setFilter: groupedHook.setFilter,
+          search: groupedHook.search,
+          setSearch: groupedHook.setSearch,
+          counts: groupedHook.counts,
+          selectedIds: groupedHook.selectedIds,
+          toggleSelection: groupedHook.toggleSelection,
+          toggleSelectAll: groupedHook.toggleSelectAll,
+          clearSelection: groupedHook.clearSelection,
+          isAllSelected: groupedHook.isAllSelected,
+          hasSelection: groupedHook.hasSelection,
+          addRule: groupedHook.addRule,
+          deleteRule: groupedHook.deleteRule,
+          bulkDeleteRules: groupedHook.bulkDeleteRules,
+          bulkCreateRules: groupedHook.bulkCreateRules,
+          updateRule: groupedHook.updateRule,
+          refetch: groupedHook.refetch,
+        }
+      : flatHook;
 
   // Get whitelist domains for type detection
   const whitelistDomains = useMemo(() => {
@@ -413,7 +459,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
       {/* Hierarchical Rules Table */}
       {!error && viewMode === 'hierarchical' && (
         <HierarchicalRulesTable
-          rules={rules}
+          domainGroups={groupedHook.domainGroups}
           loading={loading}
           onDelete={(rule) => void deleteRule(rule)}
           onSave={updateRule}
@@ -438,7 +484,16 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
       {!loading && !error && totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-slate-200 pt-4">
           <p className="text-sm text-slate-500">
-            Mostrando {(page - 1) * 50 + 1}-{Math.min(page * 50, total)} de {total} reglas
+            {viewMode === 'hierarchical' ? (
+              <>
+                Mostrando {groupedHook.domainGroups.length} de {groupedHook.totalGroups} grupos (
+                {total} reglas)
+              </>
+            ) : (
+              <>
+                Mostrando {(page - 1) * 50 + 1}-{Math.min(page * 50, total)} de {total} reglas
+              </>
+            )}
           </p>
           <div className="flex items-center gap-2">
             <button
