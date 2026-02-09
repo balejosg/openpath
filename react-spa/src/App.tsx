@@ -55,7 +55,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard onNavigateToRules={handleNavigateToRules} />;
       case 'classrooms':
         return <Classrooms />;
       case 'groups':
