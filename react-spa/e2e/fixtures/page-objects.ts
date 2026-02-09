@@ -245,6 +245,187 @@ export class UsersPage {
   }
 }
 
+// Bulk Import Modal page object
+export class BulkImportPage {
+  readonly page: Page;
+  readonly importButton: Locator;
+  readonly modal: Locator;
+  readonly textarea: Locator;
+  readonly dropZone: Locator;
+  readonly formatIndicator: Locator;
+  readonly warningBox: Locator;
+  readonly countDisplay: Locator;
+  readonly submitButton: Locator;
+  readonly cancelButton: Locator;
+
+  constructor(page: Page) {
+    this.page = page;
+    // The import button in RulesManager has text "Importar" with Upload icon
+    this.importButton = page.getByRole('button', { name: 'Importar' }).first();
+    this.modal = page.getByRole('dialog');
+    this.textarea = page.locator('textarea');
+    this.dropZone = page.locator('[data-testid="drop-zone"]');
+    this.formatIndicator = page.getByText(/Formato CSV detectado/i);
+    this.warningBox = page.locator('.bg-amber-50');
+    this.countDisplay = page.getByText(/dominios? detectados?/i);
+    // Submit button in modal shows "Importar (N)" when there are domains
+    this.submitButton = page.getByRole('dialog').getByRole('button', { name: /^Importar/ });
+    this.cancelButton = page.getByRole('button', { name: /Cancelar/i });
+  }
+
+  /**
+   * Navigate to group policies page, select a group, and open bulk import modal
+   */
+  async open(): Promise<void> {
+    // Navigate to Políticas de Grupo via sidebar
+    const groupsButton = this.page.getByRole('button', { name: /Políticas de Grupo/i });
+    if (await groupsButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await groupsButton.click();
+      await this.page.waitForLoadState('networkidle');
+    }
+
+    // Wait for groups page to load
+    await this.page.waitForTimeout(500);
+
+    // Click the first "Configurar" button to open the config modal
+    const configButton = this.page.getByRole('button', { name: /Configurar/i }).first();
+    await configButton.waitFor({ state: 'visible', timeout: 5000 });
+    await configButton.click();
+
+    // Wait for modal to appear
+    await this.page.waitForTimeout(300);
+
+    // Click "Gestionar" link inside the modal to navigate to RulesManager
+    const manageLink = this.page.getByRole('button', { name: /Gestionar/i });
+    await manageLink.waitFor({ state: 'visible', timeout: 5000 });
+    await manageLink.click();
+    await this.page.waitForLoadState('networkidle');
+
+    // Wait for RulesManager to load (look for the import button)
+    await this.importButton.waitFor({ state: 'visible', timeout: 10000 });
+
+    // Click the import button to open modal
+    await this.importButton.click();
+    await expect(this.modal).toBeVisible({ timeout: 5000 });
+  }
+
+  /**
+   * Select a rule type in the modal
+   */
+  async selectRuleType(type: 'whitelist' | 'blocked_subdomain' | 'blocked_path'): Promise<void> {
+    const labels: Record<string, string> = {
+      whitelist: 'Dominios permitidos',
+      blocked_subdomain: 'Subdominios bloqueados',
+      blocked_path: 'Rutas bloqueadas',
+    };
+    await this.page.getByRole('button', { name: labels[type] }).click();
+  }
+
+  /**
+   * Paste content directly into the textarea
+   */
+  async pasteContent(content: string): Promise<void> {
+    await this.textarea.fill(content);
+    // Wait for parsing to complete
+    await this.page.waitForTimeout(100);
+  }
+
+  /**
+   * Upload a file using the file input (simulates drag & drop)
+   */
+  async uploadFile(filePath: string): Promise<void> {
+    // Create a file input element and trigger file selection
+    const fileInput = await this.page.evaluateHandle(() => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.style.display = 'none';
+      document.body.appendChild(input);
+      return input;
+    });
+
+    await (fileInput as unknown as Locator).setInputFiles(filePath);
+
+    // Read file content and paste it (since actual drag-drop is complex in Playwright)
+    const fs = await import('fs');
+    const content = fs.readFileSync(filePath, 'utf-8');
+    await this.textarea.fill(content);
+    await this.page.waitForTimeout(100);
+  }
+
+  /**
+   * Get the number of detected domains
+   */
+  async getDetectedCount(): Promise<number> {
+    const countText = await this.countDisplay.textContent();
+    if (!countText) return 0;
+    const match = countText.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : 0;
+  }
+
+  /**
+   * Get the detected format type
+   */
+  async getFormat(): Promise<'plain-text' | 'csv-with-headers' | 'csv-simple' | 'unknown'> {
+    const hasFormatIndicator = await this.formatIndicator.isVisible().catch(() => false);
+    if (!hasFormatIndicator) {
+      return 'plain-text';
+    }
+    const hasColumnInfo = await this.page
+      .getByText(/columna:/i)
+      .isVisible()
+      .catch(() => false);
+    return hasColumnInfo ? 'csv-with-headers' : 'csv-simple';
+  }
+
+  /**
+   * Get all warning messages
+   */
+  async getWarnings(): Promise<string[]> {
+    const warnings: string[] = [];
+    const warningElements = this.warningBox.locator('div');
+    const count = await warningElements.count();
+    for (let i = 0; i < count; i++) {
+      const text = await warningElements.nth(i).textContent();
+      if (text) warnings.push(text);
+    }
+    return warnings;
+  }
+
+  /**
+   * Get the column name being used (if CSV with headers)
+   */
+  async getColumnName(): Promise<string | null> {
+    const columnInfo = this.page.getByText(/columna:/i);
+    if (await columnInfo.isVisible().catch(() => false)) {
+      const text = await columnInfo.textContent();
+      const match = text?.match(/columna:\s*(\w+)/i);
+      return match ? match[1] : null;
+    }
+    return null;
+  }
+
+  /**
+   * Submit the import form
+   */
+  async submit(): Promise<void> {
+    await this.submitButton.click();
+  }
+
+  /**
+   * Close the modal without importing
+   */
+  async cancel(): Promise<void> {
+    await this.cancelButton.click();
+  }
+
+  /**
+   * Check if the modal is open
+   */
+  async isOpen(): Promise<boolean> {
+    return await this.modal.isVisible().catch(() => false);
+  }
+}
+
 // Header navigation component
 export class Header {
   readonly page: Page;

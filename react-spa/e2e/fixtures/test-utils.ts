@@ -68,20 +68,40 @@ export function createTestDomain(overrides: Partial<TestDomain> = {}): TestDomai
 // ============================================================================
 
 /**
- * Admin credentials for test environment
+ * Detect if we're running against staging environment
  */
-export const ADMIN_CREDENTIALS = {
-  email: 'admin@openpath.local',
-  password: 'AdminPassword123!',
-};
+function isStaging(): boolean {
+  const baseUrl = process.env.BASE_URL || '';
+  return baseUrl.includes('staging') || baseUrl.includes('classroompath-staging');
+}
+
+/**
+ * Admin credentials for test environment
+ * Auto-detects staging vs local and uses appropriate credentials
+ */
+export const ADMIN_CREDENTIALS = isStaging()
+  ? {
+      email: 'test-admin@staging.local',
+      password: 'TestAdmin123!',
+    }
+  : {
+      email: 'admin@openpath.local',
+      password: 'AdminPassword123!',
+    };
 
 /**
  * Teacher credentials for test environment
+ * Auto-detects staging vs local and uses appropriate credentials
  */
-export const TEACHER_CREDENTIALS = {
-  email: 'teacher@openpath.local',
-  password: 'TeacherPassword123!',
-};
+export const TEACHER_CREDENTIALS = isStaging()
+  ? {
+      email: 'test-teacher@staging.local',
+      password: 'TestTeacher123!',
+    }
+  : {
+      email: 'teacher@openpath.local',
+      password: 'TeacherPassword123!',
+    };
 
 /**
  * Logs in as admin user - assumes test database is seeded
