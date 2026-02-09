@@ -7,7 +7,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { eq, and } from 'drizzle-orm';
-import { normalize } from '@openpath/shared';
+import { normalize, getRootDomain } from '@openpath/shared';
 import { db, whitelistGroups, whitelistRules } from '../db/index.js';
 import { logger } from './logger.js';
 import type { WhitelistGroup, WhitelistRule } from '../db/schema.js';
@@ -80,6 +80,30 @@ export interface PaginatedRulesResult {
   hasMore: boolean;
 }
 
+/** A domain group containing rules under a root domain */
+export interface DomainGroup {
+  root: string;
+  rules: Rule[];
+  status: 'allowed' | 'blocked' | 'mixed';
+}
+
+/** Paginated grouped rules query options */
+export interface ListRulesGroupedOptions {
+  groupId: string;
+  type?: RuleType | undefined;
+  limit?: number | undefined; // Limit on number of root domain groups
+  offset?: number | undefined; // Offset in root domain groups
+  search?: string | undefined;
+}
+
+/** Paginated grouped rules result */
+export interface PaginatedGroupedRulesResult {
+  groups: DomainGroup[];
+  totalGroups: number; // Total number of root domain groups
+  totalRules: number; // Total number of rules across all groups
+  hasMore: boolean;
+}
+
 /** Update rule input */
 export interface UpdateRuleInput {
   id: string;
@@ -97,6 +121,7 @@ export interface IGroupsStorage {
   deleteGroup(id: string): Promise<boolean>;
   getRulesByGroup(groupId: string, type?: RuleType): Promise<Rule[]>;
   getRulesByGroupPaginated(options: ListRulesOptions): Promise<PaginatedRulesResult>;
+  getRulesByGroupGrouped(options: ListRulesGroupedOptions): Promise<PaginatedGroupedRulesResult>;
   getRuleById(id: string): Promise<Rule | null>;
   getRulesByIds(ids: string[]): Promise<Rule[]>;
   createRule(
@@ -316,6 +341,88 @@ export async function getRulesByGroupPaginated(
     rules: paginated.map(dbRuleToApi),
     total,
     hasMore: offset + limit < total,
+  };
+}
+
+/**
+ * Get rules for a group, grouped by root domain, with pagination on groups.
+ * This ensures domain groups are never split across pages.
+ */
+export async function getRulesByGroupGrouped(
+  options: ListRulesGroupedOptions
+): Promise<PaginatedGroupedRulesResult> {
+  const { groupId, type, limit = 20, offset = 0, search } = options;
+
+  // Get all rules for the group
+  let rules: WhitelistRule[];
+  if (type) {
+    rules = await db
+      .select()
+      .from(whitelistRules)
+      .where(and(eq(whitelistRules.groupId, groupId), eq(whitelistRules.type, type)));
+  } else {
+    rules = await db.select().from(whitelistRules).where(eq(whitelistRules.groupId, groupId));
+  }
+
+  // Apply search filter if provided
+  let filtered = rules;
+  if (search?.trim()) {
+    const searchLower = search.toLowerCase().trim();
+    filtered = rules.filter((r) => r.value.toLowerCase().includes(searchLower));
+  }
+
+  // Group rules by root domain
+  const groupedMap = new Map<string, WhitelistRule[]>();
+  for (const rule of filtered) {
+    const root = getRootDomain(rule.value);
+    const existing = groupedMap.get(root) ?? [];
+    existing.push(rule);
+    groupedMap.set(root, existing);
+  }
+
+  // Sort root domains alphabetically
+  const sortedRoots = Array.from(groupedMap.keys()).sort((a, b) => a.localeCompare(b));
+
+  // Calculate totals before pagination
+  const totalGroups = sortedRoots.length;
+  const totalRules = filtered.length;
+
+  // Apply pagination on groups (not individual rules)
+  const paginatedRoots = sortedRoots.slice(offset, offset + limit);
+
+  // Build domain groups with status
+  const groups: DomainGroup[] = paginatedRoots.map((root) => {
+    const groupRules = groupedMap.get(root) ?? [];
+    // Sort rules within group alphabetically
+    groupRules.sort((a, b) => a.value.localeCompare(b.value));
+
+    // Determine status based on rule types
+    const hasWhitelist = groupRules.some((r) => r.type === 'whitelist');
+    const hasBlocked = groupRules.some(
+      (r) => r.type === 'blocked_subdomain' || r.type === 'blocked_path'
+    );
+
+    let status: 'allowed' | 'blocked' | 'mixed';
+    if (hasWhitelist && hasBlocked) {
+      status = 'mixed';
+    } else if (hasBlocked) {
+      status = 'blocked';
+    } else {
+      status = 'allowed';
+    }
+
+    return {
+      root,
+      rules: groupRules.map(dbRuleToApi),
+      status,
+    };
+  });
+
+  return {
+    groups,
+    totalGroups,
+    totalRules,
+    hasMore: offset + limit < totalGroups,
   };
 }
 
@@ -666,6 +773,7 @@ export const groupsStorage: IGroupsStorage = {
   deleteGroup,
   getRulesByGroup,
   getRulesByGroupPaginated,
+  getRulesByGroupGrouped,
   getRuleById,
   getRulesByIds,
   createRule,

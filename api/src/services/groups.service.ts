@@ -13,7 +13,9 @@ import type {
   GroupStats,
   SystemStatus,
   PaginatedRulesResult,
+  PaginatedGroupedRulesResult,
   ListRulesOptions,
+  ListRulesGroupedOptions,
 } from '../lib/groups-storage.js';
 
 // =============================================================================
@@ -190,6 +192,21 @@ export async function listRulesPaginated(
   }
 
   const result = await groupsStorage.getRulesByGroupPaginated(options);
+  return { ok: true, data: result };
+}
+
+/**
+ * List rules for a group, grouped by root domain, with pagination on groups.
+ */
+export async function listRulesGrouped(
+  options: ListRulesGroupedOptions
+): Promise<GroupsResult<PaginatedGroupedRulesResult>> {
+  const group = await groupsStorage.getGroupById(options.groupId);
+  if (!group) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Group not found' } };
+  }
+
+  const result = await groupsStorage.getRulesByGroupGrouped(options);
   return { ok: true, data: result };
 }
 
@@ -374,6 +391,7 @@ export const GroupsService = {
   deleteGroup,
   listRules,
   listRulesPaginated,
+  listRulesGrouped,
   createRule,
   updateRule,
   deleteRule,

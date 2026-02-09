@@ -41,6 +41,14 @@ const ListRulesPaginatedSchema = z.object({
   search: z.string().optional(),
 });
 
+const ListRulesGroupedSchema = z.object({
+  groupId: z.string().min(1),
+  type: RuleTypeSchema.optional(),
+  limit: z.number().min(1).max(50).optional().default(20), // Limit on domain groups
+  offset: z.number().min(0).optional().default(0),
+  search: z.string().optional(),
+});
+
 const UpdateRuleSchema = z.object({
   id: z.string().min(1),
   groupId: z.string().min(1),
@@ -180,6 +188,31 @@ export const groupsRouter = router({
    */
   listRulesPaginated: adminProcedure.input(ListRulesPaginatedSchema).query(async ({ input }) => {
     const result = await GroupsService.listRulesPaginated({
+      groupId: input.groupId,
+      type: input.type,
+      limit: input.limit,
+      offset: input.offset,
+      search: input.search,
+    });
+    if (!result.ok) {
+      throw new TRPCError({ code: result.error.code, message: result.error.message });
+    }
+    return result.data;
+  }),
+
+  /**
+   * List rules for a group, grouped by root domain, with pagination on groups.
+   * This ensures domain groups are never split across pages.
+   * @param groupId - Group ID
+   * @param type - Optional rule type filter
+   * @param limit - Max number of domain groups to return (default 20)
+   * @param offset - Number of domain groups to skip (default 0)
+   * @param search - Optional search string to filter by value
+   * @returns { groups, totalGroups, totalRules, hasMore }
+   * @throws NOT_FOUND if group doesn't exist
+   */
+  listRulesGrouped: adminProcedure.input(ListRulesGroupedSchema).query(async ({ input }) => {
+    const result = await GroupsService.listRulesGrouped({
       groupId: input.groupId,
       type: input.type,
       limit: input.limit,

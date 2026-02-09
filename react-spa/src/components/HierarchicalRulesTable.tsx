@@ -15,185 +15,8 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getRuleTypeBadge } from '../lib/ruleDetection';
+import { getRootDomain } from '@openpath/shared';
 import type { Rule } from './RulesTable';
-
-// =============================================================================
-// Root Domain Extraction with ccTLD Support
-// =============================================================================
-
-/**
- * Common country-code second-level domains (ccSLDs)
- * These require 3 parts to identify the root domain (e.g., example.co.uk)
- */
-const CC_SLDS = new Set([
-  // UK
-  'co.uk',
-  'org.uk',
-  'me.uk',
-  'ac.uk',
-  'gov.uk',
-  'ltd.uk',
-  'plc.uk',
-  'net.uk',
-  'sch.uk',
-  // Australia
-  'com.au',
-  'net.au',
-  'org.au',
-  'edu.au',
-  'gov.au',
-  'asn.au',
-  'id.au',
-  // Brazil
-  'com.br',
-  'net.br',
-  'org.br',
-  'gov.br',
-  'edu.br',
-  // Argentina
-  'com.ar',
-  'net.ar',
-  'org.ar',
-  'gov.ar',
-  'edu.ar',
-  'gob.ar',
-  // Mexico
-  'com.mx',
-  'net.mx',
-  'org.mx',
-  'gob.mx',
-  'edu.mx',
-  // Spain
-  'com.es',
-  'org.es',
-  'gob.es',
-  'edu.es',
-  // Japan
-  'co.jp',
-  'or.jp',
-  'ne.jp',
-  'ac.jp',
-  'go.jp',
-  'gr.jp',
-  // New Zealand
-  'co.nz',
-  'net.nz',
-  'org.nz',
-  'govt.nz',
-  'ac.nz',
-  'school.nz',
-  // South Africa
-  'co.za',
-  'org.za',
-  'gov.za',
-  'net.za',
-  'edu.za',
-  // India
-  'co.in',
-  'net.in',
-  'org.in',
-  'gov.in',
-  'ac.in',
-  'edu.in',
-  // China
-  'com.cn',
-  'net.cn',
-  'org.cn',
-  'gov.cn',
-  'edu.cn',
-  // Korea
-  'co.kr',
-  'or.kr',
-  'ne.kr',
-  'go.kr',
-  'ac.kr',
-  // Others
-  'com.sg',
-  'org.sg',
-  'edu.sg',
-  'gov.sg',
-  'com.hk',
-  'org.hk',
-  'edu.hk',
-  'gov.hk',
-  'com.tw',
-  'org.tw',
-  'edu.tw',
-  'gov.tw',
-  'com.my',
-  'org.my',
-  'edu.my',
-  'gov.my',
-  'com.ph',
-  'org.ph',
-  'edu.ph',
-  'gov.ph',
-  'com.vn',
-  'org.vn',
-  'edu.vn',
-  'gov.vn',
-  'com.tr',
-  'org.tr',
-  'edu.tr',
-  'gov.tr',
-  'com.ua',
-  'org.ua',
-  'edu.ua',
-  'gov.ua',
-  'com.ru',
-  'org.ru',
-  'edu.ru',
-  'gov.ru',
-  'com.pl',
-  'org.pl',
-  'edu.pl',
-  'gov.pl',
-]);
-
-/**
- * Extract the root domain from a URL or domain string.
- * Handles ccTLDs like .co.uk, .com.ar correctly.
- *
- * @example
- * getRootDomain('mail.google.com') // 'google.com'
- * getRootDomain('www.bbc.co.uk') // 'bbc.co.uk'
- * getRootDomain('facebook.com/gaming') // 'facebook.com'
- */
-export const getRootDomain = (value: string): string => {
-  try {
-    // Remove protocol and www prefix
-    let domain = value.replace(/^(https?:\/\/)?(www\.)?/, '');
-
-    // Remove path and query string
-    domain = domain.split('/')[0].split('?')[0].split('#')[0];
-
-    // Remove port
-    domain = domain.split(':')[0];
-
-    // Handle wildcards
-    domain = domain.replace(/^\*\.?/, '');
-
-    const parts = domain.split('.');
-
-    if (parts.length < 2) {
-      return domain;
-    }
-
-    // Check for ccSLD (e.g., co.uk, com.ar)
-    if (parts.length >= 3) {
-      const possibleCcSld = parts.slice(-2).join('.');
-      if (CC_SLDS.has(possibleCcSld)) {
-        // Return last 3 parts (e.g., example.co.uk)
-        return parts.slice(-3).join('.');
-      }
-    }
-
-    // Standard TLD - return last 2 parts
-    return parts.slice(-2).join('.');
-  } catch {
-    return value;
-  }
-};
 
 // =============================================================================
 // Types
@@ -205,8 +28,14 @@ export interface DomainGroup {
   status: 'allowed' | 'blocked' | 'mixed';
 }
 
+// Re-export getRootDomain for backward compatibility
+export { getRootDomain };
+
 interface HierarchicalRulesTableProps {
-  rules: Rule[];
+  /** Individual rules to be grouped client-side (legacy mode) */
+  rules?: Rule[];
+  /** Pre-grouped domain groups from the backend (preferred mode) */
+  domainGroups?: DomainGroup[];
   loading?: boolean;
   onDelete: (rule: Rule) => void;
   onSave?: (id: string, data: { value?: string; comment?: string | null }) => Promise<boolean>;
@@ -227,6 +56,7 @@ interface HierarchicalRulesTableProps {
 
 export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
   rules,
+  domainGroups: preGroupedDomains,
   loading = false,
   onDelete,
   onSave,
@@ -247,8 +77,18 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
 
   const hasSelectionFeature = selectedIds !== undefined && onToggleSelection !== undefined;
 
-  // Group rules by root domain
+  // Group rules by root domain (client-side grouping if no pre-grouped data)
   const groups = useMemo(() => {
+    // If pre-grouped data is provided, use it directly
+    if (preGroupedDomains && preGroupedDomains.length > 0) {
+      return preGroupedDomains;
+    }
+
+    // Otherwise, group rules client-side (legacy mode)
+    if (!rules || rules.length === 0) {
+      return [];
+    }
+
     const grouped = new Map<string, DomainGroup>();
 
     rules.forEach((rule) => {
@@ -269,7 +109,7 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
     });
 
     return Array.from(grouped.values()).sort((a, b) => a.root.localeCompare(b.root));
-  }, [rules]);
+  }, [rules, preGroupedDomains]);
 
   // Toggle group expansion
   const toggleGroup = useCallback((root: string) => {
@@ -302,7 +142,9 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
   const saveEdit = useCallback(async () => {
     if (!editingId || !onSave || isSaving) return;
 
-    const rule = rules.find((r) => r.id === editingId);
+    // Find rule in groups
+    const allRules = groups.flatMap((g) => g.rules);
+    const rule = allRules.find((r) => r.id === editingId);
     if (!rule) return;
 
     const valueChanged = editValue.trim() !== rule.value;
@@ -327,7 +169,7 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
       cancelEdit();
     }
     setIsSaving(false);
-  }, [editingId, editValue, editComment, rules, onSave, isSaving, cancelEdit]);
+  }, [editingId, editValue, editComment, groups, onSave, isSaving, cancelEdit]);
 
   // Handle keyboard events in edit mode
   const handleEditKeyDown = useCallback(
@@ -356,7 +198,7 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
   }
 
   // Empty state
-  if (rules.length === 0) {
+  if (groups.length === 0) {
     return (
       <div className={cn('bg-white border border-slate-200 rounded-lg', className)}>
         <div className="py-12 text-center text-slate-400 text-sm">{emptyMessage}</div>
