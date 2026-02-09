@@ -52,9 +52,9 @@ function detectDelimiter(content: string): ',' | ';' | '\t' {
 
   // Count occurrences of each potential delimiter
   const counts = {
-    ',': (firstLine.match(/,/g) || []).length,
-    ';': (firstLine.match(/;/g) || []).length,
-    '\t': (firstLine.match(/\t/g) || []).length,
+    ',': (firstLine.match(/,/g) ?? []).length,
+    ';': (firstLine.match(/;/g) ?? []).length,
+    '\t': (firstLine.match(/\t/g) ?? []).length,
   };
 
   // Return the most common delimiter, defaulting to comma
@@ -148,7 +148,7 @@ function cleanValue(value: string): string | null {
   if (!cleaned) return null;
 
   // Skip obvious non-domain values
-  if (cleaned.match(/^(#|\/\/|true|false|null|undefined|\d+)$/i)) {
+  if (/^(#|\/\/|true|false|null|undefined|\d+)$/i.exec(cleaned) !== null) {
     return null;
   }
 
@@ -191,7 +191,7 @@ export function parseCSV(content: string, options: CSVParseOptions = {}): CSVPar
   }
 
   // Detect delimiter
-  const delimiter = explicitDelimiter || detectDelimiter(content);
+  const delimiter = explicitDelimiter ?? detectDelimiter(content);
 
   // Parse first line to check for headers
   const firstLineFields = parseCSVLine(lines[0], delimiter);
@@ -214,7 +214,7 @@ export function parseCSV(content: string, options: CSVParseOptions = {}): CSVPar
 
       if (headers.length > 3) {
         warnings.push(
-          `CSV tiene ${headers.length} columnas. Usando columna "${headers[valueColumnIndex]}".`
+          `CSV tiene ${String(headers.length)} columnas. Usando columna "${headers[valueColumnIndex]}".`
         );
       }
     } else {
@@ -279,7 +279,7 @@ export function parseCSV(content: string, options: CSVParseOptions = {}): CSVPar
   const duplicatesRemoved = values.length - uniqueValues.length;
 
   if (duplicatesRemoved > 0) {
-    warnings.push(`${duplicatesRemoved} duplicados eliminados.`);
+    warnings.push(`${String(duplicatesRemoved)} duplicados eliminados.`);
   }
 
   return {

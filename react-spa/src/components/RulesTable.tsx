@@ -60,7 +60,7 @@ export const RulesTable: React.FC<RulesTableProps> = ({
   rules,
   loading,
   onDelete,
-  onEdit,
+  onEdit: _onEdit,
   onSave,
   emptyMessage = 'No hay reglas configuradas',
   className,

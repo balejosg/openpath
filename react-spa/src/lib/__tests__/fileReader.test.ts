@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   isValidTextFile,
   readFileAsText,
@@ -8,7 +8,7 @@ import {
 } from '../fileReader';
 
 // Helper to create mock File objects
-function createMockFile(name: string, content: string, type: string = 'text/plain'): File {
+function createMockFile(name: string, content: string, type = 'text/plain'): File {
   const blob = new Blob([content], { type });
   return new File([blob], name, { type });
 }
@@ -90,7 +90,7 @@ describe('fileReader', () => {
     });
 
     it('should handle large files', async () => {
-      const lines = Array.from({ length: 1000 }, (_, i) => `domain${i}.com`);
+      const lines = Array.from({ length: 1000 }, (_, i) => `domain${String(i)}.com`);
       const content = lines.join('\n');
       const file = createMockFile('large.txt', content);
 

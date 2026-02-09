@@ -1,0 +1,620 @@
+import React, { useState, useMemo, useCallback } from 'react';
+import {
+  ChevronRight,
+  ChevronDown,
+  Globe,
+  Plus,
+  Trash2,
+  Edit2,
+  Square,
+  CheckSquare,
+  Minus,
+  Save,
+  X,
+  Loader2,
+} from 'lucide-react';
+import { cn } from '../lib/utils';
+import { getRuleTypeBadge } from '../lib/ruleDetection';
+import type { Rule } from './RulesTable';
+
+// =============================================================================
+// Root Domain Extraction with ccTLD Support
+// =============================================================================
+
+/**
+ * Common country-code second-level domains (ccSLDs)
+ * These require 3 parts to identify the root domain (e.g., example.co.uk)
+ */
+const CC_SLDS = new Set([
+  // UK
+  'co.uk',
+  'org.uk',
+  'me.uk',
+  'ac.uk',
+  'gov.uk',
+  'ltd.uk',
+  'plc.uk',
+  'net.uk',
+  'sch.uk',
+  // Australia
+  'com.au',
+  'net.au',
+  'org.au',
+  'edu.au',
+  'gov.au',
+  'asn.au',
+  'id.au',
+  // Brazil
+  'com.br',
+  'net.br',
+  'org.br',
+  'gov.br',
+  'edu.br',
+  // Argentina
+  'com.ar',
+  'net.ar',
+  'org.ar',
+  'gov.ar',
+  'edu.ar',
+  'gob.ar',
+  // Mexico
+  'com.mx',
+  'net.mx',
+  'org.mx',
+  'gob.mx',
+  'edu.mx',
+  // Spain
+  'com.es',
+  'org.es',
+  'gob.es',
+  'edu.es',
+  // Japan
+  'co.jp',
+  'or.jp',
+  'ne.jp',
+  'ac.jp',
+  'go.jp',
+  'gr.jp',
+  // New Zealand
+  'co.nz',
+  'net.nz',
+  'org.nz',
+  'govt.nz',
+  'ac.nz',
+  'school.nz',
+  // South Africa
+  'co.za',
+  'org.za',
+  'gov.za',
+  'net.za',
+  'edu.za',
+  // India
+  'co.in',
+  'net.in',
+  'org.in',
+  'gov.in',
+  'ac.in',
+  'edu.in',
+  // China
+  'com.cn',
+  'net.cn',
+  'org.cn',
+  'gov.cn',
+  'edu.cn',
+  // Korea
+  'co.kr',
+  'or.kr',
+  'ne.kr',
+  'go.kr',
+  'ac.kr',
+  // Others
+  'com.sg',
+  'org.sg',
+  'edu.sg',
+  'gov.sg',
+  'com.hk',
+  'org.hk',
+  'edu.hk',
+  'gov.hk',
+  'com.tw',
+  'org.tw',
+  'edu.tw',
+  'gov.tw',
+  'com.my',
+  'org.my',
+  'edu.my',
+  'gov.my',
+  'com.ph',
+  'org.ph',
+  'edu.ph',
+  'gov.ph',
+  'com.vn',
+  'org.vn',
+  'edu.vn',
+  'gov.vn',
+  'com.tr',
+  'org.tr',
+  'edu.tr',
+  'gov.tr',
+  'com.ua',
+  'org.ua',
+  'edu.ua',
+  'gov.ua',
+  'com.ru',
+  'org.ru',
+  'edu.ru',
+  'gov.ru',
+  'com.pl',
+  'org.pl',
+  'edu.pl',
+  'gov.pl',
+]);
+
+/**
+ * Extract the root domain from a URL or domain string.
+ * Handles ccTLDs like .co.uk, .com.ar correctly.
+ *
+ * @example
+ * getRootDomain('mail.google.com') // 'google.com'
+ * getRootDomain('www.bbc.co.uk') // 'bbc.co.uk'
+ * getRootDomain('facebook.com/gaming') // 'facebook.com'
+ */
+export const getRootDomain = (value: string): string => {
+  try {
+    // Remove protocol and www prefix
+    let domain = value.replace(/^(https?:\/\/)?(www\.)?/, '');
+
+    // Remove path and query string
+    domain = domain.split('/')[0].split('?')[0].split('#')[0];
+
+    // Remove port
+    domain = domain.split(':')[0];
+
+    // Handle wildcards
+    domain = domain.replace(/^\*\.?/, '');
+
+    const parts = domain.split('.');
+
+    if (parts.length < 2) {
+      return domain;
+    }
+
+    // Check for ccSLD (e.g., co.uk, com.ar)
+    if (parts.length >= 3) {
+      const possibleCcSld = parts.slice(-2).join('.');
+      if (CC_SLDS.has(possibleCcSld)) {
+        // Return last 3 parts (e.g., example.co.uk)
+        return parts.slice(-3).join('.');
+      }
+    }
+
+    // Standard TLD - return last 2 parts
+    return parts.slice(-2).join('.');
+  } catch {
+    return value;
+  }
+};
+
+// =============================================================================
+// Types
+// =============================================================================
+
+export interface DomainGroup {
+  root: string;
+  rules: Rule[];
+  status: 'allowed' | 'blocked' | 'mixed';
+}
+
+interface HierarchicalRulesTableProps {
+  rules: Rule[];
+  loading?: boolean;
+  onDelete: (rule: Rule) => void;
+  onSave?: (id: string, data: { value?: string; comment?: string | null }) => Promise<boolean>;
+  onAddSubdomain?: (rootDomain: string) => void;
+  emptyMessage?: string;
+  className?: string;
+  // Selection props
+  selectedIds?: Set<string>;
+  onToggleSelection?: (id: string) => void;
+  onToggleSelectAll?: () => void;
+  isAllSelected?: boolean;
+  hasSelection?: boolean;
+}
+
+// =============================================================================
+// Component
+// =============================================================================
+
+export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
+  rules,
+  loading = false,
+  onDelete,
+  onSave,
+  onAddSubdomain,
+  emptyMessage = 'No hay reglas configuradas',
+  className,
+  selectedIds,
+  onToggleSelection,
+  onToggleSelectAll,
+  isAllSelected,
+  hasSelection,
+}) => {
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [editComment, setEditComment] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const hasSelectionFeature = selectedIds !== undefined && onToggleSelection !== undefined;
+
+  // Group rules by root domain
+  const groups = useMemo(() => {
+    const grouped = new Map<string, DomainGroup>();
+
+    rules.forEach((rule) => {
+      const root = getRootDomain(rule.value);
+      const existing = grouped.get(root);
+      if (existing) {
+        existing.rules.push(rule);
+      } else {
+        grouped.set(root, { root, rules: [rule], status: 'mixed' });
+      }
+    });
+
+    // Determine group status
+    grouped.forEach((group) => {
+      const allAllowed = group.rules.every((r) => r.type === 'whitelist');
+      const allBlocked = group.rules.every((r) => r.type !== 'whitelist');
+      group.status = allAllowed ? 'allowed' : allBlocked ? 'blocked' : 'mixed';
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => a.root.localeCompare(b.root));
+  }, [rules]);
+
+  // Toggle group expansion
+  const toggleGroup = useCallback((root: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(root)) {
+        next.delete(root);
+      } else {
+        next.add(root);
+      }
+      return next;
+    });
+  }, []);
+
+  // Start editing a rule
+  const startEdit = useCallback((rule: Rule) => {
+    setEditingId(rule.id);
+    setEditValue(rule.value);
+    setEditComment(rule.comment ?? '');
+  }, []);
+
+  // Cancel editing
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+    setEditValue('');
+    setEditComment('');
+  }, []);
+
+  // Save edited rule
+  const saveEdit = useCallback(async () => {
+    if (!editingId || !onSave || isSaving) return;
+
+    const rule = rules.find((r) => r.id === editingId);
+    if (!rule) return;
+
+    const valueChanged = editValue.trim() !== rule.value;
+    const commentChanged = editComment !== (rule.comment ?? '');
+
+    if (!valueChanged && !commentChanged) {
+      cancelEdit();
+      return;
+    }
+
+    if (!editValue.trim()) {
+      return;
+    }
+
+    setIsSaving(true);
+    const success = await onSave(editingId, {
+      value: valueChanged ? editValue.trim() : undefined,
+      comment: commentChanged ? editComment.trim() || null : undefined,
+    });
+
+    if (success) {
+      cancelEdit();
+    }
+    setIsSaving(false);
+  }, [editingId, editValue, editComment, rules, onSave, isSaving, cancelEdit]);
+
+  // Handle keyboard events in edit mode
+  const handleEditKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        void saveEdit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelEdit();
+      }
+    },
+    [saveEdit, cancelEdit]
+  );
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className={cn('bg-white border border-slate-200 rounded-lg', className)}>
+        <div className="flex items-center justify-center py-12 text-slate-400">
+          <Loader2 size={20} className="animate-spin mr-2" />
+          Cargando reglas...
+        </div>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (rules.length === 0) {
+    return (
+      <div className={cn('bg-white border border-slate-200 rounded-lg', className)}>
+        <div className="py-12 text-center text-slate-400 text-sm">{emptyMessage}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn('bg-white border border-slate-200 rounded-lg overflow-hidden', className)}>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-bold tracking-wider">
+              {hasSelectionFeature && (
+                <th className="px-4 py-3 w-10">
+                  <button
+                    onClick={onToggleSelectAll}
+                    className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                    title={isAllSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
+                  >
+                    {isAllSelected ? (
+                      <CheckSquare size={18} className="text-blue-600" />
+                    ) : hasSelection ? (
+                      <Minus size={18} className="text-blue-400" />
+                    ) : (
+                      <Square size={18} />
+                    )}
+                  </button>
+                </th>
+              )}
+              <th className="px-4 py-3 w-8"></th>
+              <th className="px-4 py-3">Dominio / Regla</th>
+              <th className="px-4 py-3 w-32">Estado</th>
+              <th className="px-4 py-3 w-24 text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {groups.map((group) => {
+              const isExpanded = expandedGroups.has(group.root);
+              const groupRuleIds = group.rules.map((r) => r.id);
+              const selectedInGroup = groupRuleIds.filter((id) => selectedIds?.has(id)).length;
+              const allGroupSelected = selectedInGroup === group.rules.length;
+              const someGroupSelected = selectedInGroup > 0 && selectedInGroup < group.rules.length;
+
+              return (
+                <React.Fragment key={group.root}>
+                  {/* Group Header Row */}
+                  <tr
+                    className={cn(
+                      'bg-slate-50/50 hover:bg-slate-100 transition-colors cursor-pointer',
+                      isExpanded && 'bg-slate-100'
+                    )}
+                    onClick={() => toggleGroup(group.root)}
+                  >
+                    {hasSelectionFeature && (
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Toggle all rules in group
+                            groupRuleIds.forEach((id) => {
+                              if (allGroupSelected) {
+                                if (selectedIds.has(id)) onToggleSelection(id);
+                              } else {
+                                if (!selectedIds.has(id)) onToggleSelection(id);
+                              }
+                            });
+                          }}
+                          className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                          title={allGroupSelected ? 'Deseleccionar grupo' : 'Seleccionar grupo'}
+                        >
+                          {allGroupSelected ? (
+                            <CheckSquare size={18} className="text-blue-600" />
+                          ) : someGroupSelected ? (
+                            <Minus size={18} className="text-blue-400" />
+                          ) : (
+                            <Square size={18} />
+                          )}
+                        </button>
+                      </td>
+                    )}
+                    <td className="px-4 py-3 text-slate-400">
+                      {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Globe size={16} className="text-slate-400 flex-shrink-0" />
+                        <span className="font-medium text-slate-700">{group.root}</span>
+                        <span className="text-xs text-slate-400 font-normal">
+                          ({group.rules.length})
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={cn(
+                          'text-xs px-2 py-0.5 rounded-full border font-medium',
+                          group.status === 'allowed' &&
+                            'bg-green-100 text-green-700 border-green-200',
+                          group.status === 'blocked' && 'bg-red-100 text-red-700 border-red-200',
+                          group.status === 'mixed' && 'bg-amber-100 text-amber-700 border-amber-200'
+                        )}
+                      >
+                        {group.status === 'allowed'
+                          ? 'Permitido'
+                          : group.status === 'blocked'
+                            ? 'Bloqueado'
+                            : 'Mixto'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {onAddSubdomain && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAddSubdomain(group.root);
+                          }}
+                          className="p-1.5 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-700 transition-colors"
+                          title={`Añadir subdominio a ${group.root}`}
+                        >
+                          <Plus size={16} />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+
+                  {/* Child Rule Rows */}
+                  {isExpanded &&
+                    group.rules.map((rule) => {
+                      const isSelected = selectedIds?.has(rule.id) ?? false;
+                      const isEditing = editingId === rule.id;
+
+                      return (
+                        <tr
+                          key={rule.id}
+                          className={cn(
+                            'bg-white hover:bg-slate-50 transition-colors group',
+                            isSelected && 'bg-blue-50 hover:bg-blue-100',
+                            isEditing && 'bg-amber-50 hover:bg-amber-50'
+                          )}
+                        >
+                          {hasSelectionFeature && (
+                            <td className="px-4 py-2">
+                              <button
+                                onClick={() => onToggleSelection(rule.id)}
+                                className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
+                                title={isSelected ? 'Deseleccionar' : 'Seleccionar'}
+                                disabled={isEditing}
+                              >
+                                {isSelected ? (
+                                  <CheckSquare size={18} className="text-blue-600" />
+                                ) : (
+                                  <Square size={18} />
+                                )}
+                              </button>
+                            </td>
+                          )}
+                          <td className="px-4 py-2"></td>
+                          <td className="px-4 py-2 pl-12">
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-300">↳</span>
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={editValue}
+                                  onChange={(e) => setEditValue(e.target.value)}
+                                  onKeyDown={handleEditKeyDown}
+                                  className="flex-1 px-2 py-1 text-sm font-mono border border-amber-300 rounded focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white"
+                                  autoFocus
+                                  data-testid="edit-value-input"
+                                />
+                              ) : (
+                                <span
+                                  className={cn(
+                                    'text-sm font-mono text-slate-600 break-all',
+                                    onSave && 'cursor-pointer hover:text-blue-600'
+                                  )}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onSave) startEdit(rule);
+                                  }}
+                                  title={onSave ? 'Haz clic para editar' : undefined}
+                                >
+                                  {rule.value}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                              {getRuleTypeBadge(rule.type)}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            {isEditing ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => void saveEdit()}
+                                  disabled={isSaving || !editValue.trim()}
+                                  className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Guardar (Enter)"
+                                  data-testid="save-edit-button"
+                                >
+                                  {isSaving ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                  ) : (
+                                    <Save size={14} />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={cancelEdit}
+                                  disabled={isSaving}
+                                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors disabled:opacity-50"
+                                  title="Cancelar (Esc)"
+                                  data-testid="cancel-edit-button"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {onSave && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEdit(rule);
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                    title="Editar"
+                                    data-testid="edit-button"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDelete(rule);
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                  title="Eliminar"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+export default HierarchicalRulesTable;

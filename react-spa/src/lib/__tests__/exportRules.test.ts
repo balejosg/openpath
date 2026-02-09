@@ -89,7 +89,7 @@ describe('exportRules utilities', () => {
   describe('rulesToJSON', () => {
     it('generates valid JSON', () => {
       const json = rulesToJSON(mockRules);
-      const parsed = JSON.parse(json);
+      const parsed = JSON.parse(json) as unknown[];
 
       expect(parsed).toBeInstanceOf(Array);
       expect(parsed).toHaveLength(3);
@@ -97,7 +97,12 @@ describe('exportRules utilities', () => {
 
     it('includes all required fields', () => {
       const json = rulesToJSON(mockRules);
-      const parsed = JSON.parse(json);
+      const parsed = JSON.parse(json) as {
+        value: string;
+        type: string;
+        typeLabel: string;
+        createdAt: string;
+      }[];
 
       expect(parsed[0]).toEqual({
         value: 'google.com',
@@ -109,14 +114,14 @@ describe('exportRules utilities', () => {
 
     it('handles empty array', () => {
       const json = rulesToJSON([]);
-      const parsed = JSON.parse(json);
+      const parsed = JSON.parse(json) as unknown[];
 
       expect(parsed).toEqual([]);
     });
 
     it('uses human-readable type labels', () => {
       const json = rulesToJSON(mockRules);
-      const parsed = JSON.parse(json);
+      const parsed = JSON.parse(json) as { typeLabel: string }[];
 
       expect(parsed[0].typeLabel).toBe('Permitido');
       expect(parsed[1].typeLabel).toBe('Subdominio bloqueado');

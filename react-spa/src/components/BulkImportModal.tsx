@@ -145,8 +145,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
       const validFiles: File[] = [];
 
       // Filter for text files
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      for (const file of files) {
         if (
           file.type === 'text/plain' ||
           file.name.endsWith('.txt') ||
@@ -180,7 +179,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
     e.preventDefault();
     e.stopPropagation();
     dragCounter.current++;
-    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+    if (e.dataTransfer.items.length > 0) {
       setIsDragOver(true);
     }
   }, []);
@@ -207,7 +206,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
       dragCounter.current = 0;
 
       const { files } = e.dataTransfer;
-      handleFileDrop(files);
+      void handleFileDrop(files);
     },
     [handleFileDrop]
   );
@@ -355,12 +354,12 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
             Cancelar
           </Button>
           <Button
-            onClick={handleImport}
+            onClick={() => void handleImport()}
             disabled={valueCount === 0 || isImporting}
             isLoading={isImporting}
           >
             <Upload size={14} className="mr-1" />
-            Importar {valueCount > 0 && `(${valueCount})`}
+            Importar {valueCount > 0 && `(${String(valueCount)})`}
           </Button>
         </div>
       </div>

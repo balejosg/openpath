@@ -143,7 +143,7 @@ export function exportRules(
       break;
   }
 
-  downloadFile(content, filename || `${defaultFilename}.${extension}`, mimeType);
+  downloadFile(content, filename ?? `${defaultFilename}.${extension}`, mimeType);
 }
 
 export type ExportFormat = 'csv' | 'json' | 'txt';

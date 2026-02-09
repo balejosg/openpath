@@ -11,12 +11,12 @@ const mockGroupsListQuery = vi.fn();
 vi.mock('../../lib/trpc', () => ({
   trpc: {
     groups: {
-      stats: { query: () => mockStatsQuery() },
-      list: { query: () => mockGroupsListQuery() },
-      systemStatus: { query: () => mockSystemStatusQuery() },
+      stats: { query: (): unknown => mockStatsQuery() },
+      list: { query: (): unknown => mockGroupsListQuery() },
+      systemStatus: { query: (): unknown => mockSystemStatusQuery() },
     },
     requests: {
-      stats: { query: () => mockRequestsStatsQuery() },
+      stats: { query: (): unknown => mockRequestsStatsQuery() },
     },
   },
 }));
@@ -215,9 +215,9 @@ describe('Dashboard', () => {
 
   it('limits displayed groups to 6 maximum', async () => {
     const manyGroups = Array.from({ length: 10 }, (_, i) => ({
-      id: `group-${i}`,
-      name: `group-${i}`,
-      displayName: `Group ${i}`,
+      id: `group-${String(i)}`,
+      name: `group-${String(i)}`,
+      displayName: `Group ${String(i)}`,
       enabled: true,
       whitelistCount: 10,
       blockedSubdomainCount: 2,
@@ -241,9 +241,9 @@ describe('Dashboard', () => {
 
   it('shows "view all" message when there are more than 6 groups', async () => {
     const manyGroups = Array.from({ length: 10 }, (_, i) => ({
-      id: `group-${i}`,
-      name: `group-${i}`,
-      displayName: `Group ${i}`,
+      id: `group-${String(i)}`,
+      name: `group-${String(i)}`,
+      displayName: `Group ${String(i)}`,
       enabled: true,
       whitelistCount: 10,
       blockedSubdomainCount: 2,
@@ -287,9 +287,14 @@ describe('Dashboard', () => {
     });
   });
 
-  it('shows loading state for groups', async () => {
+  it('shows loading state for groups', () => {
     // Never resolve the promise
-    mockGroupsListQuery.mockImplementation(() => new Promise(() => {}));
+    mockGroupsListQuery.mockImplementation(
+      () =>
+        new Promise<never>(() => {
+          /* intentionally empty */
+        })
+    );
 
     const onNavigateToRules = vi.fn();
 

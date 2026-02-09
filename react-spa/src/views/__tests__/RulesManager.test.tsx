@@ -114,7 +114,7 @@ describe('RulesManager View', () => {
 });
 
 // Helper to create mock File objects
-function createMockFile(name: string, content: string, type: string = 'text/plain'): File {
+function createMockFile(name: string, content: string, type = 'text/plain'): File {
   const blob = new Blob([content], { type });
   return new File([blob], name, { type });
 }
@@ -130,9 +130,15 @@ function createMockDataTransfer(files: File[]): DataTransfer {
     })) as unknown as DataTransferItemList,
     types: ['Files'],
     getData: () => '',
-    setData: () => {},
-    clearData: () => {},
-    setDragImage: () => {},
+    setData: () => {
+      /* noop */
+    },
+    clearData: () => {
+      /* noop */
+    },
+    setDragImage: () => {
+      /* noop */
+    },
     dropEffect: 'none',
     effectAllowed: 'all',
   } as unknown as DataTransfer;
@@ -152,7 +158,8 @@ describe('RulesManager - Page-level Drag and Drop', () => {
   it('shows drag overlay when dragging file over page', () => {
     render(<RulesManager {...defaultProps} />);
 
-    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]')!;
+    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]');
+    if (!container) throw new Error('Container not found');
 
     const file = createMockFile('domains.txt', 'google.com');
     const dataTransfer = createMockDataTransfer([file]);
@@ -166,7 +173,8 @@ describe('RulesManager - Page-level Drag and Drop', () => {
   it('hides drag overlay when drag leaves', () => {
     render(<RulesManager {...defaultProps} />);
 
-    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]')!;
+    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]');
+    if (!container) throw new Error('Container not found');
 
     const file = createMockFile('domains.txt', 'google.com');
     const dataTransfer = createMockDataTransfer([file]);
@@ -181,7 +189,8 @@ describe('RulesManager - Page-level Drag and Drop', () => {
   it('opens import modal with file content when valid file is dropped', async () => {
     render(<RulesManager {...defaultProps} />);
 
-    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]')!;
+    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]');
+    if (!container) throw new Error('Container not found');
 
     const file = createMockFile('domains.txt', 'google.com\nyoutube.com');
     const dataTransfer = createMockDataTransfer([file]);
@@ -196,7 +205,8 @@ describe('RulesManager - Page-level Drag and Drop', () => {
   it('shows error toast when invalid file is dropped', async () => {
     render(<RulesManager {...defaultProps} />);
 
-    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]')!;
+    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]');
+    if (!container) throw new Error('Container not found');
 
     const file = createMockFile('image.png', '', 'image/png');
     const dataTransfer = createMockDataTransfer([file]);
@@ -211,7 +221,8 @@ describe('RulesManager - Page-level Drag and Drop', () => {
   it('shows skipped files in toast when mixed files are dropped', async () => {
     render(<RulesManager {...defaultProps} />);
 
-    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]')!;
+    const container = screen.getByText('Gestión de Reglas').closest('div[class*="space-y-6"]');
+    if (!container) throw new Error('Container not found');
 
     const validFile = createMockFile('domains.txt', 'google.com');
     const invalidFile = createMockFile('photo.jpg', '', 'image/jpeg');

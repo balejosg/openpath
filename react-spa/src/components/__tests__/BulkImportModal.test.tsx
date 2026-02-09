@@ -350,7 +350,7 @@ describe('BulkImportModal Component', () => {
       });
     });
 
-    it('hides overlay after drop', async () => {
+    it('hides overlay after drop', () => {
       render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
 
       const dropZone = screen.getByTestId('drop-zone');

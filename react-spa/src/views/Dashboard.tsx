@@ -155,11 +155,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
           const bTotal = b.whitelistCount + b.blockedSubdomainCount + b.blockedPathCount;
           return bTotal - aTotal;
         }
-        case 'recent':
+        case 'recent': {
           // Use updatedAt if available, otherwise createdAt
-          const aDate = a.updatedAt || a.createdAt || '';
-          const bDate = b.updatedAt || b.createdAt || '';
+          const aDate = a.updatedAt ?? a.createdAt ?? '';
+          const bDate = b.updatedAt ?? b.createdAt ?? '';
           return bDate.localeCompare(aDate);
+        }
         default:
           return 0;
       }

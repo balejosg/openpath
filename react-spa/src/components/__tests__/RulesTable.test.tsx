@@ -350,7 +350,7 @@ describe('RulesTable Component', () => {
       expect(screen.queryByTestId('edit-button')).not.toBeInTheDocument();
     });
 
-    it('enters edit mode when clicking edit button', async () => {
+    it('enters edit mode when clicking edit button', () => {
       const handleSave = vi.fn().mockResolvedValue(true);
       render(
         <RulesTable rules={editableRules} loading={false} onDelete={noop} onSave={handleSave} />
@@ -365,7 +365,7 @@ describe('RulesTable Component', () => {
       expect(screen.getByTestId('cancel-edit-button')).toBeInTheDocument();
     });
 
-    it('enters edit mode when clicking on value text', async () => {
+    it('enters edit mode when clicking on value text', () => {
       const handleSave = vi.fn().mockResolvedValue(true);
       render(
         <RulesTable rules={editableRules} loading={false} onDelete={noop} onSave={handleSave} />
@@ -377,7 +377,7 @@ describe('RulesTable Component', () => {
       expect(screen.getByTestId('edit-value-input')).toBeInTheDocument();
     });
 
-    it('populates edit inputs with current values', async () => {
+    it('populates edit inputs with current values', () => {
       const handleSave = vi.fn().mockResolvedValue(true);
       render(
         <RulesTable rules={editableRules} loading={false} onDelete={noop} onSave={handleSave} />
@@ -386,14 +386,14 @@ describe('RulesTable Component', () => {
       const editButtons = screen.getAllByTestId('edit-button');
       fireEvent.click(editButtons[0]);
 
-      const valueInput = screen.getByTestId('edit-value-input') as HTMLInputElement;
-      const commentInput = screen.getByTestId('edit-comment-input') as HTMLInputElement;
+      const valueInput = screen.getByTestId('edit-value-input');
+      const commentInput = screen.getByTestId('edit-comment-input');
 
-      expect(valueInput.value).toBe('google.com');
-      expect(commentInput.value).toBe('Search engine');
+      expect((valueInput as HTMLInputElement).value).toBe('google.com');
+      expect((commentInput as HTMLInputElement).value).toBe('Search engine');
     });
 
-    it('cancels edit when clicking cancel button', async () => {
+    it('cancels edit when clicking cancel button', () => {
       const handleSave = vi.fn().mockResolvedValue(true);
       render(
         <RulesTable rules={editableRules} loading={false} onDelete={noop} onSave={handleSave} />

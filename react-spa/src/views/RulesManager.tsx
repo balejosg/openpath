@@ -11,9 +11,12 @@ import {
   Info,
   Upload,
   FileUp,
+  List,
+  GitBranch,
 } from 'lucide-react';
 import { Tabs } from '../components/ui/Tabs';
 import { RulesTable } from '../components/RulesTable';
+import { HierarchicalRulesTable } from '../components/HierarchicalRulesTable';
 import { BulkActionBar } from '../components/BulkActionBar';
 import { BulkImportModal } from '../components/BulkImportModal';
 import { ExportDropdown } from '../components/ExportDropdown';
@@ -24,6 +27,8 @@ import { detectRuleType, getRuleTypeBadge } from '../lib/ruleDetection';
 import { exportRules } from '../lib/exportRules';
 import { readMultipleFiles } from '../lib/fileReader';
 import { cn } from '../lib/utils';
+
+type ViewMode = 'flat' | 'hierarchical';
 
 interface RulesManagerProps {
   groupId: string;
@@ -36,6 +41,9 @@ interface RulesManagerProps {
  */
 export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, onBack }) => {
   const { success, error: toastError, ToastContainer } = useToast();
+
+  // View mode state
+  const [viewMode, setViewMode] = useState<ViewMode>('flat');
 
   // New rule input state
   const [newValue, setNewValue] = useState('');
@@ -137,7 +145,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
     e.preventDefault();
     e.stopPropagation();
     dragCounter.current++;
-    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+    if (e.dataTransfer.items.length > 0) {
       setIsDragOver(true);
     }
   }, []);
@@ -157,29 +165,31 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
   }, []);
 
   const handleDrop = useCallback(
-    async (e: React.DragEvent) => {
+    (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
       setIsDragOver(false);
       dragCounter.current = 0;
 
       const { files } = e.dataTransfer;
-      if (!files || files.length === 0) return;
+      if (files.length === 0) return;
 
-      try {
-        const result = await readMultipleFiles(files);
-        if (result.content) {
-          setImportInitialText(result.content);
-          setShowImportModal(true);
-          if (result.skippedFiles.length > 0) {
-            toastError(`Archivos ignorados: ${result.skippedFiles.join(', ')}`);
+      void (async () => {
+        try {
+          const result = await readMultipleFiles(files);
+          if (result.content) {
+            setImportInitialText(result.content);
+            setShowImportModal(true);
+            if (result.skippedFiles.length > 0) {
+              toastError(`Archivos ignorados: ${result.skippedFiles.join(', ')}`);
+            }
+          } else if (result.skippedFiles.length > 0) {
+            toastError('Solo se permiten archivos .txt, .csv o .list');
           }
-        } else if (result.skippedFiles.length > 0) {
-          toastError('Solo se permiten archivos .txt, .csv o .list');
+        } catch {
+          toastError('Error al leer los archivos');
         }
-      } catch {
-        toastError('Error al leer los archivos');
-      }
+      })();
     },
     [toastError]
   );
@@ -231,17 +241,49 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
       )}
 
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <button
-          onClick={onBack}
-          className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-          title="Volver a grupos"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">Gestión de Reglas</h2>
-          <p className="text-slate-500 text-sm">{groupName}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            title="Volver a grupos"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Gestión de Reglas</h2>
+            <p className="text-slate-500 text-sm">{groupName}</p>
+          </div>
+        </div>
+
+        {/* View mode toggle */}
+        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
+          <button
+            onClick={() => setViewMode('flat')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+              viewMode === 'flat'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            )}
+            title="Vista plana"
+          >
+            <List size={16} />
+            <span className="hidden sm:inline">Lista</span>
+          </button>
+          <button
+            onClick={() => setViewMode('hierarchical')}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+              viewMode === 'hierarchical'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            )}
+            title="Vista jerárquica"
+          >
+            <GitBranch size={16} />
+            <span className="hidden sm:inline">Árbol</span>
+          </button>
         </div>
       </div>
 
@@ -345,8 +387,32 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
       )}
 
       {/* Rules Table */}
-      {!error && (
+      {!error && viewMode === 'flat' && (
         <RulesTable
+          rules={rules}
+          loading={loading}
+          onDelete={(rule) => void deleteRule(rule)}
+          onSave={updateRule}
+          selectedIds={selectedIds}
+          onToggleSelection={toggleSelection}
+          onToggleSelectAll={toggleSelectAll}
+          isAllSelected={isAllSelected}
+          hasSelection={hasSelection}
+          emptyMessage={
+            search
+              ? 'No se encontraron resultados para tu búsqueda'
+              : filter === 'allowed'
+                ? 'No hay dominios permitidos'
+                : filter === 'blocked'
+                  ? 'No hay dominios bloqueados'
+                  : 'No hay reglas configuradas. Añade una para empezar.'
+          }
+        />
+      )}
+
+      {/* Hierarchical Rules Table */}
+      {!error && viewMode === 'hierarchical' && (
+        <HierarchicalRulesTable
           rules={rules}
           loading={loading}
           onDelete={(rule) => void deleteRule(rule)}
