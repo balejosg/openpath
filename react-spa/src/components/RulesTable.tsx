@@ -12,6 +12,8 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  X,
+  Save,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getRuleTypeBadge } from '../lib/ruleDetection';
@@ -40,6 +42,7 @@ interface RulesTableProps {
   loading: boolean;
   onDelete: (rule: Rule) => void;
   onEdit?: (rule: Rule) => void;
+  onSave?: (id: string, data: { value?: string; comment?: string | null }) => Promise<boolean>;
   emptyMessage?: string;
   className?: string;
   // Selection props
@@ -58,6 +61,7 @@ export const RulesTable: React.FC<RulesTableProps> = ({
   loading,
   onDelete,
   onEdit,
+  onSave,
   emptyMessage = 'No hay reglas configuradas',
   className,
   selectedIds,
@@ -67,8 +71,72 @@ export const RulesTable: React.FC<RulesTableProps> = ({
   hasSelection,
 }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [editComment, setEditComment] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const hasSelectionFeature = selectedIds !== undefined && onToggleSelection !== undefined;
+
+  // Start editing a rule
+  const startEdit = useCallback((rule: Rule) => {
+    setEditingId(rule.id);
+    setEditValue(rule.value);
+    setEditComment(rule.comment ?? '');
+  }, []);
+
+  // Cancel editing
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+    setEditValue('');
+    setEditComment('');
+  }, []);
+
+  // Save edited rule
+  const saveEdit = useCallback(async () => {
+    if (!editingId || !onSave || isSaving) return;
+
+    const rule = rules.find((r) => r.id === editingId);
+    if (!rule) return;
+
+    // Check if anything changed
+    const valueChanged = editValue.trim() !== rule.value;
+    const commentChanged = editComment !== (rule.comment ?? '');
+
+    if (!valueChanged && !commentChanged) {
+      cancelEdit();
+      return;
+    }
+
+    if (!editValue.trim()) {
+      return; // Don't save empty value
+    }
+
+    setIsSaving(true);
+    const success = await onSave(editingId, {
+      value: valueChanged ? editValue.trim() : undefined,
+      comment: commentChanged ? editComment.trim() || null : undefined,
+    });
+
+    if (success) {
+      cancelEdit();
+    }
+    setIsSaving(false);
+  }, [editingId, editValue, editComment, rules, onSave, isSaving, cancelEdit]);
+
+  // Handle keyboard events in edit mode
+  const handleEditKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        void saveEdit();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cancelEdit();
+      }
+    },
+    [saveEdit, cancelEdit]
+  );
 
   // Handle column header click for sorting
   const handleSort = useCallback((field: SortField) => {
@@ -219,12 +287,14 @@ export const RulesTable: React.FC<RulesTableProps> = ({
           <tbody className="divide-y divide-slate-100">
             {sortedRules.map((rule) => {
               const isSelected = selectedIds?.has(rule.id) ?? false;
+              const isEditing = editingId === rule.id;
               return (
                 <tr
                   key={rule.id}
                   className={cn(
                     'hover:bg-slate-50 transition-colors group',
-                    isSelected && 'bg-blue-50 hover:bg-blue-100'
+                    isSelected && 'bg-blue-50 hover:bg-blue-100',
+                    isEditing && 'bg-amber-50 hover:bg-amber-50'
                   )}
                 >
                   {hasSelectionFeature && (
@@ -233,6 +303,7 @@ export const RulesTable: React.FC<RulesTableProps> = ({
                         onClick={() => onToggleSelection(rule.id)}
                         className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
                         title={isSelected ? 'Deseleccionar' : 'Seleccionar'}
+                        disabled={isEditing}
                       >
                         {isSelected ? (
                           <CheckSquare size={18} className="text-blue-600" />
@@ -243,7 +314,29 @@ export const RulesTable: React.FC<RulesTableProps> = ({
                     </td>
                   )}
                   <td className="px-4 py-3">
-                    <span className="text-sm text-slate-800 font-mono break-all">{rule.value}</span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={handleEditKeyDown}
+                        className="w-full px-2 py-1 text-sm font-mono border border-amber-300 rounded focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white"
+                        autoFocus
+                        data-testid="edit-value-input"
+                      />
+                    ) : (
+                      <span
+                        className={cn(
+                          'text-sm text-slate-800 font-mono break-all',
+                          onSave && 'cursor-pointer hover:text-blue-600'
+                        )}
+                        onClick={() => onSave && startEdit(rule)}
+                        onDoubleClick={() => onSave && startEdit(rule)}
+                        title={onSave ? 'Haz clic para editar' : undefined}
+                      >
+                        {rule.value}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -257,32 +350,80 @@ export const RulesTable: React.FC<RulesTableProps> = ({
                     </span>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
-                    <span className="text-sm text-slate-500 truncate max-w-xs block">
-                      {rule.comment ?? '-'}
-                    </span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editComment}
+                        onChange={(e) => setEditComment(e.target.value)}
+                        onKeyDown={handleEditKeyDown}
+                        placeholder="Comentario (opcional)"
+                        className="w-full px-2 py-1 text-sm border border-amber-300 rounded focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white"
+                        data-testid="edit-comment-input"
+                      />
+                    ) : (
+                      <span
+                        className={cn(
+                          'text-sm text-slate-500 truncate max-w-xs block',
+                          onSave && 'cursor-pointer hover:text-blue-600'
+                        )}
+                        onClick={() => onSave && startEdit(rule)}
+                        onDoubleClick={() => onSave && startEdit(rule)}
+                        title={onSave ? 'Haz clic para editar' : undefined}
+                      >
+                        {rule.comment ?? '-'}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
                     <span className="text-xs text-slate-400">{formatDate(rule.createdAt)}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {onEdit && (
+                    {isEditing ? (
+                      <div className="flex items-center justify-end gap-1">
                         <button
-                          onClick={() => onEdit(rule)}
-                          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Editar"
+                          onClick={() => void saveEdit()}
+                          disabled={isSaving || !editValue.trim()}
+                          className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Guardar (Enter)"
+                          data-testid="save-edit-button"
                         >
-                          <Edit2 size={14} />
+                          {isSaving ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Save size={14} />
+                          )}
                         </button>
-                      )}
-                      <button
-                        onClick={() => onDelete(rule)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Eliminar"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
+                        <button
+                          onClick={cancelEdit}
+                          disabled={isSaving}
+                          className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors disabled:opacity-50"
+                          title="Cancelar (Esc)"
+                          data-testid="cancel-edit-button"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {onSave && (
+                          <button
+                            onClick={() => startEdit(rule)}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                            title="Editar"
+                            data-testid="edit-button"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onDelete(rule)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Eliminar"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               );

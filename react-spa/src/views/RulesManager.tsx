@@ -65,6 +65,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
     deleteRule,
     bulkDeleteRules,
     bulkCreateRules,
+    updateRule,
     refetch,
   } = useRulesManager({
     groupId,
@@ -263,6 +264,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
           rules={rules}
           loading={loading}
           onDelete={(rule) => void deleteRule(rule)}
+          onSave={updateRule}
           selectedIds={selectedIds}
           onToggleSelection={toggleSelection}
           onToggleSelectAll={toggleSelectAll}

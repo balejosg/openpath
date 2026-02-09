@@ -443,3 +443,181 @@ export class Header {
     await this.logoutButton.click();
   }
 }
+
+// Rules Manager page object for inline editing tests
+export class RulesManagerPage {
+  readonly page: Page;
+  readonly rulesTable: Locator;
+  readonly searchInput: Locator;
+  readonly addRuleInput: Locator;
+  readonly addRuleButton: Locator;
+
+  constructor(page: Page) {
+    this.page = page;
+    this.rulesTable = page.locator('table');
+    this.searchInput = page.getByPlaceholder(/Buscar en/i);
+    this.addRuleInput = page.getByPlaceholder(/Añadir dominio/i);
+    this.addRuleButton = page.getByRole('button', { name: 'Añadir' });
+  }
+
+  /**
+   * Navigate to RulesManager for the first group
+   */
+  async open(): Promise<void> {
+    // Navigate to Políticas de Grupo via sidebar
+    const groupsButton = this.page.getByRole('button', { name: /Políticas de Grupo/i });
+    if (await groupsButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await groupsButton.click();
+      await this.page.waitForLoadState('networkidle');
+    }
+
+    await this.page.waitForTimeout(500);
+
+    // Click the first "Configurar" button to open the config modal
+    const configButton = this.page.getByRole('button', { name: /Configurar/i }).first();
+    await configButton.waitFor({ state: 'visible', timeout: 5000 });
+    await configButton.click();
+
+    await this.page.waitForTimeout(300);
+
+    // Click "Gestionar" link inside the modal to navigate to RulesManager
+    const manageLink = this.page.getByRole('button', { name: /Gestionar/i });
+    await manageLink.waitFor({ state: 'visible', timeout: 5000 });
+    await manageLink.click();
+    await this.page.waitForLoadState('networkidle');
+
+    // Wait for RulesManager to load
+    await this.rulesTable.waitFor({ state: 'visible', timeout: 10000 });
+  }
+
+  /**
+   * Add a new rule
+   */
+  async addRule(value: string): Promise<void> {
+    await this.addRuleInput.fill(value);
+    await this.addRuleButton.click();
+    await this.page.waitForTimeout(500);
+  }
+
+  /**
+   * Get a rule row by value
+   */
+  getRuleRow(value: string): Locator {
+    return this.page.locator('tr').filter({ hasText: value });
+  }
+
+  /**
+   * Click edit button on a rule row
+   */
+  async clickEditButton(value: string): Promise<void> {
+    const row = this.getRuleRow(value);
+    await row.hover();
+    await row.getByTestId('edit-button').click();
+  }
+
+  /**
+   * Click on a rule value to start inline editing (click-to-edit)
+   */
+  async clickToEdit(value: string): Promise<void> {
+    const row = this.getRuleRow(value);
+    await row.locator('span.font-mono').click();
+  }
+
+  /**
+   * Double-click on a rule value to start inline editing
+   */
+  async doubleClickToEdit(value: string): Promise<void> {
+    const row = this.getRuleRow(value);
+    await row.locator('span.font-mono').dblclick();
+  }
+
+  /**
+   * Check if a row is in edit mode
+   */
+  async isEditing(value: string): Promise<boolean> {
+    const row = this.getRuleRow(value);
+    return await row
+      .getByTestId('edit-value-input')
+      .isVisible()
+      .catch(() => false);
+  }
+
+  /**
+   * Get the value input in edit mode
+   */
+  getEditValueInput(): Locator {
+    return this.page.getByTestId('edit-value-input');
+  }
+
+  /**
+   * Get the comment input in edit mode
+   */
+  getEditCommentInput(): Locator {
+    return this.page.getByTestId('edit-comment-input');
+  }
+
+  /**
+   * Save the current edit
+   */
+  async saveEdit(): Promise<void> {
+    await this.page.getByTestId('save-edit-button').click();
+    await this.page.waitForTimeout(500);
+  }
+
+  /**
+   * Cancel the current edit
+   */
+  async cancelEdit(): Promise<void> {
+    await this.page.getByTestId('cancel-edit-button').click();
+  }
+
+  /**
+   * Edit a rule's value inline
+   */
+  async editRuleValue(oldValue: string, newValue: string): Promise<void> {
+    await this.clickEditButton(oldValue);
+    const input = this.getEditValueInput();
+    await input.clear();
+    await input.fill(newValue);
+    await this.saveEdit();
+  }
+
+  /**
+   * Edit a rule's comment inline
+   */
+  async editRuleComment(value: string, newComment: string): Promise<void> {
+    await this.clickEditButton(value);
+    const input = this.getEditCommentInput();
+    await input.clear();
+    await input.fill(newComment);
+    await this.saveEdit();
+  }
+
+  /**
+   * Check if a rule exists in the table
+   */
+  async ruleExists(value: string): Promise<boolean> {
+    return await this.getRuleRow(value)
+      .isVisible()
+      .catch(() => false);
+  }
+
+  /**
+   * Get the comment text for a rule
+   */
+  async getRuleComment(value: string): Promise<string> {
+    const row = this.getRuleRow(value);
+    const commentCell = row.locator('td').nth(3); // Comment is the 4th column (0-indexed: checkbox, value, type, comment)
+    return (await commentCell.textContent()) ?? '';
+  }
+
+  /**
+   * Delete a rule
+   */
+  async deleteRule(value: string): Promise<void> {
+    const row = this.getRuleRow(value);
+    await row.hover();
+    await row.getByTitle('Eliminar').click();
+    await this.page.waitForTimeout(500);
+  }
+}
