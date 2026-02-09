@@ -203,7 +203,7 @@ describe('BulkImportModal Component', () => {
     it('shows drag hint text', () => {
       render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
 
-      expect(screen.getByText(/arrastra archivos .txt aquí/i)).toBeInTheDocument();
+      expect(screen.getByText(/arrastra archivos .txt o .csv aquí/i)).toBeInTheDocument();
     });
 
     it('shows drag overlay when file is dragged over', () => {

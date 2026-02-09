@@ -1,8 +1,9 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { Upload, FileText, AlertCircle, FileUp } from 'lucide-react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
+import { Upload, FileText, AlertCircle, FileUp, Table, Info } from 'lucide-react';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
+import { parseCSV, type CSVParseResult } from '../lib/csv-parser';
 
 type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
 
@@ -40,6 +41,7 @@ También puedes pegar listas separadas por comas o espacios.`;
 
 /**
  * BulkImportModal - Modal for importing multiple rules at once.
+ * Supports plain text, CSV with headers, and simple CSV formats.
  */
 export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClose, onImport }) => {
   const [text, setText] = useState('');
@@ -50,20 +52,21 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const dragCounter = useRef(0);
 
-  // Parse text into array of values
-  const parseValues = useCallback((input: string): string[] => {
-    // Split by newlines, commas, or multiple spaces
-    const values = input
-      .split(/[\n,]+/)
-      .map((v) => v.trim())
-      .filter((v) => v.length > 0 && !v.startsWith('#')); // Filter empty and comments
+  // Parse text using the CSV parser
+  const parseResult: CSVParseResult = useMemo(() => {
+    if (!text.trim()) {
+      return {
+        values: [],
+        format: 'plain-text',
+        totalRows: 0,
+        skippedRows: 0,
+        warnings: [],
+      };
+    }
+    return parseCSV(text);
+  }, [text]);
 
-    // Remove duplicates
-    return [...new Set(values)];
-  }, []);
-
-  const parsedValues = parseValues(text);
-  const valueCount = parsedValues.length;
+  const valueCount = parseResult.values.length;
 
   const handleImport = async () => {
     if (valueCount === 0) {
@@ -75,7 +78,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
     setError(null);
 
     try {
-      const result = await onImport(parsedValues, ruleType);
+      const result = await onImport(parseResult.values, ruleType);
 
       if (result.created > 0) {
         // Success - close modal
@@ -291,9 +294,37 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({ isOpen, onClos
             </div>
             <div className="text-xs text-slate-400">
               <FileUp size={12} className="inline mr-1" />
-              Arrastra archivos .txt aquí
+              Arrastra archivos .txt o .csv aquí
             </div>
           </div>
+
+          {/* CSV format indicator */}
+          {parseResult.format !== 'plain-text' && valueCount > 0 && (
+            <div className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg text-xs text-slate-600">
+              <Table size={14} className="text-slate-400" />
+              <span>
+                Formato CSV detectado
+                {parseResult.valueColumn && (
+                  <span className="text-slate-500">
+                    {' '}
+                    — columna: <strong>{parseResult.valueColumn}</strong>
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+
+          {/* CSV warnings */}
+          {parseResult.warnings.length > 0 && (
+            <div className="flex items-start gap-2 p-2 bg-amber-50 rounded-lg text-xs text-amber-700">
+              <Info size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+              <div>
+                {parseResult.warnings.map((warning, i) => (
+                  <div key={i}>{warning}</div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Error message */}
