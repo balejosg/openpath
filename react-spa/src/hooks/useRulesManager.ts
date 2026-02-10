@@ -131,7 +131,7 @@ export function useRulesManager({
         filteredTotal = result.total;
       }
 
-      setRules(filteredRules as Rule[]);
+      setRules(filteredRules);
       setTotal(filteredTotal);
     } catch (err) {
       console.error('Failed to fetch rules:', err);

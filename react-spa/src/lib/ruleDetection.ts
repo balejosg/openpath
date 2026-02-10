@@ -233,7 +233,7 @@ function validatePath(value: string): ValidationResult {
     if (!domainResult.valid) {
       return {
         valid: false,
-        error: `Dominio inválido en la ruta: ${domainResult.error}`,
+        error: `Dominio inválido en la ruta: ${domainResult.error ?? ''}`,
       };
     }
   }

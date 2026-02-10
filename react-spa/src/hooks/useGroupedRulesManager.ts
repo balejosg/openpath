@@ -163,7 +163,7 @@ export function useGroupedRulesManager({
         setTotalRules(result.totalRules);
       }
 
-      setDomainGroups(filteredGroups as DomainGroup[]);
+      setDomainGroups(filteredGroups);
     } catch (err) {
       console.error('Failed to fetch grouped rules:', err);
       setError('Error al cargar reglas');

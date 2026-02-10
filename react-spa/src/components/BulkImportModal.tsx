@@ -4,6 +4,7 @@ import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
 import { parseCSV, type CSVParseResult } from '../lib/csv-parser';
+import { validateRuleValue } from '../lib/ruleDetection';
 
 type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
 
@@ -80,11 +81,34 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
     return parseCSV(text);
   }, [text]);
 
+  // Validate each parsed value against the selected rule type
+  const validationResults = useMemo(() => {
+    const valid: string[] = [];
+    const invalid: { value: string; error: string }[] = [];
+
+    for (const value of parseResult.values) {
+      const result = validateRuleValue(value, ruleType);
+      if (result.valid) {
+        valid.push(value);
+      } else {
+        invalid.push({ value, error: result.error ?? 'Formato inválido' });
+      }
+    }
+
+    return { valid, invalid };
+  }, [parseResult.values, ruleType]);
+
   const valueCount = parseResult.values.length;
+  const validCount = validationResults.valid.length;
+  const invalidCount = validationResults.invalid.length;
 
   const handleImport = async () => {
-    if (valueCount === 0) {
-      setError('Ingresa al menos un dominio');
+    if (validCount === 0) {
+      setError(
+        invalidCount > 0
+          ? 'Ningún valor tiene formato válido. Corrige los errores antes de importar.'
+          : 'Ingresa al menos un dominio'
+      );
       return;
     }
 
@@ -92,7 +116,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
     setError(null);
 
     try {
-      const result = await onImport(parseResult.values, ruleType);
+      const result = await onImport(validationResults.valid, ruleType);
 
       if (result.created > 0) {
         // Success - close modal
@@ -298,8 +322,18 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           <div className="flex items-center justify-between mt-2">
             <div className="text-xs text-slate-500">
               {valueCount > 0 ? (
-                <span className="text-blue-600 font-medium">
-                  {valueCount} {valueCount === 1 ? 'dominio detectado' : 'dominios detectados'}
+                <span className="flex items-center gap-2">
+                  <span className="text-blue-600 font-medium">
+                    {validCount} {validCount === 1 ? 'válido' : 'válidos'}
+                  </span>
+                  {invalidCount > 0 && (
+                    <span className="text-red-500 font-medium">
+                      {invalidCount} {invalidCount === 1 ? 'inválido' : 'inválidos'}
+                    </span>
+                  )}
+                  <span className="text-slate-400">
+                    ({valueCount} {valueCount === 1 ? 'detectado' : 'detectados'})
+                  </span>
                 </span>
               ) : (
                 'Pega o escribe los dominios arriba'
@@ -340,6 +374,35 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           )}
         </div>
 
+        {/* Validation errors detail */}
+        {invalidCount > 0 && (
+          <div className="p-3 bg-red-50 rounded-lg text-sm" data-testid="validation-errors">
+            <div className="flex items-center gap-2 text-red-700 font-medium mb-2">
+              <AlertCircle size={16} />
+              {invalidCount}{' '}
+              {invalidCount === 1 ? 'valor con formato inválido' : 'valores con formato inválido'}
+            </div>
+            <ul className="space-y-1 text-xs text-red-600">
+              {validationResults.invalid.slice(0, 5).map((item, i) => (
+                <li key={i} className="flex gap-2">
+                  <code className="font-mono bg-red-100 px-1 rounded truncate max-w-[200px]">
+                    {item.value}
+                  </code>
+                  <span className="text-red-500">{item.error}</span>
+                </li>
+              ))}
+              {invalidCount > 5 && (
+                <li className="text-red-400 italic">...y {String(invalidCount - 5)} más</li>
+              )}
+            </ul>
+            {validCount > 0 && (
+              <p className="text-xs text-slate-500 mt-2">
+                Solo se importarán los {String(validCount)} valores válidos.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Error message */}
         {error && (
           <div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 rounded-lg text-sm">
@@ -355,11 +418,11 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           </Button>
           <Button
             onClick={() => void handleImport()}
-            disabled={valueCount === 0 || isImporting}
+            disabled={validCount === 0 || isImporting}
             isLoading={isImporting}
           >
             <Upload size={14} className="mr-1" />
-            Importar {valueCount > 0 && `(${String(valueCount)})`}
+            Importar {validCount > 0 && `(${String(validCount)})`}
           </Button>
         </div>
       </div>

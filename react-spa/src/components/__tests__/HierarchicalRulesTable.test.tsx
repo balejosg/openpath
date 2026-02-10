@@ -734,7 +734,7 @@ describe('HierarchicalRulesTable Component', () => {
       const rows = screen.getAllByRole('row');
       // Header row + 1 group row = 2 rows; the group row should NOT have a + button
       const groupRow = rows[1];
-      expect(groupRow?.querySelector('button[title*="Añadir"]')).toBeNull();
+      expect(groupRow.querySelector('button[title*="Añadir"]')).toBeNull();
     });
   });
 });
