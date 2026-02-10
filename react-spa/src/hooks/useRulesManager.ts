@@ -91,34 +91,44 @@ export function useRulesManager({
       setLoading(true);
       setError(null);
 
-      // Fetch paginated rules
-      const result = await trpc.groups.listRulesPaginated.query({
-        groupId,
-        type: filter === 'allowed' ? 'whitelist' : undefined,
-        limit: PAGE_SIZE,
-        offset: (page - 1) * PAGE_SIZE,
-        search: search.trim() || undefined,
-      });
-
-      // If filter is 'blocked', we need to filter out whitelist
-      let filteredRules = result.rules;
-      let filteredTotal = result.total;
+      let filteredRules: Rule[];
+      let filteredTotal: number;
 
       if (filter === 'blocked') {
-        // Fetch all to filter blocked rules
-        const allResult = await trpc.groups.listRulesPaginated.query({
-          groupId,
-          limit: 1000, // Get all for accurate count
-          offset: 0,
-          search: search.trim() || undefined,
-        });
+        // Fetch both blocked types using non-paginated endpoint
+        const [subdomains, paths] = await Promise.all([
+          trpc.groups.listRules.query({ groupId, type: 'blocked_subdomain' }),
+          trpc.groups.listRules.query({ groupId, type: 'blocked_path' }),
+        ]);
 
-        const blockedRules = allResult.rules.filter((r) => r.type !== 'whitelist');
+        let blockedRules = [...subdomains, ...paths];
+
+        // Apply search filter client-side
+        if (search.trim()) {
+          const searchLower = search.toLowerCase().trim();
+          blockedRules = blockedRules.filter((r) => r.value.toLowerCase().includes(searchLower));
+        }
+
+        // Sort by value
+        blockedRules.sort((a, b) => a.value.localeCompare(b.value));
+
         filteredTotal = blockedRules.length;
 
         // Apply pagination manually
         const start = (page - 1) * PAGE_SIZE;
         filteredRules = blockedRules.slice(start, start + PAGE_SIZE);
+      } else {
+        // Fetch paginated rules for 'all' or 'allowed' filter
+        const result = await trpc.groups.listRulesPaginated.query({
+          groupId,
+          type: filter === 'allowed' ? 'whitelist' : undefined,
+          limit: PAGE_SIZE,
+          offset: (page - 1) * PAGE_SIZE,
+          search: search.trim() || undefined,
+        });
+
+        filteredRules = result.rules;
+        filteredTotal = result.total;
       }
 
       setRules(filteredRules as Rule[]);

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { trpc } from '../lib/trpc';
 import { detectRuleType, getRuleTypeBadge } from '../lib/ruleDetection';
+import { getRootDomain } from '../../../shared/src/domain';
 import type { Rule } from '../components/RulesTable';
 
 const PAGE_SIZE = 20; // Number of domain groups per page
@@ -103,43 +104,61 @@ export function useGroupedRulesManager({
       setLoading(true);
       setError(null);
 
-      // Fetch grouped rules
-      const result = await trpc.groups.listRulesGrouped.query({
-        groupId,
-        type: filter === 'allowed' ? 'whitelist' : undefined,
-        limit: PAGE_SIZE,
-        offset: (page - 1) * PAGE_SIZE,
-        search: search.trim() || undefined,
-      });
-
       // If filter is 'blocked', we need to filter the groups
-      let filteredGroups = result.groups;
+      let filteredGroups: DomainGroup[];
 
       if (filter === 'blocked') {
-        // Fetch all grouped to filter blocked rules
-        const allResult = await trpc.groups.listRulesGrouped.query({
-          groupId,
-          limit: 500, // Get all for accurate filtering
-          offset: 0,
-          search: search.trim() || undefined,
+        // Fetch both blocked types using non-paginated endpoint
+        const [subdomains, paths] = await Promise.all([
+          trpc.groups.listRules.query({ groupId, type: 'blocked_subdomain' }),
+          trpc.groups.listRules.query({ groupId, type: 'blocked_path' }),
+        ]);
+
+        let blockedRules = [...subdomains, ...paths] as Rule[];
+
+        // Apply search filter client-side
+        if (search.trim()) {
+          const searchLower = search.toLowerCase().trim();
+          blockedRules = blockedRules.filter((r) => r.value.toLowerCase().includes(searchLower));
+        }
+
+        // Group by root domain
+        const groupedMap = new Map<string, Rule[]>();
+        for (const rule of blockedRules) {
+          const root = getRootDomain(rule.value);
+          const existing = groupedMap.get(root) ?? [];
+          existing.push(rule);
+          groupedMap.set(root, existing);
+        }
+
+        // Sort root domains alphabetically
+        const sortedRoots = Array.from(groupedMap.keys()).sort((a, b) => a.localeCompare(b));
+
+        // Build domain groups with status
+        const allBlockedGroups: DomainGroup[] = sortedRoots.map((root) => {
+          const groupRules = groupedMap.get(root) ?? [];
+          groupRules.sort((a, b) => a.value.localeCompare(b.value));
+          return { root, rules: groupRules, status: 'blocked' as const };
         });
 
-        // Filter groups that have blocked rules and remove whitelist rules from them
-        filteredGroups = allResult.groups
-          .map((g) => ({
-            ...g,
-            rules: g.rules.filter((r) => r.type !== 'whitelist'),
-          }))
-          .filter((g) => g.rules.length > 0);
-
         // Update totals
-        setTotalGroups(filteredGroups.length);
-        setTotalRules(filteredGroups.reduce((sum, g) => sum + g.rules.length, 0));
+        setTotalGroups(allBlockedGroups.length);
+        setTotalRules(blockedRules.length);
 
         // Apply pagination manually
         const start = (page - 1) * PAGE_SIZE;
-        filteredGroups = filteredGroups.slice(start, start + PAGE_SIZE);
+        filteredGroups = allBlockedGroups.slice(start, start + PAGE_SIZE);
       } else {
+        // Fetch grouped rules for 'all' or 'allowed' filter
+        const result = await trpc.groups.listRulesGrouped.query({
+          groupId,
+          type: filter === 'allowed' ? 'whitelist' : undefined,
+          limit: PAGE_SIZE,
+          offset: (page - 1) * PAGE_SIZE,
+          search: search.trim() || undefined,
+        });
+
+        filteredGroups = result.groups as DomainGroup[];
         setTotalGroups(result.totalGroups);
         setTotalRules(result.totalRules);
       }
