@@ -123,7 +123,7 @@ describe('BulkImportModal Component', () => {
     const blockedOption = screen.getByText('Subdominios bloqueados');
     fireEvent.click(blockedOption);
 
-    const textarea = screen.getByPlaceholderText(/pega los dominios/i);
+    const textarea = screen.getByPlaceholderText(/pega los subdominios/i);
     await userEvent.type(textarea, 'ads.example.com');
 
     const importButton = screen.getByRole('button', { name: /importar/i });
@@ -131,6 +131,58 @@ describe('BulkImportModal Component', () => {
 
     await waitFor(() => {
       expect(mockOnImport).toHaveBeenCalledWith(['ads.example.com'], 'blocked_subdomain');
+    });
+  });
+
+  describe('Dynamic UI text per rule type', () => {
+    it('shows domain-specific label and placeholder for whitelist type', () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      expect(screen.getByText('Dominios a importar')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/pega los dominios aquí/i)).toBeInTheDocument();
+      expect(screen.getByText(/pega o escribe los dominios arriba/i)).toBeInTheDocument();
+    });
+
+    it('shows subdomain-specific label and placeholder for blocked_subdomain type', () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      fireEvent.click(screen.getByText('Subdominios bloqueados'));
+
+      expect(screen.getByText('Subdominios a importar')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/pega los subdominios aquí/i)).toBeInTheDocument();
+      expect(screen.getByText(/pega o escribe los subdominios arriba/i)).toBeInTheDocument();
+    });
+
+    it('shows path-specific label and placeholder for blocked_path type', () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      fireEvent.click(screen.getByText('Rutas bloqueadas'));
+
+      expect(screen.getByText('Rutas a importar')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText(/pega las rutas aquí/i)).toBeInTheDocument();
+      expect(screen.getByText(/pega o escribe las rutas arriba/i)).toBeInTheDocument();
+    });
+
+    it('updates label and placeholder when switching rule types', () => {
+      render(<BulkImportModal isOpen={true} onClose={mockOnClose} onImport={mockOnImport} />);
+
+      // Start with whitelist (default)
+      expect(screen.getByText('Dominios a importar')).toBeInTheDocument();
+
+      // Switch to blocked_subdomain
+      fireEvent.click(screen.getByText('Subdominios bloqueados'));
+      expect(screen.getByText('Subdominios a importar')).toBeInTheDocument();
+      expect(screen.queryByText('Dominios a importar')).not.toBeInTheDocument();
+
+      // Switch to blocked_path
+      fireEvent.click(screen.getByText('Rutas bloqueadas'));
+      expect(screen.getByText('Rutas a importar')).toBeInTheDocument();
+      expect(screen.queryByText('Subdominios a importar')).not.toBeInTheDocument();
+
+      // Switch back to whitelist
+      fireEvent.click(screen.getByText('Dominios permitidos'));
+      expect(screen.getByText('Dominios a importar')).toBeInTheDocument();
+      expect(screen.queryByText('Rutas a importar')).not.toBeInTheDocument();
     });
   });
 
@@ -454,7 +506,7 @@ describe('BulkImportModal Component', () => {
       const pathOption = screen.getByText('Rutas bloqueadas');
       fireEvent.click(pathOption);
 
-      const textarea = screen.getByPlaceholderText(/pega los dominios/i);
+      const textarea = screen.getByPlaceholderText(/pega las rutas/i);
       await userEvent.type(textarea, 'example.com/ads\n*/tracking/*');
 
       expect(screen.getByText('2 válidos')).toBeInTheDocument();

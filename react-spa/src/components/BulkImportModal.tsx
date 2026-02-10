@@ -34,13 +34,29 @@ const RULE_TYPE_OPTIONS: { value: RuleType; label: string; description: string }
   },
 ];
 
-const PLACEHOLDER_TEXT = `Pega los dominios aquí, uno por línea:
-
-google.com
-youtube.com
-example.org
-
-También puedes pegar listas separadas por comas o espacios.`;
+const RULE_TYPE_UI: Record<
+  RuleType,
+  { label: string; placeholder: string; hint: string; emptyError: string }
+> = {
+  whitelist: {
+    label: 'Dominios a importar',
+    placeholder: `Pega los dominios aquí, uno por línea:\n\ngoogle.com\nyoutube.com\nexample.org\n\nTambién puedes pegar listas separadas por comas o espacios.`,
+    hint: 'Pega o escribe los dominios arriba',
+    emptyError: 'Ingresa al menos un dominio',
+  },
+  blocked_subdomain: {
+    label: 'Subdominios a importar',
+    placeholder: `Pega los subdominios aquí, uno por línea:\n\nads.example.com\ntracker.example.com\n*.ads.example.com\n\nTambién puedes pegar listas separadas por comas o espacios.`,
+    hint: 'Pega o escribe los subdominios arriba',
+    emptyError: 'Ingresa al menos un subdominio',
+  },
+  blocked_path: {
+    label: 'Rutas a importar',
+    placeholder: `Pega las rutas aquí, una por línea:\n\nexample.com/ads\nexample.com/tracking/*\n*/analytics/*\n\nTambién puedes pegar listas separadas por comas o espacios.`,
+    hint: 'Pega o escribe las rutas arriba',
+    emptyError: 'Ingresa al menos una ruta',
+  },
+};
 
 /**
  * BulkImportModal - Modal for importing multiple rules at once.
@@ -107,7 +123,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
       setError(
         invalidCount > 0
           ? 'Ningún valor tiene formato válido. Corrige los errores antes de importar.'
-          : 'Ingresa al menos un dominio'
+          : RULE_TYPE_UI[ruleType].emptyError
       );
       return;
     }
@@ -268,11 +284,11 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
           </div>
         </div>
 
-        {/* Textarea for domains with drag & drop */}
+        {/* Textarea for rule values with drag & drop */}
         <div>
           <label className="block text-sm font-medium text-slate-700 mb-2">
             <FileText size={14} className="inline mr-1" />
-            Dominios a importar
+            {RULE_TYPE_UI[ruleType].label}
           </label>
           <div
             ref={dropZoneRef}
@@ -289,7 +305,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                 setText(e.target.value);
                 setError(null);
               }}
-              placeholder={PLACEHOLDER_TEXT}
+              placeholder={RULE_TYPE_UI[ruleType].placeholder}
               className={cn(
                 'w-full h-48 px-3 py-2 text-sm font-mono',
                 'border-2 rounded-lg resize-none transition-all',
@@ -336,7 +352,7 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
                   </span>
                 </span>
               ) : (
-                'Pega o escribe los dominios arriba'
+                RULE_TYPE_UI[ruleType].hint
               )}
             </div>
             <div className="text-xs text-slate-400">
