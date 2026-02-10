@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getRuleTypeBadge } from '../lib/ruleDetection';
-import { getRootDomain } from '@openpath/shared';
+import { getRootDomain } from '../../../shared/src/domain';
 import type { Rule } from './RulesTable';
 
 // =============================================================================
