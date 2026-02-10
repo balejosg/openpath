@@ -3,6 +3,7 @@ import {
   ChevronRight,
   ChevronDown,
   Globe,
+  Route,
   Plus,
   Trash2,
   Edit2,
@@ -244,7 +245,7 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
               const someGroupSelected = selectedInGroup > 0 && selectedInGroup < group.rules.length;
 
               return (
-                <React.Fragment key={group.root}>
+                <React.Fragment key={group.root || '__global_paths__'}>
                   {/* Group Header Row */}
                   <tr
                     className={cn(
@@ -285,8 +286,19 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <Globe size={16} className="text-slate-400 flex-shrink-0" />
-                        <span className="font-medium text-slate-700">{group.root}</span>
+                        {group.root ? (
+                          <Globe size={16} className="text-slate-400 flex-shrink-0" />
+                        ) : (
+                          <Route size={16} className="text-slate-400 flex-shrink-0" />
+                        )}
+                        <span
+                          className={cn(
+                            'font-medium',
+                            group.root ? 'text-slate-700' : 'text-slate-500 italic'
+                          )}
+                        >
+                          {group.root || 'Rutas globales'}
+                        </span>
                         <span className="text-xs text-slate-400 font-normal">
                           ({group.rules.length})
                         </span>
@@ -310,7 +322,7 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {onAddSubdomain && (
+                      {onAddSubdomain && group.root && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

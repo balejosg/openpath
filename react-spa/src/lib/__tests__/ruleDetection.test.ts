@@ -6,6 +6,7 @@ import {
   getRuleTypeLabel,
   getRuleTypeBadge,
   categorizeRule,
+  validateRuleValue,
 } from '../ruleDetection';
 
 describe('ruleDetection', () => {
@@ -199,6 +200,205 @@ describe('ruleDetection', () => {
 
     it('categorizes blocked_path as blocked', () => {
       expect(categorizeRule('blocked_path')).toBe('blocked');
+    });
+  });
+
+  describe('validateRuleValue', () => {
+    describe('whitelist (domain) validation', () => {
+      it('accepts valid simple domain', () => {
+        expect(validateRuleValue('google.com', 'whitelist').valid).toBe(true);
+      });
+
+      it('accepts valid domain with subdomain-like parts', () => {
+        expect(validateRuleValue('www.google.com', 'whitelist').valid).toBe(true);
+      });
+
+      it('accepts domain with hyphens', () => {
+        expect(validateRuleValue('my-site.example.com', 'whitelist').valid).toBe(true);
+      });
+
+      it('accepts domain with protocol (gets stripped)', () => {
+        expect(validateRuleValue('https://google.com', 'whitelist').valid).toBe(true);
+      });
+
+      it('accepts domain with trailing slash (gets stripped)', () => {
+        expect(validateRuleValue('google.com/', 'whitelist').valid).toBe(true);
+      });
+
+      it('accepts domain with long TLD', () => {
+        expect(validateRuleValue('example.museum', 'whitelist').valid).toBe(true);
+      });
+
+      it('accepts ccTLD domains', () => {
+        expect(validateRuleValue('example.co.uk', 'whitelist').valid).toBe(true);
+      });
+
+      it('rejects empty string', () => {
+        const result = validateRuleValue('', 'whitelist');
+        expect(result.valid).toBe(false);
+        expect(result.error).toBeDefined();
+      });
+
+      it('rejects whitespace only', () => {
+        const result = validateRuleValue('   ', 'whitelist');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects domain too short', () => {
+        const result = validateRuleValue('a.b', 'whitelist');
+        expect(result.valid).toBe(false);
+        expect(result.error).toContain('corto');
+      });
+
+      it('rejects domain with consecutive dots', () => {
+        const result = validateRuleValue('google..com', 'whitelist');
+        expect(result.valid).toBe(false);
+        expect(result.error).toContain('consecutivos');
+      });
+
+      it('rejects domain starting with hyphen', () => {
+        const result = validateRuleValue('-google.com', 'whitelist');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects domain ending with hyphen', () => {
+        const result = validateRuleValue('google-.com', 'whitelist');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects domain with spaces', () => {
+        const result = validateRuleValue('goo gle.com', 'whitelist');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects random string without dots', () => {
+        const result = validateRuleValue('notadomain', 'whitelist');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects domain with invalid characters', () => {
+        const result = validateRuleValue('goo!gle.com', 'whitelist');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects domain with underscores', () => {
+        const result = validateRuleValue('my_site.com', 'whitelist');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects single-char TLD', () => {
+        const result = validateRuleValue('example.a', 'whitelist');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects numeric TLD', () => {
+        const result = validateRuleValue('example.123', 'whitelist');
+        expect(result.valid).toBe(false);
+      });
+    });
+
+    describe('blocked_subdomain validation', () => {
+      it('accepts valid subdomain', () => {
+        expect(validateRuleValue('ads.google.com', 'blocked_subdomain').valid).toBe(true);
+      });
+
+      it('accepts wildcard subdomain', () => {
+        expect(validateRuleValue('*.google.com', 'blocked_subdomain').valid).toBe(true);
+      });
+
+      it('accepts deep wildcard subdomain', () => {
+        expect(validateRuleValue('*.tracking.google.com', 'blocked_subdomain').valid).toBe(true);
+      });
+
+      it('accepts normal domain as subdomain type', () => {
+        expect(validateRuleValue('google.com', 'blocked_subdomain').valid).toBe(true);
+      });
+
+      it('rejects invalid wildcard format', () => {
+        const result = validateRuleValue('**.google.com', 'blocked_subdomain');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects wildcard in middle', () => {
+        const result = validateRuleValue('ads.*.google.com', 'blocked_subdomain');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects empty subdomain', () => {
+        const result = validateRuleValue('', 'blocked_subdomain');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects subdomain with consecutive dots', () => {
+        const result = validateRuleValue('ads..google.com', 'blocked_subdomain');
+        expect(result.valid).toBe(false);
+      });
+    });
+
+    describe('blocked_path validation', () => {
+      it('accepts valid domain/path', () => {
+        expect(validateRuleValue('facebook.com/gaming', 'blocked_path').valid).toBe(true);
+      });
+
+      it('accepts domain/path with nested segments', () => {
+        expect(validateRuleValue('example.com/path/to/page', 'blocked_path').valid).toBe(true);
+      });
+
+      it('accepts wildcard domain path', () => {
+        expect(validateRuleValue('*/ads/*', 'blocked_path').valid).toBe(true);
+      });
+
+      it('accepts path with query string', () => {
+        expect(validateRuleValue('example.com/path?q=test', 'blocked_path').valid).toBe(true);
+      });
+
+      it('accepts path with protocol (gets stripped)', () => {
+        expect(validateRuleValue('https://facebook.com/gaming', 'blocked_path').valid).toBe(true);
+      });
+
+      it('rejects path without slash', () => {
+        const result = validateRuleValue('facebook.com', 'blocked_path');
+        expect(result.valid).toBe(false);
+        expect(result.error).toContain('/');
+      });
+
+      it('rejects path with invalid domain', () => {
+        const result = validateRuleValue('not valid!/path', 'blocked_path');
+        expect(result.valid).toBe(false);
+      });
+
+      it('rejects path with empty path part', () => {
+        const result = validateRuleValue('example.com/', 'blocked_path');
+        expect(result.valid).toBe(false);
+        expect(result.error).toContain('vacía');
+      });
+
+      it('rejects empty value', () => {
+        const result = validateRuleValue('', 'blocked_path');
+        expect(result.valid).toBe(false);
+      });
+    });
+
+    describe('protocol and normalization handling', () => {
+      it('strips https:// and validates domain', () => {
+        expect(validateRuleValue('https://example.com', 'whitelist').valid).toBe(true);
+      });
+
+      it('strips http:// and validates domain', () => {
+        expect(validateRuleValue('http://example.com', 'whitelist').valid).toBe(true);
+      });
+
+      it('strips protocol from path rules', () => {
+        expect(validateRuleValue('https://example.com/page', 'blocked_path').valid).toBe(true);
+      });
+
+      it('handles case insensitive input', () => {
+        expect(validateRuleValue('GOOGLE.COM', 'whitelist').valid).toBe(true);
+      });
+
+      it('trims whitespace', () => {
+        expect(validateRuleValue('  google.com  ', 'whitelist').valid).toBe(true);
+      });
     });
   });
 });

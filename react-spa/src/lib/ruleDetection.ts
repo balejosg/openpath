@@ -11,6 +11,22 @@ export interface DetectionResult {
   reason: string;
 }
 
+export interface ValidationResult {
+  valid: boolean;
+  error?: string;
+}
+
+// Domain validation: each label 1-63 chars (alphanumeric + hyphens, not at start/end),
+// TLD 2-63 chars letters only. Does NOT allow wildcard prefix.
+const DOMAIN_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/;
+
+// Same as DOMAIN_REGEX but optionally allows a "*." prefix for wildcard patterns
+const SUBDOMAIN_REGEX =
+  /^(?:\*\.)?(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/;
+
+// Path characters: anything allowed after domain/ except whitespace and control chars
+const PATH_SEGMENT_REGEX = /^[^\s]+$/;
+
 /**
  * Clean and normalize a rule value.
  * Strips protocol, trailing slashes (for domains), and lowercases.
@@ -129,6 +145,134 @@ export function detectRuleType(
     confidence: 'high',
     reason: 'Dominio para añadir a la lista blanca',
   };
+}
+
+/**
+ * Validate that a domain string is well-formed.
+ * Checks: length 4-253, no consecutive dots, each label <= 63 chars, matches DOMAIN_REGEX.
+ */
+function validateDomain(domain: string): ValidationResult {
+  if (domain.length < 4) {
+    return { valid: false, error: 'El dominio es demasiado corto (mínimo 4 caracteres)' };
+  }
+  if (domain.length > 253) {
+    return { valid: false, error: 'El dominio excede los 253 caracteres permitidos' };
+  }
+  if (domain.includes('..')) {
+    return { valid: false, error: 'El dominio no puede contener puntos consecutivos (..)' };
+  }
+  if (!DOMAIN_REGEX.test(domain)) {
+    return {
+      valid: false,
+      error: 'Formato de dominio inválido. Ejemplo válido: example.com',
+    };
+  }
+  // Validate each label length
+  const labels = domain.split('.');
+  for (const label of labels) {
+    if (label.length > 63) {
+      return { valid: false, error: 'Cada parte del dominio debe tener como máximo 63 caracteres' };
+    }
+  }
+  return { valid: true };
+}
+
+/**
+ * Validate that a subdomain pattern is well-formed.
+ * Accepts: domain.tld, sub.domain.tld, *.domain.tld
+ */
+function validateSubdomain(value: string): ValidationResult {
+  if (value.length < 4) {
+    return { valid: false, error: 'El subdominio es demasiado corto (mínimo 4 caracteres)' };
+  }
+  if (value.length > 253) {
+    return { valid: false, error: 'El subdominio excede los 253 caracteres permitidos' };
+  }
+  if (value.includes('..')) {
+    return { valid: false, error: 'El subdominio no puede contener puntos consecutivos (..)' };
+  }
+  if (!SUBDOMAIN_REGEX.test(value)) {
+    return {
+      valid: false,
+      error: 'Formato de subdominio inválido. Ejemplo válido: sub.example.com o *.example.com',
+    };
+  }
+  // Validate each label length (skip wildcard)
+  const labels = value.replace(/^\*\./, '').split('.');
+  for (const label of labels) {
+    if (label.length > 63) {
+      return {
+        valid: false,
+        error: 'Cada parte del subdominio debe tener como máximo 63 caracteres',
+      };
+    }
+  }
+  return { valid: true };
+}
+
+/**
+ * Validate that a blocked path is well-formed.
+ * Must be domain/path where domain is valid and path is non-empty.
+ */
+function validatePath(value: string): ValidationResult {
+  const slashIndex = value.indexOf('/');
+  if (slashIndex === -1) {
+    return {
+      valid: false,
+      error: 'La ruta debe contener una barra (/). Ejemplo: example.com/path',
+    };
+  }
+
+  const domainPart = value.substring(0, slashIndex);
+  const pathPart = value.substring(slashIndex + 1);
+
+  // Allow global wildcard paths like */ads/*
+  if (domainPart !== '*') {
+    // Validate domain part
+    const domainResult = validateDomain(domainPart);
+    if (!domainResult.valid) {
+      return {
+        valid: false,
+        error: `Dominio inválido en la ruta: ${domainResult.error}`,
+      };
+    }
+  }
+
+  if (!pathPart) {
+    return { valid: false, error: 'La ruta después del dominio no puede estar vacía' };
+  }
+
+  if (!PATH_SEGMENT_REGEX.test(pathPart)) {
+    return { valid: false, error: 'La ruta contiene caracteres no permitidos (espacios)' };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Validate a rule value based on its detected type.
+ * Applies format validation for domains, subdomains, and paths.
+ *
+ * @param value - The raw input value
+ * @param type - The detected rule type
+ * @returns Validation result with optional error message
+ */
+export function validateRuleValue(value: string, type: RuleType): ValidationResult {
+  const cleaned =
+    type === 'blocked_path' ? cleanRuleValue(value, true) : cleanRuleValue(value, false);
+
+  if (!cleaned) {
+    return { valid: false, error: 'El valor no puede estar vacío' };
+  }
+
+  switch (type) {
+    case 'whitelist':
+      return validateDomain(cleaned);
+    case 'blocked_subdomain':
+      return validateSubdomain(cleaned);
+    case 'blocked_path':
+      return validatePath(cleaned);
+  }
 }
 
 /**

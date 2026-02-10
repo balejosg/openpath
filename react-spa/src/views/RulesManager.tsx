@@ -24,7 +24,7 @@ import { Button } from '../components/ui/Button';
 import { useRulesManager, FilterType } from '../hooks/useRulesManager';
 import { useGroupedRulesManager } from '../hooks/useGroupedRulesManager';
 import { useToast } from '../components/ui/Toast';
-import { detectRuleType, getRuleTypeBadge } from '../lib/ruleDetection';
+import { detectRuleType, getRuleTypeBadge, validateRuleValue } from '../lib/ruleDetection';
 import { exportRules } from '../lib/exportRules';
 import { readMultipleFiles } from '../lib/fileReader';
 import { cn } from '../lib/utils';
@@ -150,9 +150,25 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
     return detectRuleType(newValue, whitelistDomains);
   }, [newValue, whitelistDomains]);
 
+  // Real-time validation for current input
+  const validationError = useMemo(() => {
+    if (!newValue.trim() || !detectedType) return '';
+    const result = validateRuleValue(newValue, detectedType.type);
+    return result.valid ? '' : (result.error ?? '');
+  }, [newValue, detectedType]);
+
   // Handle add rule
   const handleAddRule = async () => {
     if (!newValue.trim() || adding) return;
+
+    // Validate format before sending to API
+    if (detectedType) {
+      const validation = validateRuleValue(newValue, detectedType.type);
+      if (!validation.valid) {
+        setInputError(validation.error ?? 'Formato inválido');
+        return;
+      }
+    }
 
     setAdding(true);
     setInputError('');
@@ -358,13 +374,15 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
               onKeyDown={handleKeyDown}
               className={cn(
                 'w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none',
-                inputError ? 'border-red-300 focus:ring-red-500' : 'border-slate-200'
+                inputError || validationError
+                  ? 'border-red-300 focus:ring-red-500'
+                  : 'border-slate-200'
               )}
             />
           </div>
           <Button
             onClick={() => void handleAddRule()}
-            disabled={adding || !newValue.trim()}
+            disabled={adding || !newValue.trim() || !!validationError}
             isLoading={adding}
             size="md"
           >
@@ -388,8 +406,8 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
         </div>
       </div>
 
-      {/* Detection hint */}
-      {detectedType && !inputError && (
+      {/* Detection hint + validation feedback */}
+      {detectedType && !inputError && !validationError && (
         <p className="text-xs text-slate-500 flex items-center gap-1 -mt-2">
           <Info size={12} />
           Se añadirá como:{' '}
@@ -404,6 +422,14 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
           {detectedType.confidence === 'medium' && (
             <span className="text-amber-600"> (sugerido)</span>
           )}
+        </p>
+      )}
+
+      {/* Real-time validation error */}
+      {validationError && !inputError && (
+        <p className="text-red-500 text-xs flex items-center gap-1 -mt-2">
+          <AlertCircle size={12} />
+          {validationError}
         </p>
       )}
 

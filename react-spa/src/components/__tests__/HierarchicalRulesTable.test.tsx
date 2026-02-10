@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HierarchicalRulesTable, getRootDomain } from '../HierarchicalRulesTable';
+import type { DomainGroup } from '../HierarchicalRulesTable';
 import type { Rule } from '../RulesTable';
 
 // =============================================================================
@@ -629,6 +630,111 @@ describe('HierarchicalRulesTable Component', () => {
 
       expect(screen.getByText('bbc.co.uk')).toBeInTheDocument();
       expect(screen.getByText('abc.com.au')).toBeInTheDocument();
+    });
+  });
+
+  describe('Global paths (domainless rules)', () => {
+    it('shows "Rutas globales" label for rules with empty root domain', () => {
+      const domainGroups: DomainGroup[] = [
+        {
+          root: '',
+          rules: [
+            {
+              id: '1',
+              groupId: 'group-1',
+              type: 'blocked_path',
+              value: '*/ads/*',
+              comment: null,
+              createdAt: '2024-01-15T10:00:00Z',
+            },
+          ],
+          status: 'blocked',
+        },
+        {
+          root: 'google.com',
+          rules: [
+            {
+              id: '2',
+              groupId: 'group-1',
+              type: 'whitelist',
+              value: 'google.com',
+              comment: null,
+              createdAt: '2024-01-15T10:00:00Z',
+            },
+          ],
+          status: 'allowed',
+        },
+      ];
+
+      render(
+        <HierarchicalRulesTable domainGroups={domainGroups} loading={false} onDelete={noop} />
+      );
+
+      expect(screen.getByText('Rutas globales')).toBeInTheDocument();
+      expect(screen.getByText('google.com')).toBeInTheDocument();
+    });
+
+    it('groups domainless paths under empty root when using client-side grouping', () => {
+      const pathRules: Rule[] = [
+        {
+          id: '1',
+          groupId: 'group-1',
+          type: 'blocked_path',
+          value: '*/ads/*',
+          comment: null,
+          createdAt: '2024-01-15T10:00:00Z',
+        },
+        {
+          id: '2',
+          groupId: 'group-1',
+          type: 'blocked_path',
+          value: '*/tracking/*',
+          comment: null,
+          createdAt: '2024-01-16T10:00:00Z',
+        },
+      ];
+
+      render(<HierarchicalRulesTable rules={pathRules} loading={false} onDelete={noop} />);
+
+      expect(screen.getByText('Rutas globales')).toBeInTheDocument();
+      expect(screen.getByText('(2)')).toBeInTheDocument();
+    });
+
+    it('does not show add subdomain button for global paths group', () => {
+      const domainGroups: DomainGroup[] = [
+        {
+          root: '',
+          rules: [
+            {
+              id: '1',
+              groupId: 'group-1',
+              type: 'blocked_path',
+              value: '*/ads/*',
+              comment: null,
+              createdAt: '2024-01-15T10:00:00Z',
+            },
+          ],
+          status: 'blocked',
+        },
+      ];
+
+      const onAddSubdomain = vi.fn();
+
+      render(
+        <HierarchicalRulesTable
+          domainGroups={domainGroups}
+          loading={false}
+          onDelete={noop}
+          onAddSubdomain={onAddSubdomain}
+        />
+      );
+
+      expect(screen.getByText('Rutas globales')).toBeInTheDocument();
+      // The + button should not be present for domainless groups
+      const rows = screen.getAllByRole('row');
+      // Header row + 1 group row = 2 rows; the group row should NOT have a + button
+      const groupRow = rows[1];
+      expect(groupRow?.querySelector('button[title*="Añadir"]')).toBeNull();
     });
   });
 });
