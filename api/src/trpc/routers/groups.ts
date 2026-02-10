@@ -10,6 +10,7 @@ import { TRPCError } from '@trpc/server';
 import { router, adminProcedure } from '../trpc.js';
 import { GroupsService } from '../../services/groups.service.js';
 import type { RuleType } from '../../lib/groups-storage.js';
+import { validateRuleValue } from '@openpath/shared';
 
 // =============================================================================
 // Input Schemas
@@ -56,18 +57,42 @@ const UpdateRuleSchema = z.object({
   comment: z.string().max(500).nullable().optional(),
 });
 
-const CreateRuleSchema = z.object({
-  groupId: z.string().min(1),
-  type: RuleTypeSchema,
-  value: z.string().min(1).max(500),
-  comment: z.string().max(500).optional(),
-});
+const CreateRuleSchema = z
+  .object({
+    groupId: z.string().min(1),
+    type: RuleTypeSchema,
+    value: z.string().min(1).max(500),
+    comment: z.string().max(500).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const result = validateRuleValue(data.value, data.type);
+    if (!result.valid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['value'],
+        message: result.error ?? 'Invalid rule value',
+      });
+    }
+  });
 
-const BulkCreateRulesSchema = z.object({
-  groupId: z.string().min(1),
-  type: RuleTypeSchema,
-  values: z.array(z.string().min(1).max(500)),
-});
+const BulkCreateRulesSchema = z
+  .object({
+    groupId: z.string().min(1),
+    type: RuleTypeSchema,
+    values: z.array(z.string().min(1).max(500)),
+  })
+  .superRefine((data, ctx) => {
+    data.values.forEach((value, i) => {
+      const result = validateRuleValue(value, data.type);
+      if (!result.valid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['values', i],
+          message: result.error ?? 'Invalid rule value',
+        });
+      }
+    });
+  });
 
 const BulkDeleteRulesSchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(100),

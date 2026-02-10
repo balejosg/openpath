@@ -17,6 +17,7 @@ import type {
   ListRulesOptions,
   ListRulesGroupedOptions,
 } from '../lib/groups-storage.js';
+import { validateRuleValue, cleanRuleValue } from '@openpath/shared';
 
 // =============================================================================
 // Types
@@ -214,9 +215,21 @@ export async function listRulesGrouped(
  * Create a rule.
  */
 export async function createRule(input: CreateRuleInput): Promise<GroupsResult<{ id: string }>> {
+  // Clean the value (strip protocol, normalize)
+  const cleanedValue = cleanRuleValue(input.value, input.type === 'blocked_path');
+
   // Validate input
-  if (!input.value || input.value.trim() === '') {
+  if (!cleanedValue) {
     return { ok: false, error: { code: 'BAD_REQUEST', message: 'Value is required' } };
+  }
+
+  // Validate format
+  const validation = validateRuleValue(cleanedValue, input.type);
+  if (!validation.valid) {
+    return {
+      ok: false,
+      error: { code: 'BAD_REQUEST', message: validation.error ?? 'Invalid rule value format' },
+    };
   }
 
   // Check if group exists
@@ -228,7 +241,7 @@ export async function createRule(input: CreateRuleInput): Promise<GroupsResult<{
   const result = await groupsStorage.createRule(
     input.groupId,
     input.type,
-    input.value,
+    cleanedValue,
     input.comment ?? null
   );
 
@@ -298,9 +311,25 @@ export async function updateRule(input: UpdateRuleInput): Promise<GroupsResult<R
     };
   }
 
+  // Clean and validate the new value if provided
+  let cleanedValue = input.value;
+  if (cleanedValue !== undefined) {
+    cleanedValue = cleanRuleValue(cleanedValue, existingRule.type === 'blocked_path');
+    if (!cleanedValue) {
+      return { ok: false, error: { code: 'BAD_REQUEST', message: 'Value cannot be empty' } };
+    }
+    const validation = validateRuleValue(cleanedValue, existingRule.type);
+    if (!validation.valid) {
+      return {
+        ok: false,
+        error: { code: 'BAD_REQUEST', message: validation.error ?? 'Invalid rule value format' },
+      };
+    }
+  }
+
   const updated = await groupsStorage.updateRule({
     id: input.id,
-    value: input.value,
+    value: cleanedValue,
     comment: input.comment,
   });
 
@@ -326,7 +355,11 @@ export async function bulkCreateRules(
     return { ok: false, error: { code: 'NOT_FOUND', message: 'Group not found' } };
   }
 
-  const count = await groupsStorage.bulkCreateRules(input.groupId, input.type, input.values);
+  // Clean all values before insertion
+  const preservePath = input.type === 'blocked_path';
+  const cleanedValues = input.values.map((v) => cleanRuleValue(v, preservePath));
+
+  const count = await groupsStorage.bulkCreateRules(input.groupId, input.type, cleanedValues);
   return { ok: true, data: { count } };
 }
 

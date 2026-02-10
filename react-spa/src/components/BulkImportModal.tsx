@@ -40,19 +40,22 @@ const RULE_TYPE_UI: Record<
 > = {
   whitelist: {
     label: 'Dominios a importar',
-    placeholder: `Pega los dominios aquí, uno por línea:\n\ngoogle.com\nyoutube.com\nexample.org\n\nTambién puedes pegar listas separadas por comas o espacios.`,
+    placeholder:
+      'Pega los dominios aquí, uno por línea:\n\ngoogle.com\nyoutube.com\nexample.org\n\nTambién puedes pegar listas separadas por comas o espacios.',
     hint: 'Pega o escribe los dominios arriba',
     emptyError: 'Ingresa al menos un dominio',
   },
   blocked_subdomain: {
     label: 'Subdominios a importar',
-    placeholder: `Pega los subdominios aquí, uno por línea:\n\nads.example.com\ntracker.example.com\n*.ads.example.com\n\nTambién puedes pegar listas separadas por comas o espacios.`,
+    placeholder:
+      'Pega los subdominios aquí, uno por línea:\n\nads.example.com\ntracker.example.com\n*.ads.example.com\n\nTambién puedes pegar listas separadas por comas o espacios.',
     hint: 'Pega o escribe los subdominios arriba',
     emptyError: 'Ingresa al menos un subdominio',
   },
   blocked_path: {
     label: 'Rutas a importar',
-    placeholder: `Pega las rutas aquí, una por línea:\n\nexample.com/ads\nexample.com/tracking/*\n*/analytics/*\n\nTambién puedes pegar listas separadas por comas o espacios.`,
+    placeholder:
+      'Pega las rutas aquí, una por línea:\n\nexample.com/ads\nexample.com/tracking/*\n*/analytics/*\n\nTambién puedes pegar listas separadas por comas o espacios.',
     hint: 'Pega o escribe las rutas arriba',
     emptyError: 'Ingresa al menos una ruta',
   },
