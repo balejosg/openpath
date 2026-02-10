@@ -46,16 +46,16 @@ export const schedulesRouter = router({
     .input(
       z.object({
         id: z.string(),
-        dayOfWeek: z.number().min(0).max(6).optional(),
+        dayOfWeek: z.number().min(1).max(5).optional(),
         startTime: z
           .string()
-          .regex(/^\d{2}:\d{2}$/)
+          .regex(/^([01]\d|2[0-3]):([0-5]\d)$/)
           .optional(),
         endTime: z
           .string()
-          .regex(/^\d{2}:\d{2}$/)
+          .regex(/^([01]\d|2[0-3]):([0-5]\d)$/)
           .optional(),
-        groupId: z.string().optional(),
+        groupId: z.string().min(1).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {

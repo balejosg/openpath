@@ -125,6 +125,19 @@ await describe('Schedule Storage', async () => {
       }, /Invalid time format/);
     });
 
+    await it('should reject times not in 15-minute increments', async () => {
+      await assert.rejects(async () => {
+        await scheduleStorage.createSchedule({
+          classroomId: testClassroomId,
+          teacherId: testTeacherId,
+          groupId: testGroupId,
+          dayOfWeek: 1,
+          startTime: '08:10',
+          endTime: '09:00',
+        });
+      }, /15-minute increments/);
+    });
+
     await it('should reject startTime >= endTime', async () => {
       await assert.rejects(async () => {
         await scheduleStorage.createSchedule({
@@ -217,6 +230,41 @@ await describe('Schedule Storage', async () => {
 
       const retrieved = await scheduleStorage.getScheduleById(schedule.id);
       assert.strictEqual(retrieved, null);
+    });
+
+    await it('should reject update with weekend dayOfWeek', async () => {
+      const schedule = await scheduleStorage.createSchedule({
+        classroomId: testClassroomId,
+        teacherId: testTeacherId,
+        groupId: testGroupId,
+        dayOfWeek: 1,
+        startTime: '08:00',
+        endTime: '09:00',
+      });
+
+      await assert.rejects(async () => {
+        await scheduleStorage.updateSchedule(schedule.id, {
+          dayOfWeek: 6,
+        });
+      }, /dayOfWeek must be between 1.*and 5/);
+    });
+
+    await it('should reject update with non-15-minute times', async () => {
+      const schedule = await scheduleStorage.createSchedule({
+        classroomId: testClassroomId,
+        teacherId: testTeacherId,
+        groupId: testGroupId,
+        dayOfWeek: 1,
+        startTime: '08:00',
+        endTime: '09:00',
+      });
+
+      await assert.rejects(async () => {
+        await scheduleStorage.updateSchedule(schedule.id, {
+          startTime: '08:05',
+          endTime: '09:00',
+        });
+      }, /15-minute increments/);
     });
   });
 

@@ -185,6 +185,11 @@ export async function updateSchedule(
   const isAdmin = auth.isAdminToken(user);
   const isOwner = schedule.teacherId === user.sub;
 
+  // Reject empty-string groupId explicitly (router should also prevent this).
+  if (input.groupId?.trim() === '') {
+    return { ok: false, error: { code: 'BAD_REQUEST', message: 'groupId cannot be empty' } };
+  }
+
   if (!isOwner && !isAdmin) {
     return {
       ok: false,
@@ -192,7 +197,7 @@ export async function updateSchedule(
     };
   }
 
-  if (input.groupId !== undefined && input.groupId !== '' && input.groupId !== schedule.groupId) {
+  if (input.groupId !== undefined && input.groupId !== schedule.groupId) {
     if (!isAdmin && !auth.canApproveGroup(user, input.groupId)) {
       return {
         ok: false,

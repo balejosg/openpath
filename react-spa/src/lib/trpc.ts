@@ -16,8 +16,12 @@ function getApiUrl(): string {
   const savedUrl = localStorage.getItem('requests_api_url');
   if (savedUrl) return savedUrl;
 
-  // Por defecto, usar ruta relativa (proxy en dev, mismo origen en prod)
-  return '';
+  // Por defecto, usar mismo origen.
+  // Esto mantiene compatibilidad con el proxy de Vite (misma origin) y evita
+  // problemas en tests Node (fetch de undici no acepta URLs relativas).
+  const origin = window.location.origin;
+  if (!origin || origin === 'null') return 'http://localhost';
+  return origin;
 }
 
 /**

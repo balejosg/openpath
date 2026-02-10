@@ -171,7 +171,7 @@ export interface IClassroomStorage {
  * Data for updating a schedule
  */
 export interface UpdateScheduleData {
-  dayOfWeek?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  dayOfWeek?: 1 | 2 | 3 | 4 | 5;
   startTime?: string;
   endTime?: string;
   groupId?: string;

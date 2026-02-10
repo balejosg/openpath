@@ -47,6 +47,50 @@ export function timeToMinutes(time: string): number {
   return hours * 60 + minutes;
 }
 
+function parseTimeParts(time: string): { hours: number; minutes: number; seconds: number } {
+  // Accept HH:MM or HH:MM:SS (DB may return seconds)
+  const match = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.exec(time);
+  if (!match) {
+    throw new Error('Invalid time format. Use HH:MM (24h)');
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3] ?? '0');
+
+  return { hours, minutes, seconds };
+}
+
+function assertQuarterHour(time: string): void {
+  const { minutes, seconds } = parseTimeParts(time);
+  if (seconds !== 0) {
+    throw new Error('Time must not include seconds');
+  }
+  if (minutes % 15 !== 0) {
+    throw new Error('Time must be in 15-minute increments');
+  }
+}
+
+function assertValidScheduleValues(input: {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+}): void {
+  const { dayOfWeek, startTime, endTime } = input;
+
+  if (dayOfWeek < 1 || dayOfWeek > 5) {
+    throw new Error('dayOfWeek must be between 1 (Monday) and 5 (Friday)');
+  }
+
+  // Format + 15-minute granularity
+  assertQuarterHour(startTime);
+  assertQuarterHour(endTime);
+
+  if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
+    throw new Error('startTime must be before endTime');
+  }
+}
+
 export function timesOverlap(start1: string, end1: string, start2: string, end2: string): boolean {
   const s1 = timeToMinutes(start1);
   const e1 = timeToMinutes(end1);
@@ -116,18 +160,7 @@ export async function findConflict(
 export async function createSchedule(scheduleData: CreateScheduleInput): Promise<DBSchedule> {
   const { classroomId, teacherId, groupId, dayOfWeek, startTime, endTime } = scheduleData;
 
-  if (dayOfWeek < 1 || dayOfWeek > 5) {
-    throw new Error('dayOfWeek must be between 1 (Monday) and 5 (Friday)');
-  }
-
-  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-  if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
-    throw new Error('Invalid time format. Use HH:MM (24h)');
-  }
-
-  if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
-    throw new Error('startTime must be before endTime');
-  }
+  assertValidScheduleValues({ dayOfWeek, startTime, endTime });
 
   const conflict = await findConflict(classroomId, dayOfWeek, startTime, endTime);
   if (conflict !== null) {
@@ -166,6 +199,13 @@ export async function updateSchedule(
   const newDayOfWeek = updates.dayOfWeek ?? schedule.dayOfWeek;
   const newStartTime = updates.startTime ?? schedule.startTime;
   const newEndTime = updates.endTime ?? schedule.endTime;
+
+  // Validate effective values to avoid persisting invalid data.
+  assertValidScheduleValues({
+    dayOfWeek: newDayOfWeek,
+    startTime: newStartTime,
+    endTime: newEndTime,
+  });
 
   const conflict = await findConflict(
     schedule.classroomId,
