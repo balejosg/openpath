@@ -36,7 +36,7 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Comandos que requieren root
-ROOT_COMMANDS="update health force enable disable restart rotate-token"
+ROOT_COMMANDS="update health force enable disable restart rotate-token enroll"
 
 # Auto-elevar a root si el comando lo requiere
 auto_elevate() {
@@ -264,6 +264,138 @@ cmd_health() {
     return $failed
 }
 
+# Registrar maquina en un aula
+cmd_enroll() {
+    local classroom="" classroom_id="" api_url="" token="" enrollment_token=""
+    
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --classroom)  classroom="$2"; shift 2 ;;
+            --classroom-id) classroom_id="$2"; shift 2 ;;
+            --api-url)    api_url="$2"; shift 2 ;;
+            --token)      token="$2"; shift 2 ;;
+            --enrollment-token) enrollment_token="$2"; shift 2 ;;
+            *)            echo -e "${RED}Opcion desconocida: $1${NC}"; exit 1 ;;
+        esac
+    done
+    
+    # Validate required params
+    [[ -z "$api_url" ]]   && { echo -e "${RED}Error: --api-url requerido${NC}"; exit 1; }
+    api_url="${api_url%/}"
+
+    if [[ -n "$enrollment_token" ]]; then
+        [[ -z "$classroom_id" ]] && { echo -e "${RED}Error: --classroom-id requerido con --enrollment-token${NC}"; exit 1; }
+    else
+        [[ -z "$classroom" ]] && { echo -e "${RED}Error: --classroom requerido${NC}"; exit 1; }
+        [[ -z "$token" ]]     && { echo -e "${RED}Error: --token requerido${NC}"; exit 1; }
+    fi
+    
+    echo -e "${BLUE}Registrando en aula...${NC}"
+    
+    # Step 1: Validate token
+    if [[ -z "$enrollment_token" ]]; then
+        local validate_response
+        validate_response=$(curl -fsS -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"token\":\"$token\"}" \
+            "$api_url/api/setup/validate-token" 2>/dev/null) || {
+            echo -e "${RED}Error: No se pudo validar el token (API no accesible)${NC}"
+            exit 1
+        }
+
+        local is_valid
+        is_valid=$(echo "$validate_response" | python3 -c 'import json,sys
+try:
+  d=json.load(sys.stdin)
+  print("true" if d.get("valid") is True else "false")
+except Exception:
+  print("false")
+')
+
+        if [[ "$is_valid" != "true" ]]; then
+            echo -e "${RED}Error: Token de registro invalido${NC}"
+            exit 1
+        fi
+        echo -e "  Token: ${GREEN}valido${NC}"
+    fi
+    
+    # Step 2: Save config
+    mkdir -p "$ETC_CONFIG_DIR"
+    echo "$api_url"   > "$ETC_CONFIG_DIR/api-url.conf"
+    if [[ -n "$classroom" ]]; then
+        echo "$classroom" > "$ETC_CONFIG_DIR/classroom.conf"
+    fi
+    if [[ -n "$classroom_id" ]]; then
+        echo "$classroom_id" > "$ETC_CONFIG_DIR/classroom-id.conf"
+    fi
+    
+    # Step 3: Generate API secret if missing
+    if [[ ! -f "$ETC_CONFIG_DIR/api-secret.conf" ]] || [[ ! -s "$ETC_CONFIG_DIR/api-secret.conf" ]]; then
+        local secret
+        secret=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 32)
+        echo "$secret" > "$ETC_CONFIG_DIR/api-secret.conf"
+        chmod 600 "$ETC_CONFIG_DIR/api-secret.conf"
+    fi
+    
+    # Step 4: Register with API
+    local hostname version response
+    hostname=$(hostname)
+    version=$(dpkg -s openpath-dnsmasq 2>/dev/null | grep "^Version:" | awk '{print $2}' || echo "unknown")
+
+    local payload
+
+    if [[ -n "$enrollment_token" ]]; then
+        payload=$(HN="$hostname" CID="$classroom_id" VER="$version" python3 -c 'import json,os
+print(json.dumps({"hostname": os.environ.get("HN",""), "classroomId": os.environ.get("CID",""), "version": os.environ.get("VER","unknown")}))
+')
+        response=$(curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $enrollment_token" \
+            -d "$payload" \
+            "$api_url/api/machines/register" 2>/dev/null)
+    else
+        payload=$(HN="$hostname" CNAME="$classroom" VER="$version" python3 -c 'import json,os
+print(json.dumps({"hostname": os.environ.get("HN",""), "classroomName": os.environ.get("CNAME",""), "version": os.environ.get("VER","unknown")}))
+')
+        response=$(curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $token" \
+            -d "$payload" \
+            "$api_url/api/machines/register" 2>/dev/null)
+    fi
+
+    local tokenized_url
+    tokenized_url=$(echo "$response" | python3 -c 'import json,sys
+try:
+  d=json.load(sys.stdin)
+  if d.get("success") is True and isinstance(d.get("whitelistUrl"), str) and d.get("whitelistUrl"):
+    print(d.get("whitelistUrl"))
+except Exception:
+  pass
+')
+
+    if [[ -n "$tokenized_url" ]]; then
+        echo "$tokenized_url" > "$WHITELIST_URL_CONF"
+        echo -e "  Registro: ${GREEN}exitoso${NC}"
+        echo "  URL: $tokenized_url"
+    else
+        echo -e "${RED}Error al registrar maquina${NC}"
+        echo "  Respuesta: $response"
+        exit 1
+    fi
+    
+    # Step 5: Apply immediately
+    echo -e "  Aplicando configuracion..."
+    /usr/local/bin/openpath-update.sh || echo -e "${YELLOW}Primera actualizacion fallo (el timer lo reintentara)${NC}"
+    
+    if [[ -n "$classroom" ]]; then
+        echo -e "${GREEN}✓ Registrado en aula: $classroom${NC}"
+    else
+        echo -e "${GREEN}✓ Registrado en aula${NC}"
+    fi
+}
+
 # Forzar aplicación
 cmd_force() {
     source "$INSTALL_DIR/lib/firewall.sh"
@@ -414,6 +546,7 @@ cmd_help() {
     echo "  disable         Deshabilitar sistema"
     echo "  restart         Reiniciar servicios"
     echo "  rotate-token    Rotar token de descarga (modo Aula)"
+    echo "  enroll          Registrar maquina en un aula"
     echo "  help            Mostrar esta ayuda"
     echo ""
 }
@@ -433,6 +566,7 @@ case "${1:-status}" in
     disable)    cmd_disable ;;
     restart)    cmd_restart ;;
     rotate-token) cmd_rotate_token ;;
+    enroll)     shift; cmd_enroll "$@" ;;
     help|--help|-h) cmd_help ;;
     *)
         echo -e "${RED}Comando desconocido: $1${NC}"

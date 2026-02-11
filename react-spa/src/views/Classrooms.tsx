@@ -9,6 +9,9 @@ import {
   X,
   AlertCircle,
   Loader2,
+  Download,
+  Copy,
+  Check,
 } from 'lucide-react';
 import type { Classroom, ScheduleWithPermissions } from '../types';
 import { trpc } from '../lib/trpc';
@@ -45,6 +48,12 @@ const Classrooms = () => {
     null
   );
 
+  // Enrollment state
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [enrollToken, setEnrollToken] = useState<string | null>(null);
+  const [enrollCopied, setEnrollCopied] = useState(false);
+  const [loadingToken, setLoadingToken] = useState(false);
+
   // New classroom form state
   const [newName, setNewName] = useState('');
   const [newGroup, setNewGroup] = useState('');
@@ -68,6 +77,7 @@ const Classrooms = () => {
       const mappedClassrooms = apiClassrooms.map((c) => ({
         id: c.id,
         name: c.name,
+        displayName: c.displayName,
         computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
         status: c.status,
@@ -129,8 +139,11 @@ const Classrooms = () => {
       const mappedClassrooms = apiClassrooms.map((c) => ({
         id: c.id,
         name: c.name,
+        displayName: c.displayName,
         computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
+        status: c.status,
+        onlineMachineCount: c.onlineMachineCount,
       })) as Classroom[];
       setClassrooms(mappedClassrooms);
       return mappedClassrooms;
@@ -300,6 +313,55 @@ const Classrooms = () => {
       setScheduleSaving(false);
     }
   };
+
+  const openEnrollModal = async () => {
+    setLoadingToken(true);
+    try {
+      if (!selectedClassroom) {
+        setError('Selecciona un aula primero');
+        return;
+      }
+
+      const accessToken = localStorage.getItem('openpath_access_token');
+      const response = await fetch(
+        `/api/enroll/${encodeURIComponent(selectedClassroom.id)}/ticket`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${String(response.status)}`);
+      }
+
+      const data = (await response.json()) as {
+        success: boolean;
+        enrollmentToken?: string;
+      };
+
+      if (!data.success || !data.enrollmentToken) {
+        throw new Error('No enrollment token received');
+      }
+
+      setEnrollToken(data.enrollmentToken);
+      setShowEnrollModal(true);
+    } catch (err: unknown) {
+      console.error('Failed to get enrollment ticket:', err);
+      setError('No se pudo generar el comando de instalacion');
+    } finally {
+      setLoadingToken(false);
+    }
+  };
+
+  const apiUrl = window.location.origin;
+  const enrollCommand =
+    selectedClassroom && enrollToken
+      ? `curl -fsSL -H 'Authorization: Bearer ${enrollToken}' '${apiUrl}/api/enroll/${encodeURIComponent(selectedClassroom.id)}' | sudo bash`
+      : '';
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-6">
@@ -475,9 +537,23 @@ const Classrooms = () => {
                   <Monitor size={18} className="text-blue-500" />
                   Máquinas Registradas
                 </h3>
-                <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600 border border-slate-200 font-medium">
-                  Total: {selectedClassroom.computerCount}
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => void openEnrollModal()}
+                    disabled={loadingToken}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium disabled:opacity-50"
+                  >
+                    {loadingToken ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Download size={16} />
+                    )}
+                    Instalar equipos
+                  </button>
+                  <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600 border border-slate-200 font-medium">
+                    Total: {selectedClassroom.computerCount}
+                  </span>
+                </div>
               </div>
 
               {/* Empty State Style */}
@@ -704,6 +780,53 @@ const Classrooms = () => {
                   Eliminar
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Instalar Equipos */}
+      {showEnrollModal && enrollToken && selectedClassroom && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Instalar Equipos</h3>
+              <button
+                onClick={() => setShowEnrollModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-slate-600 mb-3">
+              Ejecuta este comando en cada PC del aula{' '}
+              <strong>{selectedClassroom.displayName}</strong> para instalar y registrar el agente:
+            </p>
+            <div className="bg-slate-900 text-green-400 rounded-lg p-4 font-mono text-xs overflow-x-auto relative">
+              <button
+                onClick={() => {
+                  void navigator.clipboard.writeText(enrollCommand);
+                  setEnrollCopied(true);
+                  setTimeout(() => setEnrollCopied(false), 2000);
+                }}
+                className="absolute top-2 right-2 text-slate-400 hover:text-white"
+                title="Copiar al portapapeles"
+              >
+                {enrollCopied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
+              </button>
+              <pre className="whitespace-pre-wrap pr-8">{enrollCommand}</pre>
+            </div>
+            <p className="text-xs text-slate-500 mt-3">
+              El agente se auto-actualizará automáticamente vía APT. Asegúrate de tener conexión a
+              internet en el equipo durante la instalación.
+            </p>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowEnrollModal(false)}
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>

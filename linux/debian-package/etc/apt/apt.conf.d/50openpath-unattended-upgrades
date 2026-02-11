@@ -1,0 +1,8 @@
+// Auto-update OpenPath packages
+Unattended-Upgrade::Allowed-Origins {
+    "OpenPath System:stable";
+    "OpenPath System:unstable";
+};
+
+// Never reboot automatically (classroom PCs may be in use)
+Unattended-Upgrade::Automatic-Reboot "false";

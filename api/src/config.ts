@@ -78,6 +78,9 @@ export const config = {
   /** Is test environment */
   isTest: process.env.NODE_ENV === 'test',
 
+  /** APT Repository Setup URL */
+  aptRepoUrl: process.env.APT_REPO_URL ?? 'https://balejosg.github.io/openpath/apt',
+
   /** Enable rate limiting even in test environment (defaults to false) */
   enableRateLimitInTest: process.env.ENABLE_RATE_LIMIT_IN_TEST === 'true',
 

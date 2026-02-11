@@ -108,6 +108,15 @@ EOF
         systemctl enable dnsmasq-watchdog.timer
         systemctl enable captive-portal-detector.service
         
+        # Step 10b: Enable unattended-upgrades if available
+        if command -v unattended-upgrade &>/dev/null; then
+            echo "  Habilitando auto-actualizaciones..."
+            systemctl enable apt-daily.timer 2>/dev/null || true
+            systemctl enable apt-daily-upgrade.timer 2>/dev/null || true
+            systemctl start apt-daily.timer 2>/dev/null || true
+            systemctl start apt-daily-upgrade.timer 2>/dev/null || true
+        fi
+        
         # Step 11: Start services
         systemctl restart dnsmasq
         sleep 2

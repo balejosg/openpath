@@ -1,1 +1,2 @@
 /etc/openpath/config.default
+/etc/apt/apt.conf.d/50openpath-unattended-upgrades

@@ -4,7 +4,7 @@ Section: net
 Priority: optional
 Architecture: amd64
 Depends: dnsmasq, iptables, iptables-persistent, ipset, curl, libcap2-bin, dnsutils, conntrack, python3
-Recommends: firefox-esr
+Recommends: firefox-esr, unattended-upgrades
 Maintainer: Las Encinas IT <it@lasencinas.edu>
 Description: DNS Whitelist System for Educational Environments
  A multi-layer internet access control system using DNS sinkhole,

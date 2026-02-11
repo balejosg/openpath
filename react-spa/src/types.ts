@@ -20,6 +20,7 @@ export type ClassroomStatus = 'operational' | 'degraded' | 'offline';
 export interface Classroom {
   id: string;
   name: string;
+  displayName: string;
   computerCount: number;
   activeGroup: string | null;
   status: ClassroomStatus;

@@ -62,7 +62,9 @@ import * as userStorage from './lib/user-storage.js';
 import * as groupsStorage from './lib/groups-storage.js';
 import * as classroomStorage from './lib/classroom-storage.js';
 import * as setupStorage from './lib/setup-storage.js';
-import { cleanupBlacklist } from './lib/auth.js';
+import { cleanupBlacklist, verifyAccessToken } from './lib/auth.js';
+import { verifyEnrollmentToken } from './lib/enrollment-token.js';
+import { generateEnrollmentToken } from './lib/enrollment-token.js';
 import {
   generateMachineToken,
   hashMachineToken,
@@ -379,28 +381,53 @@ app.post('/api/machines/register', (req: Request, res: Response): void => {
       return;
     }
 
-    const registrationToken = authHeader.slice(7);
-    const isValid = await setupStorage.validateRegistrationToken(registrationToken);
-    if (!isValid) {
-      res.status(403).json({ success: false, error: 'Invalid registration token' });
-      return;
-    }
+    const providedToken = authHeader.slice(7);
+    const enrollmentPayload = verifyEnrollmentToken(providedToken);
 
-    const { hostname, classroomName, version } = req.body as {
+    const { hostname, classroomName, classroomId, version } = req.body as {
       hostname?: string;
       classroomName?: string;
+      classroomId?: string;
       version?: string;
     };
 
-    if (!hostname || !classroomName) {
-      res.status(400).json({ success: false, error: 'hostname and classroomName are required' });
+    if (!hostname) {
+      res.status(400).json({ success: false, error: 'hostname is required' });
       return;
     }
 
-    const classroom = await classroomStorage.getClassroomByName(classroomName);
-    if (!classroom) {
-      res.status(404).json({ success: false, error: `Classroom "${classroomName}" not found` });
-      return;
+    let classroom: { id: string; name: string } | null = null;
+
+    if (enrollmentPayload) {
+      if (classroomId && classroomId !== enrollmentPayload.classroomId) {
+        res
+          .status(403)
+          .json({ success: false, error: 'Enrollment token does not match classroom' });
+        return;
+      }
+      classroom = await classroomStorage.getClassroomById(enrollmentPayload.classroomId);
+      if (!classroom) {
+        res.status(404).json({ success: false, error: 'Classroom not found' });
+        return;
+      }
+    } else {
+      const isValid = await setupStorage.validateRegistrationToken(providedToken);
+      if (!isValid) {
+        res.status(403).json({ success: false, error: 'Invalid registration token' });
+        return;
+      }
+
+      if (!classroomName) {
+        res.status(400).json({ success: false, error: 'classroomName is required' });
+        return;
+      }
+
+      const found = await classroomStorage.getClassroomByName(classroomName);
+      if (!found) {
+        res.status(404).json({ success: false, error: `Classroom "${classroomName}" not found` });
+        return;
+      }
+      classroom = found;
     }
 
     const machine = await classroomStorage.registerMachine({
@@ -416,7 +443,176 @@ app.post('/api/machines/register', (req: Request, res: Response): void => {
     const publicUrl = config.publicUrl ?? `http://${config.host}:${String(config.port)}`;
     const whitelistUrl = buildWhitelistUrl(publicUrl, token);
 
-    res.json({ success: true, whitelistUrl });
+    res.json({
+      success: true,
+      whitelistUrl,
+      classroomName: classroom.name,
+      classroomId: classroom.id,
+    });
+  })();
+});
+
+// Create a short-lived enrollment token for a classroom (teacher/admin)
+app.post('/api/enroll/:classroomId/ticket', (req: Request, res: Response): void => {
+  void (async (): Promise<void> => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) {
+        res.status(401).json({ success: false, error: 'Authorization header required' });
+        return;
+      }
+
+      const accessToken = authHeader.slice(7);
+      const decoded = await verifyAccessToken(accessToken);
+      if (!decoded) {
+        res.status(401).json({ success: false, error: 'Invalid access token' });
+        return;
+      }
+
+      const roles = decoded.roles.map((r) => r.role);
+      if (!roles.includes('admin') && !roles.includes('teacher')) {
+        res.status(403).json({ success: false, error: 'Teacher access required' });
+        return;
+      }
+
+      const classroomId = req.params.classroomId;
+      if (!classroomId) {
+        res.status(400).json({ success: false, error: 'classroomId parameter required' });
+        return;
+      }
+
+      const classroom = await classroomStorage.getClassroomById(classroomId);
+      if (!classroom) {
+        res.status(404).json({ success: false, error: 'Classroom not found' });
+        return;
+      }
+
+      const enrollmentToken = generateEnrollmentToken(classroom.id);
+
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.json({
+        success: true,
+        enrollmentToken,
+        classroomId: classroom.id,
+        classroomName: classroom.name,
+      });
+    } catch (error) {
+      logger.error('Enrollment ticket error', { error: getErrorMessage(error) });
+      res.status(500).json({ success: false, error: 'Internal error' });
+    }
+  })();
+});
+
+// === Enrollment Script Endpoint ===
+app.get('/api/enroll/:classroomId', (req: Request, res: Response): void => {
+  void (async (): Promise<void> => {
+    try {
+      const { classroomId } = req.params;
+      const authHeader = req.headers.authorization;
+
+      if (!classroomId) {
+        res.status(400).send('Missing classroomId');
+        return;
+      }
+
+      if (!authHeader?.startsWith('Bearer ')) {
+        res.status(401).send('Authorization header required');
+        return;
+      }
+
+      const enrollmentToken = authHeader.slice(7);
+      const payload = verifyEnrollmentToken(enrollmentToken);
+      if (!payload) {
+        res.status(403).send('Invalid enrollment token');
+        return;
+      }
+      if (payload.classroomId !== classroomId) {
+        res.status(403).send('Enrollment token does not match classroom');
+        return;
+      }
+
+      const classroom = await classroomStorage.getClassroomById(classroomId);
+      if (!classroom) {
+        res.status(404).send('Classroom not found');
+        return;
+      }
+
+      const publicUrl = config.publicUrl ?? `http://${config.host}:${String(config.port)}`;
+      const aptRepoUrl = config.aptRepoUrl;
+      if (!aptRepoUrl) {
+        res.status(500).send('APT repo URL not configured');
+        return;
+      }
+
+      const bashSingleQuote = (value: string): string => {
+        // Bash-safe single-quoting: wrap in '...' and escape embedded single quotes with: '\''
+        const escaped = value.replace(/'/g, "'\\''");
+        return "'" + escaped + "'";
+      };
+
+      // Generate enrollment script with embedded values
+      const script = `#!/bin/bash
+set -euo pipefail
+
+API_URL=${bashSingleQuote(publicUrl)}
+CLASSROOM_ID=${bashSingleQuote(classroomId)}
+CLASSROOM_NAME=${bashSingleQuote(classroom.name)}
+ENROLLMENT_TOKEN=${bashSingleQuote(enrollmentToken)}
+APT_REPO_SETUP_URL=${bashSingleQuote(`${aptRepoUrl}/apt-setup.sh`)}
+
+ echo ''
+echo '==============================================='
+echo ' OpenPath Enrollment: '"$CLASSROOM_NAME"
+echo '==============================================='
+echo ''
+
+# Must run as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "ERROR: Run with sudo"
+    exit 1
+fi
+
+# Step 1: Set up APT repository
+echo "[1/3] Configurando repositorio APT..."
+if ! command -v openpath &>/dev/null; then
+    tmpfile="$(mktemp)"
+    trap 'rm -f "$tmpfile"' EXIT
+    curl -fsSL --proto '=https' --tlsv1.2 "$APT_REPO_SETUP_URL" -o "$tmpfile"
+    bash "$tmpfile"
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get install -y openpath-dnsmasq
+    echo "  OK: Paquete instalado"
+else
+    echo "  OK: Ya instalado, actualizando..."
+    apt-get update -qq && apt-get install -y openpath-dnsmasq
+fi
+
+# Step 2: Enroll in classroom
+echo "[2/3] Registrando en aula..."
+openpath enroll --classroom-id "$CLASSROOM_ID" --api-url "$API_URL" --enrollment-token "$ENROLLMENT_TOKEN"
+
+# Step 3: Verify
+echo "[3/3] Verificando..."
+openpath health || true
+
+echo ""
+echo "========================================="
+echo "  OK - Equipo listo en aula: $CLASSROOM_NAME"
+echo "========================================="
+echo ""
+`;
+
+      res.setHeader('Content-Type', 'text/x-shellscript');
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Disposition', 'inline; filename="enroll.sh"');
+      res.send(script);
+    } catch (error) {
+      logger.error('Enrollment script error', { error: getErrorMessage(error) });
+      res.status(500).send('Internal error');
+    }
   })();
 });
 
