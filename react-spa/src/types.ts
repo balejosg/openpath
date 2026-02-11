@@ -41,6 +41,24 @@ export interface GroupData {
   blockedPaths: string[];
 }
 
+export interface Schedule {
+  id: string;
+  classroomId: string;
+  dayOfWeek: number; // 1=Mon … 5=Fri
+  startTime: string; // "HH:MM"
+  endTime: string;
+  groupId: string;
+  teacherId: string;
+  recurrence?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ScheduleWithPermissions extends Schedule {
+  isMine: boolean;
+  canEdit: boolean;
+}
+
 export interface NavItem {
   id: string;
   label: string;
