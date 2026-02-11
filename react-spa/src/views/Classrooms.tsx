@@ -80,6 +80,7 @@ const Classrooms = () => {
         displayName: c.displayName,
         computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
+        currentGroupId: c.currentGroupId ?? null,
         status: c.status,
         onlineMachineCount: c.onlineMachineCount,
       })) as Classroom[];
@@ -142,6 +143,7 @@ const Classrooms = () => {
         displayName: c.displayName,
         computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
+        currentGroupId: c.currentGroupId ?? null,
         status: c.status,
         onlineMachineCount: c.onlineMachineCount,
       })) as Classroom[];
@@ -217,9 +219,12 @@ const Classrooms = () => {
         id: selectedClassroom.id,
         groupId: groupId || null,
       });
-      await refetchClassrooms();
-      // Update local selected classroom
-      setSelectedClassroom((prev) => (prev ? { ...prev, activeGroup: groupId || null } : null));
+      const updatedClassrooms = await refetchClassrooms();
+      // Update local selected classroom from the updated list
+      const updated = updatedClassrooms.find((c) => c.id === selectedClassroom.id);
+      if (updated) {
+        setSelectedClassroom(updated);
+      }
     } catch (err) {
       console.error('Failed to update active group:', err);
     }
@@ -433,9 +438,12 @@ const Classrooms = () => {
                     <Laptop size={12} /> {room.computerCount} Equipos
                   </span>
                   <span
-                    className={`px-2 py-0.5 rounded-full border ${room.activeGroup ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}
+                    className={`px-2 py-0.5 rounded-full border ${room.currentGroupId ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}
                   >
-                    {room.activeGroup ?? 'Sin grupo'}
+                    {room.currentGroupId
+                      ? (groups.find((g) => g.id === room.currentGroupId)?.displayName ??
+                        room.currentGroupId)
+                      : 'Sin grupo'}
                   </span>
                 </div>
               </div>
@@ -498,6 +506,16 @@ const Classrooms = () => {
                       </option>
                     ))}
                   </select>
+                  {!selectedClassroom.activeGroup && selectedClassroom.currentGroupId && (
+                    <p className="mt-2 text-xs text-slate-500 italic">
+                      Actualmente usando{' '}
+                      <span className="font-semibold text-slate-700">
+                        {groups.find((g) => g.id === selectedClassroom.currentGroupId)
+                          ?.displayName ?? selectedClassroom.currentGroupId}
+                      </span>{' '}
+                      por horario
+                    </p>
+                  )}
                 </div>
                 <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 flex items-center justify-between">
                   <div>

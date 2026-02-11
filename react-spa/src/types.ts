@@ -23,6 +23,7 @@ export interface Classroom {
   displayName: string;
   computerCount: number;
   activeGroup: string | null;
+  currentGroupId: string | null;
   status: ClassroomStatus;
   onlineMachineCount: number;
 }
