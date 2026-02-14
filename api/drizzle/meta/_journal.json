@@ -29,6 +29,13 @@
       "when": 1767718826302,
       "tag": "0003_add-google-auth",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1769000000000,
+      "tag": "0004_rule_source_auto_extension",
+      "breakpoints": true
     }
   ]
 }

@@ -141,6 +141,7 @@ CREATE TABLE IF NOT EXISTS "whitelist_rules" (
 	"group_id" varchar(50) NOT NULL,
 	"type" varchar(50) NOT NULL,
 	"value" varchar(500) NOT NULL,
+	"source" varchar(50) DEFAULT 'manual' NOT NULL,
 	"comment" text,
 	"created_at" timestamp with time zone DEFAULT now(),
 	CONSTRAINT "whitelist_rules_group_type_value_key" UNIQUE("group_id","type","value")

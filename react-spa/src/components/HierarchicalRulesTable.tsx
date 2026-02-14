@@ -400,9 +400,16 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
                             </div>
                           </td>
                           <td className="px-4 py-2">
-                            <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                              {getRuleTypeBadge(rule.type)}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                                {getRuleTypeBadge(rule.type)}
+                              </span>
+                              {rule.source === 'auto_extension' && (
+                                <span className="text-xs px-2 py-0.5 rounded bg-cyan-50 text-cyan-700 border border-cyan-200">
+                                  Auto (Firefox)
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-2 text-right">
                             {isEditing ? (

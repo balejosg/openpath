@@ -19,6 +19,9 @@ import type { WhitelistGroup, WhitelistRule } from '../db/schema.js';
 /** Rule type for whitelist entries */
 export type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
 
+/** Rule source for whitelist entries */
+export type RuleSource = 'manual' | 'auto_extension';
+
 /** Group with computed rule counts */
 export interface GroupWithCounts {
   id: string;
@@ -38,6 +41,7 @@ export interface Rule {
   groupId: string;
   type: RuleType;
   value: string;
+  source: RuleSource;
   comment: string | null;
   createdAt: string;
 }
@@ -128,11 +132,17 @@ export interface IGroupsStorage {
     groupId: string,
     type: RuleType,
     value: string,
-    comment?: string | null
+    comment?: string | null,
+    source?: RuleSource
   ): Promise<CreateRuleResult>;
   updateRule(input: UpdateRuleInput): Promise<Rule | null>;
   deleteRule(id: string): Promise<boolean>;
-  bulkCreateRules(groupId: string, type: RuleType, values: string[]): Promise<number>;
+  bulkCreateRules(
+    groupId: string,
+    type: RuleType,
+    values: string[],
+    source?: RuleSource
+  ): Promise<number>;
   bulkDeleteRules(ids: string[]): Promise<number>;
   getStats(): Promise<GroupStats>;
   getSystemStatus(): Promise<SystemStatus>;
@@ -164,6 +174,7 @@ function dbRuleToApi(r: WhitelistRule): Rule {
     groupId: r.groupId,
     type: r.type as RuleType,
     value: r.value,
+    source: (r.source as RuleSource | null) ?? 'manual',
     comment: r.comment ?? null,
     createdAt: r.createdAt?.toISOString() ?? new Date().toISOString(),
   };
@@ -506,7 +517,8 @@ export async function createRule(
   groupId: string,
   type: RuleType,
   value: string,
-  comment: string | null = null
+  comment: string | null = null,
+  source: RuleSource = 'manual'
 ): Promise<CreateRuleResult> {
   const normalizedValue = normalize.domain(value);
 
@@ -532,10 +544,11 @@ export async function createRule(
     groupId,
     type,
     value: normalizedValue,
+    source,
     comment,
   });
 
-  logger.debug('Created rule', { id, groupId, type, value: normalizedValue });
+  logger.debug('Created rule', { id, groupId, type, value: normalizedValue, source });
   return { success: true, id };
 }
 
@@ -576,13 +589,14 @@ export async function bulkDeleteRules(ids: string[]): Promise<number> {
 export async function bulkCreateRules(
   groupId: string,
   type: RuleType,
-  values: string[]
+  values: string[],
+  source: RuleSource = 'manual'
 ): Promise<number> {
   let count = 0;
   for (const value of values) {
     const trimmed = normalize.domain(value);
     if (trimmed) {
-      const result = await createRule(groupId, type, trimmed);
+      const result = await createRule(groupId, type, trimmed, null, source);
       if (result.success) count++;
     }
   }

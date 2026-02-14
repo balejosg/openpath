@@ -225,6 +225,7 @@ export const whitelistRules = pgTable(
       .references(() => whitelistGroups.id, { onDelete: 'cascade' }),
     type: varchar('type', { length: 50 }).notNull(), // 'whitelist' | 'blocked_subdomain' | 'blocked_path'
     value: varchar('value', { length: 500 }).notNull(),
+    source: varchar('source', { length: 50 }).default('manual').notNull(), // 'manual' | 'auto_extension'
     comment: text('comment'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   },

@@ -33,6 +33,7 @@ export interface Rule {
   groupId: string;
   type: RuleType;
   value: string;
+  source?: 'manual' | 'auto_extension';
   comment: string | null;
   createdAt: string;
 }
@@ -339,15 +340,22 @@ export const RulesTable: React.FC<RulesTableProps> = ({
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border font-medium',
-                        getTypeBadgeClass(rule.type)
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border font-medium',
+                          getTypeBadgeClass(rule.type)
+                        )}
+                      >
+                        {getTypeIcon(rule.type)}
+                        {getRuleTypeBadge(rule.type)}
+                      </span>
+                      {rule.source === 'auto_extension' && (
+                        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full border font-medium bg-cyan-50 text-cyan-700 border-cyan-200">
+                          Auto (Firefox)
+                        </span>
                       )}
-                    >
-                      {getTypeIcon(rule.type)}
-                      {getRuleTypeBadge(rule.type)}
-                    </span>
+                    </div>
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
                     {isEditing ? (

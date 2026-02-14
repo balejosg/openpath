@@ -18,9 +18,11 @@
 
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
+import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
 import { getAvailablePort } from './test-utils.js';
-import { closeConnection } from '../src/db/index.js';
+import { closeConnection, db } from '../src/db/index.js';
+import { sql } from 'drizzle-orm';
 
 let PORT: number;
 let API_URL: string;
@@ -81,12 +83,19 @@ async function parseTRPC(
   return {};
 }
 
+function buildMachineProofToken(hostname: string, secret: string): string {
+  return createHash('sha256')
+    .update(hostname + secret)
+    .digest('base64');
+}
+
 await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async () => {
   before(async () => {
     // Start server for testing
     PORT = await getAvailablePort();
     API_URL = `http://localhost:${String(PORT)}`;
     process.env.PORT = String(PORT);
+    process.env.SHARED_SECRET = process.env.SHARED_SECRET ?? 'test-shared-secret';
 
     const { app } = await import('../src/server.js');
 
@@ -131,6 +140,79 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
       const data = (await response.json()) as { status: string; service: string };
       assert.strictEqual(data.status, 'ok');
       assert.strictEqual(data.service, 'openpath-api');
+    });
+  });
+
+  await describe('Auto Request Endpoint', async () => {
+    await test('should auto-approve to active group and mark source', async () => {
+      const suffix = Date.now().toString();
+      const groupId = `grp-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const domain = `ajax-${suffix}.example.com`;
+      const sharedSecret = process.env.SHARED_SECRET;
+
+      assert.ok(sharedSecret, 'SHARED_SECRET must be defined in test environment');
+
+      await db.execute(
+        sql.raw(
+          `ALTER TABLE whitelist_rules ADD COLUMN IF NOT EXISTS source varchar(50) DEFAULT 'manual' NOT NULL`
+        )
+      );
+
+      await db.execute(
+        sql.raw(
+          `INSERT INTO whitelist_groups (id, name, display_name, enabled) VALUES ('${groupId}', '${groupId}', '${groupId}', 1)`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO classrooms (id, name, display_name, default_group_id, active_group_id) VALUES ('${classroomId}', '${classroomId}', '${classroomId}', '${groupId}', '${groupId}')`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO machines (id, hostname, classroom_id, version) VALUES ('${machineId}', '${hostname}', '${classroomId}', 'test')`
+        )
+      );
+
+      const token = buildMachineProofToken(hostname, sharedSecret);
+
+      const response = await fetch(`${API_URL}/api/requests/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          hostname,
+          token,
+          origin_page: `${classroomId}.school.local`,
+        }),
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = (await response.json()) as {
+        success: boolean;
+        groupId: string;
+        source: string;
+        approved: boolean;
+      };
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.approved, true);
+      assert.strictEqual(data.groupId, groupId);
+      assert.strictEqual(data.source, 'auto_extension');
+
+      const ruleRow = await db.execute(
+        sql.raw(
+          `SELECT type, value, source FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}' LIMIT 1`
+        )
+      );
+      const rows = ruleRow.rows as { type: string; value: string; source: string }[];
+      assert.strictEqual(rows.length, 1);
+      const firstRow = rows[0] as { type: string; value: string; source: string };
+      assert.strictEqual(firstRow.type, 'whitelist');
+      assert.strictEqual(firstRow.source, 'auto_extension');
     });
   });
 

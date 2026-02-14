@@ -460,7 +460,6 @@ async function submitDomainRequest(): Promise<void> {
   }
 
   const apiUrl = CONFIG.requestApiUrl;
-  const groupId = CONFIG.defaultGroup;
   const sharedSecret = CONFIG.sharedSecret;
 
   // Disable button while submitting
@@ -492,7 +491,6 @@ async function submitDomainRequest(): Promise<void> {
       body: JSON.stringify({
         domain,
         origin_page: origin,
-        group_id: groupId,
         token,
         hostname: systemHostname,
       }),

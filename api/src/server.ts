@@ -43,6 +43,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import path from 'node:path';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import rateLimit from 'express-rate-limit';
 import 'dotenv/config';
@@ -50,7 +51,7 @@ import 'dotenv/config';
 // Structured logging with Winston
 import { logger } from './lib/logger.js';
 
-import { getErrorMessage } from '@openpath/shared';
+import { cleanRuleValue, getErrorMessage, validateRuleValue } from '@openpath/shared';
 // Centralized configuration
 import { config } from './config.js';
 
@@ -95,6 +96,23 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = config.port;
 const HOST = config.host;
+
+interface AutoRequestPayload {
+  domain?: unknown;
+  origin_page?: unknown;
+  token?: unknown;
+  hostname?: unknown;
+}
+
+function normalizeHostInput(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function computeMachineProofToken(hostname: string, secret: string): string {
+  return createHash('sha256')
+    .update(hostname + secret)
+    .digest('base64');
+}
 
 // =============================================================================
 // Security Middleware
@@ -234,6 +252,91 @@ app.get('/api/config', (_req, res) => {
   res.json({
     googleClientId: config.googleClientId,
   });
+});
+
+app.post('/api/requests/auto', (req: Request, res: Response): void => {
+  void (async (): Promise<void> => {
+    const body = req.body as AutoRequestPayload;
+
+    const domainRaw = typeof body.domain === 'string' ? body.domain : '';
+    const hostnameRaw = typeof body.hostname === 'string' ? body.hostname : '';
+    const token = typeof body.token === 'string' ? body.token : '';
+    const originPageRaw = typeof body.origin_page === 'string' ? body.origin_page : '';
+
+    if (!domainRaw || !hostnameRaw || !token) {
+      res.status(400).json({
+        success: false,
+        error: 'domain, hostname and token are required',
+      });
+      return;
+    }
+
+    const sharedSecret = process.env.SHARED_SECRET;
+    if (!sharedSecret) {
+      res.status(500).json({ success: false, error: 'SHARED_SECRET not configured' });
+      return;
+    }
+
+    const hostname = normalizeHostInput(hostnameRaw);
+    const expectedToken = computeMachineProofToken(hostname, sharedSecret);
+    if (token !== expectedToken) {
+      logger.warn('Auto request rejected: invalid proof token', { hostname });
+      res.status(403).json({ success: false, error: 'Invalid token proof' });
+      return;
+    }
+
+    const normalizedDomain = cleanRuleValue(domainRaw, false);
+    if (!normalizedDomain) {
+      res.status(400).json({ success: false, error: 'Domain is required' });
+      return;
+    }
+
+    const validation = validateRuleValue(normalizedDomain, 'whitelist');
+    if (!validation.valid) {
+      res.status(400).json({
+        success: false,
+        error: validation.error ?? 'Invalid domain format',
+      });
+      return;
+    }
+
+    const groupContext = await classroomStorage.getWhitelistUrlForMachine(hostname);
+    if (!groupContext) {
+      res.status(404).json({
+        success: false,
+        error: 'No active group found for machine hostname',
+      });
+      return;
+    }
+
+    const targetGroupId = groupContext.groupId;
+    const sourceComment = originPageRaw
+      ? `Auto-approved via Firefox extension (${originPageRaw.slice(0, 300)})`
+      : 'Auto-approved via Firefox extension';
+
+    const created = await groupsStorage.createRule(
+      targetGroupId,
+      'whitelist',
+      normalizedDomain,
+      sourceComment,
+      'auto_extension'
+    );
+
+    if (!created.success && created.error !== 'Rule already exists') {
+      res.status(400).json({ success: false, error: created.error ?? 'Could not create rule' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      approved: true,
+      autoApproved: true,
+      groupId: targetGroupId,
+      domain: normalizedDomain,
+      source: 'auto_extension',
+      duplicate: created.error === 'Rule already exists',
+    });
+  })();
 });
 
 // Public endpoint for dnsmasq clients to fetch whitelist files
