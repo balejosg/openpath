@@ -78,6 +78,7 @@ const Classrooms = () => {
         id: c.id,
         name: c.name,
         displayName: c.displayName,
+        defaultGroupId: c.defaultGroupId ?? null,
         computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
         currentGroupId: c.currentGroupId ?? null,
@@ -141,6 +142,7 @@ const Classrooms = () => {
         id: c.id,
         name: c.name,
         displayName: c.displayName,
+        defaultGroupId: c.defaultGroupId ?? null,
         computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
         currentGroupId: c.currentGroupId ?? null,
@@ -227,6 +229,24 @@ const Classrooms = () => {
       }
     } catch (err) {
       console.error('Failed to update active group:', err);
+    }
+  };
+
+  const handleDefaultGroupChange = async (groupId: string) => {
+    if (!selectedClassroom) return;
+
+    try {
+      await trpc.classrooms.update.mutate({
+        id: selectedClassroom.id,
+        defaultGroupId: groupId || null,
+      });
+      const updatedClassrooms = await refetchClassrooms();
+      const updated = updatedClassrooms.find((c) => c.id === selectedClassroom.id);
+      if (updated) {
+        setSelectedClassroom(updated);
+      }
+    } catch (err) {
+      console.error('Failed to update default group:', err);
     }
   };
 
@@ -413,41 +433,66 @@ const Classrooms = () => {
           ) : filteredClassrooms.length === 0 ? (
             <div className="text-center py-8 text-slate-500 text-sm">No se encontraron aulas</div>
           ) : (
-            filteredClassrooms.map((room) => (
-              <div
-                key={room.id}
-                onClick={() => setSelectedClassroom(room)}
-                className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                  selectedClassroom?.id === room.id
-                    ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200 shadow-sm'
-                    : 'bg-white border-slate-200 hover:border-blue-200 hover:shadow-sm'
-                }`}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <h3
-                    className={`font-semibold text-sm ${selectedClassroom?.id === room.id ? 'text-blue-800' : 'text-slate-800'}`}
-                  >
-                    {room.name}
-                  </h3>
-                  {selectedClassroom?.id === room.id && (
-                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                  )}
+            filteredClassrooms.map((room) => {
+              const displayGroupId = room.activeGroup ?? room.currentGroupId;
+              const displayGroupName = displayGroupId
+                ? (groups.find((g) => g.id === displayGroupId)?.displayName ?? displayGroupId)
+                : 'Sin grupo';
+              const isScheduleAssigned =
+                !room.activeGroup &&
+                !!room.currentGroupId &&
+                (room.defaultGroupId === null || room.currentGroupId !== room.defaultGroupId);
+              const isDefaultGroup =
+                !room.activeGroup &&
+                !!room.currentGroupId &&
+                room.defaultGroupId !== null &&
+                room.currentGroupId === room.defaultGroupId;
+              const badgeVariant = room.activeGroup
+                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                : isScheduleAssigned
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : displayGroupId
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-100 text-slate-500 border-slate-200';
+              const sourceLabel = room.activeGroup
+                ? 'manual'
+                : isScheduleAssigned
+                  ? 'horario'
+                  : isDefaultGroup
+                    ? 'defecto'
+                    : '';
+
+              return (
+                <div
+                  key={room.id}
+                  onClick={() => setSelectedClassroom(room)}
+                  className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                    selectedClassroom?.id === room.id
+                      ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200 shadow-sm'
+                      : 'bg-white border-slate-200 hover:border-blue-200 hover:shadow-sm'
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <h3
+                      className={`font-semibold text-sm ${selectedClassroom?.id === room.id ? 'text-blue-800' : 'text-slate-800'}`}
+                    >
+                      {room.name}
+                    </h3>
+                    {selectedClassroom?.id === room.id && (
+                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span className="flex items-center gap-1">
+                      <Laptop size={12} /> {room.computerCount} Equipos
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full border ${badgeVariant}`}>
+                      {sourceLabel ? `${displayGroupName} · ${sourceLabel}` : displayGroupName}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-4 text-xs text-slate-500">
-                  <span className="flex items-center gap-1">
-                    <Laptop size={12} /> {room.computerCount} Equipos
-                  </span>
-                  <span
-                    className={`px-2 py-0.5 rounded-full border ${room.currentGroupId ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}
-                  >
-                    {room.currentGroupId
-                      ? (groups.find((g) => g.id === room.currentGroupId)?.displayName ??
-                        room.currentGroupId)
-                      : 'Sin grupo'}
-                  </span>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -489,12 +534,16 @@ const Classrooms = () => {
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block">
+                  <label
+                    htmlFor="classroom-active-group"
+                    className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block"
+                  >
                     Grupo Activo
                   </label>
                   <select
+                    id="classroom-active-group"
                     value={selectedClassroom.activeGroup ?? ''}
                     onChange={(e) => void handleGroupChange(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
@@ -513,9 +562,36 @@ const Classrooms = () => {
                         {groups.find((g) => g.id === selectedClassroom.currentGroupId)
                           ?.displayName ?? selectedClassroom.currentGroupId}
                       </span>{' '}
-                      por horario
+                      {selectedClassroom.defaultGroupId !== null &&
+                      selectedClassroom.currentGroupId === selectedClassroom.defaultGroupId
+                        ? 'por defecto'
+                        : 'por horario'}
                     </p>
                   )}
+                </div>
+                <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                  <label
+                    htmlFor="classroom-default-group"
+                    className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 block"
+                  >
+                    Grupo por defecto
+                  </label>
+                  <select
+                    id="classroom-default-group"
+                    value={selectedClassroom.defaultGroupId ?? ''}
+                    onChange={(e) => void handleDefaultGroupChange(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
+                  >
+                    <option value="">Sin grupo por defecto</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.displayName}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-2 text-xs text-slate-500 italic">
+                    Se usa cuando no hay grupo activo ni bloque de horario vigente.
+                  </p>
                 </div>
                 <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 flex items-center justify-between">
                   <div>

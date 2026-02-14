@@ -21,6 +21,7 @@ export interface Classroom {
   id: string;
   name: string;
   displayName: string;
+  defaultGroupId: string | null;
   computerCount: number;
   activeGroup: string | null;
   currentGroupId: string | null;
