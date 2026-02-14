@@ -23,18 +23,8 @@ jobs:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          release-type: simple
           token: ${{ secrets.GITHUB_TOKEN }}
-          changelog-types: |
-            [
-              {"type": "feat", "section": "✨ Features", "hidden": false},
-              {"type": "fix", "section": "🐛 Bug Fixes", "hidden": false},
-              {"type": "ci", "section": "🔧 CI/CD", "hidden": false},
-              {"type": "docs", "section": "📚 Documentation", "hidden": false},
-              {"type": "perf", "section": "⚡ Performance", "hidden": false},
-              {"type": "refactor", "section": "♻️ Refactoring", "hidden": false},
-              {"type": "chore", "section": "🧹 Chores", "hidden": true}
-            ]
+          config-file: release-please-config.json
 
       - name: Release Summary
         if: ${{ steps.release.outputs.release_created }}
