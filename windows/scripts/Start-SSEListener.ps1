@@ -124,25 +124,32 @@ function Invoke-DebouncedUpdate {
     $script:LastUpdateTime = $now
 
     # Keep one update job at a time for this listener process
-    Get-Job -Name $script:UpdateJobName -ErrorAction SilentlyContinue |
-        Where-Object { $_.State -in @('Completed', 'Failed', 'Stopped') } |
-        Remove-Job -Force -ErrorAction SilentlyContinue
+    $existingJobs = @(Get-Job -Name $script:UpdateJobName -ErrorAction SilentlyContinue)
+    if ($existingJobs.Count -gt 0) {
+        $activeJob = $existingJobs | Where-Object { $_.State -notin @('Completed', 'Failed', 'Stopped') } | Select-Object -First 1
+        if ($activeJob) {
+            Write-OpenPathLog "SSE: Update already in progress (state: $($activeJob.State)) - skipping duplicate trigger"
+            return
+        }
 
-    $runningJob = Get-Job -Name $script:UpdateJobName -State Running -ErrorAction SilentlyContinue
-    if ($runningJob) {
-        Write-OpenPathLog "SSE: Update already in progress - skipping duplicate trigger"
-        return
+        $existingJobs | Remove-Job -Force -ErrorAction SilentlyContinue
     }
 
     # Run update in a background job so we don't block the SSE stream
     if (Test-Path $script:UpdateScript) {
-        Start-Job -ScriptBlock {
-            param($scriptPath)
-            & $scriptPath
-        } -Name $script:UpdateJobName -ArgumentList $script:UpdateScript | Out-Null
+        try {
+            Start-Job -ScriptBlock {
+                param($scriptPath)
+                & $scriptPath
+            } -Name $script:UpdateJobName -ArgumentList $script:UpdateScript -ErrorAction Stop | Out-Null
+        }
+        catch {
+            Write-OpenPathLog "SSE: Failed to start update job: $_" -Level WARN
+        }
     }
     else {
         Write-OpenPathLog "SSE: Update script not found at $($script:UpdateScript)" -Level WARN
+        return
     }
 }
 
