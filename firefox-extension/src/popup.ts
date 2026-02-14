@@ -6,9 +6,10 @@
 import { logger, getErrorMessage } from './lib/logger.js';
 
 interface BlockedDomainInfo {
-  count: number;
+  count?: number;
+  errors?: string[];
   timestamp: number;
-  origin?: string;
+  origin?: string | null;
 }
 
 interface SerializedBlockedDomain {
@@ -23,6 +24,8 @@ interface VerifyResult {
   domain: string;
   inWhitelist: boolean;
   resolvedIp?: string;
+  in_whitelist?: boolean;
+  resolved_ip?: string;
   error?: string;
 }
 
@@ -32,11 +35,15 @@ interface VerifyResponse {
   error?: string;
 }
 
-interface RequestResponse {
-  success: boolean;
-  groupId?: string;
-  status?: 'approved' | 'duplicate';
-  error?: string;
+interface TRPCMutationResponse<T> {
+  result?: { data: T };
+  error?: { message?: string };
+}
+
+interface CreateRequestResult {
+  id: string;
+  domain: string;
+  status: 'pending' | 'approved' | 'rejected';
 }
 
 interface BlockedDomainsResponse {
@@ -294,6 +301,7 @@ function renderDomainsList(): void {
   hostnames.forEach((hostname) => {
     const info = blockedDomainsData[hostname];
     if (!info) return;
+    const attempts = info.count ?? info.errors?.length ?? 1;
 
     const item = document.createElement('li');
     item.className = 'domain-item';
@@ -307,7 +315,7 @@ function renderDomainsList(): void {
     item.innerHTML = `
             <span class="domain-name" title="${hostname}">${hostname}</span>
             <span class="domain-meta">
-                <span class="domain-count" title="Intentos de conexión">${info.count.toString()}</span>
+                <span class="domain-count" title="Intentos de conexión">${attempts.toString()}</span>
                 <span class="domain-status ${meta.className}" title="${meta.label}">${meta.label}</span>
                 ${retryButton}
             </span>
@@ -439,9 +447,11 @@ function renderVerifyResults(results: VerifyResult[]): void {
     const item = document.createElement('li');
     item.className = 'verify-item';
 
-    const statusClass = res.inWhitelist ? 'status-allowed' : 'status-blocked';
-    const statusText = res.inWhitelist ? 'PERMITIDO' : 'BLOQUEADO';
-    const ipInfo = res.resolvedIp ? `<span class="ip-info">${res.resolvedIp}</span>` : '';
+    const inWhitelist = res.in_whitelist ?? res.inWhitelist;
+    const resolvedIp = res.resolvedIp ?? res.resolved_ip;
+    const statusClass = inWhitelist ? 'status-allowed' : 'status-blocked';
+    const statusText = inWhitelist ? 'PERMITIDO' : 'BLOQUEADO';
+    const ipInfo = resolvedIp ? `<span class="ip-info">${resolvedIp}</span>` : '';
 
     item.innerHTML = `
             <span class="verify-domain">${res.domain}</span>
@@ -556,36 +566,19 @@ function updateSubmitButtonState(): void {
 }
 
 /**
- * Generate token from hostname using SHA-256
- */
-async function generateToken(hostname: string, secret: string): Promise<string> {
-  const data = new TextEncoder().encode(hostname + secret);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = new Uint8Array(hashBuffer);
-  // btoa is available in browser
-  return btoa(String.fromCharCode(...hashArray));
-}
-
-/**
- * Submit a domain request using auto-inclusion endpoint
+ * Submit a domain request to approval queue
  */
 async function submitDomainRequest(): Promise<void> {
   const domain = requestDomainSelectEl.value;
   const reason = requestReasonEl.value.trim();
-  const selectedOption = requestDomainSelectEl.selectedOptions[0];
-  const origin = selectedOption ? (selectedOption.dataset.origin ?? '') : '';
+  const selectedInfo = blockedDomainsData[domain];
+  const extensionVersion = browser.runtime.getManifest().version;
+  const groupId = CONFIG.defaultGroup;
 
   if (!domain || reason.length < 3) {
     showRequestStatus('❌ Selecciona un dominio y escribe un motivo', 'error');
     return;
   }
-
-  if (!origin) {
-    showRequestStatus('❌ El dominio no tiene un origen válido', 'error');
-    return;
-  }
-
-  const sharedSecret = CONFIG.sharedSecret;
 
   if (!isRequestConfigured() || !isNativeAvailable) {
     showRequestStatus('❌ Configuración incompleta para solicitar dominios', 'error');
@@ -598,64 +591,44 @@ async function submitDomainRequest(): Promise<void> {
   showRequestStatus('Enviando solicitud...', 'pending');
 
   try {
-    // Get hostname via Native Messaging
-    const response = await browser.runtime.sendMessage({ action: 'getHostname' });
-    const hostnameResult = response as { success: boolean; hostname: string };
-    if (!hostnameResult.success) {
-      throw new Error('No se pudo obtener el hostname del sistema');
+    let machineHostname: string | undefined;
+    try {
+      const hostResponse = await browser.runtime.sendMessage({ action: 'getHostname' });
+      const hostPayload = hostResponse as { success?: boolean; hostname?: string };
+      if (hostPayload.success && hostPayload.hostname) {
+        machineHostname = hostPayload.hostname;
+      }
+    } catch {
+      machineHostname = undefined;
     }
-    const systemHostname = hostnameResult.hostname;
-
-    // Generate token
-    const token = await generateToken(systemHostname, sharedSecret);
 
     const apiResponse = await fetchWithFallback(
-      '/api/requests/auto',
+      '/trpc/requests.create',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           domain,
-          origin_page: origin,
           reason,
-          token,
-          hostname: systemHostname,
+          groupId,
+          source: 'firefox-extension',
+          machineHostname,
+          originHost: selectedInfo?.origin ?? undefined,
+          clientVersion: extensionVersion,
+          errorType: selectedInfo?.errors?.[0],
         }),
       },
       CONFIG.requestTimeout
     );
 
-    const data = (await apiResponse.json()) as RequestResponse;
+    const payload = (await apiResponse.json()) as TRPCMutationResponse<CreateRequestResult>;
 
-    if (apiResponse.ok && data.success) {
+    if (apiResponse.ok && payload.result?.data.id) {
       showRequestStatus(
-        `✅ Dominio añadido a ${data.groupId ?? 'grupo'}\nActualizando whitelist local...`,
+        `✅ Solicitud enviada para ${domain}. Queda pendiente de aprobación.`,
         'success'
       );
-
-      // MultiReplace note: skipping lines for brevity where unchanged
-      // Trigger local whitelist update
-      try {
-        const updateResponse = await browser.runtime.sendMessage({
-          action: 'triggerWhitelistUpdate',
-        });
-        const updateResult = updateResponse as { success: boolean };
-        if (updateResult.success) {
-          showRequestStatus(
-            `✅ Dominio ${domain} añadido y whitelist local actualizada`,
-            'success'
-          );
-          showToast('✅ Dominio añadido y WL actualizada');
-        } else {
-          showRequestStatus('✅ Dominio añadido (actualización local pendiente)', 'success');
-          showToast('✅ Dominio añadido');
-        }
-      } catch (updateError) {
-        logger.warn('Whitelist update failed', {
-          error: updateError instanceof Error ? updateError.message : String(updateError),
-        });
-        showToast('✅ Dominio añadido');
-      }
+      showToast('✅ Solicitud enviada');
 
       // Clear form
       requestDomainSelectEl.value = '';
@@ -663,7 +636,7 @@ async function submitDomainRequest(): Promise<void> {
       await loadDomainStatuses();
       renderDomainsList();
     } else {
-      const errorMsg = data.error ?? 'Error desconocido';
+      const errorMsg = payload.error?.message ?? 'Error desconocido';
       showRequestStatus(`❌ ${errorMsg}`, 'error');
       showToast(`❌ ${errorMsg}`);
     }

@@ -713,7 +713,7 @@ browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.
     case 'checkWithNative':
     case 'verifyDomains':
       try {
-        const domainsToCheck = msg.domains ?? [];
+        const domainsToCheck = Array.isArray(msg.domains) ? msg.domains : [];
         return await checkDomainsWithNative(domainsToCheck);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';

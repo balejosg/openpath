@@ -27,6 +27,12 @@ export const requestsRouter = router({
         requesterEmail: input.requesterEmail,
         groupId: input.groupId,
         priority: input.priority,
+        source: input.source,
+        machineHostname: input.machineHostname,
+        originHost: input.originHost,
+        originPage: input.originPage,
+        clientVersion: input.clientVersion,
+        errorType: input.errorType,
       }) as CreateRequestData
     );
 
@@ -115,8 +121,10 @@ export const requestsRouter = router({
     const allGroups = await groupsStorage.getAllGroups();
     const userGroups = RequestService.getApprovalGroupsForUser(ctx.user);
     const filteredGroups =
-      userGroups === 'all' ? allGroups : allGroups.filter((g) => userGroups.includes(g.name));
-    return filteredGroups.map((g) => ({ name: g.name, path: `${g.name}.txt` }));
+      userGroups === 'all'
+        ? allGroups
+        : allGroups.filter((g) => userGroups.includes(g.name) || userGroups.includes(g.id));
+    return filteredGroups.map((g) => ({ id: g.id, name: g.name, path: g.id }));
   }),
 
   // Admin: List blocked domains for a group

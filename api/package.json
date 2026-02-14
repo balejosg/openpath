@@ -47,6 +47,7 @@
     "test:unit": "NODE_ENV=test node --import tsx --test tests/schedules.test.ts",
     "test:mutation": "stryker run",
     "db:migrate": "node dist/scripts/migrate.js",
+    "db:migrate:request-metadata": "tsx scripts/migrate-request-metadata.ts",
     "db:test": "node -e \"import { db } from './dist/src/db/index.js'; console.log('DB module loaded'); process.exit(0);\"",
     "db:push": "drizzle-kit push --force",
     "drizzle:generate": "drizzle-kit generate",

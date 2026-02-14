@@ -36,6 +36,13 @@
       "when": 1769000000000,
       "tag": "0004_rule_source_auto_extension",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1768060800000,
+      "tag": "0005_request_metadata",
+      "breakpoints": true
     }
   ]
 }

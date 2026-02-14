@@ -12,6 +12,34 @@ import type { CreateRequestData } from '../types/storage.js';
 import type { DomainRequest, RequestStatus } from '../types/index.js';
 import { getErrorMessage } from '@openpath/shared';
 
+interface ResolvedGroupTarget {
+  id: string;
+  name: string;
+}
+
+async function resolveGroupTarget(rawGroup: string): Promise<ResolvedGroupTarget | null> {
+  const directById = await groupsStorage.getGroupById(rawGroup);
+  if (directById) return { id: directById.id, name: directById.name };
+
+  const normalized = rawGroup.endsWith('.txt') ? rawGroup.slice(0, -4) : rawGroup;
+
+  const directByName = await groupsStorage.getGroupByName(normalized);
+  if (directByName) return { id: directByName.id, name: directByName.name };
+
+  return null;
+}
+
+function canApproveResolvedTarget(
+  user: JWTPayload,
+  rawGroup: string,
+  resolvedTarget: ResolvedGroupTarget
+): boolean {
+  if (auth.canApproveGroup(user, rawGroup)) return true;
+  if (auth.canApproveGroup(user, resolvedTarget.id)) return true;
+  if (auth.canApproveGroup(user, resolvedTarget.name)) return true;
+  return false;
+}
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -82,17 +110,30 @@ export async function approveRequest(
     };
   }
 
-  const targetGroup = groupId ?? request.groupId;
-  if (!auth.canApproveGroup(user, targetGroup)) {
+  const rawTargetGroup = groupId ?? request.groupId;
+  const hasRawPermission = auth.canApproveGroup(user, rawTargetGroup);
+  const resolvedTarget = await resolveGroupTarget(rawTargetGroup);
+
+  if (
+    !hasRawPermission &&
+    (!resolvedTarget || !canApproveResolvedTarget(user, rawTargetGroup, resolvedTarget))
+  ) {
     return {
       ok: false,
       error: { code: 'FORBIDDEN', message: 'You do not have permission to approve for this group' },
     };
   }
 
+  if (!resolvedTarget) {
+    return {
+      ok: false,
+      error: { code: 'BAD_REQUEST', message: 'Target group does not exist' },
+    };
+  }
+
   // Check blocked domains for non-admins
   if (!auth.isAdminToken(user)) {
-    const blocked = await groupsStorage.isDomainBlocked(targetGroup, request.domain);
+    const blocked = await groupsStorage.isDomainBlocked(resolvedTarget.id, request.domain);
     if (blocked.blocked) {
       return {
         ok: false,
@@ -102,7 +143,11 @@ export async function approveRequest(
   }
 
   try {
-    const ruleResult = await groupsStorage.createRule(targetGroup, 'whitelist', request.domain);
+    const ruleResult = await groupsStorage.createRule(
+      resolvedTarget.id,
+      'whitelist',
+      request.domain
+    );
     if (!ruleResult.success) {
       if (ruleResult.error === 'Rule already exists') {
         // Domain already whitelisted - still mark request as approved
@@ -114,7 +159,7 @@ export async function approveRequest(
       request.id,
       'approved',
       user.name,
-      `Added to ${targetGroup}`
+      `Added to ${resolvedTarget.name}`
     );
 
     if (!updated) {

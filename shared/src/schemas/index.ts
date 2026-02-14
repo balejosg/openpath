@@ -28,6 +28,12 @@ export const DomainRequest = z.object({
   reason: z.string(),
   requesterEmail: z.string(),
   groupId: z.string(),
+  source: z.string().optional(),
+  machineHostname: z.string().nullable().optional(),
+  originHost: z.string().nullable().optional(),
+  originPage: z.string().nullable().optional(),
+  clientVersion: z.string().nullable().optional(),
+  errorType: z.string().nullable().optional(),
   priority: RequestPriority,
   status: RequestStatus,
   createdAt: z.string(),
@@ -214,6 +220,12 @@ export const CreateRequestDTO = z
     requesterEmail: z.string().email().optional(),
     groupId: z.string().optional(),
     priority: RequestPriority.optional(),
+    source: z.string().max(50).optional(),
+    machineHostname: z.string().max(255).optional(),
+    originHost: z.string().max(255).optional(),
+    originPage: z.string().max(2048).optional(),
+    clientVersion: z.string().max(50).optional(),
+    errorType: z.string().max(100).optional(),
   })
   .strict();
 
