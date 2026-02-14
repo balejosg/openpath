@@ -20,6 +20,17 @@ const BLOCKING_ERRORS = [
 
 const IGNORED_ERRORS = ['NS_BINDING_ABORTED', 'NS_ERROR_ABORT'];
 const AUTO_ALLOW_REQUEST_TYPES = new Set(['xmlhttprequest', 'fetch']);
+const BLOCKED_SCREEN_ERRORS = new Set([
+  'NS_ERROR_UNKNOWN_HOST',
+  'NS_ERROR_PROXY_CONNECTION_REFUSED',
+]);
+const BLOCKED_SCREEN_PATH = 'blocked/blocked.html';
+
+interface MockOnErrorOccurredDetails {
+  type: string;
+  error: string;
+  url: string;
+}
 
 type LocalDomainStatusState =
   | 'detected'
@@ -60,6 +71,42 @@ function isSupportedNativeAvailabilityAction(action: string): boolean {
 function isAutoAllowRequestType(type?: string): boolean {
   if (!type) return false;
   return AUTO_ALLOW_REQUEST_TYPES.has(type);
+}
+
+function isExtensionUrl(url: string): boolean {
+  return url.startsWith('moz-extension://') || url.startsWith('chrome-extension://');
+}
+
+function shouldDisplayBlockedScreen(details: MockOnErrorOccurredDetails): boolean {
+  if (details.type !== 'main_frame') {
+    return false;
+  }
+
+  if (!BLOCKED_SCREEN_ERRORS.has(details.error)) {
+    return false;
+  }
+
+  if (isExtensionUrl(details.url)) {
+    return false;
+  }
+
+  return true;
+}
+
+function buildBlockedScreenRedirectUrl(payload: {
+  extensionOrigin: string;
+  hostname: string;
+  error: string;
+  origin: string | null;
+}): string {
+  const redirectUrl = new URL(BLOCKED_SCREEN_PATH, payload.extensionOrigin);
+  redirectUrl.searchParams.set('domain', payload.hostname);
+  redirectUrl.searchParams.set('error', payload.error);
+  if (payload.origin) {
+    redirectUrl.searchParams.set('origin', payload.origin);
+  }
+
+  return redirectUrl.toString();
 }
 
 function resolveAutoStatus(payload: {
@@ -334,6 +381,74 @@ void describe('isIgnoredError()', () => {
 
   void test('should not ignore unknown errors', () => {
     assert.strictEqual(isIgnoredError('UNKNOWN_ERROR'), false);
+  });
+});
+
+// =============================================================================
+// Blocked Screen Routing Tests
+// =============================================================================
+
+void describe('shouldDisplayBlockedScreen()', () => {
+  void test('should display blocked screen for main_frame DNS blocks', () => {
+    assert.strictEqual(
+      shouldDisplayBlockedScreen({
+        type: 'main_frame',
+        error: 'NS_ERROR_UNKNOWN_HOST',
+        url: 'https://example.com/login',
+      }),
+      true
+    );
+  });
+
+  void test('should not display blocked screen for subresource requests', () => {
+    assert.strictEqual(
+      shouldDisplayBlockedScreen({
+        type: 'xmlhttprequest',
+        error: 'NS_ERROR_UNKNOWN_HOST',
+        url: 'https://api.example.com/v1/data',
+      }),
+      false
+    );
+  });
+
+  void test('should not display blocked screen for extension urls', () => {
+    assert.strictEqual(
+      shouldDisplayBlockedScreen({
+        type: 'main_frame',
+        error: 'NS_ERROR_UNKNOWN_HOST',
+        url: 'moz-extension://abc123/popup/popup.html',
+      }),
+      false
+    );
+  });
+
+  void test('should not display blocked screen for generic network failures', () => {
+    assert.strictEqual(
+      shouldDisplayBlockedScreen({
+        type: 'main_frame',
+        error: 'NS_ERROR_NET_TIMEOUT',
+        url: 'https://example.com',
+      }),
+      false
+    );
+  });
+});
+
+void describe('buildBlockedScreenRedirectUrl()', () => {
+  void test('should include only non-sensitive query params', () => {
+    const redirectUrl = buildBlockedScreenRedirectUrl({
+      extensionOrigin: 'moz-extension://unit-test-id/',
+      hostname: 'example.com',
+      error: 'NS_ERROR_UNKNOWN_HOST',
+      origin: 'portal.local',
+    });
+
+    const parsed = new URL(redirectUrl);
+    assert.strictEqual(parsed.pathname, '/blocked/blocked.html');
+    assert.strictEqual(parsed.searchParams.get('domain'), 'example.com');
+    assert.strictEqual(parsed.searchParams.get('error'), 'NS_ERROR_UNKNOWN_HOST');
+    assert.strictEqual(parsed.searchParams.get('origin'), 'portal.local');
+    assert.strictEqual(parsed.searchParams.has('blockedUrl'), false);
   });
 });
 

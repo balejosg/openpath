@@ -249,6 +249,18 @@ test_firefox_extension_installed() {
     else
         test_fail "Extension dist/config.js missing"
     fi
+
+    if [ -f "$ext_dir/dist/lib/logger.js" ]; then
+        test_pass "Extension dist/lib/logger.js exists"
+    else
+        test_fail "Extension dist/lib/logger.js missing"
+    fi
+
+    if [ -f "$ext_dir/blocked/blocked.html" ] && [ -f "$ext_dir/blocked/blocked.css" ] && [ -f "$ext_dir/blocked/blocked.js" ]; then
+        test_pass "Extension blocked screen assets exist"
+    else
+        test_fail "Extension blocked screen assets missing"
+    fi
     
     # Check autoconfig files
     local autoconfig_found=false

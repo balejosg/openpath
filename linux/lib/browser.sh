@@ -486,14 +486,35 @@ install_firefox_extension() {
         return 1
     fi
 
+    if [[ ! -d "$ext_source/dist/lib" ]]; then
+        log "⚠ Missing extension build artifact directory: $ext_source/dist/lib"
+        return 1
+    fi
+
+    if [[ ! -f "$ext_source/blocked/blocked.html" ]]; then
+        log "⚠ Missing extension blocked screen: $ext_source/blocked/blocked.html"
+        return 1
+    fi
+
+    if [[ ! -f "$ext_source/blocked/blocked.css" ]]; then
+        log "⚠ Missing extension blocked screen: $ext_source/blocked/blocked.css"
+        return 1
+    fi
+
+    if [[ ! -f "$ext_source/blocked/blocked.js" ]]; then
+        log "⚠ Missing extension blocked screen: $ext_source/blocked/blocked.js"
+        return 1
+    fi
+
     cp "$ext_source/manifest.json" "$ext_dir/$ext_id/"
     mkdir -p "$ext_dir/$ext_id/dist"
     cp "$ext_source/dist/background.js" "$ext_dir/$ext_id/dist/"
     cp "$ext_source/dist/popup.js" "$ext_dir/$ext_id/dist/"
     cp "$ext_source/dist/config.js" "$ext_dir/$ext_id/dist/"
-    [[ -d "$ext_source/dist/lib" ]] && cp -r "$ext_source/dist/lib" "$ext_dir/$ext_id/dist/"
+    cp -r "$ext_source/dist/lib" "$ext_dir/$ext_id/dist/"
     cp -r "$ext_source/popup" "$ext_dir/$ext_id/"
     cp -r "$ext_source/icons" "$ext_dir/$ext_id/"
+    cp -r "$ext_source/blocked" "$ext_dir/$ext_id/"
     
     # Set permissions
     chmod -R 755 "$ext_dir/$ext_id"

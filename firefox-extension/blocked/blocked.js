@@ -50,7 +50,12 @@ function main() {
   const backBtn = document.getElementById('go-back');
   if (backBtn) {
     backBtn.addEventListener('click', () => {
-      window.history.back();
+      if (window.history.length > 1) {
+        window.history.back();
+        return;
+      }
+
+      window.location.replace('about:blank');
     });
   }
 

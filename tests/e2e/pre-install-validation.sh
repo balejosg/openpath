@@ -152,9 +152,13 @@ test_required_files() {
         "firefox-extension/manifest.json"
         "firefox-extension/dist/background.js"
         "firefox-extension/dist/config.js"
+        "firefox-extension/dist/lib/logger.js"
         "firefox-extension/popup/popup.html"
         "firefox-extension/dist/popup.js"
         "firefox-extension/popup/popup.css"
+        "firefox-extension/blocked/blocked.html"
+        "firefox-extension/blocked/blocked.css"
+        "firefox-extension/blocked/blocked.js"
         "firefox-extension/native/openpath-native-host.py"
         "firefox-extension/native/openpath_native_host.json"
         "firefox-extension/native/install-native-host.sh"
@@ -278,6 +282,18 @@ test_installer_extension_paths() {
         test_pass "installer copies dist/config.js"
     else
         test_fail "installer does not copy dist/config.js"
+    fi
+
+    if grep -Fq 'cp -r "$ext_source/dist/lib" "$ext_dir/$ext_id/dist/"' "$browser_sh"; then
+        test_pass "installer copies dist/lib"
+    else
+        test_fail "installer does not copy dist/lib"
+    fi
+
+    if grep -Fq 'cp -r "$ext_source/blocked" "$ext_dir/$ext_id/"' "$browser_sh"; then
+        test_pass "installer copies blocked screen assets"
+    else
+        test_fail "installer does not copy blocked screen assets"
     fi
 
     if grep -q 'cp "\$ext_source/background.js"' "$browser_sh"; then

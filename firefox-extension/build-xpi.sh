@@ -51,10 +51,10 @@ cp "$SCRIPT_DIR/manifest.json" "$BUILD_DIR/"
 cp "$SCRIPT_DIR/PRIVACY.md" "$BUILD_DIR/"
 cp -r "$SCRIPT_DIR/popup" "$BUILD_DIR/"
 cp -r "$SCRIPT_DIR/icons" "$BUILD_DIR/"
+cp -r "$SCRIPT_DIR/blocked" "$BUILD_DIR/"
 
-# Crear directorio dist y copiar compilados
-mkdir -p "$BUILD_DIR/dist"
-cp "$SCRIPT_DIR/dist/"* "$BUILD_DIR/dist/"
+# Copiar artefactos compilados (incluye subdirectorios como dist/lib)
+cp -r "$SCRIPT_DIR/dist" "$BUILD_DIR/"
 
 # Crear el archivo XPI (es un ZIP con extensión .xpi)
 XPI_FILE="$SCRIPT_DIR/${XPI_NAME}-${VERSION}.xpi"

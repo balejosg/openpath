@@ -81,7 +81,6 @@ interface BlockedScreenContext {
   tabId: number;
   hostname: string;
   error: string;
-  blockedUrl: string;
   origin: string | null;
 }
 
@@ -122,6 +121,10 @@ const IGNORED_ERRORS = [
 
 const AUTO_ALLOW_REQUEST_TYPES = new Set(['xmlhttprequest', 'fetch']);
 const BLOCKED_SCREEN_PATH = 'blocked/blocked.html';
+const BLOCKED_SCREEN_ERRORS = new Set([
+  'NS_ERROR_UNKNOWN_HOST',
+  'NS_ERROR_PROXY_CONNECTION_REFUSED',
+]);
 
 function isExtensionUrl(url: string): boolean {
   return url.startsWith('moz-extension://') || url.startsWith('chrome-extension://');
@@ -129,6 +132,10 @@ function isExtensionUrl(url: string): boolean {
 
 function shouldDisplayBlockedScreen(details: WebRequest.OnErrorOccurredDetailsType): boolean {
   if (details.type !== 'main_frame') {
+    return false;
+  }
+
+  if (!BLOCKED_SCREEN_ERRORS.has(details.error)) {
     return false;
   }
 
@@ -145,7 +152,6 @@ async function redirectToBlockedScreen(context: BlockedScreenContext): Promise<v
     const redirectUrl = new URL(blockedPageUrl);
     redirectUrl.searchParams.set('domain', context.hostname);
     redirectUrl.searchParams.set('error', context.error);
-    redirectUrl.searchParams.set('blockedUrl', context.blockedUrl);
     if (context.origin) {
       redirectUrl.searchParams.set('origin', context.origin);
     }
@@ -707,7 +713,6 @@ browser.webRequest.onErrorOccurred.addListener(
         tabId: details.tabId,
         hostname,
         error: details.error,
-        blockedUrl: details.url,
         origin,
       });
     }
