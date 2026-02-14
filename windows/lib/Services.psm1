@@ -14,7 +14,7 @@ function Register-OpenPathTask {
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
-        [int]$UpdateIntervalMinutes = 5,
+        [int]$UpdateIntervalMinutes = 15,
         [int]$WatchdogIntervalMinutes = 1
     )
 
@@ -81,6 +81,29 @@ function Register-OpenPathTask {
     
     Write-OpenPathLog "Registered: $script:TaskPrefix-Startup (at boot)"
     
+    # Task 4: SSE Listener (persistent, starts at boot)
+    $sseAction = New-ScheduledTaskAction -Execute "PowerShell.exe" `
+        -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$openPathRoot\scripts\Start-SSEListener.ps1`""
+    
+    $sseTrigger = New-ScheduledTaskTrigger -AtStartup
+    
+    $sseSettings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable `
+        -RestartCount 9999 `
+        -RestartInterval (New-TimeSpan -Minutes 1) `
+        -ExecutionTimeLimit (New-TimeSpan -Days 0)
+    
+    Register-ScheduledTask -TaskName "$script:TaskPrefix-SSE" `
+        -Action $sseAction `
+        -Trigger $sseTrigger `
+        -Principal $updatePrincipal `
+        -Settings $sseSettings `
+        -Force | Out-Null
+    
+    Write-OpenPathLog "Registered: $script:TaskPrefix-SSE (persistent SSE listener)"
+    
     return $true
 }
 
@@ -142,7 +165,7 @@ function Start-OpenPathTask {
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
-        [ValidateSet("Update", "Watchdog", "Startup")]
+        [ValidateSet("Update", "Watchdog", "Startup", "SSE")]
         [string]$TaskType = "Update"
     )
 

@@ -8,7 +8,8 @@ Internet access control system using a DNS sinkhole for Windows, powered by Acry
 ✅ **Acrylic DNS Proxy** - Local DNS server with wildcard support.  
 ✅ **Windows Firewall** - Blocks external DNS, VPNs, and Tor.  
 ✅ **Browser Policies** - Supports Firefox, Chrome, and Edge.  
-✅ **Auto-Update** - Syncs every 5 minutes via Task Scheduler.  
+✅ **Real-Time SSE Updates** - Instant rule changes via Server-Sent Events.  
+✅ **Auto-Update Fallback** - Syncs every 15 minutes via Task Scheduler.  
 ✅ **Watchdog** - Automatic failure recovery.
 
 ## Requirements
@@ -53,7 +54,8 @@ C:\OpenPath\
 │   ├── Browser.psm1            # Browser policies
 │   └── Services.psm1           # Task Scheduler
 ├── scripts\
-│   ├── Update-OpenPath.ps1     # Periodic update
+│   ├── Update-OpenPath.ps1     # Periodic update (fallback)
+│   ├── Start-SSEListener.ps1   # Real-time SSE listener
 │   └── Test-DNSHealth.ps1      # Watchdog
 └── data\
     ├── config.json             # Configuration
@@ -67,11 +69,14 @@ Edit `C:\OpenPath\data\config.json`:
 
 ```json
 {
-  "whitelistUrl": "http://server:3000/export/group.txt",
-  "updateIntervalMinutes": 5,
+  "whitelistUrl": "http://server:3000/w/<token>/whitelist.txt",
+  "updateIntervalMinutes": 15,
   "primaryDNS": "8.8.8.8",
   "enableFirewall": true,
-  "enableBrowserPolicies": true
+  "enableBrowserPolicies": true,
+  "sseReconnectMin": 5,
+  "sseReconnectMax": 60,
+  "sseUpdateCooldown": 10
 }
 ```
 
@@ -105,6 +110,19 @@ Get-NetFirewallRule -DisplayName "OpenPath-*" | Format-Table
 
 # Temporarily disable
 Get-NetFirewallRule -DisplayName "OpenPath-*" | Disable-NetFirewallRule
+```
+
+### SSE listener not connecting
+
+```powershell
+# Check SSE task status
+Get-ScheduledTask -TaskName "OpenPath-SSE"
+
+# Manually start SSE listener
+Start-ScheduledTask -TaskName "OpenPath-SSE"
+
+# View SSE logs
+Get-Content C:\OpenPath\data\logs\openpath.log -Tail 50 | Select-String "SSE"
 ```
 
 ## Linux Compatibility

@@ -171,7 +171,23 @@ Describe "Services Module" {
     Context "Register-OpenPathTask" {
         It "Accepts custom interval parameters" -Skip:(-not ((Test-FunctionExists 'Register-OpenPathTask') -and (Test-IsAdmin))) {
             # Just verify the function signature works
-            { Register-OpenPathTask -UpdateIntervalMinutes 10 -WatchdogIntervalMinutes 2 -WhatIf } | Should -Not -Throw
+            { Register-OpenPathTask -UpdateIntervalMinutes 15 -WatchdogIntervalMinutes 2 -WhatIf } | Should -Not -Throw
+        }
+    }
+
+    Context "Start-OpenPathTask" {
+        It "Accepts SSE as a valid task type" -Skip:(-not (Test-FunctionExists 'Start-OpenPathTask')) {
+            # Verify the SSE task type is accepted in the ValidateSet
+            { Start-OpenPathTask -TaskType SSE -WhatIf } | Should -Not -Throw
+        }
+    }
+}
+
+Describe "SSE Listener" {
+    Context "Script existence" {
+        It "Start-SSEListener.ps1 exists" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Start-SSEListener.ps1"
+            Test-Path $scriptPath | Should -BeTrue
         }
     }
 }

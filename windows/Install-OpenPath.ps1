@@ -134,12 +134,15 @@ if (-not $primaryDNS) {
 
 $config = @{
     whitelistUrl = $WhitelistUrl
-    updateIntervalMinutes = 5
+    updateIntervalMinutes = 15
     watchdogIntervalMinutes = 1
     primaryDNS = $primaryDNS
     acrylicPath = "${env:ProgramFiles(x86)}\Acrylic DNS Proxy"
     enableFirewall = $true
     enableBrowserPolicies = $true
+    sseReconnectMin = 5
+    sseReconnectMax = 60
+    sseUpdateCooldown = 10
     installedAt = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 }
 
@@ -190,7 +193,7 @@ Write-Host "  DNS configurado a 127.0.0.1" -ForegroundColor Green
 
 # Step 6: Register scheduled tasks
 Write-Host "[6/7] Registrando tareas programadas..." -ForegroundColor Yellow
-Register-OpenPathTask -UpdateIntervalMinutes 5 -WatchdogIntervalMinutes 1
+Register-OpenPathTask -UpdateIntervalMinutes 15 -WatchdogIntervalMinutes 1
 Write-Host "  Tareas registradas" -ForegroundColor Green
 
 # Step 7: First update
@@ -313,7 +316,7 @@ if ($Classroom -and $ApiUrl) {
 }
 Write-Host "  - Whitelist: $WhitelistUrl"
 Write-Host "  - DNS upstream: $primaryDNS"
-Write-Host "  - Actualización: cada 5 minutos"
+Write-Host "  - Actualización: SSE real-time + cada 15 min (fallback)"
 Write-Host ""
 Write-Host "Comandos útiles:"
 Write-Host "  nslookup google.com 127.0.0.1  # Probar DNS"
