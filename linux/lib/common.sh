@@ -81,6 +81,9 @@ export CHROMIUM_POLICIES_BASE="/etc/chromium/policies/managed"
 # Empty default forces explicit configuration
 DEFAULT_WHITELIST_URL="${DEFAULT_WHITELIST_URL:-}"
 
+# Lock file for mutual exclusion between scripts that modify firewall/dnsmasq
+export OPENPATH_LOCK_FILE="${OPENPATH_LOCK_FILE:-/var/run/openpath.lock}"
+
 # Global variables (initialized at runtime) - exported for use by other scripts
 export PRIMARY_DNS=""
 export GATEWAY_IP=""

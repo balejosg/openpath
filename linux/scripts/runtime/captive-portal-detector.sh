@@ -30,8 +30,7 @@ INSTALL_DIR="/usr/local/lib/openpath"
 source "$INSTALL_DIR/lib/common.sh"
 source "$INSTALL_DIR/lib/firewall.sh"
 
-# Lock file compartido con openpath-update.sh
-LOCK_FILE="/var/run/openpath-update.lock"
+# Lock file compartido con openpath-update.sh (defined in common.sh as OPENPATH_LOCK_FILE)
 
 # Configuración
 CHECK_INTERVAL=30
@@ -44,7 +43,7 @@ CAPTIVE_PORTAL_DETECTED=false
 modify_firewall_locked() {
     local action="$1"
 
-    exec 200>"$LOCK_FILE"
+    exec 200>"$OPENPATH_LOCK_FILE"
     if ! timeout 30 flock -x 200; then
         log "[CAPTIVE] Could not acquire lock after 30s - skipping firewall modification"
         return 1

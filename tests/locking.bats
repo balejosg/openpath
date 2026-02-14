@@ -250,13 +250,18 @@ teardown() {
 }
 
 @test "shared lock file path is consistent" {
-    # Both scripts should use the same lock file for shared resources
-    local captive_lock="/var/run/openpath-update.lock"
-    local update_lock="/var/run/whitelist-update.lock"
+    # Both scripts must use OPENPATH_LOCK_FILE from common.sh
+    source "$PROJECT_DIR/linux/lib/common.sh"
 
-    # These are the actual lock files from the scripts
-    # Note: captive-portal-detector uses openpath-update.lock (shared)
-    # openpath-update uses whitelist-update.lock (its own)
-    [ -n "$captive_lock" ]
-    [ -n "$update_lock" ]
+    # Verify the constant is defined and points to the unified path
+    [ -n "$OPENPATH_LOCK_FILE" ]
+    [ "$OPENPATH_LOCK_FILE" = "/var/run/openpath.lock" ]
+
+    # Verify both scripts reference OPENPATH_LOCK_FILE (not hardcoded paths)
+    grep -q 'OPENPATH_LOCK_FILE' "$PROJECT_DIR/linux/scripts/runtime/openpath-update.sh"
+    grep -q 'OPENPATH_LOCK_FILE' "$PROJECT_DIR/linux/scripts/runtime/captive-portal-detector.sh"
+
+    # Verify neither script has its own LOCK_FILE definition
+    ! grep -q '^LOCK_FILE=' "$PROJECT_DIR/linux/scripts/runtime/openpath-update.sh"
+    ! grep -q '^LOCK_FILE=' "$PROJECT_DIR/linux/scripts/runtime/captive-portal-detector.sh"
 }

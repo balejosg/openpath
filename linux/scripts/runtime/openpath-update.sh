@@ -28,25 +28,24 @@ set -o pipefail
 # - Detectar desactivación remota
 ################################################################################
 
-# Lock file para evitar ejecuciones simultáneas
-LOCK_FILE="/var/run/whitelist-update.lock"
+# Cargar common.sh primero (defines OPENPATH_LOCK_FILE and shared functions)
+INSTALL_DIR="/usr/local/lib/openpath"
+source "$INSTALL_DIR/lib/common.sh"
 
 # Cleanup en caso de salida (normal o error)
 cleanup_lock() {
-    rm -f "$LOCK_FILE" 2>/dev/null || true
+    rm -f "$OPENPATH_LOCK_FILE" 2>/dev/null || true
 }
 trap cleanup_lock EXIT
 
 # Obtener lock exclusivo con timeout (evita race conditions con captive-portal-detector)
-exec 200>"$LOCK_FILE"
+exec 200>"$OPENPATH_LOCK_FILE"
 if ! timeout 30 flock -x 200; then
     echo "Could not acquire lock after 30s - another process may be stuck"
     exit 1
 fi
 
-# Cargar librerías
-INSTALL_DIR="/usr/local/lib/openpath"
-source "$INSTALL_DIR/lib/common.sh"
+# Cargar librerías adicionales
 source "$INSTALL_DIR/lib/dns.sh"
 source "$INSTALL_DIR/lib/firewall.sh"
 source "$INSTALL_DIR/lib/browser.sh"
