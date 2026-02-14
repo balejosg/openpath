@@ -455,9 +455,43 @@ install_firefox_extension() {
     mkdir -p "$ext_dir/$ext_id"
     
     # Copy extension files (excluding native host and build scripts)
+    # Manifest references dist/background.js and popup/popup.html (which loads dist/*.js)
+    if [[ ! -f "$ext_source/manifest.json" ]]; then
+        log "⚠ Missing extension manifest: $ext_source/manifest.json"
+        return 1
+    fi
+
+    if [[ ! -f "$ext_source/popup/popup.html" ]]; then
+        log "⚠ Missing extension popup HTML: $ext_source/popup/popup.html"
+        return 1
+    fi
+
+    if [[ ! -d "$ext_source/icons" ]]; then
+        log "⚠ Missing extension icons directory: $ext_source/icons"
+        return 1
+    fi
+
+    if [[ ! -f "$ext_source/dist/background.js" ]]; then
+        log "⚠ Missing extension build artifact: $ext_source/dist/background.js"
+        return 1
+    fi
+
+    if [[ ! -f "$ext_source/dist/popup.js" ]]; then
+        log "⚠ Missing extension build artifact: $ext_source/dist/popup.js"
+        return 1
+    fi
+
+    if [[ ! -f "$ext_source/dist/config.js" ]]; then
+        log "⚠ Missing extension build artifact: $ext_source/dist/config.js"
+        return 1
+    fi
+
     cp "$ext_source/manifest.json" "$ext_dir/$ext_id/"
-    cp "$ext_source/background.js" "$ext_dir/$ext_id/"
-    [ -f "$ext_source/config.js" ] && cp "$ext_source/config.js" "$ext_dir/$ext_id/"
+    mkdir -p "$ext_dir/$ext_id/dist"
+    cp "$ext_source/dist/background.js" "$ext_dir/$ext_id/dist/"
+    cp "$ext_source/dist/popup.js" "$ext_dir/$ext_id/dist/"
+    cp "$ext_source/dist/config.js" "$ext_dir/$ext_id/dist/"
+    [[ -d "$ext_source/dist/lib" ]] && cp -r "$ext_source/dist/lib" "$ext_dir/$ext_id/dist/"
     cp -r "$ext_source/popup" "$ext_dir/$ext_id/"
     cp -r "$ext_source/icons" "$ext_dir/$ext_id/"
     

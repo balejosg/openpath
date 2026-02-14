@@ -231,11 +231,23 @@ test_firefox_extension_installed() {
         test_fail "Extension manifest.json missing"
     fi
     
-    # Check background.js exists
-    if [ -f "$ext_dir/background.js" ]; then
-        test_pass "Extension background.js exists"
+    # Check built scripts required by manifest and popup
+    if [ -f "$ext_dir/dist/background.js" ]; then
+        test_pass "Extension dist/background.js exists"
     else
-        test_fail "Extension background.js missing"
+        test_fail "Extension dist/background.js missing"
+    fi
+
+    if [ -f "$ext_dir/dist/popup.js" ]; then
+        test_pass "Extension dist/popup.js exists"
+    else
+        test_fail "Extension dist/popup.js missing"
+    fi
+
+    if [ -f "$ext_dir/dist/config.js" ]; then
+        test_pass "Extension dist/config.js exists"
+    else
+        test_fail "Extension dist/config.js missing"
     fi
     
     # Check autoconfig files

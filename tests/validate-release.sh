@@ -14,6 +14,13 @@ cd "$(dirname "$0")/.."
 echo "🔍 Running quick release validation..."
 echo ""
 
+if [ -f "firefox-extension/package.json" ]; then
+    echo "🔧 Building Firefox extension artifacts..."
+    npm run clean:all --workspace=@openpath/firefox-extension
+    npm run build --workspace=@openpath/firefox-extension
+    echo ""
+fi
+
 # Run pre-installation validation
 if [ -x "tests/e2e/pre-install-validation.sh" ]; then
     ./tests/e2e/pre-install-validation.sh

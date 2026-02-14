@@ -51,7 +51,7 @@ test_section() {
 # ============== Validation Tests ==============
 
 test_file_permissions() {
-    test_section "1/5" "Script execution permissions"
+    test_section "1/6" "Script execution permissions"
     
     local scripts=(
         "linux/install.sh"
@@ -93,7 +93,7 @@ test_file_permissions() {
 }
 
 test_required_directories() {
-    test_section "2/5" "Required directory structure"
+    test_section "2/6" "Required directory structure"
     
     local required_dirs=(
         "linux/lib"
@@ -127,7 +127,7 @@ test_required_directories() {
 }
 
 test_required_files() {
-    test_section "3/5" "Critical installation files"
+    test_section "3/6" "Critical installation files"
     
     local required_files=(
         # Core installers
@@ -171,7 +171,7 @@ test_required_files() {
 }
 
 test_firefox_extension_structure() {
-    test_section "4/5" "Firefox extension structure"
+    test_section "4/6" "Firefox extension structure"
     
     local ext_dir="$PROJECT_ROOT/firefox-extension"
     
@@ -213,7 +213,7 @@ test_firefox_extension_structure() {
 }
 
 test_release_tarball_simulation() {
-    test_section "5/5" "Release tarball contents simulation"
+    test_section "5/6" "Release tarball contents simulation"
     
     # Simulate what would be in the Linux release tarball
     local tarball_contents=(
@@ -257,6 +257,36 @@ test_release_tarball_simulation() {
     fi
 }
 
+test_installer_extension_paths() {
+    test_section "6/6" "Firefox installer path consistency"
+
+    local browser_sh="$PROJECT_ROOT/linux/lib/browser.sh"
+
+    if grep -Fq 'cp "$ext_source/dist/background.js" "$ext_dir/$ext_id/dist/"' "$browser_sh"; then
+        test_pass "installer copies dist/background.js"
+    else
+        test_fail "installer does not copy dist/background.js"
+    fi
+
+    if grep -Fq 'cp "$ext_source/dist/popup.js" "$ext_dir/$ext_id/dist/"' "$browser_sh"; then
+        test_pass "installer copies dist/popup.js"
+    else
+        test_fail "installer does not copy dist/popup.js"
+    fi
+
+    if grep -Fq 'cp "$ext_source/dist/config.js" "$ext_dir/$ext_id/dist/"' "$browser_sh"; then
+        test_pass "installer copies dist/config.js"
+    else
+        test_fail "installer does not copy dist/config.js"
+    fi
+
+    if grep -q 'cp "\$ext_source/background.js"' "$browser_sh"; then
+        test_fail "installer still references legacy root background.js"
+    else
+        test_pass "installer no longer references legacy root background.js"
+    fi
+}
+
 # ============== Main ==============
 
 main() {
@@ -272,6 +302,7 @@ main() {
     test_required_files
     test_firefox_extension_structure
     test_release_tarball_simulation
+    test_installer_extension_paths
     
     # Summary
     echo ""
