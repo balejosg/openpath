@@ -54,6 +54,15 @@ Describe "Common Module" {
         It "Writes ERROR level logs" {
             { Write-OpenPathLog -Message "Test ERROR message" -Level ERROR } | Should -Not -Throw
         }
+
+        It "Includes PID in log entries" {
+            $logPath = "C:\OpenPath\data\logs\openpath.log"
+            if (Test-Path $logPath) {
+                Write-OpenPathLog -Message "PID test entry" -Level INFO
+                $lastLine = Get-Content $logPath -Tail 1
+                $lastLine | Should -Match "\[PID:\d+\]"
+            }
+        }
     }
 
     Context "Get-PrimaryDNS" {
@@ -108,6 +117,15 @@ Describe "DNS Module" {
             $result | Should -BeTrue
         }
     }
+
+    Context "Max domains limit" {
+        It "Update-AcrylicHost code enforces a max domains limit" -Skip:(-not (Test-FunctionExists 'Update-AcrylicHost')) {
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "DNS.psm1"
+            $content = Get-Content $modulePath -Raw
+            $content | Should -Match 'maxDomains'
+            $content | Should -Match 'Truncating whitelist'
+        }
+    }
 }
 
 Describe "Firewall Module" {
@@ -150,6 +168,22 @@ Describe "Browser Module" {
     Context "Set-ChromePolicy" {
         It "Does not throw with empty blocked paths" -Skip:(-not ((Test-FunctionExists 'Set-ChromePolicy') -and (Test-IsAdmin))) {
             { Set-ChromePolicy -BlockedPaths @() } | Should -Not -Throw
+        }
+    }
+
+    Context "DoH blocking" {
+        It "Firefox policy includes DNSOverHTTPS disabled and locked" {
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
+            $content = Get-Content $modulePath -Raw
+            $content | Should -Match 'DNSOverHTTPS'
+            $content | Should -Match 'Locked\s*=\s*\$true'
+        }
+
+        It "Chrome/Edge policy includes DnsOverHttpsMode off" {
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
+            $content = Get-Content $modulePath -Raw
+            $content | Should -Match 'DnsOverHttpsMode'
+            $content | Should -Match '"off"'
         }
     }
 }
@@ -213,6 +247,114 @@ Describe "Update Script" {
             $content | Should -Match "System\.Threading\.Mutex"
             $content | Should -Match "Global\\OpenPathUpdateLock"
             $content | Should -Match "WaitOne\(0\)"
+        }
+    }
+
+    Context "Rollback system" {
+        It "Backs up whitelist before applying new one" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'whitelist\.backup\.txt'
+            $content | Should -Match 'Copy-Item.*\$whitelistPath.*\$backupPath'
+        }
+
+        It "Restores backup on update failure" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'Rolling back to previous whitelist'
+            $content | Should -Match 'Copy-Item.*\$backupPath.*\$whitelistPath'
+        }
+    }
+
+    Context "Health report" {
+        It "Sends health report to API after successful update" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'healthReport'
+            $content | Should -Match '/api/machines/.*/health'
+            $content | Should -Match 'platform.*windows'
+        }
+    }
+}
+
+Describe "Watchdog Script" {
+    Context "SSE listener monitoring" {
+        It "Checks and restarts SSE listener task" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'OpenPath-SSE'
+            $content | Should -Match 'Start-ScheduledTask.*OpenPath-SSE'
+        }
+    }
+
+    Context "Captive portal detection" {
+        It "Detects captive portals and temporarily opens DNS" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'msftconnecttest\.com'
+            $content | Should -Match 'Captive portal detected'
+            $content | Should -Match 'Restore-OriginalDNS'
+        }
+
+        It "Restores DNS protection after captive portal is resolved" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'Captive portal resolved.*restoring DNS protection'
+            $content | Should -Match 'Set-LocalDNS'
+        }
+    }
+}
+
+Describe "Installer" {
+    Context "ACL lockdown" {
+        It "Sets restrictive file permissions during installation" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'SetAccessRuleProtection'
+            $content | Should -Match 'NT AUTHORITY\\SYSTEM'
+            $content | Should -Match 'BUILTIN\\Administrators'
+        }
+    }
+
+    Context "Source path validation" {
+        It "Validates modules exist before copying" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'Modules not found'
+            $content | Should -Match 'Test-Path.*lib.*psm1'
+        }
+    }
+}
+
+Describe "Whitelist Validation" {
+    Context "Content validation" {
+        It "Common module validates minimum domain count" {
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "Common.psm1"
+            $content = Get-Content $modulePath -Raw
+
+            $content | Should -Match 'minRequiredDomains'
+            $content | Should -Match 'Invalid whitelist content'
+        }
+    }
+}
+
+Describe "Log Rotation" {
+    Context "Automatic rotation" {
+        It "Common module implements log rotation" {
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "Common.psm1"
+            $content = Get-Content $modulePath -Raw
+
+            $content | Should -Match 'MaxLogSizeBytes'
+            $content | Should -Match 'Move-Item.*archivePath'
+            $content | Should -Match 'Select-Object -Skip 5'
         }
     }
 }

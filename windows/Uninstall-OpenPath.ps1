@@ -38,7 +38,7 @@ param(
     [switch]$KeepLogs
 )
 
-$ErrorActionPreference = "SilentlyContinue"
+$ErrorActionPreference = "Stop"
 $OpenPathRoot = "C:\OpenPath"
 
 Write-Host "============================================" -ForegroundColor Cyan

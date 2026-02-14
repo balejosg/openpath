@@ -165,6 +165,18 @@ function Update-AcrylicHost {
         $upstream = "8.8.8.8"
     }
 
+    # Enforce max domains limit to protect Acrylic from excessive memory usage
+    $maxDomains = 500
+    try {
+        $cfg = Get-OpenPathConfig
+        if ($cfg.PSObject.Properties['maxDomains']) { $maxDomains = $cfg.maxDomains }
+    } catch { <# use default #> }
+
+    if ($WhitelistedDomains.Count -gt $maxDomains) {
+        Write-OpenPathLog "Truncating whitelist from $($WhitelistedDomains.Count) to $maxDomains domains" -Level WARN
+        $WhitelistedDomains = $WhitelistedDomains | Select-Object -First $maxDomains
+    }
+
     Write-OpenPathLog "Generating AcrylicHosts.txt with $($WhitelistedDomains.Count) domains..."
     
     $content = @"

@@ -80,6 +80,49 @@ if (-not $dnsServers) {
     Set-LocalDNS
 }
 
+# Check 6: SSE listener running
+$sseTask = Get-ScheduledTask -TaskName "OpenPath-SSE" -ErrorAction SilentlyContinue
+if ($sseTask -and $sseTask.State -ne 'Running') {
+    $issues += "SSE listener not running"
+    Write-OpenPathLog "Watchdog: SSE listener not running, restarting..." -Level WARN
+    Start-ScheduledTask -TaskName "OpenPath-SSE" -ErrorAction SilentlyContinue
+}
+
+# Check 7: Captive portal detection
+# If we're behind a captive portal (WiFi login), temporarily allow full access
+try {
+    $captiveResponse = Invoke-WebRequest -Uri "http://www.msftconnecttest.com/connecttest.txt" `
+        -UseBasicParsing -TimeoutSec 5 -MaximumRedirection 0 -ErrorAction Stop
+    $isCaptive = ($captiveResponse.StatusCode -ne 200 -or $captiveResponse.Content.Trim() -ne "Microsoft Connect Test")
+}
+catch {
+    # A redirect (3xx) or connection failure could indicate captive portal
+    $isCaptive = $true
+}
+
+if ($isCaptive -and (Test-InternetConnection)) {
+    # We have network connectivity but captive portal detected
+    $issues += "Captive portal detected"
+    Write-OpenPathLog "Watchdog: Captive portal detected - temporarily opening DNS for authentication" -Level WARN
+    Restore-OriginalDNS
+    
+    # Wait for user to complete captive portal authentication
+    Start-Sleep -Seconds 30
+    
+    # Re-check if captive portal is resolved
+    try {
+        $recheck = Invoke-WebRequest -Uri "http://www.msftconnecttest.com/connecttest.txt" `
+            -UseBasicParsing -TimeoutSec 5 -MaximumRedirection 0 -ErrorAction Stop
+        if ($recheck.StatusCode -eq 200 -and $recheck.Content.Trim() -eq "Microsoft Connect Test") {
+            Write-OpenPathLog "Watchdog: Captive portal resolved - restoring DNS protection" 
+            Set-LocalDNS
+        }
+    }
+    catch {
+        Write-OpenPathLog "Watchdog: Captive portal still active - will retry next cycle" -Level WARN
+    }
+}
+
 # Summary
 if ($issues.Count -eq 0) {
     # All checks passed - silent success

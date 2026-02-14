@@ -6,7 +6,6 @@
 param()
 
 # Configuration paths
-# Configuration paths
 $script:OpenPathRoot = "C:\OpenPath"
 $script:ConfigPath = "$script:OpenPathRoot\data\config.json"
 $script:LogPath = "$script:OpenPathRoot\data\logs\openpath.log"
@@ -39,12 +38,30 @@ function Write-OpenPathLog {
     )
     
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $logEntry = "$timestamp [$Level] $Message"
+
+    # Identify calling script for structured logging
+    $callerInfo = Get-PSCallStack | Select-Object -Skip 1 -First 1
+    $callerScript = if ($callerInfo -and $callerInfo.ScriptName) {
+        Split-Path $callerInfo.ScriptName -Leaf
+    } else { "unknown" }
+
+    $logEntry = "$timestamp [$Level] [$callerScript] [PID:$PID] $Message"
     
     # Ensure log directory exists
     $logDir = Split-Path $script:LogPath -Parent
     if (-not (Test-Path $logDir)) {
         New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    }
+
+    # Rotate log if it exceeds 5 MB
+    $script:MaxLogSizeBytes = 5MB
+    if ((Test-Path $script:LogPath) -and (Get-Item $script:LogPath -ErrorAction SilentlyContinue).Length -gt $script:MaxLogSizeBytes) {
+        $archivePath = $script:LogPath -replace '\.log$', ".$(Get-Date -Format 'yyyyMMddHHmmss').log"
+        Move-Item $script:LogPath $archivePath -Force -ErrorAction SilentlyContinue
+        # Keep only the 5 most recent archives
+        Get-ChildItem (Split-Path $script:LogPath) -Filter "openpath.*.log" -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending | Select-Object -Skip 5 |
+            Remove-Item -Force -ErrorAction SilentlyContinue
     }
     
     # Append to log file
@@ -179,6 +196,14 @@ function Get-OpenPathFromUrl {
     }
     
     Write-OpenPathLog "Parsed: $($result.Whitelist.Count) whitelisted, $($result.BlockedSubdomains.Count) blocked subdomains, $($result.BlockedPaths.Count) blocked paths"
+
+    # Validate that the downloaded content looks like a real whitelist
+    $validDomains = $result.Whitelist | Where-Object { $_ -match '^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$' }
+    $minRequiredDomains = 3
+    if ($validDomains.Count -lt $minRequiredDomains) {
+        Write-OpenPathLog "Downloaded whitelist appears invalid ($($validDomains.Count) valid domains, minimum $minRequiredDomains required)" -Level ERROR
+        throw "Invalid whitelist content: insufficient valid domains ($($validDomains.Count)/$minRequiredDomains)"
+    }
     
     return $result
 }

@@ -90,6 +90,10 @@ function Set-FirefoxPolicy {
                 WebsiteFilter = @{
                     Block = $blockedUrls
                 }
+                DNSOverHTTPS = @{
+                    Enabled = $false
+                    Locked  = $true
+                }
                 DisableTelemetry = $true
                 OverrideFirstRunPage = ""
             }
@@ -162,6 +166,9 @@ function Set-ChromePolicy {
             Set-ItemProperty -Path $regPath -Name "DefaultSearchProviderEnabled" -Value 1 -Type DWord
             Set-ItemProperty -Path $regPath -Name "DefaultSearchProviderName" -Value "DuckDuckGo"
             Set-ItemProperty -Path $regPath -Name "DefaultSearchProviderSearchURL" -Value "https://duckduckgo.com/?q={searchTerms}"
+
+            # Block DNS-over-HTTPS to prevent DNS sinkhole bypass
+            Set-ItemProperty -Path $regPath -Name "DnsOverHttpsMode" -Value "off" -Type String
             
             Write-OpenPathLog "Policies written to: $regPath"
         }

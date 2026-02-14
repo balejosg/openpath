@@ -104,11 +104,46 @@ foreach ($dir in $dirs) {
 }
 Write-Host "  Estructura creada en $OpenPathRoot" -ForegroundColor Green
 
+# Lock down permissions: only SYSTEM and Administrators
+Write-Host "  Aplicando permisos restrictivos..." -ForegroundColor Yellow
+try {
+    $acl = Get-Acl $OpenPathRoot
+    $acl.SetAccessRuleProtection($true, $false) # Disable inheritance, remove inherited rules
+    # Remove all existing rules
+    $acl.Access | ForEach-Object { $acl.RemoveAccessRule($_) } | Out-Null
+    # Grant SYSTEM full control
+    $systemRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        "NT AUTHORITY\SYSTEM", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
+    $acl.AddAccessRule($systemRule)
+    # Grant Administrators full control
+    $adminRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        "BUILTIN\Administrators", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
+    $acl.AddAccessRule($adminRule)
+    Set-Acl $OpenPathRoot $acl
+    Write-Host "  Permisos aplicados (solo SYSTEM y Administradores)" -ForegroundColor Green
+}
+catch {
+    Write-Host "  ADVERTENCIA: No se pudieron restringir permisos: $_" -ForegroundColor Yellow
+}
+
 # Step 2: Copy modules and scripts
 Write-Host "[2/7] Copiando módulos y scripts..." -ForegroundColor Yellow
 
-$scriptDir = Split-Path $PSScriptRoot -Parent
-if ($scriptDir -eq "") { $scriptDir = $PSScriptRoot }
+$scriptDir = $PSScriptRoot
+
+# Verify that modules exist at the expected location
+if (-not (Test-Path "$scriptDir\lib\*.psm1")) {
+    # Try parent directory (in case script is run from windows/ subdirectory)
+    $parentDir = Split-Path $scriptDir -Parent
+    if (Test-Path "$parentDir\windows\lib\*.psm1") {
+        $scriptDir = "$parentDir\windows"
+    }
+    else {
+        Write-Host "ERROR: Modules not found in $scriptDir\lib\" -ForegroundColor Red
+        Write-Host "  Ensure lib\*.psm1 files are in the same directory as the installer" -ForegroundColor Yellow
+        exit 1
+    }
+}
 
 # Copy lib modules
 Get-ChildItem "$scriptDir\lib\*.psm1" -ErrorAction SilentlyContinue | 

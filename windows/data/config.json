@@ -1,10 +1,14 @@
 {
   "whitelistUrl": "",
-  "updateIntervalMinutes": 5,
+  "updateIntervalMinutes": 15,
   "watchdogIntervalMinutes": 1,
   "primaryDNS": "8.8.8.8",
   "acrylicPath": "C:\\Program Files (x86)\\Acrylic DNS Proxy",
   "enableFirewall": true,
   "enableBrowserPolicies": true,
+  "sseReconnectMin": 5,
+  "sseReconnectMax": 60,
+  "sseUpdateCooldown": 10,
+  "maxDomains": 500,
   "logLevel": "INFO"
 }

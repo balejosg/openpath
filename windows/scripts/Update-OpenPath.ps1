@@ -56,6 +56,14 @@ try {
     # Load configuration
     $config = Get-OpenPathConfig
     
+    # Backup current whitelist for rollback
+    $whitelistPath = "$OpenPathRoot\data\whitelist.txt"
+    $backupPath = "$OpenPathRoot\data\whitelist.backup.txt"
+    if (Test-Path $whitelistPath) {
+        Copy-Item $whitelistPath $backupPath -Force
+        Write-OpenPathLog "Backed up current whitelist for rollback"
+    }
+    
     # Download and parse whitelist
     $whitelist = Get-OpenPathFromUrl -Url $config.whitelistUrl
     
@@ -77,7 +85,7 @@ try {
     }
     
     # Save whitelist to local file
-    $whitelist.Whitelist | Set-Content "$OpenPathRoot\data\whitelist.txt" -Encoding UTF8
+    $whitelist.Whitelist | Set-Content $whitelistPath -Encoding UTF8
     
     # Update Acrylic DNS hosts
     Update-AcrylicHost -WhitelistedDomains $whitelist.Whitelist -BlockedSubdomains $whitelist.BlockedSubdomains
@@ -96,11 +104,54 @@ try {
         Set-AllBrowserPolicy -BlockedPaths $whitelist.BlockedPaths
     }
     
+    # Send health report to central API (best-effort, non-blocking)
+    if ($config.apiUrl) {
+        try {
+            $healthReport = @{
+                hostname       = $env:COMPUTERNAME
+                status         = "ok"
+                platform       = "windows"
+                domainsCount   = $whitelist.Whitelist.Count
+                firewallActive = [bool](Test-FirewallActive)
+                acrylicRunning = ((Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1).Status -eq 'Running')
+                lastUpdate     = (Get-Date -Format "o")
+            } | ConvertTo-Json
+
+            Invoke-RestMethod -Uri "$($config.apiUrl)/api/machines/$($env:COMPUTERNAME)/health" `
+                -Method Post -Body $healthReport -ContentType "application/json" `
+                -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+
+            Write-OpenPathLog "Health report sent to API"
+        }
+        catch {
+            Write-OpenPathLog "Health report failed (non-critical): $_" -Level WARN
+        }
+    }
+
     Write-OpenPathLog "=== OpenPath update completed successfully ==="
     
 }
 catch {
     Write-OpenPathLog "Update failed: $_" -Level ERROR
+    
+    # Rollback: restore previous whitelist and restart Acrylic
+    if (Test-Path $backupPath) {
+        Write-OpenPathLog "Rolling back to previous whitelist..." -Level WARN
+        try {
+            Copy-Item $backupPath $whitelistPath -Force
+            
+            # Re-parse the backup and re-apply
+            $backupContent = Get-Content $whitelistPath
+            Update-AcrylicHost -WhitelistedDomains $backupContent -BlockedSubdomains @() -ErrorAction SilentlyContinue
+            Restart-AcrylicService -ErrorAction SilentlyContinue
+            
+            Write-OpenPathLog "Rollback completed successfully" -Level WARN
+        }
+        catch {
+            Write-OpenPathLog "Rollback also failed: $_" -Level ERROR
+        }
+    }
+    
     exit 1
 }
 finally {
