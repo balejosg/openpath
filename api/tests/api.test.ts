@@ -151,13 +151,14 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
       const machineId = `mach-${suffix}`;
       const hostname = `host-${suffix}`;
       const domain = `ajax-${suffix}.example.com`;
+      const reason = 'auto-allow ajax (xmlhttprequest)';
       const sharedSecret = process.env.SHARED_SECRET;
 
       assert.ok(sharedSecret, 'SHARED_SECRET must be defined in test environment');
 
       await db.execute(
         sql.raw(
-          `ALTER TABLE whitelist_rules ADD COLUMN IF NOT EXISTS source varchar(50) DEFAULT 'manual' NOT NULL`
+          "ALTER TABLE whitelist_rules ADD COLUMN IF NOT EXISTS source varchar(50) DEFAULT 'manual' NOT NULL"
         )
       );
 
@@ -187,6 +188,7 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
           hostname,
           token,
           origin_page: `${classroomId}.school.local`,
+          reason,
         }),
       });
 
@@ -196,23 +198,53 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
         groupId: string;
         source: string;
         approved: boolean;
+        status: string;
       };
 
       assert.strictEqual(data.success, true);
       assert.strictEqual(data.approved, true);
+      assert.strictEqual(data.status, 'approved');
       assert.strictEqual(data.groupId, groupId);
       assert.strictEqual(data.source, 'auto_extension');
 
       const ruleRow = await db.execute(
         sql.raw(
-          `SELECT type, value, source FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}' LIMIT 1`
+          `SELECT type, value, source, comment FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}' LIMIT 1`
         )
       );
-      const rows = ruleRow.rows as { type: string; value: string; source: string }[];
+      const rows = ruleRow.rows as {
+        type: string;
+        value: string;
+        source: string;
+        comment: string;
+      }[];
       assert.strictEqual(rows.length, 1);
-      const firstRow = rows[0] as { type: string; value: string; source: string };
+      const firstRow = rows[0] as { type: string; value: string; source: string; comment: string };
       assert.strictEqual(firstRow.type, 'whitelist');
       assert.strictEqual(firstRow.source, 'auto_extension');
+      assert.ok(firstRow.comment.includes(reason));
+
+      const duplicateResponse = await fetch(`${API_URL}/api/requests/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          hostname,
+          token,
+          origin_page: `${classroomId}.school.local`,
+          reason,
+        }),
+      });
+
+      assert.strictEqual(duplicateResponse.status, 200);
+      const duplicateData = (await duplicateResponse.json()) as {
+        success: boolean;
+        status: string;
+        duplicate: boolean;
+      };
+      assert.strictEqual(duplicateData.success, true);
+      assert.strictEqual(duplicateData.status, 'duplicate');
+      assert.strictEqual(duplicateData.duplicate, true);
     });
   });
 

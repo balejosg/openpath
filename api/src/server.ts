@@ -102,6 +102,7 @@ interface AutoRequestPayload {
   origin_page?: unknown;
   token?: unknown;
   hostname?: unknown;
+  reason?: unknown;
 }
 
 function normalizeHostInput(value: string): string {
@@ -262,6 +263,7 @@ app.post('/api/requests/auto', (req: Request, res: Response): void => {
     const hostnameRaw = typeof body.hostname === 'string' ? body.hostname : '';
     const token = typeof body.token === 'string' ? body.token : '';
     const originPageRaw = typeof body.origin_page === 'string' ? body.origin_page : '';
+    const reasonRaw = typeof body.reason === 'string' ? body.reason.trim() : '';
 
     if (!domainRaw || !hostnameRaw || !token) {
       res.status(400).json({
@@ -310,9 +312,10 @@ app.post('/api/requests/auto', (req: Request, res: Response): void => {
     }
 
     const targetGroupId = groupContext.groupId;
+    const reasonText = reasonRaw.slice(0, 200);
     const sourceComment = originPageRaw
-      ? `Auto-approved via Firefox extension (${originPageRaw.slice(0, 300)})`
-      : 'Auto-approved via Firefox extension';
+      ? `Auto-approved via Firefox extension (${originPageRaw.slice(0, 300)})${reasonText ? ` - ${reasonText}` : ''}`
+      : `Auto-approved via Firefox extension${reasonText ? ` - ${reasonText}` : ''}`;
 
     const created = await groupsStorage.createRule(
       targetGroupId,
@@ -331,6 +334,7 @@ app.post('/api/requests/auto', (req: Request, res: Response): void => {
       success: true,
       approved: true,
       autoApproved: true,
+      status: created.error === 'Rule already exists' ? 'duplicate' : 'approved',
       groupId: targetGroupId,
       domain: normalizedDomain,
       source: 'auto_extension',

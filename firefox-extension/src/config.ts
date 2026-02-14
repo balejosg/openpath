@@ -117,6 +117,12 @@ function getAllApiUrls(): string[] {
   return [CONFIG.requestApiUrl, ...CONFIG.fallbackApiUrls].filter(Boolean);
 }
 
+function hasValidRequestConfig(): boolean {
+  return (
+    CONFIG.enableRequests && CONFIG.sharedSecret.trim().length > 0 && getAllApiUrls().length > 0
+  );
+}
+
 // Window interface is extended in types.d.ts for type-safe global access
 
 // Make config available globally
@@ -126,4 +132,5 @@ if (typeof window !== 'undefined') {
   window.saveOpenPathConfig = saveConfig;
   window.getApiUrl = getApiUrl;
   window.getAllApiUrls = getAllApiUrls;
+  window.hasValidRequestConfig = hasValidRequestConfig;
 }

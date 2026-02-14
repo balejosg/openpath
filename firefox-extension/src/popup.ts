@@ -35,11 +35,16 @@ interface VerifyResponse {
 interface RequestResponse {
   success: boolean;
   groupId?: string;
+  status?: 'approved' | 'duplicate';
   error?: string;
 }
 
 interface BlockedDomainsResponse {
   domains?: Record<string, SerializedBlockedDomain>;
+}
+
+interface DomainStatusesResponse {
+  statuses?: Record<string, DomainStatus>;
 }
 
 /**
@@ -83,6 +88,8 @@ let blockedDomainsData: BlockedDomainsData = {};
 
 // Native Messaging availability
 let isNativeAvailable = false;
+let isRequestApiAvailable = false;
+let domainStatusesData: Record<string, DomainStatus> = {};
 
 /**
  * Show a temporary toast message
@@ -132,6 +139,96 @@ function normalizeBlockedDomains(response: unknown): BlockedDomainsData {
   return normalized;
 }
 
+function normalizeDomainStatuses(response: unknown): Record<string, DomainStatus> {
+  const payload = response as DomainStatusesResponse;
+  return payload.statuses ?? {};
+}
+
+function getRequestApiEndpoints(): string[] {
+  if (window.getAllApiUrls) {
+    return window.getAllApiUrls().filter((url) => typeof url === 'string' && url.length > 0);
+  }
+
+  return [CONFIG.requestApiUrl, ...CONFIG.fallbackApiUrls].filter((url) => url.length > 0);
+}
+
+function isRequestConfigured(): boolean {
+  if (window.hasValidRequestConfig) {
+    return window.hasValidRequestConfig();
+  }
+  return (
+    CONFIG.enableRequests &&
+    CONFIG.sharedSecret.trim().length > 0 &&
+    getRequestApiEndpoints().length > 0
+  );
+}
+
+async function fetchWithFallback(
+  path: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const endpoints = getRequestApiEndpoints();
+  let lastError: Error | null = null;
+
+  for (const endpoint of endpoints) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      const response = await fetch(`${endpoint}${path}`, {
+        ...init,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      return response;
+    } catch (error) {
+      clearTimeout(timeout);
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  throw lastError ?? new Error('No hay endpoint API disponible');
+}
+
+function statusMeta(status?: DomainStatus): {
+  label: string;
+  className: string;
+  retryable: boolean;
+} {
+  switch (status?.state) {
+    case 'pending':
+      return { label: 'Pendiente', className: 'status-pending', retryable: false };
+    case 'autoApproved':
+      return { label: 'Auto-aprobado', className: 'status-approved', retryable: false };
+    case 'duplicate':
+      return { label: 'Duplicado', className: 'status-duplicate', retryable: false };
+    case 'localUpdateError':
+      return { label: 'Error update local', className: 'status-update-error', retryable: true };
+    case 'apiError':
+      return { label: 'Error API', className: 'status-api-error', retryable: false };
+    default:
+      return { label: 'Detectado', className: 'status-detected', retryable: false };
+  }
+}
+
+function refreshRequestButtonState(): void {
+  const hasDomains = Object.keys(blockedDomainsData).length > 0;
+  const canRequest =
+    hasDomains && isNativeAvailable && isRequestApiAvailable && isRequestConfigured();
+
+  if (canRequest) {
+    btnRequest.classList.remove('hidden');
+    btnRequest.disabled = false;
+  } else {
+    btnRequest.classList.add('hidden');
+    btnRequest.disabled = true;
+    hideRequestSection();
+  }
+}
+
 /**
  * Load blocked domains for the current tab
  */
@@ -145,11 +242,27 @@ async function loadBlockedDomains(): Promise<void> {
     });
 
     blockedDomainsData = normalizeBlockedDomains(response);
+    await loadDomainStatuses();
     renderDomainsList();
   } catch (error) {
     logger.error('[Popup] Error loading blocked domains', { error: getErrorMessage(error) });
     blockedDomainsData = {};
+    domainStatusesData = {};
     renderDomainsList();
+  }
+}
+
+async function loadDomainStatuses(): Promise<void> {
+  if (currentTabId === null) return;
+
+  try {
+    const response = await browser.runtime.sendMessage({
+      action: 'getDomainStatuses',
+      tabId: currentTabId,
+    });
+    domainStatusesData = normalizeDomainStatuses(response);
+  } catch {
+    domainStatusesData = {};
   }
 }
 
@@ -166,6 +279,7 @@ function renderDomainsList(): void {
     btnCopy.disabled = true;
     btnVerify.disabled = true;
     btnRequest.disabled = true;
+    refreshRequestButtonState();
     return;
   }
 
@@ -174,7 +288,7 @@ function renderDomainsList(): void {
   emptyMessageEl.classList.add('hidden');
   btnCopy.disabled = false;
   btnVerify.disabled = !isNativeAvailable;
-  // btnRequest state depends on API availability check later
+  refreshRequestButtonState();
 
   domainsListEl.innerHTML = '';
   hostnames.forEach((hostname) => {
@@ -183,9 +297,20 @@ function renderDomainsList(): void {
 
     const item = document.createElement('li');
     item.className = 'domain-item';
+    const status = domainStatusesData[hostname];
+    const meta = statusMeta(status);
+    const retryButton =
+      meta.retryable && currentTabId !== null
+        ? `<button class="retry-update-btn" data-hostname="${hostname}" title="Reintentar actualización local">Reintentar</button>`
+        : '';
+
     item.innerHTML = `
             <span class="domain-name" title="${hostname}">${hostname}</span>
-            <span class="domain-count" title="Intentos de conexión">${info.count.toString()}</span>
+            <span class="domain-meta">
+                <span class="domain-count" title="Intentos de conexión">${info.count.toString()}</span>
+                <span class="domain-status ${meta.className}" title="${meta.label}">${meta.label}</span>
+                ${retryButton}
+            </span>
         `;
     domainsListEl.appendChild(item);
   });
@@ -220,6 +345,7 @@ async function clearDomains(): Promise<void> {
       tabId: currentTabId,
     });
     blockedDomainsData = {};
+    domainStatusesData = {};
     renderDomainsList();
     hideVerifyResults();
     hideRequestSection();
@@ -255,11 +381,13 @@ async function checkNativeAvailable(): Promise<void> {
 
     // Enable/disable verify button based on availability
     btnVerify.disabled = !isNativeAvailable;
+    refreshRequestButtonState();
   } catch {
     isNativeAvailable = false;
     nativeStatusEl.textContent = 'Error de comunicación';
     nativeStatusEl.className = 'status-indicator unavailable';
     btnVerify.disabled = true;
+    refreshRequestButtonState();
   }
 }
 
@@ -346,30 +474,23 @@ let CONFIG: Config = window.OPENPATH_CONFIG;
  * Check if the request API is available
  */
 async function checkRequestApiAvailable(): Promise<boolean> {
-  const apiUrl = CONFIG.requestApiUrl;
-
-  if (!apiUrl || !CONFIG.enableRequests) {
+  if (!isRequestConfigured()) {
     return false;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => {
-    controller.abort();
-  }, 5000);
-
   try {
-    const response = await fetch(`${apiUrl}/health`, {
-      method: 'GET',
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
+    const response = await fetchWithFallback(
+      '/health',
+      {
+        method: 'GET',
+      },
+      5000
+    );
 
     if (response.ok) {
       return true;
     }
   } catch (error) {
-    clearTimeout(timeout);
     if (CONFIG.debugMode) {
       logger.debug('[Popup] Request API not available', { error: getErrorMessage(error) });
     }
@@ -426,7 +547,12 @@ function updateSubmitButtonState(): void {
 
   const hasReason = requestReasonEl.value.trim().length >= 3;
 
-  btnSubmitRequest.disabled = !hasSelection || !hasReason;
+  btnSubmitRequest.disabled =
+    !hasSelection ||
+    !hasReason ||
+    !isRequestConfigured() ||
+    !isNativeAvailable ||
+    !isRequestApiAvailable;
 }
 
 /**
@@ -459,8 +585,12 @@ async function submitDomainRequest(): Promise<void> {
     return;
   }
 
-  const apiUrl = CONFIG.requestApiUrl;
   const sharedSecret = CONFIG.sharedSecret;
+
+  if (!isRequestConfigured() || !isNativeAvailable) {
+    showRequestStatus('❌ Configuración incompleta para solicitar dominios', 'error');
+    return;
+  }
 
   // Disable button while submitting
   btnSubmitRequest.disabled = true;
@@ -479,25 +609,21 @@ async function submitDomainRequest(): Promise<void> {
     // Generate token
     const token = await generateToken(systemHostname, sharedSecret);
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, CONFIG.requestTimeout);
-
-    // Use auto-inclusion endpoint
-    const apiResponse = await fetch(`${apiUrl}/api/requests/auto`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        domain,
-        origin_page: origin,
-        token,
-        hostname: systemHostname,
-      }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
+    const apiResponse = await fetchWithFallback(
+      '/api/requests/auto',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          origin_page: origin,
+          reason,
+          token,
+          hostname: systemHostname,
+        }),
+      },
+      CONFIG.requestTimeout
+    );
 
     const data = (await apiResponse.json()) as RequestResponse;
 
@@ -534,6 +660,8 @@ async function submitDomainRequest(): Promise<void> {
       // Clear form
       requestDomainSelectEl.value = '';
       requestReasonEl.value = '';
+      await loadDomainStatuses();
+      renderDomainsList();
     } else {
       const errorMsg = data.error ?? 'Error desconocido';
       showRequestStatus(`❌ ${errorMsg}`, 'error');
@@ -579,6 +707,29 @@ function hideRequestStatus(): void {
   requestStatusEl.textContent = '';
 }
 
+async function retryDomainLocalUpdate(hostname: string): Promise<void> {
+  if (currentTabId === null) return;
+
+  try {
+    const response = await browser.runtime.sendMessage({
+      action: 'retryLocalUpdate',
+      tabId: currentTabId,
+      hostname,
+    });
+    const result = response as { success: boolean };
+    if (result.success) {
+      showToast('Whitelist local actualizada');
+    } else {
+      showToast('No se pudo actualizar whitelist local');
+    }
+    await loadDomainStatuses();
+    renderDomainsList();
+  } catch (error) {
+    logger.error('[Popup] Error retrying local update', { error: getErrorMessage(error) });
+    showToast('Error al reintentar actualización local');
+  }
+}
+
 /**
  * Inicializa el popup
  */
@@ -613,13 +764,8 @@ async function init(): Promise<void> {
     await checkNativeAvailable();
 
     // Verificar si Request API está disponible
-    const requestAvailable = await checkRequestApiAvailable();
-    if (requestAvailable) {
-      btnRequest.classList.remove('hidden');
-      btnRequest.disabled = false;
-    } else {
-      btnRequest.classList.add('hidden');
-    }
+    isRequestApiAvailable = await checkRequestApiAvailable();
+    refreshRequestButtonState();
   } catch (error) {
     logger.error('[Popup] Error de inicialización', { error: getErrorMessage(error) });
     tabDomainEl.textContent = 'Error';
@@ -642,6 +788,23 @@ btnSubmitRequest.addEventListener('click', () => {
 });
 requestDomainSelectEl.addEventListener('change', updateSubmitButtonState);
 requestReasonEl.addEventListener('input', updateSubmitButtonState);
+domainsListEl.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  if (!target.classList.contains('retry-update-btn')) {
+    return;
+  }
+
+  const hostname = target.dataset.hostname;
+  if (!hostname) {
+    return;
+  }
+
+  void retryDomainLocalUpdate(hostname);
+});
 
 // Inicializar al cargar
 document.addEventListener('DOMContentLoaded', () => {

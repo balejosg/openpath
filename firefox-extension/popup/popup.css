@@ -185,6 +185,64 @@ header h1 {
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 }
 
+#domains-list li .domain-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#domains-list li .domain-status {
+  font-size: 10px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  border: 1px solid transparent;
+}
+
+#domains-list li .domain-status.status-detected {
+  background: rgba(255, 165, 2, 0.2);
+  color: var(--accent-yellow);
+  border-color: rgba(255, 165, 2, 0.45);
+}
+
+#domains-list li .domain-status.status-pending {
+  background: rgba(55, 66, 250, 0.2);
+  color: #9fa6ff;
+  border-color: rgba(55, 66, 250, 0.5);
+}
+
+#domains-list li .domain-status.status-approved {
+  background: rgba(46, 213, 115, 0.22);
+  color: var(--accent-green);
+  border-color: rgba(46, 213, 115, 0.5);
+}
+
+#domains-list li .domain-status.status-duplicate {
+  background: rgba(111, 143, 175, 0.25);
+  color: #c7ddf5;
+  border-color: rgba(111, 143, 175, 0.45);
+}
+
+#domains-list li .domain-status.status-update-error,
+#domains-list li .domain-status.status-api-error {
+  background: rgba(255, 71, 87, 0.18);
+  color: #ff7f8a;
+  border-color: rgba(255, 71, 87, 0.45);
+}
+
+#domains-list li .retry-update-btn {
+  border: 1px solid var(--accent-yellow);
+  background: transparent;
+  color: var(--accent-yellow);
+  border-radius: 4px;
+  font-size: 10px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+#domains-list li .retry-update-btn:hover {
+  background: rgba(255, 165, 2, 0.15);
+}
+
 /* Empty Message */
 #empty-message {
   text-align: center;

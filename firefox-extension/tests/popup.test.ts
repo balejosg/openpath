@@ -90,6 +90,36 @@ function normalizeBlockedDomainsResponse(
   return normalized;
 }
 
+function normalizeDomainStatusesResponse(response: unknown): Record<string, { state: string }> {
+  const payload = response as { statuses?: Record<string, { state: string }> };
+  return payload.statuses ?? {};
+}
+
+function shouldEnableRequestAction(input: {
+  hasDomains: boolean;
+  nativeAvailable: boolean;
+  apiAvailable: boolean;
+  requestConfigured: boolean;
+}): boolean {
+  return input.hasDomains && input.nativeAvailable && input.apiAvailable && input.requestConfigured;
+}
+
+function buildAutoRequestPayload(input: {
+  domain: string;
+  origin: string;
+  reason: string;
+  token: string;
+  hostname: string;
+}): Record<string, string> {
+  return {
+    domain: input.domain,
+    origin_page: input.origin,
+    reason: input.reason,
+    token: input.token,
+    hostname: input.hostname,
+  };
+}
+
 // =============================================================================
 // formatErrorTypes() Tests
 // =============================================================================
@@ -467,5 +497,58 @@ void describe('Popup/Background Contract', () => {
     };
     assert.strictEqual(domain.count, 1);
     assert.ok(domain.origin === undefined);
+  });
+});
+
+// =============================================================================
+// Auto-Allow UX Contract
+// =============================================================================
+
+void describe('Auto-Allow UX Contract', () => {
+  void test('should normalize domain statuses payload from background', () => {
+    const result = normalizeDomainStatusesResponse({
+      statuses: {
+        'cdn.example.com': { state: 'pending' },
+        'api.example.com': { state: 'autoApproved' },
+      },
+    });
+
+    assert.strictEqual(result['cdn.example.com']?.state, 'pending');
+    assert.strictEqual(result['api.example.com']?.state, 'autoApproved');
+  });
+
+  void test('should enable request only when all requirements are met', () => {
+    const enabled = shouldEnableRequestAction({
+      hasDomains: true,
+      nativeAvailable: true,
+      apiAvailable: true,
+      requestConfigured: true,
+    });
+
+    const disabledNoNative = shouldEnableRequestAction({
+      hasDomains: true,
+      nativeAvailable: false,
+      apiAvailable: true,
+      requestConfigured: true,
+    });
+
+    assert.strictEqual(enabled, true);
+    assert.strictEqual(disabledNoNative, false);
+  });
+
+  void test('should include reason in auto request payload', () => {
+    const payload = buildAutoRequestPayload({
+      domain: 'cdn.example.com',
+      origin: 'portal.example.com',
+      reason: 'auto-allow ajax (xmlhttprequest)',
+      token: 'token123',
+      hostname: 'host-aula-1',
+    });
+
+    assert.strictEqual(payload.domain, 'cdn.example.com');
+    assert.strictEqual(payload.origin_page, 'portal.example.com');
+    assert.strictEqual(payload.reason, 'auto-allow ajax (xmlhttprequest)');
+    assert.strictEqual(payload.token, 'token123');
+    assert.strictEqual(payload.hostname, 'host-aula-1');
   });
 });

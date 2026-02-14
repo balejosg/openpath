@@ -19,6 +19,15 @@ const BLOCKING_ERRORS = [
 ];
 
 const IGNORED_ERRORS = ['NS_BINDING_ABORTED', 'NS_ERROR_ABORT'];
+const AUTO_ALLOW_REQUEST_TYPES = new Set(['xmlhttprequest', 'fetch']);
+
+type LocalDomainStatusState =
+  | 'detected'
+  | 'pending'
+  | 'autoApproved'
+  | 'duplicate'
+  | 'localUpdateError'
+  | 'apiError';
 
 /**
  * Map native host snake_case result to popup camelCase result
@@ -46,6 +55,31 @@ function isSupportedNativeCheckAction(action: string): boolean {
 
 function isSupportedNativeAvailabilityAction(action: string): boolean {
   return action === 'isNativeAvailable' || action === 'checkNative';
+}
+
+function isAutoAllowRequestType(type?: string): boolean {
+  if (!type) return false;
+  return AUTO_ALLOW_REQUEST_TYPES.has(type);
+}
+
+function resolveAutoStatus(payload: {
+  apiSuccess: boolean;
+  duplicate: boolean;
+  localUpdateSuccess: boolean;
+}): LocalDomainStatusState {
+  if (!payload.apiSuccess) {
+    return 'apiError';
+  }
+
+  if (!payload.localUpdateSuccess) {
+    return 'localUpdateError';
+  }
+
+  if (payload.duplicate) {
+    return 'duplicate';
+  }
+
+  return 'autoApproved';
 }
 
 /**
@@ -575,5 +609,54 @@ void describe('Message Contract Compatibility', () => {
     assert.strictEqual(mapped.domain, 'cdn.example.com');
     assert.strictEqual(mapped.inWhitelist, true);
     assert.strictEqual(mapped.resolvedIp, '10.0.0.2');
+  });
+});
+
+// =============================================================================
+// Auto-Allow Flow
+// =============================================================================
+
+void describe('Auto-Allow Flow', () => {
+  void test('should auto-allow only AJAX/fetch request types', () => {
+    assert.strictEqual(isAutoAllowRequestType('xmlhttprequest'), true);
+    assert.strictEqual(isAutoAllowRequestType('fetch'), true);
+    assert.strictEqual(isAutoAllowRequestType('script'), false);
+    assert.strictEqual(isAutoAllowRequestType('image'), false);
+  });
+
+  void test('should resolve autoApproved when api and local update succeed', () => {
+    const status = resolveAutoStatus({
+      apiSuccess: true,
+      duplicate: false,
+      localUpdateSuccess: true,
+    });
+    assert.strictEqual(status, 'autoApproved');
+  });
+
+  void test('should resolve duplicate when rule already exists', () => {
+    const status = resolveAutoStatus({
+      apiSuccess: true,
+      duplicate: true,
+      localUpdateSuccess: true,
+    });
+    assert.strictEqual(status, 'duplicate');
+  });
+
+  void test('should resolve localUpdateError when update script fails', () => {
+    const status = resolveAutoStatus({
+      apiSuccess: true,
+      duplicate: false,
+      localUpdateSuccess: false,
+    });
+    assert.strictEqual(status, 'localUpdateError');
+  });
+
+  void test('should resolve apiError when API request fails', () => {
+    const status = resolveAutoStatus({
+      apiSuccess: false,
+      duplicate: false,
+      localUpdateSuccess: false,
+    });
+    assert.strictEqual(status, 'apiError');
   });
 });

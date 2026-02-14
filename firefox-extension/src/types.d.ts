@@ -3,6 +3,21 @@ import { Browser } from 'webextension-polyfill';
 declare global {
   const browser: Browser;
 
+  type DomainStatusState =
+    | 'detected'
+    | 'pending'
+    | 'autoApproved'
+    | 'duplicate'
+    | 'localUpdateError'
+    | 'apiError';
+
+  interface DomainStatus {
+    state: DomainStatusState;
+    updatedAt: number;
+    message?: string;
+    requestType?: string;
+  }
+
   interface Config {
     requestApiUrl: string;
     fallbackApiUrls: string[];
@@ -22,5 +37,6 @@ declare global {
     saveOpenPathConfig?: (c: Partial<Config>) => Promise<void>;
     getApiUrl?: () => string;
     getAllApiUrls?: () => string[];
+    hasValidRequestConfig?: () => boolean;
   }
 }
