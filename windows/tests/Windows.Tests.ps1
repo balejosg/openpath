@@ -196,10 +196,10 @@ Describe "SSE Listener" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Start-SSEListener.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match "OpenPath-SSE-Update"
-            $content | Should -Match "Get-Job\s+-Name\s+\$script:UpdateJobName\s+-State\s+Running"
-            $content | Should -Match "Start-Job\s+-ScriptBlock"
-            $content | Should -Match "-Name\s+\$script:UpdateJobName"
+            $content | Should -Match 'OpenPath-SSE-Update'
+            $content | Should -Match 'Get-Job\s+-Name\s+\$script:UpdateJobName\s+-State\s+Running'
+            $content | Should -Match 'Start-Job\s+-ScriptBlock'
+            $content | Should -Match '-Name\s+\$script:UpdateJobName'
         }
     }
 }
