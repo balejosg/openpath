@@ -18,6 +18,7 @@ import type {
   ListRulesGroupedOptions,
 } from '../lib/groups-storage.js';
 import { validateRuleValue, cleanRuleValue } from '@openpath/shared';
+import { emitWhitelistChanged, emitAllWhitelistsChanged } from '../lib/rule-events.js';
 
 // =============================================================================
 // Types
@@ -152,6 +153,11 @@ export async function updateGroup(input: UpdateGroupInput): Promise<GroupsResult
     };
   }
 
+  // Notify SSE clients if enabled state changed
+  if (existing.enabled !== input.enabled) {
+    emitWhitelistChanged(input.id);
+  }
+
   return { ok: true, data: updated };
 }
 
@@ -165,6 +171,12 @@ export async function deleteGroup(id: string): Promise<GroupsResult<{ deleted: b
   }
 
   const deleted = await groupsStorage.deleteGroup(id);
+
+  // Notify SSE clients that this group's whitelist is gone
+  if (deleted) {
+    emitWhitelistChanged(id);
+  }
+
   return { ok: true, data: { deleted } };
 }
 
@@ -259,14 +271,30 @@ export async function createRule(input: CreateRuleInput): Promise<GroupsResult<{
     };
   }
 
+  emitWhitelistChanged(input.groupId);
   return { ok: true, data: { id: result.id } };
 }
 
 /**
  * Delete a rule.
  */
-export async function deleteRule(id: string): Promise<GroupsResult<{ deleted: boolean }>> {
+export async function deleteRule(
+  id: string,
+  groupId?: string
+): Promise<GroupsResult<{ deleted: boolean }>> {
+  // Look up the rule's group before deleting (for SSE notification)
+  let ruleGroupId = groupId;
+  if (!ruleGroupId) {
+    const rule = await groupsStorage.getRuleById(id);
+    ruleGroupId = rule?.groupId;
+  }
+
   const deleted = await groupsStorage.deleteRule(id);
+
+  if (deleted && ruleGroupId) {
+    emitWhitelistChanged(ruleGroupId);
+  }
+
   return { ok: true, data: { deleted } };
 }
 
@@ -280,10 +308,19 @@ export async function bulkDeleteRules(
     return { ok: true, data: { deleted: 0, rules: [] } };
   }
 
-  // Get the rules before deleting (for undo functionality)
+  // Get the rules before deleting (for undo functionality + SSE notification)
   const rules = await groupsStorage.getRulesByIds(ids);
 
   const deleted = await groupsStorage.bulkDeleteRules(ids);
+
+  // Notify affected groups
+  if (deleted > 0) {
+    const affectedGroups = new Set(rules.map((r) => r.groupId));
+    for (const gid of affectedGroups) {
+      emitWhitelistChanged(gid);
+    }
+  }
+
   return { ok: true, data: { deleted, rules } };
 }
 
@@ -340,6 +377,7 @@ export async function updateRule(input: UpdateRuleInput): Promise<GroupsResult<R
     };
   }
 
+  emitWhitelistChanged(input.groupId);
   return { ok: true, data: updated };
 }
 
@@ -360,6 +398,11 @@ export async function bulkCreateRules(
   const cleanedValues = input.values.map((v) => cleanRuleValue(v, preservePath));
 
   const count = await groupsStorage.bulkCreateRules(input.groupId, input.type, cleanedValues);
+
+  if (count > 0) {
+    emitWhitelistChanged(input.groupId);
+  }
+
   return { ok: true, data: { count } };
 }
 
@@ -381,7 +424,9 @@ export async function getSystemStatus(): Promise<SystemStatus> {
  * Toggle system status (enable/disable all groups).
  */
 export async function toggleSystemStatus(enable: boolean): Promise<SystemStatus> {
-  return groupsStorage.toggleSystemStatus(enable);
+  const result = await groupsStorage.toggleSystemStatus(enable);
+  emitAllWhitelistsChanged();
+  return result;
 }
 
 /**

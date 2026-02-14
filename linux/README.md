@@ -11,7 +11,8 @@ The Linux agent enforces DNS whitelisting at the network level using `dnsmasq` a
 - **DNS Sinkhole**: Uses `dnsmasq` to block all DNS requests except for those on the whitelist.
 - **Firewall Enforcement**: Uses `iptables`/`nftables` to prevent DNS bypassing via external servers.
 - **Captive Portal Detection**: Automatically detects and handles network environments with captive portals.
-- **Auto-Update**: Periodically syncs with the central API to refresh the whitelist.
+- **Instant Rule Updates**: Uses Server-Sent Events (SSE) to receive real-time notifications when rules change, triggering immediate whitelist refresh.
+- **Auto-Update Fallback**: 15-minute periodic sync with the API as a safety net if the SSE connection drops.
 - **Watchdog**: Monitoring scripts that ensure system services are healthy and running.
 
 ## Installation

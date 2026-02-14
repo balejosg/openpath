@@ -71,6 +71,7 @@ import {
   hashMachineToken,
   buildWhitelistUrl,
 } from './lib/machine-download-token.js';
+import { onWhitelistChanged, emitWhitelistChanged, getListenerCount } from './lib/rule-events.js';
 
 // Swagger/OpenAPI (optional - only load if dependencies installed and enabled)
 let swaggerUi: typeof import('swagger-ui-express') | undefined;
@@ -340,6 +341,11 @@ app.post('/api/requests/auto', (req: Request, res: Response): void => {
       source: 'auto_extension',
       duplicate: created.error === 'Rule already exists',
     });
+
+    // Notify SSE clients of the new rule
+    if (created.error !== 'Rule already exists') {
+      emitWhitelistChanged(targetGroupId);
+    }
   })();
 });
 
@@ -798,6 +804,97 @@ app.get('/w/:machineToken/whitelist.txt', (req: Request, res: Response): void =>
     } catch (error) {
       logger.error('Error serving tokenized whitelist', { error: getErrorMessage(error) });
       res.type('text/plain').send(FAIL_OPEN_RESPONSE);
+    }
+  })();
+});
+
+// =============================================================================
+// SSE Endpoint for Real-Time Rule Updates
+// =============================================================================
+
+app.get('/api/machines/events', (req: Request, res: Response): void => {
+  void (async (): Promise<void> => {
+    try {
+      const machineToken = (req.query.token as string) ?? '';
+      if (!machineToken) {
+        res
+          .status(401)
+          .json({ success: false, error: 'Machine token required (query param: token)' });
+        return;
+      }
+
+      // Authenticate with the same token used for whitelist download
+      const tokenHash = hashMachineToken(machineToken);
+      const machine = await classroomStorage.getMachineByDownloadTokenHash(tokenHash);
+      if (!machine) {
+        res.status(403).json({ success: false, error: 'Invalid machine token' });
+        return;
+      }
+
+      // Find which group this machine should watch
+      const whitelistInfo = await classroomStorage.getWhitelistUrlForMachine(machine.hostname);
+      if (!whitelistInfo) {
+        res.status(404).json({ success: false, error: 'No active group for this machine' });
+        return;
+      }
+
+      const groupId = whitelistInfo.groupId;
+
+      // Set SSE headers
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no', // Disable nginx buffering
+      });
+
+      // Send initial connection event
+      res.write(
+        `data: ${JSON.stringify({ event: 'connected', groupId, hostname: machine.hostname })}\n\n`
+      );
+
+      logger.info('SSE client connected', {
+        hostname: machine.hostname,
+        groupId,
+        listeners: getListenerCount() + 1,
+      });
+
+      // Update machine last-seen on SSE connection
+      await classroomStorage.updateMachineLastSeen(machine.hostname);
+
+      // Subscribe to whitelist changes for this group
+      const unsubscribe = onWhitelistChanged(groupId, () => {
+        try {
+          res.write(`data: ${JSON.stringify({ event: 'whitelist-changed', groupId })}\n\n`);
+        } catch {
+          // Client disconnected — let cleanup handle it
+        }
+      });
+
+      // Keep-alive ping every 30 seconds
+      const keepAliveInterval = setInterval(() => {
+        try {
+          res.write(': keep-alive\n\n');
+        } catch {
+          clearInterval(keepAliveInterval);
+        }
+      }, 30_000);
+
+      // Cleanup on client disconnect
+      req.on('close', () => {
+        unsubscribe();
+        clearInterval(keepAliveInterval);
+        logger.info('SSE client disconnected', {
+          hostname: machine.hostname,
+          groupId,
+          listeners: getListenerCount(),
+        });
+      });
+    } catch (error) {
+      logger.error('SSE endpoint error', { error: getErrorMessage(error) });
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Internal error' });
+      }
     }
   })();
 });

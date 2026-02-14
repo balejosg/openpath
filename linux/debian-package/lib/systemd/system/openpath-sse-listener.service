@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenPath SSE Listener for Instant Rule Updates
+After=network-online.target dnsmasq.service openpath-dnsmasq.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/openpath-sse-listener.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

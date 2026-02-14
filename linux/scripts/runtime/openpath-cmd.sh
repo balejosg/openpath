@@ -57,7 +57,7 @@ cmd_status() {
     echo ""
     
     echo -e "${YELLOW}Servicios:${NC}"
-    for svc in dnsmasq openpath-dnsmasq.timer dnsmasq-watchdog.timer captive-portal-detector; do
+    for svc in dnsmasq openpath-dnsmasq.timer dnsmasq-watchdog.timer captive-portal-detector openpath-sse-listener; do
         if systemctl is-active --quiet $svc 2>/dev/null; then
             echo -e "  $svc: ${GREEN}● activo${NC}"
         else
@@ -209,7 +209,7 @@ cmd_health() {
 
     # Services test
     echo -e "${YELLOW}Services:${NC}"
-    for svc in dnsmasq openpath-dnsmasq.timer dnsmasq-watchdog.timer captive-portal-detector; do
+    for svc in dnsmasq openpath-dnsmasq.timer dnsmasq-watchdog.timer captive-portal-detector openpath-sse-listener; do
         if systemctl is-active --quiet "$svc" 2>/dev/null; then
             echo -e "  $svc: ${GREEN}✓ running${NC}"
         else
@@ -465,6 +465,7 @@ cmd_restart() {
     systemctl restart openpath-dnsmasq.timer
     systemctl restart dnsmasq-watchdog.timer
     systemctl restart captive-portal-detector.service 2>/dev/null || true
+    systemctl restart openpath-sse-listener.service 2>/dev/null || true
     
     # Esperar a que dnsmasq esté listo (máx 5 segundos)
     for _ in $(seq 1 5); do
