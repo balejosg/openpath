@@ -190,4 +190,29 @@ Describe "SSE Listener" {
             Test-Path $scriptPath | Should -BeTrue
         }
     }
+
+    Context "Update job deduplication" {
+        It "uses a named job and running-job guard" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Start-SSEListener.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match "OpenPath-SSE-Update"
+            $content | Should -Match "Get-Job\s+-Name\s+\$script:UpdateJobName\s+-State\s+Running"
+            $content | Should -Match "Start-Job\s+-ScriptBlock"
+            $content | Should -Match "-Name\s+\$script:UpdateJobName"
+        }
+    }
+}
+
+Describe "Update Script" {
+    Context "Concurrency guard" {
+        It "Update-OpenPath.ps1 uses a global mutex lock" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match "System\.Threading\.Mutex"
+            $content | Should -Match "Global\\OpenPathUpdateLock"
+            $content | Should -Match "WaitOne\(0\)"
+        }
+    }
 }

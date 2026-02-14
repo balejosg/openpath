@@ -23,7 +23,6 @@ import {
 import { closeConnection } from '../src/db/index.js';
 import { generateMachineToken, hashMachineToken } from '../src/lib/machine-download-token.js';
 import * as classroomStorage from '../src/lib/classroom-storage.js';
-import * as groupsStorage from '../src/lib/groups-storage.js';
 
 let PORT: number;
 let API_URL: string;
@@ -125,7 +124,9 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
 
     await test('should accept requests with valid machine token', async () => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 2000);
 
       try {
         const response = await fetch(`${API_URL}/api/machines/events?token=${testMachineToken}`, {
@@ -181,10 +182,25 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
 
             const decoder = new TextDecoder();
             const readChunk = async (): Promise<void> => {
-              const { value, done } = await reader.read();
-              if (done) return;
+              const chunkUnknown: unknown = await reader.read();
+              if (typeof chunkUnknown !== 'object' || chunkUnknown === null) {
+                return;
+              }
 
-              const text = decoder.decode(value, { stream: true });
+              if (!('done' in chunkUnknown) || !('value' in chunkUnknown)) {
+                return;
+              }
+
+              const chunk = chunkUnknown as { done: boolean; value?: unknown };
+              if (chunk.done) {
+                return;
+              }
+
+              if (!(chunk.value instanceof Uint8Array)) {
+                return;
+              }
+
+              const text = decoder.decode(chunk.value, { stream: true });
               for (const line of text.split('\n')) {
                 if (line.startsWith('data: ')) {
                   receivedEvents.push(line.slice(6));
@@ -211,11 +227,11 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
 
             await readChunk();
           })
-          .catch((error) => {
+          .catch((error: unknown) => {
             if (error instanceof DOMException && error.name === 'AbortError') {
               // Expected when we abort after receiving the event
             } else {
-              reject(error);
+              reject(error instanceof Error ? error : new Error(String(error)));
             }
           });
       });
@@ -260,10 +276,25 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
             let gotConnected = false;
 
             const readChunk = async (): Promise<void> => {
-              const { value, done } = await reader.read();
-              if (done) return;
+              const chunkUnknown: unknown = await reader.read();
+              if (typeof chunkUnknown !== 'object' || chunkUnknown === null) {
+                return;
+              }
 
-              const text = decoder.decode(value, { stream: true });
+              if (!('done' in chunkUnknown) || !('value' in chunkUnknown)) {
+                return;
+              }
+
+              const chunk = chunkUnknown as { done: boolean; value?: unknown };
+              if (chunk.done) {
+                return;
+              }
+
+              if (!(chunk.value instanceof Uint8Array)) {
+                return;
+              }
+
+              const text = decoder.decode(chunk.value, { stream: true });
               for (const line of text.split('\n')) {
                 if (line.startsWith('data: ')) {
                   const payload = line.slice(6);
@@ -273,8 +304,8 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
                     if (parsed.event === 'connected') {
                       gotConnected = true;
                       // Now that we're connected, create a rule to trigger an event
-                      setTimeout(async () => {
-                        await trpcMutate(
+                      setTimeout(() => {
+                        void trpcMutate(
                           API_URL,
                           'groups.createRule',
                           {
@@ -305,11 +336,11 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
 
             await readChunk();
           })
-          .catch((error) => {
+          .catch((error: unknown) => {
             if (error instanceof DOMException && error.name === 'AbortError') {
               // Expected
             } else {
-              reject(error);
+              reject(error instanceof Error ? error : new Error(String(error)));
             }
           });
       });

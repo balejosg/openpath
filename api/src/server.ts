@@ -815,7 +815,7 @@ app.get('/w/:machineToken/whitelist.txt', (req: Request, res: Response): void =>
 app.get('/api/machines/events', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {
     try {
-      const machineToken = (req.query.token as string) ?? '';
+      const machineToken = typeof req.query.token === 'string' ? req.query.token : '';
       if (!machineToken) {
         res
           .status(401)

@@ -15,7 +15,7 @@ import {
 } from '../src/lib/rule-events.js';
 
 await describe('Rule Events Lib', async () => {
-  await test('should register and trigger group-specific listeners', async () => {
+  await test('should register and trigger group-specific listeners', () => {
     let triggered = false;
 
     const unsubscribe = onWhitelistChanged('test-group-1', () => {
@@ -36,7 +36,7 @@ await describe('Rule Events Lib', async () => {
     assert.strictEqual(triggered, false);
   });
 
-  await test('should trigger listeners for wildcard emissions', async () => {
+  await test('should trigger listeners for wildcard emissions', () => {
     let triggered = false;
     const unsubscribe = onWhitelistChanged('test-group-2', () => {
       triggered = true;
@@ -48,7 +48,7 @@ await describe('Rule Events Lib', async () => {
     unsubscribe();
   });
 
-  await test('should not trigger listeners for different groups', async () => {
+  await test('should not trigger listeners for different groups', () => {
     let triggered = false;
     const unsubscribe = onWhitelistChanged('test-group-3', () => {
       triggered = true;
@@ -60,7 +60,7 @@ await describe('Rule Events Lib', async () => {
     unsubscribe();
   });
 
-  await test('should support multiple listeners on same group', async () => {
+  await test('should support multiple listeners on same group', () => {
     let count = 0;
     const unsub1 = onWhitelistChanged('multi-group', () => count++);
     const unsub2 = onWhitelistChanged('multi-group', () => count++);

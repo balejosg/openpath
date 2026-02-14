@@ -26,7 +26,7 @@ function Register-OpenPathTask {
 
     $openPathRoot = "C:\OpenPath"
     
-    # Task 1: Update OpenPath (every 5 minutes)
+    # Task 1: Update OpenPath (15-minute fallback sync)
     $updateAction = New-ScheduledTaskAction -Execute "PowerShell.exe" `
         -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$openPathRoot\scripts\Update-OpenPath.ps1`""
     

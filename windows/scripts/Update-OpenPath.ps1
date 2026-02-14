@@ -25,12 +25,30 @@
 
 $ErrorActionPreference = "Stop"
 $OpenPathRoot = "C:\OpenPath"
+$script:UpdateMutexName = "Global\OpenPathUpdateLock"
 
 # Import modules
 Import-Module "$OpenPathRoot\lib\Common.psm1" -Force
 Import-Module "$OpenPathRoot\lib\DNS.psm1" -Force
 Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
 Import-Module "$OpenPathRoot\lib\Browser.psm1" -Force
+
+$mutex = $null
+$lockAcquired = $false
+
+try {
+    $mutex = [System.Threading.Mutex]::new($false, $script:UpdateMutexName)
+    $lockAcquired = $mutex.WaitOne(0)
+
+    if (-not $lockAcquired) {
+        Write-OpenPathLog "Another OpenPath update is already running - skipping this cycle" -Level WARN
+        exit 0
+    }
+}
+catch {
+    Write-OpenPathLog "Failed to acquire OpenPath update lock: $_" -Level ERROR
+    exit 1
+}
 
 try {
     Write-OpenPathLog "=== Starting openpath update ==="
@@ -84,4 +102,13 @@ try {
 catch {
     Write-OpenPathLog "Update failed: $_" -Level ERROR
     exit 1
+}
+finally {
+    if ($lockAcquired -and $mutex) {
+        $mutex.ReleaseMutex()
+    }
+
+    if ($mutex) {
+        $mutex.Dispose()
+    }
 }

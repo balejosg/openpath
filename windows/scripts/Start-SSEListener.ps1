@@ -39,6 +39,7 @@ Import-Module "$OpenPathRoot\lib\Common.psm1" -Force
 
 $script:LastUpdateTime = [datetime]::MinValue
 $script:UpdateScript = "$OpenPathRoot\scripts\Update-OpenPath.ps1"
+$script:UpdateJobName = "OpenPath-SSE-Update"
 
 function Get-SSEConfig {
     <#
@@ -122,12 +123,23 @@ function Invoke-DebouncedUpdate {
     Write-OpenPathLog "SSE: Whitelist change detected - triggering immediate update"
     $script:LastUpdateTime = $now
 
+    # Keep one update job at a time for this listener process
+    Get-Job -Name $script:UpdateJobName -ErrorAction SilentlyContinue |
+        Where-Object { $_.State -in @('Completed', 'Failed', 'Stopped') } |
+        Remove-Job -Force -ErrorAction SilentlyContinue
+
+    $runningJob = Get-Job -Name $script:UpdateJobName -State Running -ErrorAction SilentlyContinue
+    if ($runningJob) {
+        Write-OpenPathLog "SSE: Update already in progress - skipping duplicate trigger"
+        return
+    }
+
     # Run update in a background job so we don't block the SSE stream
     if (Test-Path $script:UpdateScript) {
         Start-Job -ScriptBlock {
             param($scriptPath)
             & $scriptPath
-        } -ArgumentList $script:UpdateScript | Out-Null
+        } -Name $script:UpdateJobName -ArgumentList $script:UpdateScript | Out-Null
     }
     else {
         Write-OpenPathLog "SSE: Update script not found at $($script:UpdateScript)" -Level WARN
