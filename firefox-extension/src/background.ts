@@ -28,6 +28,32 @@ interface NativeResponse {
   [key: string]: unknown;
 }
 
+interface NativeCheckResult {
+  domain: string;
+  in_whitelist: boolean;
+  resolved_ip?: string;
+  error?: string;
+}
+
+interface NativeCheckResponse {
+  success: boolean;
+  results?: NativeCheckResult[];
+  error?: string;
+}
+
+interface VerifyResult {
+  domain: string;
+  inWhitelist: boolean;
+  resolvedIp?: string;
+  error?: string;
+}
+
+interface VerifyResponse {
+  success: boolean;
+  results: VerifyResult[];
+  error?: string;
+}
+
 type BlockedDomainsMap = Record<number, Map<string, BlockedDomainData>>;
 
 // Almacenamiento en memoria: { tabId: Map<hostname, Set<errorTypes>> }
@@ -224,28 +250,51 @@ async function sendNativeMessage(message: unknown): Promise<unknown> {
   });
 }
 
-interface CheckResult {
-  success: boolean;
-  error?: string;
-  [key: string]: unknown;
-}
-
 /**
  * Verifica dominios usando el sistema de whitelist local
  * @param domains - Lista de dominios a verificar
  * @returns Resultado de la verificación
  */
-async function checkDomainsWithNative(domains: string[]): Promise<CheckResult> {
+async function checkDomainsWithNative(domains: string[]): Promise<VerifyResponse> {
   try {
     const response = await sendNativeMessage({
       action: 'check',
       domains: domains,
     });
-    return response as CheckResult;
+
+    const nativeResponse = response as NativeCheckResponse;
+    const mappedResults: VerifyResult[] = (nativeResponse.results ?? []).map((result) => {
+      const mapped: VerifyResult = {
+        domain: result.domain,
+        inWhitelist: result.in_whitelist,
+      };
+
+      if (result.resolved_ip !== undefined) {
+        mapped.resolvedIp = result.resolved_ip;
+      }
+
+      if (result.error !== undefined) {
+        mapped.error = result.error;
+      }
+
+      return mapped;
+    });
+
+    const verifyResponse: VerifyResponse = {
+      success: nativeResponse.success,
+      results: mappedResults,
+    };
+
+    if (nativeResponse.error !== undefined) {
+      verifyResponse.error = nativeResponse.error;
+    }
+
+    return verifyResponse;
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     return {
       success: false,
+      results: [],
       error: errorMessage,
     };
   }
@@ -334,65 +383,61 @@ browser.tabs.onRemoved.addListener((tabId: number) => {
  * Listener: Mensajes del popup
  * Responde a solicitudes de datos del popup
  */
-browser.runtime.onMessage.addListener((message: unknown, _sender: Runtime.MessageSender) => {
-  const handleMessage = async (): Promise<unknown> => {
-    const msg = message as { action: string; tabId: number; domains?: string[] };
-    switch (msg.action) {
-      case 'getBlockedDomains':
+browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.MessageSender) => {
+  const msg = message as { action: string; tabId: number; domains?: string[] };
+
+  switch (msg.action) {
+    case 'getBlockedDomains':
+      return {
+        domains: getBlockedDomainsForTab(msg.tabId),
+      };
+
+    case 'clearBlockedDomains':
+      clearBlockedDomains(msg.tabId);
+      return { success: true };
+
+    case 'checkWithNative':
+    case 'verifyDomains':
+      try {
+        const domainsToCheck = msg.domains ?? [];
+        return await checkDomainsWithNative(domainsToCheck);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return {
-          domains: getBlockedDomainsForTab(msg.tabId),
+          success: false,
+          results: [],
+          error: errorMessage,
         };
+      }
 
-      case 'clearBlockedDomains':
-        clearBlockedDomains(msg.tabId);
-        return { success: true };
+    case 'isNativeAvailable':
+    case 'checkNative':
+      try {
+        const available = await isNativeHostAvailable();
+        return { available, success: available };
+      } catch {
+        return { available: false, success: false };
+      }
 
-      case 'checkWithNative':
-        // Verificar dominios con Native Messaging (async)
-        try {
-          const domainsToCheck = (message as { domains: string[] }).domains;
-          return await checkDomainsWithNative(domainsToCheck);
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          return {
-            success: false,
-            error: errorMessage,
-          };
-        }
+    case 'getHostname':
+      try {
+        return await sendNativeMessage({ action: 'get-hostname' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: errorMessage };
+      }
 
-      case 'isNativeAvailable':
-        try {
-          const available = await isNativeHostAvailable();
-          return { available };
-        } catch {
-          return { available: false };
-        }
+    case 'triggerWhitelistUpdate':
+      try {
+        return await sendNativeMessage({ action: 'update-whitelist' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: errorMessage };
+      }
 
-      case 'getHostname':
-        // Get system hostname via Native Messaging
-        try {
-          return await sendNativeMessage({ action: 'get-hostname' });
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          return { success: false, error: errorMessage };
-        }
-
-      case 'triggerWhitelistUpdate':
-        // Trigger local whitelist update via Native Messaging
-        try {
-          return await sendNativeMessage({ action: 'update-whitelist' });
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          return { success: false, error: errorMessage };
-        }
-
-      default:
-        return { error: 'Unknown action' };
-    }
-  };
-
-  void handleMessage(); // Return promise for async response
-  return true; // Indicates async response
+    default:
+      return { error: 'Unknown action' };
+  }
 });
 
 logger.info('[Monitor de Bloqueos] Background script v2.0.0 (MV3) cargado');

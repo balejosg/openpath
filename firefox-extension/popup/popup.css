@@ -67,9 +67,17 @@ header h1 {
   font-size: 14px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: var(--accent-yellow);
   color: #1e1e2e;
   animation: pulse 2s infinite;
+}
+
+.status-indicator.available {
+  background: var(--accent-green);
+}
+
+.status-indicator.unavailable {
+  background: var(--accent-red);
+  color: #fff;
 }
 
 @keyframes pulse {
@@ -140,7 +148,9 @@ header h1 {
 
 #domains-list li {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 8px 10px;
   margin-bottom: 6px;
   background: var(--bg-secondary);
@@ -153,23 +163,26 @@ header h1 {
   background: var(--bg-tertiary);
 }
 
-#domains-list li .hostname {
+#domains-list li .domain-name {
   font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
   font-size: 12px;
   color: var(--text-primary);
   word-break: break-all;
+  flex: 1;
 }
 
-#domains-list li .hostname::before {
+#domains-list li .domain-name::before {
   content: '⚠️ ';
   font-size: 11px;
 }
 
-#domains-list li .error-type {
+#domains-list li .domain-count {
   font-size: 10px;
-  color: var(--text-muted);
-  margin-top: 3px;
-  font-family: monospace;
+  color: #fff;
+  background: var(--accent-red);
+  border-radius: 999px;
+  padding: 2px 7px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 }
 
 /* Empty Message */
@@ -223,24 +236,35 @@ header h1 {
   font-size: 12px;
 }
 
-#verify-list li .domain-name {
+#verify-list li .verify-domain {
   flex: 1;
   color: var(--text-primary);
   word-break: break-all;
 }
 
-#verify-list li .whitelist-status {
+#verify-list li .verify-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#verify-list li .ip-info {
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+#verify-list li .verify-status {
   font-size: 10px;
   padding: 2px 6px;
   border-radius: 3px;
 }
 
-#verify-list li .whitelist-status.in-whitelist {
+#verify-list li .verify-status.status-allowed {
   background: var(--accent-green);
   color: #1e1e2e;
 }
 
-#verify-list li .whitelist-status.not-in-whitelist {
+#verify-list li .verify-status.status-blocked {
   background: var(--accent-red);
   color: white;
 }

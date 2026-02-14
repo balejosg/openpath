@@ -11,6 +11,12 @@ interface BlockedDomainInfo {
   origin?: string;
 }
 
+interface SerializedBlockedDomain {
+  errors: string[];
+  origin: string | null;
+  timestamp: number;
+}
+
 type BlockedDomainsData = Record<string, BlockedDomainInfo>;
 
 interface VerifyResult {
@@ -30,6 +36,10 @@ interface RequestResponse {
   success: boolean;
   groupId?: string;
   error?: string;
+}
+
+interface BlockedDomainsResponse {
+  domains?: Record<string, SerializedBlockedDomain>;
 }
 
 /**
@@ -61,7 +71,7 @@ const verifyListEl = getElement('verify-list');
 // Request form elements
 const requestSectionEl = getElement('request-section');
 const requestDomainSelectEl = getElement('request-domain-select') as HTMLSelectElement;
-const requestReasonEl = getElement('request-reason') as HTMLTextAreaElement;
+const requestReasonEl = getElement('request-reason') as HTMLInputElement;
 const btnSubmitRequest = getElement('btn-submit-request') as HTMLButtonElement;
 const requestStatusEl = getElement('request-status');
 
@@ -101,6 +111,27 @@ function extractTabHostname(url: string): string {
   }
 }
 
+function normalizeBlockedDomains(response: unknown): BlockedDomainsData {
+  const payload = response as BlockedDomainsResponse;
+  const serializedDomains = payload.domains ?? {};
+  const normalized: BlockedDomainsData = {};
+
+  Object.entries(serializedDomains).forEach(([hostname, data]) => {
+    const normalizedEntry: BlockedDomainInfo = {
+      count: data.errors.length,
+      timestamp: data.timestamp,
+    };
+
+    if (data.origin !== null) {
+      normalizedEntry.origin = data.origin;
+    }
+
+    normalized[hostname] = normalizedEntry;
+  });
+
+  return normalized;
+}
+
 /**
  * Load blocked domains for the current tab
  */
@@ -108,15 +139,16 @@ async function loadBlockedDomains(): Promise<void> {
   if (currentTabId === null) return;
 
   try {
-    const data = await browser.runtime.sendMessage({
+    const response = await browser.runtime.sendMessage({
       action: 'getBlockedDomains',
       tabId: currentTabId,
     });
 
-    blockedDomainsData = (data as BlockedDomainsData | null) ?? {};
+    blockedDomainsData = normalizeBlockedDomains(response);
     renderDomainsList();
   } catch (error) {
     logger.error('[Popup] Error loading blocked domains', { error: getErrorMessage(error) });
+    blockedDomainsData = {};
     renderDomainsList();
   }
 }
@@ -149,7 +181,7 @@ function renderDomainsList(): void {
     const info = blockedDomainsData[hostname];
     if (!info) return;
 
-    const item = document.createElement('div');
+    const item = document.createElement('li');
     item.className = 'domain-item';
     item.innerHTML = `
             <span class="domain-name" title="${hostname}">${hostname}</span>
@@ -209,16 +241,16 @@ function hideRequestSection(): void {
  */
 async function checkNativeAvailable(): Promise<void> {
   try {
-    const response = await browser.runtime.sendMessage({ action: 'checkNative' });
-    const res = response as { success: boolean; version?: string };
-    isNativeAvailable = res.success;
+    const response = await browser.runtime.sendMessage({ action: 'isNativeAvailable' });
+    const res = response as { available?: boolean; success?: boolean; version?: string };
+    isNativeAvailable = res.available ?? res.success ?? false;
 
     if (isNativeAvailable) {
       nativeStatusEl.textContent = `Host nativo v${res.version ?? '?'}`;
-      nativeStatusEl.className = 'status-badge available';
+      nativeStatusEl.className = 'status-indicator available';
     } else {
       nativeStatusEl.textContent = 'Host nativo no disponible';
-      nativeStatusEl.className = 'status-badge unavailable';
+      nativeStatusEl.className = 'status-indicator unavailable';
     }
 
     // Enable/disable verify button based on availability
@@ -226,7 +258,7 @@ async function checkNativeAvailable(): Promise<void> {
   } catch {
     isNativeAvailable = false;
     nativeStatusEl.textContent = 'Error de comunicación';
-    nativeStatusEl.className = 'status-badge unavailable';
+    nativeStatusEl.className = 'status-indicator unavailable';
     btnVerify.disabled = true;
   }
 }
@@ -245,7 +277,7 @@ async function verifyDomainsWithNative(): Promise<void> {
 
   try {
     const response = await browser.runtime.sendMessage({
-      action: 'verifyDomains',
+      action: 'checkWithNative',
       domains: hostnames,
     });
 
@@ -276,7 +308,7 @@ function renderVerifyResults(results: VerifyResult[]): void {
 
   verifyListEl.innerHTML = '';
   results.forEach((res) => {
-    const item = document.createElement('div');
+    const item = document.createElement('li');
     item.className = 'verify-item';
 
     const statusClass = res.inWhitelist ? 'status-allowed' : 'status-blocked';
@@ -308,7 +340,7 @@ function hideVerifyResults(): void {
 if (window.OPENPATH_CONFIG === undefined) {
   throw new Error('OpenPath config not loaded - config.js must be loaded first');
 }
-const CONFIG: Config = window.OPENPATH_CONFIG;
+let CONFIG: Config = window.OPENPATH_CONFIG;
 
 /**
  * Check if the request API is available
@@ -554,6 +586,10 @@ function hideRequestStatus(): void {
  */
 async function init(): Promise<void> {
   try {
+    if (window.loadOpenPathConfig) {
+      CONFIG = await window.loadOpenPathConfig();
+    }
+
     // Obtener pestaña activa
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
 

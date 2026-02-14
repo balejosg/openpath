@@ -62,6 +62,34 @@ function generateToken(hostname: string, secret: string): Promise<string> {
   return Promise.resolve(Buffer.from(data).toString('base64'));
 }
 
+/**
+ * Normalize background payload shape for popup rendering
+ */
+function normalizeBlockedDomainsResponse(
+  response: unknown
+): Record<string, { count: number; timestamp: number; origin?: string }> {
+  const payload = response as {
+    domains?: Record<string, { errors: string[]; origin: string | null; timestamp: number }>;
+  };
+  const domains = payload.domains ?? {};
+  const normalized: Record<string, { count: number; timestamp: number; origin?: string }> = {};
+
+  Object.entries(domains).forEach(([hostname, data]) => {
+    const entry: { count: number; timestamp: number; origin?: string } = {
+      count: data.errors.length,
+      timestamp: data.timestamp,
+    };
+
+    if (data.origin !== null) {
+      entry.origin = data.origin;
+    }
+
+    normalized[hostname] = entry;
+  });
+
+  return normalized;
+}
+
 // =============================================================================
 // formatErrorTypes() Tests
 // =============================================================================
@@ -391,5 +419,53 @@ void describe('Privacy & Data Minimization', () => {
     assert.strictEqual(result, 'localhost');
     assert.ok(!result.includes('8080')); // extractTabHostname specifically returns hostname, not host
     assert.ok(!result.includes('sensitive'));
+  });
+});
+
+// =============================================================================
+// Popup/Background Contract Tests
+// =============================================================================
+
+void describe('Popup/Background Contract', () => {
+  void test('should read blocked domains from nested domains payload', () => {
+    const response = {
+      domains: {
+        'cdn.example.com': {
+          errors: ['NS_ERROR_UNKNOWN_HOST', 'NS_ERROR_NET_TIMEOUT'],
+          origin: 'portal.example.com',
+          timestamp: 123,
+        },
+      },
+    };
+
+    const result = normalizeBlockedDomainsResponse(response);
+    const domain = result['cdn.example.com'] as {
+      count: number;
+      timestamp: number;
+      origin?: string;
+    };
+    assert.strictEqual(domain.count, 2);
+    assert.strictEqual(domain.origin, 'portal.example.com');
+  });
+
+  void test('should omit origin when background origin is null', () => {
+    const response = {
+      domains: {
+        'api.example.com': {
+          errors: ['NS_ERROR_CONNECTION_REFUSED'],
+          origin: null,
+          timestamp: 321,
+        },
+      },
+    };
+
+    const result = normalizeBlockedDomainsResponse(response);
+    const domain = result['api.example.com'] as {
+      count: number;
+      timestamp: number;
+      origin?: string;
+    };
+    assert.strictEqual(domain.count, 1);
+    assert.ok(domain.origin === undefined);
   });
 });

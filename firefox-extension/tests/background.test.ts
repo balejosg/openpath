@@ -21,6 +21,34 @@ const BLOCKING_ERRORS = [
 const IGNORED_ERRORS = ['NS_BINDING_ABORTED', 'NS_ERROR_ABORT'];
 
 /**
+ * Map native host snake_case result to popup camelCase result
+ */
+function mapNativeCheckResult(result: {
+  domain: string;
+  in_whitelist: boolean;
+  resolved_ip?: string;
+}): { domain: string; inWhitelist: boolean; resolvedIp?: string } {
+  const mapped: { domain: string; inWhitelist: boolean; resolvedIp?: string } = {
+    domain: result.domain,
+    inWhitelist: result.in_whitelist,
+  };
+
+  if (result.resolved_ip !== undefined) {
+    mapped.resolvedIp = result.resolved_ip;
+  }
+
+  return mapped;
+}
+
+function isSupportedNativeCheckAction(action: string): boolean {
+  return action === 'checkWithNative' || action === 'verifyDomains';
+}
+
+function isSupportedNativeAvailabilityAction(action: string): boolean {
+  return action === 'isNativeAvailable' || action === 'checkNative';
+}
+
+/**
  * Extract hostname from URL
  */
 function extractHostname(url: string): string | null {
@@ -517,5 +545,35 @@ void describe('Edge Cases', () => {
     const result = state.getBlockedDomainsForTab(1);
     // Origin should be from first block
     assert.strictEqual(result['ads.com']?.origin, 'first-origin.com');
+  });
+});
+
+// =============================================================================
+// Message Contract Compatibility
+// =============================================================================
+
+void describe('Message Contract Compatibility', () => {
+  void test('should support both verify action names', () => {
+    assert.strictEqual(isSupportedNativeCheckAction('checkWithNative'), true);
+    assert.strictEqual(isSupportedNativeCheckAction('verifyDomains'), true);
+    assert.strictEqual(isSupportedNativeCheckAction('unknown'), false);
+  });
+
+  void test('should support both native availability action names', () => {
+    assert.strictEqual(isSupportedNativeAvailabilityAction('isNativeAvailable'), true);
+    assert.strictEqual(isSupportedNativeAvailabilityAction('checkNative'), true);
+    assert.strictEqual(isSupportedNativeAvailabilityAction('unknown'), false);
+  });
+
+  void test('should map native snake_case fields to popup camelCase fields', () => {
+    const mapped = mapNativeCheckResult({
+      domain: 'cdn.example.com',
+      in_whitelist: true,
+      resolved_ip: '10.0.0.2',
+    });
+
+    assert.strictEqual(mapped.domain, 'cdn.example.com');
+    assert.strictEqual(mapped.inWhitelist, true);
+    assert.strictEqual(mapped.resolvedIp, '10.0.0.2');
   });
 });
