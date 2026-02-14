@@ -19,7 +19,7 @@ set -o pipefail
 
 ################################################################################
 # common.sh - Common variables and functions
-# Part of the OpenPath DNS system v4.1.0
+# Part of the OpenPath DNS system
 ################################################################################
 
 # System version - read from central VERSION file or fallback
@@ -95,10 +95,14 @@ BLOCKED_SUBDOMAINS=()
 BLOCKED_PATHS=()
 
 # Logging function with levels
+# Includes PID and caller for structured debugging in fleet deployments
 # Usage: log "message" or log_info/log_warn/log_error/log_debug "message"
 log() {
     local level="${2:-INFO}"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $1" | tee -a "$LOG_FILE"
+    local caller="${FUNCNAME[1]:-main}"
+    printf '[%s] [%s] [%s] [%d] %s\n' \
+        "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$caller" "$$" "$1" \
+        | tee -a "$LOG_FILE"
 }
 
 log_info() {

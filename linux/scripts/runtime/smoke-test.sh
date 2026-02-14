@@ -17,18 +17,25 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ################################################################################
-# smoke-test.sh - Tests de validación post-instalación
-# Parte del sistema OpenPath DNS v3.4
+# smoke-test.sh - Post-installation validation tests
+# Part of the OpenPath DNS system
 #
-# Verifica que el sistema funciona correctamente después de instalar.
-# Retorna 0 si todo OK, 1 si hay fallos críticos.
+# Verifies the system works correctly after installation.
+# Returns 0 if OK, 1 if critical failures.
 #
 # Uso:
 #   sudo ./smoke-test.sh           # Test completo
 #   sudo ./smoke-test.sh --quick   # Solo tests críticos
 ################################################################################
 
-# Colores
+# Load common.sh for VERSION and shared functions
+INSTALL_DIR="/usr/local/lib/openpath"
+if [ -f "$INSTALL_DIR/lib/common.sh" ]; then
+    source "$INSTALL_DIR/lib/common.sh" 2>/dev/null || true
+fi
+VERSION="${VERSION:-unknown}"
+
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -196,7 +203,7 @@ test_config_files() {
 main() {
     echo ""
     echo -e "${BLUE}═══════════════════════════════════════════════════${NC}"
-    echo -e "${BLUE}  Smoke Tests - OpenPath System v3.4${NC}"
+    echo -e "${BLUE}  Smoke Tests - OpenPath System v$VERSION${NC}"
     echo -e "${BLUE}═══════════════════════════════════════════════════${NC}"
     
     # Tests críticos (siempre se ejecutan)

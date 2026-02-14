@@ -19,7 +19,7 @@ set -o pipefail
 
 ################################################################################
 # browser.sh - Browser policy management functions
-# Part of the OpenPath DNS system v3.5
+# Part of the OpenPath DNS system
 ################################################################################
 
 # Calculate hash of current policies
@@ -217,10 +217,18 @@ for block in google_blocks:
     if block not in policies["policies"]["WebsiteFilter"]["Block"]:
         policies["policies"]["WebsiteFilter"]["Block"].append(block)
 
+print("SearchEngines y bloqueos de Google aplicados")
+
+# Block DNS-over-HTTPS to prevent bypassing DNS-level filtering
+policies["policies"]["DNSOverHTTPS"] = {
+    "Enabled": False,
+    "Locked": True
+}
+
 with open(policies_file, 'w') as f:
     json.dump(policies, f, indent=2)
 
-print("SearchEngines y bloqueos de Google aplicados")
+print("DoH bloqueado, SearchEngines y bloqueos de Google aplicados")
 PYEOF
     
     log "✓ Search engines configured"

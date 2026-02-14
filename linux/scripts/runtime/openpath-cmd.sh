@@ -18,7 +18,7 @@
 
 ################################################################################
 # openpath - Comando unificado de gestión
-# Parte del sistema OpenPath DNS v3.5
+# Parte del sistema OpenPath DNS
 ################################################################################
 
 # Cargar librerías
@@ -120,6 +120,12 @@ cmd_logs() {
 
 cmd_log() {
     local lines="${1:-50}"
+    # Validate numeric input
+    if ! [[ "$lines" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}Error: '$lines' is not a valid number of lines${NC}"
+        echo "Uso: openpath log [N]"
+        exit 1
+    fi
     tail -n "$lines" "$LOG_FILE"
 }
 

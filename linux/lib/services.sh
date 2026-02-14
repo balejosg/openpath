@@ -18,7 +18,7 @@
 
 ################################################################################
 # services.sh - Systemd service management functions
-# Part of the OpenPath DNS system v3.5
+# Part of the OpenPath DNS system
 ################################################################################
 
 # Create all systemd services
@@ -60,16 +60,17 @@ WantedBy=multi-user.target
 EOF
 }
 
-# Timer for periodic updates (15-min fallback — SSE handles real-time)
+# Timer for periodic updates (configurable fallback — SSE handles real-time)
 create_whitelist_timer() {
-    cat > /etc/systemd/system/openpath-dnsmasq.timer << 'EOF'
+    local interval="${TIMER_INTERVAL_MINUTES:-5}"
+    cat > /etc/systemd/system/openpath-dnsmasq.timer << EOF
 [Unit]
 Description=Timer for OpenPath DNS Whitelist Update
 After=network-online.target
 
 [Timer]
 OnBootSec=2min
-OnCalendar=*:0/15
+OnCalendar=*:0/${interval}
 AccuracySec=1min
 Persistent=true
 

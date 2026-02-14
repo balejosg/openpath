@@ -434,10 +434,12 @@ if [ -n "$CLASSROOM_NAME" ] && [ -n "$API_URL" ]; then
     echo "Registrando máquina en aula..."
     HOSTNAME=$(hostname)
     
+    REGISTER_PAYLOAD=$(HN="$HOSTNAME" CNAME="$CLASSROOM_NAME" VER="$VERSION" python3 -c 'import json,os
+print(json.dumps({"hostname": os.environ.get("HN",""), "classroomName": os.environ.get("CNAME",""), "version": os.environ.get("VER","unknown")}))')
     REGISTER_RESPONSE=$(curl -s -X POST \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $REGISTRATION_TOKEN" \
-        -d "{\"hostname\":\"$HOSTNAME\",\"classroomName\":\"$CLASSROOM_NAME\",\"version\":\"$VERSION\"}" \
+        -d "$REGISTER_PAYLOAD" \
         "$API_URL/api/machines/register" 2>/dev/null || echo "{\"success\":false}")
     
     if echo "$REGISTER_RESPONSE" | grep -q '"success":true'; then

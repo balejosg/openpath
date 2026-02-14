@@ -19,7 +19,7 @@ set -o pipefail
 
 ################################################################################
 # firewall.sh - Firewall management functions (iptables)
-# Part of the OpenPath DNS system v3.5
+# Part of the OpenPath DNS system
 ################################################################################
 
 # Rule criticality levels for error handling

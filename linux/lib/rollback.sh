@@ -18,7 +18,7 @@
 
 ################################################################################
 # rollback.sh - Checkpoint and rollback functionality
-# Part of the OpenPath DNS system v4.1.0
+# Part of the OpenPath DNS system
 #
 # Provides save/restore checkpoint functionality for automatic recovery
 ################################################################################

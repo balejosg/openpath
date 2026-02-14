@@ -18,41 +18,41 @@ set -o pipefail
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ################################################################################
-# openpath-update.sh - Script de actualización de whitelist
-# Parte del sistema OpenPath DNS v3.5
+# openpath-update.sh - Whitelist update script
+# Part of the OpenPath DNS system
 #
-# Este script se ejecuta periódicamente (via timer) para:
-# - Descargar el whitelist desde GitHub
-# - Actualizar la configuración de dnsmasq
-# - Aplicar políticas de navegadores
-# - Detectar desactivación remota
+# Runs periodically (via timer) to:
+# - Download the whitelist from the API/GitHub
+# - Update the dnsmasq configuration
+# - Apply browser policies
+# - Detect remote deactivation
 ################################################################################
 
-# Cargar common.sh primero (defines OPENPATH_LOCK_FILE and shared functions)
+# Load common.sh first (defines OPENPATH_LOCK_FILE and shared functions)
 INSTALL_DIR="/usr/local/lib/openpath"
 source "$INSTALL_DIR/lib/common.sh"
 
-# Cleanup en caso de salida (normal o error)
+# Cleanup on exit (normal or error)
 cleanup_lock() {
     rm -f "$OPENPATH_LOCK_FILE" 2>/dev/null || true
 }
 trap cleanup_lock EXIT
 
-# Obtener lock exclusivo con timeout (evita race conditions con captive-portal-detector)
+# Acquire exclusive lock with timeout (prevents race with captive-portal-detector)
 exec 200>"$OPENPATH_LOCK_FILE"
 if ! timeout 30 flock -x 200; then
     echo "Could not acquire lock after 30s - another process may be stuck"
     exit 1
 fi
 
-# Cargar librerías adicionales
+# Load additional libraries
 source "$INSTALL_DIR/lib/dns.sh"
 source "$INSTALL_DIR/lib/firewall.sh"
 source "$INSTALL_DIR/lib/browser.sh"
 source "$INSTALL_DIR/lib/rollback.sh"
 
-# URL del whitelist - siempre lee de whitelist-url.conf
-# En modo Aula, install.sh guarda la URL tokenizada durante el registro
+# Whitelist URL - always reads from whitelist-url.conf
+# In Classroom mode, install.sh saves the tokenized URL during registration
 get_whitelist_url() {
     if [ -f "$WHITELIST_URL_CONF" ]; then
         cat "$WHITELIST_URL_CONF"
@@ -66,22 +66,55 @@ WHITELIST_URL=$(get_whitelist_url)
 # NOTE: check_captive_portal() is now defined in common.sh
 # to avoid code duplication with captive-portal-detector.sh
 
-# Descargar whitelist
+# Validate whitelist content format
+# Returns 0 if valid, 1 if invalid
+# Checks that the file contains enough domain-like lines (defense against HTML error pages)
+validate_whitelist_content() {
+    local file="$1"
+    local valid_lines
+    valid_lines=$(grep -cP '^[a-zA-Z0-9*].*\.[a-zA-Z]{2,}' "$file" 2>/dev/null || echo 0)
+
+    if [ "$valid_lines" -lt "${MIN_VALID_DOMAINS:-5}" ]; then
+        log_warn "Downloaded whitelist does not look valid ($valid_lines domain-like lines, need ${MIN_VALID_DOMAINS:-5})"
+        return 1
+    fi
+
+    # Enforce max domains limit
+    local total_lines
+    total_lines=$(wc -l < "$file" 2>/dev/null || echo 0)
+    if [ "$total_lines" -gt "${MAX_DOMAINS:-500}" ]; then
+        log_warn "Whitelist has $total_lines lines, truncating to ${MAX_DOMAINS:-500}"
+        local truncated="${file}.truncated"
+        head -n "${MAX_DOMAINS:-500}" "$file" > "$truncated"
+        mv "$truncated" "$file"
+    fi
+
+    return 0
+}
+
+# Download whitelist
 download_whitelist() {
-    log "Descargando whitelist desde: $WHITELIST_URL"
+    log "Downloading whitelist from: $WHITELIST_URL"
     
     local temp_file="${WHITELIST_FILE}.tmp"
     
     if timeout 30 curl -L -f -s "$WHITELIST_URL" -o "$temp_file" 2>/dev/null; then
         if [ -s "$temp_file" ]; then
-            mv "$temp_file" "$WHITELIST_FILE"
-            log "✓ Whitelist descargado correctamente"
-            return 0
+            # Validate content format before accepting
+            if validate_whitelist_content "$temp_file"; then
+                mv "$temp_file" "$WHITELIST_FILE"
+                log "✓ Whitelist downloaded successfully"
+                return 0
+            else
+                log_warn "Whitelist content validation failed - rejecting download"
+                rm -f "$temp_file"
+                return 1
+            fi
         fi
     fi
     
     rm -f "$temp_file"
-    log "⚠ Error al descargar whitelist"
+    log "⚠ Error downloading whitelist"
     return 1
 }
 

@@ -2,7 +2,7 @@ Package: openpath-dnsmasq
 Version: 3.5.0-1
 Section: net
 Priority: optional
-Architecture: amd64
+Architecture: all
 Depends: dnsmasq, iptables, iptables-persistent, ipset, curl, libcap2-bin, dnsutils, conntrack, python3
 Recommends: firefox-esr, unattended-upgrades
 Maintainer: Las Encinas IT <it@lasencinas.edu>

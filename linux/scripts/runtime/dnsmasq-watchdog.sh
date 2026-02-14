@@ -19,7 +19,7 @@ set -o pipefail
 
 ################################################################################
 # dnsmasq-watchdog.sh - Watchdog para dnsmasq
-# Parte del sistema OpenPath DNS v3.5
+# Parte del sistema OpenPath DNS
 #
 # Verifica la salud del sistema y recupera automáticamente si hay problemas
 ################################################################################

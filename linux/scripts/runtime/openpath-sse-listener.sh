@@ -10,7 +10,7 @@
 
 ################################################################################
 # openpath-sse-listener.sh - SSE listener daemon for instant rule updates
-# Part of the OpenPath DNS system v3.5
+# Part of the OpenPath DNS system
 #
 # Maintains a persistent connection to the API's Server-Sent Events (SSE)
 # endpoint. When a whitelist rule change is detected, immediately triggers

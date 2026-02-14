@@ -18,11 +18,11 @@ set -o pipefail
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 ################################################################################
-# captive-portal-detector.sh - Detector de portal cautivo
-# Parte del sistema OpenPath DNS v3.4
+# captive-portal-detector.sh - Captive portal detector
+# Part of the OpenPath DNS system
 #
-# Detecta si hay un portal cautivo (WiFi hotel, aeropuerto, etc.)
-# y desactiva temporalmente el firewall para permitir autenticación
+# Detects captive portals (hotel WiFi, airports, etc.)
+# and temporarily deactivates the firewall for authentication
 ################################################################################
 
 # Cargar librerías
