@@ -77,6 +77,14 @@ interface DomainStatusPayload extends DomainStatus {
 type BlockedDomainsMap = Record<number, Map<string, BlockedDomainData>>;
 type DomainStatusesMap = Record<number, Map<string, DomainStatus>>;
 
+interface BlockedScreenContext {
+  tabId: number;
+  hostname: string;
+  error: string;
+  blockedUrl: string;
+  origin: string | null;
+}
+
 // Almacenamiento en memoria: { tabId: Map<hostname, Set<errorTypes>> }
 const blockedDomains: BlockedDomainsMap = {};
 const domainStatuses: DomainStatusesMap = {};
@@ -113,6 +121,44 @@ const IGNORED_ERRORS = [
 ];
 
 const AUTO_ALLOW_REQUEST_TYPES = new Set(['xmlhttprequest', 'fetch']);
+const BLOCKED_SCREEN_PATH = 'blocked/blocked.html';
+
+function isExtensionUrl(url: string): boolean {
+  return url.startsWith('moz-extension://') || url.startsWith('chrome-extension://');
+}
+
+function shouldDisplayBlockedScreen(details: WebRequest.OnErrorOccurredDetailsType): boolean {
+  if (details.type !== 'main_frame') {
+    return false;
+  }
+
+  if (isExtensionUrl(details.url)) {
+    return false;
+  }
+
+  return true;
+}
+
+async function redirectToBlockedScreen(context: BlockedScreenContext): Promise<void> {
+  try {
+    const blockedPageUrl = browser.runtime.getURL(BLOCKED_SCREEN_PATH);
+    const redirectUrl = new URL(blockedPageUrl);
+    redirectUrl.searchParams.set('domain', context.hostname);
+    redirectUrl.searchParams.set('error', context.error);
+    redirectUrl.searchParams.set('blockedUrl', context.blockedUrl);
+    if (context.origin) {
+      redirectUrl.searchParams.set('origin', context.origin);
+    }
+
+    await browser.tabs.update(context.tabId, { url: redirectUrl.toString() });
+  } catch (error) {
+    logger.error('[Monitor] No se pudo mostrar pantalla de bloqueo', {
+      tabId: context.tabId,
+      hostname: context.hostname,
+      error: getErrorMessage(error),
+    });
+  }
+}
 
 /**
  * Extrae el hostname de una URL
@@ -655,6 +701,16 @@ browser.webRequest.onErrorOccurred.addListener(
       details.error,
       details.originUrl ?? details.documentUrl
     );
+
+    if (shouldDisplayBlockedScreen(details)) {
+      void redirectToBlockedScreen({
+        tabId: details.tabId,
+        hostname,
+        error: details.error,
+        blockedUrl: details.url,
+        origin,
+      });
+    }
 
     if (isAutoAllowRequestType(details.type)) {
       void autoAllowBlockedDomain(details.tabId, hostname, origin, details.type);

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Acceso bloqueado</title>
+    <link rel="stylesheet" href="blocked.css" />
+  </head>
+  <body>
+    <main class="lock-screen">
+      <section class="card" aria-live="polite">
+        <p class="eyebrow">OpenPath</p>
+        <h1>Acceso bloqueado</h1>
+        <p class="message">Esta navegacion fue bloqueada por politicas de seguridad del equipo.</p>
+        <dl class="details">
+          <div>
+            <dt>Dominio</dt>
+            <dd id="blocked-domain">-</dd>
+          </div>
+          <div>
+            <dt>Motivo tecnico</dt>
+            <dd id="blocked-error">-</dd>
+          </div>
+          <div>
+            <dt>Pagina origen</dt>
+            <dd id="blocked-origin">-</dd>
+          </div>
+        </dl>
+        <div class="actions">
+          <button id="go-back" type="button">Volver</button>
+          <button id="copy-domain" type="button">Copiar dominio</button>
+        </div>
+        <p class="hint">
+          Si necesitas acceso, abre el icono de la extension y solicita este dominio.
+        </p>
+        <p id="copy-feedback" class="feedback" role="status" aria-live="polite"></p>
+      </section>
+    </main>
+
+    <script src="blocked.js"></script>
+  </body>
+</html>

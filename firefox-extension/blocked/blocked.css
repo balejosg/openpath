@@ -1,0 +1,151 @@
+:root {
+  --bg: #f3efe6;
+  --bg-shade: #e8dfcf;
+  --card: #fffaf0;
+  --text: #2d261d;
+  --muted: #6a5b46;
+  --accent: #b14f20;
+  --accent-strong: #8e3e17;
+  --line: #ddccb2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Source Serif 4', Georgia, serif;
+  color: var(--text);
+  background:
+    radial-gradient(
+      circle at 8% 15%,
+      color-mix(in srgb, var(--accent) 20%, transparent),
+      transparent 36%
+    ),
+    radial-gradient(
+      circle at 90% 82%,
+      color-mix(in srgb, var(--accent) 14%, transparent),
+      transparent 40%
+    ),
+    linear-gradient(130deg, var(--bg) 0%, var(--bg-shade) 100%);
+}
+
+.lock-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.card {
+  width: min(680px, 100%);
+  background: color-mix(in srgb, var(--card) 92%, white);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 20px 50px color-mix(in srgb, black 16%, transparent);
+  padding: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.55rem, 2vw, 2rem);
+}
+
+.message {
+  margin: 14px 0 22px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.details {
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.details div {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, white 70%, var(--card));
+}
+
+dt {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+dd {
+  margin: 4px 0 0;
+  word-break: break-word;
+  font-size: 1rem;
+}
+
+.actions {
+  margin-top: 18px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+#go-back {
+  background: var(--accent);
+  color: #fff;
+}
+
+#go-back:hover {
+  background: var(--accent-strong);
+}
+
+#copy-domain {
+  background: color-mix(in srgb, var(--accent) 16%, white);
+  color: var(--text);
+}
+
+#copy-domain:hover {
+  background: color-mix(in srgb, var(--accent) 24%, white);
+}
+
+.hint {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.feedback {
+  min-height: 1.1em;
+  margin: 10px 0 0;
+  color: var(--accent-strong);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .card {
+    padding: 20px;
+    border-radius: 14px;
+  }
+}
