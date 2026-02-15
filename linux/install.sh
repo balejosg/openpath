@@ -283,10 +283,25 @@ echo ""
 echo "[6/13] Configurando permisos sudo..."
 
 cat > /etc/sudoers.d/openpath << 'EOF'
-# Permitir a todos los usuarios ejecutar comandos openpath sin contraseña
-ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath *
+# Permitir a todos los usuarios ejecutar comandos de LECTURA sin contraseña
+# Estos son seguros: no modifican configuración ni desactivan protecciones
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath status
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath test
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath check *
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath health
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath domains
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath domains *
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath log
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath log *
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath logs
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath help
+
+# Comandos de sistema (solo internos, no expuestos al usuario)
 ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath-update.sh
 ALL ALL=(root) NOPASSWD: /usr/local/bin/dnsmasq-watchdog.sh
+
+# NOTA: Los siguientes comandos REQUIEREN contraseña de root:
+# openpath update, enable, disable, force, restart, rotate-token, enroll
 EOF
 
 chmod 440 /etc/sudoers.d/openpath

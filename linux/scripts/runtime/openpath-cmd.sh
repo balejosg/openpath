@@ -35,8 +35,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Comandos que requieren root
-ROOT_COMMANDS="update health force enable disable restart rotate-token enroll"
+# Comandos que requieren root (estos pedirán contraseña si no es root)
+# Los comandos de solo lectura (status, test, check, domains, log, logs, help)
+# se permiten sin contraseña via sudoers
+ROOT_COMMANDS="update health force enable disable restart rotate-token enroll self-update"
 
 # Auto-elevar a root si el comando lo requiere
 auto_elevate() {
