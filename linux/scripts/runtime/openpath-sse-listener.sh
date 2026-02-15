@@ -89,10 +89,7 @@ get_sse_url() {
         return 1
     fi
 
-    local token
-    token=$(get_machine_token) || return 1
-
-    echo "${base_url}/api/machines/events?token=${token}"
+    echo "${base_url}/api/machines/events"
 }
 
 # =============================================================================
@@ -137,7 +134,7 @@ run_sse_listener() {
     local backoff="${SSE_RECONNECT_MIN:-5}"
     local max_backoff="${SSE_RECONNECT_MAX:-60}"
 
-    log "✓ SSE listener starting (endpoint: ${sse_url%%\?*}?token=***)"
+    log "✓ SSE listener starting (endpoint: ${sse_url})"
 
     # Ensure runtime directory exists
     mkdir -p "$OPENPATH_RUN"
@@ -153,9 +150,13 @@ run_sse_listener() {
         # --max-time 0 means no timeout (keep connection open forever)
         # -s silent mode, -S show errors
         # --retry 0 so curl doesn't retry internally (we handle reconnects)
+        local token
+        token=$(get_machine_token) || exit 1
+
         curl -N -sS \
             --retry 0 \
             --connect-timeout 15 \
+            -H "Authorization: Bearer $token" \
             "$sse_url" 2>/dev/null | while IFS= read -r line; do
 
             # Reset backoff on any successful data
