@@ -87,6 +87,82 @@ Describe "Common Module" {
     }
 }
 
+Describe "Common Module - Mocked Tests" {
+    BeforeAll {
+        $modulePath = Join-Path $PSScriptRoot ".." "lib"
+        Import-Module "$modulePath\Common.psm1" -Force
+    }
+
+    Context "Get-OpenPathFromUrl parsing" {
+        It "Parses whitelist sections correctly" {
+            Mock Invoke-WebRequest {
+                @{ Content = "domain1.com`ndomain2.com`n## BLOCKED-SUBDOMAINS`nbad.domain.com`n## BLOCKED-PATHS`n/blocked/path" }
+            } -ModuleName Common
+
+            $result = Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt"
+            $result.Whitelist | Should -HaveCount 2
+            $result.Whitelist[0] | Should -Be "domain1.com"
+            $result.BlockedSubdomains | Should -HaveCount 1
+            $result.BlockedSubdomains[0] | Should -Be "bad.domain.com"
+            $result.BlockedPaths | Should -HaveCount 1
+        }
+
+        It "Skips comment lines and empty lines" {
+            Mock Invoke-WebRequest {
+                @{ Content = "# comment`n`ndomain1.com`ndomain2.com`ndomain3.com`n# another comment" }
+            } -ModuleName Common
+
+            $result = Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt"
+            $result.Whitelist | Should -HaveCount 3
+        }
+
+        It "Rejects whitelist with insufficient valid domains" {
+            Mock Invoke-WebRequest {
+                @{ Content = "not-a-domain" }
+            } -ModuleName Common
+
+            { Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt" } | Should -Throw "*Invalid whitelist*"
+        }
+
+        It "Handles empty response content" {
+            Mock Invoke-WebRequest {
+                @{ Content = "" }
+            } -ModuleName Common
+
+            { Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt" } | Should -Throw "*Invalid whitelist*"
+        }
+    }
+
+    Context "Get-PrimaryDNS with mocked network" {
+        It "Returns DNS from adapter when available" {
+            Mock Get-DnsClientServerAddress {
+                @([PSCustomObject]@{ ServerAddresses = @("192.168.1.1") })
+            } -ModuleName Common
+
+            $dns = Get-PrimaryDNS
+            $dns | Should -Be "192.168.1.1"
+        }
+
+        It "Falls back to gateway when no DNS adapter found" {
+            Mock Get-DnsClientServerAddress { @() } -ModuleName Common
+            Mock Get-NetRoute {
+                @([PSCustomObject]@{ NextHop = "10.0.0.1" })
+            } -ModuleName Common
+
+            $dns = Get-PrimaryDNS
+            $dns | Should -Be "10.0.0.1"
+        }
+
+        It "Falls back to 8.8.8.8 as ultimate default" {
+            Mock Get-DnsClientServerAddress { @() } -ModuleName Common
+            Mock Get-NetRoute { @() } -ModuleName Common
+
+            $dns = Get-PrimaryDNS
+            $dns | Should -Be "8.8.8.8"
+        }
+    }
+}
+
 Describe "DNS Module" {
     BeforeAll {
         $modulePath = Join-Path $PSScriptRoot ".." "lib"
