@@ -166,6 +166,7 @@ function escapeRegexChar(value: string): string {
 
 function globPatternToRegex(globPattern: string): RegExp {
   let regexSource = '^';
+  const lastIndex = globPattern.length - 1;
 
   for (let i = 0; i < globPattern.length; i += 1) {
     if (globPattern.slice(i, i + 4) === '*://') {
@@ -176,7 +177,8 @@ function globPatternToRegex(globPattern: string): RegExp {
 
     const char = globPattern[i] ?? '';
     if (char === '*') {
-      regexSource += '.*';
+      // Use non-greedy for trailing glob, segment-limited for mid-path
+      regexSource += i === lastIndex ? '.*?' : '[^?#]*';
     } else {
       regexSource += escapeRegexChar(char);
     }
@@ -232,6 +234,10 @@ function findMatchingBlockedPathRule(
   return null;
 }
 
+/**
+ * Evaluates whether a request should be blocked by path rules.
+ * Mirrors the production evaluatePathBlocking function.
+ */
 function evaluatePathBlocking(
   details: MockOnBeforeRequestDetails,
   rules: CompiledBlockedPathRule[]

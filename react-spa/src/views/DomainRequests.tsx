@@ -383,11 +383,11 @@ export default function DomainRequests() {
         prev.map((r) =>
           selectedRequestIds.includes(r.id) && r.status === 'pending'
             ? {
-                ...r,
-                status: 'approved',
-                updatedAt: nowIso,
-                resolvedAt: nowIso,
-              }
+              ...r,
+              status: 'approved',
+              updatedAt: nowIso,
+              resolvedAt: nowIso,
+            }
             : r
         )
       );
@@ -396,8 +396,8 @@ export default function DomainRequests() {
 
     setBulkMessage(
       failedCount > 0
-        ? 'Aprobadas ' + String(successCount) + '. Fallaron ' + String(failedCount) + '.'
-        : 'Aprobadas ' + String(successCount) + ' solicitudes.'
+        ? `Aprobadas ${successCount}. Fallaron ${failedCount}.`
+        : `Aprobadas ${successCount} solicitudes.`
     );
     setBulkFailedIds(failedIds);
     setBulkFailedMode(failedCount > 0 ? 'approve' : null);
@@ -438,12 +438,12 @@ export default function DomainRequests() {
         prev.map((r) =>
           selectedRequestIds.includes(r.id) && r.status === 'pending'
             ? {
-                ...r,
-                status: 'rejected',
-                updatedAt: nowIso,
-                resolvedAt: nowIso,
-                resolutionNote: bulkRejectReason || r.resolutionNote,
-              }
+              ...r,
+              status: 'rejected',
+              updatedAt: nowIso,
+              resolvedAt: nowIso,
+              resolutionNote: bulkRejectReason || r.resolutionNote,
+            }
             : r
         )
       );
@@ -453,8 +453,8 @@ export default function DomainRequests() {
 
     setBulkMessage(
       failedCount > 0
-        ? 'Rechazadas ' + String(successCount) + '. Fallaron ' + String(failedCount) + '.'
-        : 'Rechazadas ' + String(successCount) + ' solicitudes.'
+        ? `Rechazadas ${successCount}. Fallaron ${failedCount}.`
+        : `Rechazadas ${successCount} solicitudes.`
     );
     setBulkFailedIds(failedIds);
     setBulkFailedMode(failedCount > 0 ? 'reject' : null);
@@ -670,7 +670,7 @@ export default function DomainRequests() {
                 <div
                   className="h-full bg-blue-600"
                   style={{
-                    width: `${String(Math.round((bulkProgress.done / Math.max(1, bulkProgress.total)) * 100))}%`,
+                    width: `${Math.round((bulkProgress.done / Math.max(1, bulkProgress.total)) * 100)}%`,
                   }}
                 />
               </div>

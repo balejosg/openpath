@@ -21,6 +21,8 @@ import json
 import struct
 import subprocess
 import os
+import re
+import socket
 import hashlib
 from pathlib import Path
 from datetime import datetime
@@ -131,8 +133,6 @@ def check_domain(domain):
         if "→" in output:
             result["resolves"] = True
             # Extraer IP
-            import re
-
             ip_match = re.search(r"→\s*(\S+)", output)
             if ip_match:
                 result["resolved_ip"] = ip_match.group(1)
@@ -232,20 +232,23 @@ def get_blocked_paths():
 
     blocked_paths = []
     section = ""
+    found_blocked_path_section = False
 
     try:
         with open(whitelist_file, "r", encoding="utf-8", errors="ignore") as f:
             for raw_line in f:
                 line = raw_line.strip()
+                line_upper = line.upper()
 
-                if line == "## WHITELIST":
+                if line_upper == "## WHITELIST":
                     section = "whitelist"
                     continue
-                if line == "## BLOCKED-SUBDOMAINS":
+                if line_upper == "## BLOCKED-SUBDOMAINS":
                     section = "blocked_sub"
                     continue
-                if line == "## BLOCKED-PATHS":
+                if line_upper == "## BLOCKED-PATHS":
                     section = "blocked_path"
+                    found_blocked_path_section = True
                     continue
 
                 if not line or line.startswith("#"):
@@ -258,6 +261,9 @@ def get_blocked_paths():
                     blocked_paths.append(line)
                     if len(blocked_paths) >= MAX_PATH_RULES:
                         break
+
+        if not found_blocked_path_section:
+            log_debug("Warning: ## BLOCKED-PATHS section not found in whitelist file")
 
         digest = hashlib.sha256("\n".join(blocked_paths).encode("utf-8")).hexdigest()
         mtime = int(whitelist_file.stat().st_mtime)
@@ -305,8 +311,6 @@ def handle_message(message):
 
     elif action == "get-hostname":
         # Return the system hostname for token generation
-        import socket
-
         hostname = socket.gethostname()
         return {"success": True, "action": "get-hostname", "hostname": hostname}
 

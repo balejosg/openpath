@@ -153,6 +153,9 @@ const PATH_BLOCKING_FILTER_TYPES: WebRequest.ResourceType[] = [
 const PATH_BLOCKING_REQUEST_TYPES = new Set<string>([...PATH_BLOCKING_FILTER_TYPES, 'fetch']);
 const BLOCKED_PATH_REFRESH_INTERVAL_MS = 60000;
 const ROUTE_BLOCK_REASON = 'BLOCKED_PATH_POLICY';
+const MAX_BLOCKED_PATH_RULES = 500;
+const BLOCKED_PATH_INITIAL_RETRY_DELAY_MS = 2000;
+const BLOCKED_PATH_MAX_RETRIES = 3;
 
 let blockedPathRulesState: BlockedPathRulesState = {
   version: '',
@@ -268,6 +271,7 @@ function escapeRegexChar(value: string): string {
 
 function globPatternToRegex(globPattern: string): RegExp {
   let regexSource = '^';
+  const lastIndex = globPattern.length - 1;
 
   for (let i = 0; i < globPattern.length; i += 1) {
     if (globPattern.slice(i, i + 4) === '*://') {
@@ -278,7 +282,8 @@ function globPatternToRegex(globPattern: string): RegExp {
 
     const char = globPattern[i] ?? '';
     if (char === '*') {
-      regexSource += '.*';
+      // Use non-greedy for trailing glob, segment-limited for mid-path
+      regexSource += i === lastIndex ? '.*?' : '[^?#]*';
     } else {
       regexSource += escapeRegexChar(char);
     }
@@ -291,8 +296,9 @@ function globPatternToRegex(globPattern: string): RegExp {
 function compileBlockedPathRules(paths: string[]): CompiledBlockedPathRule[] {
   const compiled: CompiledBlockedPathRule[] = [];
   const seenPatterns = new Set<string>();
+  const capped = paths.slice(0, MAX_BLOCKED_PATH_RULES);
 
-  for (const rawPath of paths) {
+  for (const rawPath of capped) {
     const patterns = buildPathRulePatterns(rawPath).filter((pattern) => {
       if (seenPatterns.has(pattern)) {
         return false;
@@ -309,6 +315,13 @@ function compileBlockedPathRules(paths: string[]): CompiledBlockedPathRule[] {
       rawRule: rawPath,
       compiledPatterns: patterns,
       regexes: patterns.map((pattern) => globPatternToRegex(pattern)),
+    });
+  }
+
+  if (paths.length > MAX_BLOCKED_PATH_RULES) {
+    logger.warn('[Monitor] Reglas de ruta truncadas', {
+      provided: paths.length,
+      capped: MAX_BLOCKED_PATH_RULES,
     });
   }
 
@@ -334,14 +347,56 @@ function shouldEnforcePathBlocking(type?: string): boolean {
   return PATH_BLOCKING_REQUEST_TYPES.has(type);
 }
 
-function findMatchingBlockedPathRule(requestUrl: string): CompiledBlockedPathRule | null {
-  for (const rule of blockedPathRulesState.rules) {
+function findMatchingBlockedPathRule(
+  requestUrl: string,
+  rules: CompiledBlockedPathRule[] = blockedPathRulesState.rules
+): CompiledBlockedPathRule | null {
+  for (const rule of rules) {
     if (rule.regexes.some((regex) => regex.test(requestUrl))) {
       return rule;
     }
   }
 
   return null;
+}
+
+/**
+ * Evalúa si una petición debe ser bloqueada por reglas de ruta.
+ * Extraída como función pura para facilitar testing.
+ */
+function evaluatePathBlocking(
+  details: { type: string; url: string; originUrl?: string; documentUrl?: string },
+  rules: CompiledBlockedPathRule[] = blockedPathRulesState.rules
+): { cancel?: boolean; redirectUrl?: string; reason?: string } | null {
+  if (!shouldEnforcePathBlocking(details.type)) {
+    return null;
+  }
+
+  if (isExtensionUrl(details.url)) {
+    return null;
+  }
+
+  const matchedRule = findMatchingBlockedPathRule(details.url, rules);
+  if (!matchedRule) {
+    return null;
+  }
+
+  const hostname = extractHostname(details.url) ?? 'dominio desconocido';
+  const origin = extractHostname(details.originUrl ?? details.documentUrl ?? '');
+  const reason = `${ROUTE_BLOCK_REASON}:${matchedRule.rawRule}`;
+
+  if (details.type === 'main_frame') {
+    return {
+      redirectUrl: buildBlockedScreenUrl({
+        hostname,
+        error: reason,
+        origin,
+      }),
+      reason,
+    };
+  }
+
+  return { cancel: true, reason };
 }
 
 async function refreshBlockedPathRules(force = false): Promise<boolean> {
@@ -388,6 +443,30 @@ function startBlockedPathRefreshLoop(): void {
   blockedPathRefreshTimer = setInterval(() => {
     void refreshBlockedPathRules(false);
   }, BLOCKED_PATH_REFRESH_INTERVAL_MS);
+}
+
+/**
+ * Carga inicial de reglas con reintentos y backoff exponencial.
+ * Garantiza que las reglas se carguen antes de depender de ellas.
+ */
+async function initBlockedPathRules(): Promise<void> {
+  for (let attempt = 0; attempt < BLOCKED_PATH_MAX_RETRIES; attempt++) {
+    const ok = await refreshBlockedPathRules(true);
+    if (ok) {
+      return;
+    }
+    const delay = BLOCKED_PATH_INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt);
+    logger.warn('[Monitor] Reintentando carga de reglas de ruta', {
+      attempt: attempt + 1,
+      nextRetryMs: delay,
+    });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, delay);
+    });
+  }
+  logger.error('[Monitor] No se pudieron cargar reglas de ruta tras reintentos', {
+    maxRetries: BLOCKED_PATH_MAX_RETRIES,
+  });
 }
 
 /**
@@ -883,35 +962,19 @@ async function retryLocalUpdate(tabId: number, hostname: string): Promise<{ succ
 
 browser.webRequest.onBeforeRequest.addListener(
   (details: WebRequest.OnBeforeRequestDetailsType) => {
-    if (!shouldEnforcePathBlocking(details.type)) {
-      return;
-    }
-
-    if (isExtensionUrl(details.url)) {
-      return;
-    }
-
-    const matchedRule = findMatchingBlockedPathRule(details.url);
-    if (!matchedRule) {
+    const result = evaluatePathBlocking(details);
+    if (!result) {
       return;
     }
 
     const hostname = extractHostname(details.url) ?? 'dominio desconocido';
-    const origin = extractHostname(details.originUrl ?? details.documentUrl ?? '');
-    const reason = `${ROUTE_BLOCK_REASON}:${matchedRule.rawRule}`;
-
     if (details.tabId >= 0) {
+      const reason = result.reason ?? `${ROUTE_BLOCK_REASON}:unknown`;
       addBlockedDomain(details.tabId, hostname, reason, details.originUrl ?? details.documentUrl);
     }
 
-    if (details.type === 'main_frame') {
-      return {
-        redirectUrl: buildBlockedScreenUrl({
-          hostname,
-          error: reason,
-          origin,
-        }),
-      };
+    if (result.redirectUrl) {
+      return { redirectUrl: result.redirectUrl };
     }
 
     return { cancel: true };
@@ -1079,7 +1142,8 @@ browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.
   }
 });
 
-void refreshBlockedPathRules(true);
-startBlockedPathRefreshLoop();
+void initBlockedPathRules().then(() => {
+  startBlockedPathRefreshLoop();
+});
 
 logger.info('[Monitor de Bloqueos] Background script v2.0.0 (MV3) cargado');
