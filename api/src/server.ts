@@ -823,9 +823,10 @@ app.get('/api/machines/events', (req: Request, res: Response): void => {
           ? req.query.token
           : '';
       if (!machineToken) {
-        res
-          .status(401)
-          .json({ success: false, error: 'Machine token required (Authorization: Bearer or query param)' });
+        res.status(401).json({
+          success: false,
+          error: 'Machine token required (Authorization: Bearer or query param)',
+        });
         return;
       }
 
