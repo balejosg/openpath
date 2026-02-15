@@ -396,8 +396,8 @@ export default function DomainRequests() {
 
     setBulkMessage(
       failedCount > 0
-        ? `Aprobadas ${successCount}. Fallaron ${failedCount}.`
-        : `Aprobadas ${successCount} solicitudes.`
+        ? 'Aprobadas ' + String(successCount) + '. Fallaron ' + String(failedCount) + '.'
+        : 'Aprobadas ' + String(successCount) + ' solicitudes.'
     );
     setBulkFailedIds(failedIds);
     setBulkFailedMode(failedCount > 0 ? 'approve' : null);
@@ -453,8 +453,8 @@ export default function DomainRequests() {
 
     setBulkMessage(
       failedCount > 0
-        ? `Rechazadas ${successCount}. Fallaron ${failedCount}.`
-        : `Rechazadas ${successCount} solicitudes.`
+        ? 'Rechazadas ' + String(successCount) + '. Fallaron ' + String(failedCount) + '.'
+        : 'Rechazadas ' + String(successCount) + ' solicitudes.'
     );
     setBulkFailedIds(failedIds);
     setBulkFailedMode(failedCount > 0 ? 'reject' : null);
@@ -670,7 +670,7 @@ export default function DomainRequests() {
                 <div
                   className="h-full bg-blue-600"
                   style={{
-                    width: `${Math.round((bulkProgress.done / Math.max(1, bulkProgress.total)) * 100)}%`,
+                    width: `${String(Math.round((bulkProgress.done / Math.max(1, bulkProgress.total)) * 100))}%`,
                   }}
                 />
               </div>

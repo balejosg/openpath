@@ -50,6 +50,7 @@ export default tseslint.config(
       'shared/tests/**',
       'spa/js/**',
       'react-spa/e2e/**',
+      'firefox-extension/blocked/**',
       'tests/selenium/**',
       'scripts/**',
     ],

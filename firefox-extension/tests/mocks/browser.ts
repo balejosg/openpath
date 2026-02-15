@@ -148,6 +148,14 @@ export const mockBrowser = {
   },
 
   webRequest: {
+    onBeforeRequest: {
+      addListener: (_callback: unknown, _filter: unknown, _extraInfoSpec?: unknown): void => {
+        // No-op
+      },
+      removeListener: (_callback: unknown): void => {
+        // No-op
+      },
+    },
     onErrorOccurred: {
       addListener: (_callback: unknown, _filter: unknown): void => {
         // No-op

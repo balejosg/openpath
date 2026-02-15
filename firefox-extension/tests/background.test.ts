@@ -25,11 +25,26 @@ const BLOCKED_SCREEN_ERRORS = new Set([
   'NS_ERROR_PROXY_CONNECTION_REFUSED',
 ]);
 const BLOCKED_SCREEN_PATH = 'blocked/blocked.html';
+const ROUTE_BLOCK_REASON = 'BLOCKED_PATH_POLICY';
+const PATH_BLOCKING_FILTER_TYPES = ['main_frame', 'sub_frame', 'xmlhttprequest', 'fetch'] as const;
+const PATH_BLOCKING_REQUEST_TYPES = new Set(PATH_BLOCKING_FILTER_TYPES);
 
 interface MockOnErrorOccurredDetails {
   type: string;
   error: string;
   url: string;
+}
+
+interface MockOnBeforeRequestDetails {
+  type: string;
+  url: string;
+  originUrl?: string;
+}
+
+interface CompiledBlockedPathRule {
+  rawRule: string;
+  compiledPatterns: string[];
+  regexes: RegExp[];
 }
 
 type LocalDomainStatusState =
@@ -107,6 +122,154 @@ function buildBlockedScreenRedirectUrl(payload: {
   }
 
   return redirectUrl.toString();
+}
+
+function buildPathRulePatterns(rawRule: string): string[] {
+  const raw = rawRule.trim().toLowerCase();
+  if (raw.length === 0) {
+    return [];
+  }
+
+  let clean = raw;
+  for (const prefix of ['http://', 'https://', '*://']) {
+    if (clean.startsWith(prefix)) {
+      clean = clean.slice(prefix.length);
+      break;
+    }
+  }
+
+  if (!clean.includes('/') && !clean.includes('.') && !clean.includes('*')) {
+    clean = `*${clean}*`;
+  } else if (!clean.endsWith('*')) {
+    clean = `${clean}*`;
+  }
+
+  if (clean.startsWith('*.')) {
+    const base = clean.slice(2);
+    return [`*://${clean}`, `*://${base}`];
+  }
+
+  if (clean.startsWith('*/')) {
+    return [`*://*${clean.slice(1)}`];
+  }
+
+  if (clean.includes('.') && clean.includes('/')) {
+    return [`*://*.${clean}`, `*://${clean}`];
+  }
+
+  return [`*://${clean}`];
+}
+
+function escapeRegexChar(value: string): string {
+  return value.replace(/[\\^$+?.()|[\]{}]/g, '\\$&');
+}
+
+function globPatternToRegex(globPattern: string): RegExp {
+  let regexSource = '^';
+
+  for (let i = 0; i < globPattern.length; i += 1) {
+    if (globPattern.slice(i, i + 4) === '*://') {
+      regexSource += '[a-z][a-z0-9+.-]*://';
+      i += 3;
+      continue;
+    }
+
+    const char = globPattern[i] ?? '';
+    if (char === '*') {
+      regexSource += '.*';
+    } else {
+      regexSource += escapeRegexChar(char);
+    }
+  }
+
+  regexSource += '$';
+  return new RegExp(regexSource, 'i');
+}
+
+function compileBlockedPathRules(paths: string[]): CompiledBlockedPathRule[] {
+  const compiled: CompiledBlockedPathRule[] = [];
+  const seenPatterns = new Set<string>();
+
+  for (const rawPath of paths) {
+    const patterns = buildPathRulePatterns(rawPath).filter((pattern) => {
+      if (seenPatterns.has(pattern)) {
+        return false;
+      }
+      seenPatterns.add(pattern);
+      return true;
+    });
+
+    if (patterns.length === 0) {
+      continue;
+    }
+
+    compiled.push({
+      rawRule: rawPath,
+      compiledPatterns: patterns,
+      regexes: patterns.map((pattern) => globPatternToRegex(pattern)),
+    });
+  }
+
+  return compiled;
+}
+
+function shouldEnforcePathBlocking(type?: string): boolean {
+  if (!type) {
+    return false;
+  }
+  return PATH_BLOCKING_REQUEST_TYPES.has(type as (typeof PATH_BLOCKING_FILTER_TYPES)[number]);
+}
+
+function findMatchingBlockedPathRule(
+  requestUrl: string,
+  rules: CompiledBlockedPathRule[]
+): CompiledBlockedPathRule | null {
+  for (const rule of rules) {
+    if (rule.regexes.some((regex) => regex.test(requestUrl))) {
+      return rule;
+    }
+  }
+  return null;
+}
+
+function evaluatePathBlocking(
+  details: MockOnBeforeRequestDetails,
+  rules: CompiledBlockedPathRule[]
+): {
+  cancel?: boolean;
+  redirectUrl?: string;
+  reason?: string;
+} | null {
+  if (!shouldEnforcePathBlocking(details.type)) {
+    return null;
+  }
+
+  if (isExtensionUrl(details.url)) {
+    return null;
+  }
+
+  const matchedRule = findMatchingBlockedPathRule(details.url, rules);
+  if (!matchedRule) {
+    return null;
+  }
+
+  const hostname = extractHostname(details.url) ?? 'dominio desconocido';
+  const origin = extractHostname(details.originUrl ?? '');
+  const reason = `${ROUTE_BLOCK_REASON}:${matchedRule.rawRule}`;
+
+  if (details.type === 'main_frame') {
+    return {
+      redirectUrl: buildBlockedScreenRedirectUrl({
+        extensionOrigin: 'moz-extension://unit-test-id/',
+        hostname,
+        error: reason,
+        origin,
+      }),
+      reason,
+    };
+  }
+
+  return { cancel: true, reason };
 }
 
 function resolveAutoStatus(payload: {
@@ -449,6 +612,97 @@ void describe('buildBlockedScreenRedirectUrl()', () => {
     assert.strictEqual(parsed.searchParams.get('error'), 'NS_ERROR_UNKNOWN_HOST');
     assert.strictEqual(parsed.searchParams.get('origin'), 'portal.local');
     assert.strictEqual(parsed.searchParams.has('blockedUrl'), false);
+  });
+});
+
+// =============================================================================
+// Path Blocking (active route blocking) Tests
+// =============================================================================
+
+void describe('Path Blocking', () => {
+  void test('should compile domain/path rule to include base and subdomains', () => {
+    const patterns = buildPathRulePatterns('facebook.com/gaming');
+    assert.deepStrictEqual(patterns, ['*://*.facebook.com/gaming*', '*://facebook.com/gaming*']);
+  });
+
+  void test('should match blocked path for base domain', () => {
+    const rules = compileBlockedPathRules(['facebook.com/gaming']);
+    const matched = findMatchingBlockedPathRule('https://facebook.com/gaming/live', rules);
+    assert.ok(matched !== null);
+    assert.strictEqual(matched.rawRule, 'facebook.com/gaming');
+  });
+
+  void test('should match blocked path for subdomain', () => {
+    const rules = compileBlockedPathRules(['facebook.com/gaming']);
+    const matched = findMatchingBlockedPathRule('https://m.facebook.com/gaming/watch', rules);
+    assert.ok(matched !== null);
+    assert.strictEqual(matched.rawRule, 'facebook.com/gaming');
+  });
+
+  void test('should support path wildcard rules', () => {
+    const rules = compileBlockedPathRules(['*/tracking/*']);
+    const matched = findMatchingBlockedPathRule('https://example.org/app/tracking/pixel', rules);
+    assert.ok(matched !== null);
+    assert.strictEqual(matched.rawRule, '*/tracking/*');
+  });
+
+  void test('should redirect main_frame requests to blocked page', () => {
+    const rules = compileBlockedPathRules(['example.com/private']);
+    const outcome = evaluatePathBlocking(
+      {
+        type: 'main_frame',
+        url: 'https://example.com/private/data',
+        originUrl: 'https://portal.school/dashboard',
+      },
+      rules
+    );
+
+    assert.ok(outcome !== null);
+    assert.ok(outcome.redirectUrl);
+    assert.strictEqual(outcome.cancel, undefined);
+    assert.ok((outcome.reason ?? '').startsWith('BLOCKED_PATH_POLICY:'));
+  });
+
+  void test('should cancel XHR requests that match blocked route', () => {
+    const rules = compileBlockedPathRules(['example.com/private']);
+    const outcome = evaluatePathBlocking(
+      {
+        type: 'xmlhttprequest',
+        url: 'https://example.com/private/api',
+      },
+      rules
+    );
+
+    assert.deepStrictEqual(outcome, {
+      cancel: true,
+      reason: 'BLOCKED_PATH_POLICY:example.com/private',
+    });
+  });
+
+  void test('should not block non-target resource types', () => {
+    const rules = compileBlockedPathRules(['example.com/private']);
+    const outcome = evaluatePathBlocking(
+      {
+        type: 'image',
+        url: 'https://example.com/private/banner.png',
+      },
+      rules
+    );
+
+    assert.strictEqual(outcome, null);
+  });
+
+  void test('should not block extension resources', () => {
+    const rules = compileBlockedPathRules(['example.com/private']);
+    const outcome = evaluatePathBlocking(
+      {
+        type: 'main_frame',
+        url: 'moz-extension://abc123/blocked/blocked.html',
+      },
+      rules
+    );
+
+    assert.strictEqual(outcome, null);
   });
 });
 

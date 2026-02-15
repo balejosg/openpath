@@ -17,6 +17,7 @@
   },
   "permissions": [
     "webRequest",
+    "webRequestBlocking",
     "webNavigation",
     "tabs",
     "clipboardWrite",
@@ -38,5 +39,11 @@
   "icons": {
     "48": "icons/icon-48.png",
     "96": "icons/icon-96.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["blocked/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
