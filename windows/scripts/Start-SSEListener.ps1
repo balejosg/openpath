@@ -79,14 +79,12 @@ function Get-MachineToken {
 function Get-SSEUrl {
     <#
     .SYNOPSIS
-        Derives the SSE endpoint URL from the whitelist URL
+        Derives the SSE endpoint URL from the whitelist URL (without token)
     #>
     param(
         [Parameter(Mandatory = $true)]
         [string]$WhitelistUrl
     )
-
-    $token = Get-MachineToken -WhitelistUrl $WhitelistUrl
 
     # Extract base URL (scheme + host)
     if ($WhitelistUrl -match '^(https?://[^/]+)') {
@@ -96,7 +94,7 @@ function Get-SSEUrl {
         throw "Cannot extract base URL from whitelist URL"
     }
 
-    return "$baseUrl/api/machines/events?token=$token"
+    return "$baseUrl/api/machines/events"
 }
 
 # =============================================================================
@@ -170,10 +168,10 @@ function Start-SSEConnection {
     }
 
     $sseUrl = Get-SSEUrl -WhitelistUrl $sseConfig.WhitelistUrl
-    $maskedUrl = $sseUrl -replace 'token=[^&]+', 'token=***'
+    $machineToken = Get-MachineToken -WhitelistUrl $sseConfig.WhitelistUrl
     $backoff = $sseConfig.ReconnectMin
 
-    Write-OpenPathLog "SSE listener starting (endpoint: $maskedUrl)"
+    Write-OpenPathLog "SSE listener starting (endpoint: $sseUrl)"
 
     while ($true) {
         Write-OpenPathLog "SSE: Connecting..."
@@ -192,6 +190,9 @@ function Start-SSEConnection {
             $request = [System.Net.Http.HttpRequestMessage]::new(
                 [System.Net.Http.HttpMethod]::Get,
                 $sseUrl
+            )
+            $request.Headers.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new(
+                "Bearer", $machineToken
             )
             $request.Headers.Accept.Add(
                 [System.Net.Http.Headers.MediaTypeWithQualityHeaderValue]::new("text/event-stream")
