@@ -383,11 +383,11 @@ export default function DomainRequests() {
         prev.map((r) =>
           selectedRequestIds.includes(r.id) && r.status === 'pending'
             ? {
-              ...r,
-              status: 'approved',
-              updatedAt: nowIso,
-              resolvedAt: nowIso,
-            }
+                ...r,
+                status: 'approved',
+                updatedAt: nowIso,
+                resolvedAt: nowIso,
+              }
             : r
         )
       );
@@ -438,12 +438,12 @@ export default function DomainRequests() {
         prev.map((r) =>
           selectedRequestIds.includes(r.id) && r.status === 'pending'
             ? {
-              ...r,
-              status: 'rejected',
-              updatedAt: nowIso,
-              resolvedAt: nowIso,
-              resolutionNote: bulkRejectReason || r.resolutionNote,
-            }
+                ...r,
+                status: 'rejected',
+                updatedAt: nowIso,
+                resolvedAt: nowIso,
+                resolutionNote: bulkRejectReason || r.resolutionNote,
+              }
             : r
         )
       );

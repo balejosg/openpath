@@ -57,9 +57,9 @@ sudo WHITELIST_URL="https://api.example.com/w/TOKEN/whitelist.txt" \
 - hosts: lab_computers
   become: true
   vars:
-    openpath_api: "https://openpath.school.edu"
+    openpath_api: 'https://openpath.school.edu'
     classroom: "{{ inventory_hostname | regex_replace('pc-', '') }}"
-    shared_secret: "{{ vault_shared_secret }}"
+    shared_secret: '{{ vault_shared_secret }}'
 
   tasks:
     - name: Copy OpenPath deb package
@@ -178,13 +178,13 @@ sudo dpkg -r openpath-dnsmasq
 
 ### Services
 
-| Service | Type | Purpose |
-|---------|------|---------|
-| `openpath-dnsmasq.timer` | Timer (5min) | Fallback whitelist polling |
-| `dnsmasq-watchdog.timer` | Timer (1min) | Health check + integrity |
-| `openpath-sse-listener.service` | Persistent | Real-time SSE updates |
-| `captive-portal-detector.service` | Persistent | WiFi portal detection |
-| `dnsmasq.service` | Persistent | DNS filtering engine |
+| Service                           | Type         | Purpose                    |
+| --------------------------------- | ------------ | -------------------------- |
+| `openpath-dnsmasq.timer`          | Timer (5min) | Fallback whitelist polling |
+| `dnsmasq-watchdog.timer`          | Timer (1min) | Health check + integrity   |
+| `openpath-sse-listener.service`   | Persistent   | Real-time SSE updates      |
+| `captive-portal-detector.service` | Persistent   | WiFi portal detection      |
+| `dnsmasq.service`                 | Persistent   | DNS filtering engine       |
 
 ### Security Layers
 
