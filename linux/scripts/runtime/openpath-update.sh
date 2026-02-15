@@ -314,16 +314,13 @@ main() {
         fi
     fi
     
-    # CERRAR NAVEGADORES solo si:
-    # 1. Las políticas de navegador cambiaron, O
-    # 2. El sistema pasó de desactivado a activado (firewall estaba inactivo)
+    # Aplicar cambios de red sin cerrar navegadores.
+    # El bloqueo por rutas se aplica en caliente desde la extension.
     if [ "$policies_changed" = true ]; then
-        log "Cerrando navegadores por cambio en políticas..."
-        force_browser_close
+        log "Cambio en políticas detectado (sin cierre de navegadores)"
         flush_connections
     elif [ "$firewall_was_inactive" = true ]; then
-        log "Cerrando navegadores por reactivación del sistema..."
-        force_browser_close
+        log "Sistema reactivado (sin cierre de navegadores)"
         flush_connections
     fi
     
