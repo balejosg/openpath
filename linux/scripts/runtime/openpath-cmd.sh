@@ -556,6 +556,7 @@ cmd_help() {
     echo "  restart         Reiniciar servicios"
     echo "  rotate-token    Rotar token de descarga (modo Aula)"
     echo "  enroll          Registrar maquina en un aula"
+    echo "  self-update     Actualizar agente a la última versión"
     echo "  help            Mostrar esta ayuda"
     echo ""
 }
@@ -576,6 +577,7 @@ case "${1:-status}" in
     restart)    cmd_restart ;;
     rotate-token) cmd_rotate_token ;;
     enroll)     shift; cmd_enroll "$@" ;;
+    self-update) shift; /usr/local/bin/openpath-self-update.sh "$@" ;;
     help|--help|-h) cmd_help ;;
     *)
         echo -e "${RED}Comando desconocido: $1${NC}"

@@ -192,6 +192,7 @@ rm -f /usr/local/bin/dnsmasq-watchdog.sh
 rm -f /usr/local/bin/dnsmasq-init-resolv.sh
 rm -f /usr/local/bin/captive-portal-detector.sh
 rm -f /usr/local/bin/openpath
+rm -f /usr/local/bin/openpath-self-update.sh
 rm -rf /usr/local/lib/openpath
 rm -f /etc/dnsmasq.d/openpath.conf
 rm -rf /var/lib/openpath

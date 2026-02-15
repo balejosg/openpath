@@ -243,6 +243,10 @@ chmod +x "$SCRIPTS_DIR/captive-portal-detector.sh"
 cp "$SCRIPT_DIR/scripts/runtime/openpath-cmd.sh" "$SCRIPTS_DIR/openpath"
 chmod +x "$SCRIPTS_DIR/openpath"
 
+# Script de auto-actualización
+cp "$SCRIPT_DIR/scripts/runtime/openpath-self-update.sh" "$SCRIPTS_DIR/"
+chmod +x "$SCRIPTS_DIR/openpath-self-update.sh"
+
 # Script de inicialización DNS
 create_dns_init_script
 
