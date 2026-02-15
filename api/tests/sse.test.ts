@@ -117,12 +117,49 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
       assert.strictEqual(response.status, 401);
     });
 
-    await test('should reject requests with invalid token', async () => {
+    await test('should reject requests with invalid token (query param)', async () => {
       const response = await fetch(`${API_URL}/api/machines/events?token=invalid-token`);
       assert.strictEqual(response.status, 403);
     });
 
-    await test('should accept requests with valid machine token', async () => {
+    await test('should reject requests with invalid Bearer token', async () => {
+      const response = await fetch(`${API_URL}/api/machines/events`, {
+        headers: { Authorization: 'Bearer invalid-token' },
+      });
+      assert.strictEqual(response.status, 403);
+    });
+
+    await test('should accept requests with valid Bearer token', async () => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, 2000);
+
+      try {
+        const response = await fetch(`${API_URL}/api/machines/events`, {
+          signal: controller.signal,
+          headers: { Authorization: `Bearer ${testMachineToken}` },
+        });
+
+        assert.strictEqual(response.status, 200);
+
+        const contentType = response.headers.get('content-type');
+        assert.ok(
+          contentType?.includes('text/event-stream'),
+          `Expected text/event-stream, got ${String(contentType)}`
+        );
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          // Expected — connection was aborted after header check
+        } else {
+          throw error;
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    });
+
+    await test('should accept requests with valid query param token (backward compat)', async () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
         controller.abort();
@@ -134,16 +171,9 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
         });
 
         assert.strictEqual(response.status, 200);
-
-        const contentType = response.headers.get('content-type');
-        assert.ok(
-          contentType?.includes('text/event-stream'),
-          `Expected text/event-stream, got ${String(contentType)}`
-        );
       } catch (error) {
-        // AbortError is expected — we're just checking headers
         if (error instanceof DOMException && error.name === 'AbortError') {
-          // Expected — connection was aborted after header check
+          // Expected
         } else {
           throw error;
         }
@@ -168,8 +198,9 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
           reject(new Error('Timeout waiting for connected event'));
         }, 5000);
 
-        void fetch(`${API_URL}/api/machines/events?token=${testMachineToken}`, {
+        void fetch(`${API_URL}/api/machines/events`, {
           signal: controller.signal,
+          headers: { Authorization: `Bearer ${testMachineToken}` },
         })
           .then(async (response) => {
             assert.strictEqual(response.status, 200);
@@ -262,8 +293,9 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
           reject(new Error('Timeout waiting for whitelist-changed event'));
         }, 8000);
 
-        void fetch(`${API_URL}/api/machines/events?token=${testMachineToken}`, {
+        void fetch(`${API_URL}/api/machines/events`, {
           signal: controller.signal,
+          headers: { Authorization: `Bearer ${testMachineToken}` },
         })
           .then(async (response) => {
             const reader = response.body?.getReader();

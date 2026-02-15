@@ -815,11 +815,17 @@ app.get('/w/:machineToken/whitelist.txt', (req: Request, res: Response): void =>
 app.get('/api/machines/events', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {
     try {
-      const machineToken = typeof req.query.token === 'string' ? req.query.token : '';
+      // Accept token from Authorization header (preferred) or query param (legacy)
+      const authHeader = req.headers.authorization;
+      const machineToken = authHeader?.startsWith('Bearer ')
+        ? authHeader.slice(7)
+        : typeof req.query.token === 'string'
+          ? req.query.token
+          : '';
       if (!machineToken) {
         res
           .status(401)
-          .json({ success: false, error: 'Machine token required (query param: token)' });
+          .json({ success: false, error: 'Machine token required (Authorization: Bearer or query param)' });
         return;
       }
 
