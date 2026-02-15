@@ -88,7 +88,7 @@ await describe('Security and Hardening Tests', async () => {
 
   await describe('Authorization Boundaries', async () => {
     await it('prevents students from approving requests', async (): Promise<void> => {
-      const domain = `student-test-${Date.now()}.com`;
+      const domain = `student-test-${String(Date.now())}.com`;
       // 1. Create a request
       const createResp = await request('/trpc/requests.create', {
         method: 'POST',
@@ -133,7 +133,7 @@ await describe('Security and Hardening Tests', async () => {
     });
 
     await it('prevents cross-group access', async (): Promise<void> => {
-      const domain = `group-b-test-${Date.now()}.com`;
+      const domain = `group-b-test-${String(Date.now())}.com`;
       // 1. Create a request for group-b
       const createResp = await request('/trpc/requests.create', {
         method: 'POST',
@@ -323,7 +323,7 @@ await describe('Security and Hardening Tests', async () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           json: {
-            domain: `privacy-test-${Date.now()}.com`,
+            domain: `privacy-test-${String(Date.now())}.com`,
             reason: 'test',
             requesterEmail: 'user@test.local',
             fullUrl: 'https://example.com/private/path',
