@@ -32,7 +32,7 @@ function Register-OpenPathTask {
     
     $updateTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) `
         -RepetitionInterval (New-TimeSpan -Minutes $UpdateIntervalMinutes) `
-        -RepetitionDuration (New-TimeSpan -Days 9999)
+        -RepetitionDuration ([TimeSpan]::MaxValue)
     
     $updatePrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
     
@@ -58,7 +58,7 @@ function Register-OpenPathTask {
     
     $watchdogTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
         -RepetitionInterval (New-TimeSpan -Minutes $WatchdogIntervalMinutes) `
-        -RepetitionDuration (New-TimeSpan -Days 9999)
+        -RepetitionDuration ([TimeSpan]::MaxValue)
     
     Register-ScheduledTask -TaskName "$script:TaskPrefix-Watchdog" `
         -Action $watchdogAction `
