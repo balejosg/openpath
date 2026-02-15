@@ -416,6 +416,28 @@ echo "[13/13] Habilitando servicios..."
 
 enable_services
 
+# Generate integrity baseline for anti-tampering watchdog
+echo "Generando hashes de integridad..."
+source "$INSTALL_DIR/lib/common.sh"
+INTEGRITY_HASH_FILE="$VAR_STATE_DIR/integrity.sha256"
+CRITICAL_INSTALL_FILES=(
+    "$INSTALL_DIR/lib/common.sh"
+    "$INSTALL_DIR/lib/dns.sh"
+    "$INSTALL_DIR/lib/firewall.sh"
+    "$INSTALL_DIR/lib/browser.sh"
+    "$INSTALL_DIR/lib/services.sh"
+    "$INSTALL_DIR/lib/rollback.sh"
+    "$SCRIPTS_DIR/openpath-update.sh"
+    "$SCRIPTS_DIR/dnsmasq-watchdog.sh"
+    "$SCRIPTS_DIR/openpath"
+)
+> "$INTEGRITY_HASH_FILE"
+for f in "${CRITICAL_INSTALL_FILES[@]}"; do
+    [ -f "$f" ] && sha256sum "$f" >> "$INTEGRITY_HASH_FILE"
+done
+chmod 600 "$INTEGRITY_HASH_FILE"
+echo "✓ Hashes de integridad generados"
+
 # Primera ejecución del whitelist
 echo "Ejecutando primera actualización..."
 "$SCRIPTS_DIR/openpath-update.sh" || echo "⚠ Primera actualización falló (el timer lo reintentará)"

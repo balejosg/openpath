@@ -32,7 +32,21 @@ source "$INSTALL_DIR/lib/rollback.sh"
 
 HEALTH_FILE="$CONFIG_DIR/health-status"
 FAIL_COUNT_FILE="$CONFIG_DIR/watchdog-fails"
+INTEGRITY_HASH_FILE="$CONFIG_DIR/integrity.sha256"
 MAX_CONSECUTIVE_FAILS=3
+
+# Critical files that must not be tampered with
+CRITICAL_FILES=(
+    "$INSTALL_DIR/lib/common.sh"
+    "$INSTALL_DIR/lib/dns.sh"
+    "$INSTALL_DIR/lib/firewall.sh"
+    "$INSTALL_DIR/lib/browser.sh"
+    "$INSTALL_DIR/lib/services.sh"
+    "$INSTALL_DIR/lib/rollback.sh"
+    "/usr/local/bin/openpath-update.sh"
+    "/usr/local/bin/dnsmasq-watchdog.sh"
+    "/usr/local/bin/openpath"
+)
 
 # Obtener/incrementar contador de fallos
 get_fail_count() {
@@ -68,6 +82,81 @@ check_upstream_dns() {
 
 check_resolv_conf() {
     grep -q "nameserver 127.0.0.1" /etc/resolv.conf 2>/dev/null
+}
+
+# Generate integrity hashes for critical files
+# Called during install to establish baseline
+generate_integrity_hashes() {
+    local hash_file="$INTEGRITY_HASH_FILE"
+    > "$hash_file"
+    for f in "${CRITICAL_FILES[@]}"; do
+        if [ -f "$f" ]; then
+            sha256sum "$f" >> "$hash_file"
+        fi
+    done
+    chmod 600 "$hash_file"
+    log "[INTEGRITY] Baseline hashes generated for ${#CRITICAL_FILES[@]} files"
+}
+
+# Verify file integrity against stored hashes
+# Returns 0 if all OK, 1 if tampering detected
+check_integrity() {
+    if [ ! -f "$INTEGRITY_HASH_FILE" ]; then
+        # No baseline yet — generate one and return OK
+        generate_integrity_hashes
+        return 0
+    fi
+
+    local tampered=0
+    local missing=0
+
+    for f in "${CRITICAL_FILES[@]}"; do
+        if [ ! -f "$f" ]; then
+            log_warn "[INTEGRITY] MISSING: $f"
+            missing=$((missing + 1))
+            continue
+        fi
+
+        local current_hash
+        current_hash=$(sha256sum "$f" | cut -d' ' -f1)
+        local stored_hash
+        stored_hash=$(grep "$f" "$INTEGRITY_HASH_FILE" 2>/dev/null | cut -d' ' -f1)
+
+        if [ -z "$stored_hash" ]; then
+            # File not in baseline (new file?) — skip
+            continue
+        fi
+
+        if [ "$current_hash" != "$stored_hash" ]; then
+            log_warn "[INTEGRITY] TAMPERED: $f"
+            tampered=$((tampered + 1))
+        fi
+    done
+
+    if [ $((tampered + missing)) -gt 0 ]; then
+        log_error "[INTEGRITY] Tampering detected: $tampered modified, $missing missing"
+        return 1
+    fi
+
+    log_debug "[INTEGRITY] All ${#CRITICAL_FILES[@]} critical files OK"
+    return 0
+}
+
+# Recover tampered files by reinstalling from deb package or backup
+recover_integrity() {
+    log "[INTEGRITY] Attempting recovery..."
+
+    # Try to reinstall from dpkg if the package is installed
+    if dpkg -s openpath-dnsmasq >/dev/null 2>&1; then
+        if dpkg --force-confask --reinstall -i "$(dpkg-query -L openpath-dnsmasq | head -1 | xargs dpkg -S 2>/dev/null | cut -d: -f1)" 2>/dev/null; then
+            log "[INTEGRITY] Recovered from deb package"
+            generate_integrity_hashes
+            return 0
+        fi
+    fi
+
+    log_error "[INTEGRITY] Cannot auto-recover — manual reinstallation required"
+    return 1
 }
 
 # Recuperaciones
@@ -157,6 +246,13 @@ EOF
         log "[WATCHDOG] ADVERTENCIA: /etc/resolv.conf no apunta a localhost"
     fi
     
+    # Check 4: file integrity (anti-tampering)
+    if ! check_integrity; then
+        [ "$status" = "OK" ] && status="WARNING"
+        actions="$actions integrity_recovery"
+        log "[WATCHDOG] ALERTA: Integridad de archivos comprometida"
+    fi
+    
     # Ejecutar recuperaciones
     if [ -n "$actions" ]; then
         log "[WATCHDOG] Iniciando recuperación: $actions"
@@ -168,6 +264,15 @@ EOF
                     ;;
                 resolv_conf)
                     recover_resolv_conf
+                    ;;
+                integrity_recovery)
+                    if recover_integrity; then
+                        log "[WATCHDOG] ✓ Integridad restaurada"
+                        status="RECOVERED"
+                    else
+                        status="TAMPERED"
+                        report_health_to_api "TAMPERED" "integrity_failure"
+                    fi
                     ;;
                 dnsmasq_restart)
                     recover_upstream_dns
