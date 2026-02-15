@@ -235,7 +235,7 @@ Write-Host "  Tareas registradas" -ForegroundColor Green
 Write-Host "[7/7] Ejecutando primera actualización..." -ForegroundColor Yellow
 
 try {
-    & "$OpenPathRoot\scripts\Update-Whitelist.ps1"
+    & "$OpenPathRoot\scripts\Update-OpenPath.ps1"
     Write-Host "  Primera actualización completada" -ForegroundColor Green
 }
 catch {
