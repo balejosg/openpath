@@ -61,6 +61,31 @@ get_whitelist_url() {
     fi
 }
 
+get_url_host() {
+    local url="$1"
+    local without_scheme="${url#*://}"
+    local host_port="${without_scheme%%/*}"
+
+    # Remove optional userinfo (user:pass@host)
+    host_port="${host_port##*@}"
+
+    # Drop optional port
+    echo "${host_port%%:*}"
+}
+
+append_fail_safe_allow_domain() {
+    local domain="$1"
+
+    if validate_domain "$domain"; then
+        local safe_domain
+        safe_domain=$(sanitize_domain "$domain")
+        echo "server=/${safe_domain}/${PRIMARY_DNS}" >> "$DNSMASQ_CONF"
+        log "Fail-safe allows control-plane domain: $safe_domain"
+    else
+        log_warn "Fail-safe cannot allow invalid control-plane domain: ${domain:-<empty>}"
+    fi
+}
+
 WHITELIST_URL=$(get_whitelist_url)
 
 # NOTE: check_captive_portal() is now defined in common.sh
@@ -231,11 +256,12 @@ main() {
                 log_warn "⚠ Whitelist expired: ${age_hours}h old (max: ${max_age_hours}h)"
                 log_warn "Entering fail-safe mode — blocking all DNS until fresh whitelist"
 
-                # Write fail-safe dnsmasq config: blocks everything, only allows
-                # the API and DNS server so the agent can re-download
+                # Write fail-safe dnsmasq config: block everything by default.
+                # Then allow only the whitelist control-plane hostname so the
+                # agent can recover automatically.
                 cat > "$DNSMASQ_CONF" << EOF
 # FAIL-SAFE MODE — whitelist expired (${age_hours}h old, max ${max_age_hours}h)
-# Only allows DNS queries to the upstream server and API server
+# Blocks all domains by default
 no-resolv
 resolv-file=/run/dnsmasq/resolv.conf
 listen-address=127.0.0.1
@@ -244,6 +270,11 @@ server=$PRIMARY_DNS
 # Block all domains by default (return NXDOMAIN)
 address=/#/
 EOF
+
+                local whitelist_host
+                whitelist_host=$(get_url_host "$WHITELIST_URL")
+                append_fail_safe_allow_domain "$whitelist_host"
+
                 rm -f "$DNSMASQ_CONF_HASH" 2>/dev/null || true
                 systemctl restart dnsmasq 2>/dev/null || true
                 log "=== Sistema en modo fail-safe (whitelist expirada) ==="

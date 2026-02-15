@@ -212,8 +212,10 @@ activate_firewall() {
             log_debug "Skipping DoH block for $resolver_ip (is upstream DNS)"
             continue
         fi
-        add_important_rule "Block DoH resolver $resolver_ip" \
+        add_important_rule "Block DoH resolver $resolver_ip (TCP/443)" \
             iptables -A OUTPUT -d "$resolver_ip" -p tcp --dport 443 -j DROP
+        add_important_rule "Block DoH resolver $resolver_ip (UDP/443)" \
+            iptables -A OUTPUT -d "$resolver_ip" -p udp --dport 443 -j DROP
     done
 
     # 8. Block common VPNs - prevents bypass via VPN tunnels

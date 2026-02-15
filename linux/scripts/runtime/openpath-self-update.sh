@@ -30,15 +30,27 @@ LIB_DIR="${SCRIPT_DIR}/../../lib"
 if [ -f "$LIB_DIR/common.sh" ]; then
     # shellcheck source=/dev/null
     source "$LIB_DIR/common.sh"
+elif [ -f "/usr/local/lib/openpath/lib/common.sh" ]; then
+    # shellcheck source=/dev/null
+    source "/usr/local/lib/openpath/lib/common.sh"
 else
+    # Backward-compatible fallback for older installations.
+    # shellcheck source=/dev/null
     source /usr/local/lib/openpath/common.sh 2>/dev/null || true
+fi
+
+if ! declare -F log >/dev/null 2>&1; then
+    log() { echo "$*"; }
+    log_warn() { echo "$*" >&2; }
+    log_error() { echo "$*" >&2; }
+    log_debug() { :; }
 fi
 
 # =============================================================================
 # Configuration
 # =============================================================================
 
-GITHUB_REPO="${OPENPATH_GITHUB_REPO:-balejosg/Whitelist}"
+GITHUB_REPO="${OPENPATH_GITHUB_REPO:-balejosg/openpath}"
 GITHUB_API="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
 DOWNLOAD_DIR="/tmp/openpath-update"
 BACKUP_DIR="/tmp/openpath-update-backup"
@@ -48,6 +60,7 @@ CURRENT_VERSION="${VERSION:-0.0.0}"
 PRESERVE_FILES=(
     "/etc/openpath/whitelist-url.conf"
     "/etc/openpath/classroom.conf"
+    "/etc/openpath/overrides.conf"
     "/etc/openpath/config-overrides.conf"
     "/var/lib/openpath/whitelist.txt"
     "/var/lib/openpath/whitelist-domains.conf"
@@ -206,7 +219,7 @@ install_update() {
 
     # Regenerate integrity hashes for the new version
     if [ -f "/usr/local/bin/dnsmasq-watchdog.sh" ]; then
-        source /usr/local/lib/openpath/common.sh 2>/dev/null || true
+        source /usr/local/lib/openpath/lib/common.sh 2>/dev/null || true
         # The watchdog will regenerate hashes on next run if missing
         rm -f "/var/lib/openpath/integrity.sha256"
         log "Integrity hashes will be regenerated on next watchdog run"

@@ -88,7 +88,7 @@ check_resolv_conf() {
 # Called during install to establish baseline
 generate_integrity_hashes() {
     local hash_file="$INTEGRITY_HASH_FILE"
-    > "$hash_file"
+    : > "$hash_file"
     for f in "${CRITICAL_FILES[@]}"; do
         if [ -f "$f" ]; then
             sha256sum "$f" >> "$hash_file"
@@ -146,10 +146,19 @@ check_integrity() {
 recover_integrity() {
     log "[INTEGRITY] Attempting recovery..."
 
-    # Try to reinstall from dpkg if the package is installed
+    # Try to reinstall package if it is installed
     if dpkg -s openpath-dnsmasq >/dev/null 2>&1; then
-        if dpkg --force-confask --reinstall -i "$(dpkg-query -L openpath-dnsmasq | head -1 | xargs dpkg -S 2>/dev/null | cut -d: -f1)" 2>/dev/null; then
+        if DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y openpath-dnsmasq >/dev/null 2>&1; then
             log "[INTEGRITY] Recovered from deb package"
+            generate_integrity_hashes
+            return 0
+        fi
+
+        # Fallback: use cached .deb if available
+        local cached_deb
+        cached_deb=$(ls -1 /var/cache/apt/archives/openpath-dnsmasq_*.deb 2>/dev/null | head -1 || true)
+        if [ -n "$cached_deb" ] && dpkg -i "$cached_deb" >/dev/null 2>&1; then
+            log "[INTEGRITY] Recovered from cached package: $cached_deb"
             generate_integrity_hashes
             return 0
         fi
