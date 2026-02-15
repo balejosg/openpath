@@ -23,7 +23,7 @@
     Attempts auto-recovery if problems are detected.
 #>
 
-$ErrorActionPreference = "SilentlyContinue"
+$ErrorActionPreference = "Stop"
 $OpenPathRoot = "C:\OpenPath"
 
 # Import modules
@@ -34,58 +34,82 @@ Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
 $issues = @()
 
 # Check 1: Acrylic service running
-$acrylicService = Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $acrylicService -or $acrylicService.Status -ne 'Running') {
-    $issues += "Acrylic service not running"
-    Write-OpenPathLog "Watchdog: Acrylic service not running, attempting restart..." -Level WARN
-    Start-AcrylicService
+try {
+    $acrylicService = Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $acrylicService -or $acrylicService.Status -ne 'Running') {
+        $issues += "Acrylic service not running"
+        Write-OpenPathLog "Watchdog: Acrylic service not running, attempting restart..." -Level WARN
+        Start-AcrylicService
+    }
+}
+catch {
+    Write-OpenPathLog "Watchdog: Error checking Acrylic service: $_" -Level ERROR
 }
 
 # Check 2: DNS resolution working (should resolve whitelisted domain)
-if (-not (Test-DNSResolution -Domain "google.com")) {
-    $issues += "DNS resolution failed for whitelisted domain"
-    Write-OpenPathLog "Watchdog: DNS resolution failed, restarting Acrylic..." -Level WARN
-    Restart-AcrylicService
-    Start-Sleep -Seconds 3
+try {
+    if (-not (Test-DNSResolution -Domain "google.com")) {
+        $issues += "DNS resolution failed for whitelisted domain"
+        Write-OpenPathLog "Watchdog: DNS resolution failed, restarting Acrylic..." -Level WARN
+        Restart-AcrylicService
+        Start-Sleep -Seconds 3
+    }
+}
+catch {
+    Write-OpenPathLog "Watchdog: Error checking DNS resolution: $_" -Level ERROR
 }
 
 # Check 3: DNS sinkhole working (should block non-whitelisted)
-if (-not (Test-DNSSinkhole -Domain "this-should-be-blocked-test-12345.com")) {
-    $issues += "DNS sinkhole not working"
-    Write-OpenPathLog "Watchdog: Sinkhole not working properly" -Level WARN
+try {
+    if (-not (Test-DNSSinkhole -Domain "this-should-be-blocked-test-12345.com")) {
+        $issues += "DNS sinkhole not working"
+        Write-OpenPathLog "Watchdog: Sinkhole not working properly" -Level WARN
+    }
+}
+catch {
+    Write-OpenPathLog "Watchdog: Error checking DNS sinkhole: $_" -Level ERROR
 }
 
 # Check 4: Firewall rules active
-if (-not (Test-FirewallActive)) {
-    $issues += "Firewall rules not active"
-    Write-OpenPathLog "Watchdog: Firewall rules missing, reconfiguring..." -Level WARN
-    
-    try {
+try {
+    if (-not (Test-FirewallActive)) {
+        $issues += "Firewall rules not active"
+        Write-OpenPathLog "Watchdog: Firewall rules missing, reconfiguring..." -Level WARN
         $config = Get-OpenPathConfig
         $acrylicPath = Get-AcrylicPath
         Set-OpenPathFirewall -UpstreamDNS $config.primaryDNS -AcrylicPath $acrylicPath
     }
-    catch {
-        Write-OpenPathLog "Failed to reconfigure firewall: $_" -Level ERROR
-    }
+}
+catch {
+    Write-OpenPathLog "Watchdog: Error checking/reconfiguring firewall: $_" -Level ERROR
 }
 
 # Check 5: Local DNS configured
-$dnsServers = Get-DnsClientServerAddress -AddressFamily IPv4 | 
-    Where-Object { $_.ServerAddresses -contains "127.0.0.1" }
+try {
+    $dnsServers = Get-DnsClientServerAddress -AddressFamily IPv4 | 
+        Where-Object { $_.ServerAddresses -contains "127.0.0.1" }
 
-if (-not $dnsServers) {
-    $issues += "Local DNS not configured"
-    Write-OpenPathLog "Watchdog: Local DNS not configured, fixing..." -Level WARN
-    Set-LocalDNS
+    if (-not $dnsServers) {
+        $issues += "Local DNS not configured"
+        Write-OpenPathLog "Watchdog: Local DNS not configured, fixing..." -Level WARN
+        Set-LocalDNS
+    }
+}
+catch {
+    Write-OpenPathLog "Watchdog: Error checking local DNS: $_" -Level ERROR
 }
 
 # Check 6: SSE listener running
-$sseTask = Get-ScheduledTask -TaskName "OpenPath-SSE" -ErrorAction SilentlyContinue
-if ($sseTask -and $sseTask.State -ne 'Running') {
-    $issues += "SSE listener not running"
-    Write-OpenPathLog "Watchdog: SSE listener not running, restarting..." -Level WARN
-    Start-ScheduledTask -TaskName "OpenPath-SSE" -ErrorAction SilentlyContinue
+try {
+    $sseTask = Get-ScheduledTask -TaskName "OpenPath-SSE" -ErrorAction SilentlyContinue
+    if ($sseTask -and $sseTask.State -ne 'Running') {
+        $issues += "SSE listener not running"
+        Write-OpenPathLog "Watchdog: SSE listener not running, restarting..." -Level WARN
+        Start-ScheduledTask -TaskName "OpenPath-SSE" -ErrorAction SilentlyContinue
+    }
+}
+catch {
+    Write-OpenPathLog "Watchdog: Error checking SSE listener: $_" -Level ERROR
 }
 
 # Check 7: Captive portal detection

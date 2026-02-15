@@ -168,8 +168,7 @@ function Update-AcrylicHost {
     # Enforce max domains limit to protect Acrylic from excessive memory usage
     $maxDomains = 500
     try {
-        $cfg = Get-OpenPathConfig
-        if ($cfg.PSObject.Properties['maxDomains']) { $maxDomains = $cfg.maxDomains }
+        if ($config.PSObject.Properties['maxDomains']) { $maxDomains = $config.maxDomains }
     } catch { <# use default #> }
 
     if ($WhitelistedDomains.Count -gt $maxDomains) {
