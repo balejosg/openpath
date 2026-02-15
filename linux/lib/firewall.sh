@@ -186,6 +186,36 @@ activate_firewall() {
     add_important_rule "Block DNS-over-TLS (port 853)" \
         iptables -A OUTPUT -p tcp --dport 853 -j DROP
 
+    # 7b. Block DNS-over-HTTPS (DoH) resolver IPs - prevents encrypted DNS bypass
+    # These are well-known public DoH providers that could be used to circumvent
+    # the DNS sinkhole via HTTPS (port 443). We block traffic to their IPs entirely.
+    # Note: $PRIMARY_DNS is already ACCEPT'd above, so if the upstream DNS is one
+    # of these, it won't be affected (ACCEPT rules come before these DROPs).
+    local doh_resolvers=(
+        # Google Public DNS
+        "8.8.8.8" "8.8.4.4"
+        # Cloudflare DNS
+        "1.1.1.1" "1.0.0.1"
+        # Quad9
+        "9.9.9.9" "149.112.112.112"
+        # OpenDNS
+        "208.67.222.222" "208.67.220.220"
+        # NextDNS
+        "45.90.28.0" "45.90.30.0"
+        # Mullvad DNS
+        "194.242.2.2" "194.242.2.3"
+    )
+
+    for resolver_ip in "${doh_resolvers[@]}"; do
+        # Skip if this IP is our configured upstream DNS (already ACCEPT'd)
+        if [ "$resolver_ip" = "$PRIMARY_DNS" ]; then
+            log_debug "Skipping DoH block for $resolver_ip (is upstream DNS)"
+            continue
+        fi
+        add_important_rule "Block DoH resolver $resolver_ip" \
+            iptables -A OUTPUT -d "$resolver_ip" -p tcp --dport 443 -j DROP
+    done
+
     # 8. Block common VPNs - prevents bypass via VPN tunnels
     add_important_rule "Block OpenVPN (port 1194)" \
         iptables -A OUTPUT -p udp --dport 1194 -j DROP
