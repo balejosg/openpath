@@ -23,7 +23,8 @@ export type AuthServiceError =
   | { code: 'CONFLICT'; message: string }
   | { code: 'UNAUTHORIZED'; message: string }
   | { code: 'FORBIDDEN'; message: string }
-  | { code: 'NOT_FOUND'; message: string };
+  | { code: 'NOT_FOUND'; message: string }
+  | { code: 'BAD_REQUEST'; message: string };
 
 export type AuthResult<T> = { ok: true; data: T } | { ok: false; error: AuthServiceError };
 
@@ -257,6 +258,53 @@ export async function resetPassword(
   }
 }
 
+/**
+ * Change password for an authenticated user.
+ */
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<AuthResult<{ success: boolean }>> {
+  try {
+    if (!currentPassword || !newPassword) {
+      return {
+        ok: false,
+        error: { code: 'BAD_REQUEST', message: 'Current and new password are required' },
+      };
+    }
+
+    if (newPassword.length < 8) {
+      return {
+        ok: false,
+        error: { code: 'BAD_REQUEST', message: 'New password must be at least 8 characters' },
+      };
+    }
+
+    const user = await userStorage.getUserById(userId);
+    if (!user) {
+      return { ok: false, error: { code: 'NOT_FOUND', message: 'User not found' } };
+    }
+
+    const isValidCurrentPassword = await userStorage.verifyPassword(user, currentPassword);
+    if (!isValidCurrentPassword) {
+      return {
+        ok: false,
+        error: { code: 'BAD_REQUEST', message: 'Current password is incorrect' },
+      };
+    }
+
+    await userStorage.updateUser(user.id, { password: newPassword });
+    return { ok: true, data: { success: true } };
+  } catch (error) {
+    logger.error('auth.changePassword error', { error: getErrorMessage(error) });
+    return {
+      ok: false,
+      error: { code: 'UNAUTHORIZED', message: getErrorMessage(error) },
+    };
+  }
+}
+
 // =============================================================================
 // Default Export
 // =============================================================================
@@ -430,4 +478,5 @@ export default {
   getProfile,
   generateResetToken,
   resetPassword,
+  changePassword,
 };

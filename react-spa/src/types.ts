@@ -2,8 +2,8 @@ import React from 'react';
 
 export enum UserRole {
   ADMIN = 'admin',
-  OPENPATH_ADMIN = 'openpath-admin',
-  USER = 'user',
+  TEACHER = 'teacher',
+  STUDENT = 'student',
   NO_ROLES = 'no roles',
 }
 

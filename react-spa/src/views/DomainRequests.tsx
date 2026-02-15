@@ -71,7 +71,6 @@ export default function DomainRequests() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
-  const [bulkGroupId, setBulkGroupId] = useState('');
   const [bulkRejectReason, setBulkRejectReason] = useState('');
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{
@@ -100,7 +99,6 @@ export default function DomainRequests() {
     request: null,
   });
 
-  const [selectedGroupId, setSelectedGroupId] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
@@ -272,12 +270,11 @@ export default function DomainRequests() {
 
   // Handle approve
   const handleApprove = async () => {
-    if (!approveModal.request || !selectedGroupId) return;
+    if (!approveModal.request) return;
     setActionLoading(true);
     try {
       await trpc.requests.approve.mutate({
         id: approveModal.request.id,
-        groupId: selectedGroupId,
       });
       setRequests((prev) =>
         prev.map((r) =>
@@ -285,7 +282,6 @@ export default function DomainRequests() {
         )
       );
       setApproveModal({ open: false, request: null });
-      setSelectedGroupId('');
     } catch (err) {
       console.error('Error approving request:', err);
     } finally {
@@ -351,7 +347,7 @@ export default function DomainRequests() {
   };
 
   const handleBulkApprove = async () => {
-    if (selectedPendingRequests.length === 0 || !bulkGroupId) return;
+    if (selectedPendingRequests.length === 0) return;
 
     setBulkMessage(null);
     setBulkLoading(true);
@@ -363,7 +359,7 @@ export default function DomainRequests() {
 
     for (const req of selectedPendingRequests) {
       try {
-        await trpc.requests.approve.mutate({ id: req.id, groupId: bulkGroupId });
+        await trpc.requests.approve.mutate({ id: req.id });
         successCount++;
       } catch {
         failedCount++;
@@ -478,10 +474,6 @@ export default function DomainRequests() {
     setSelectedRequestIds(retryCandidates.map((r) => r.id));
 
     if (bulkFailedMode === 'approve') {
-      if (!bulkGroupId) {
-        setBulkMessage('Selecciona un grupo para reintentar aprobacion de fallidas.');
-        return;
-      }
       await handleBulkApprove();
       return;
     }
@@ -603,18 +595,6 @@ export default function DomainRequests() {
             {selectedPendingRequests.length} solicitudes pendientes seleccionadas
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <select
-              value={bulkGroupId}
-              onChange={(e) => setBulkGroupId(e.target.value)}
-              className="px-3 py-2 border border-blue-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Grupo para aprobar en lote...</option>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
             <input
               type="text"
               value={bulkRejectReason}
@@ -628,7 +608,7 @@ export default function DomainRequests() {
               onClick={() => {
                 void handleBulkApprove();
               }}
-              disabled={!bulkGroupId || bulkLoading}
+              disabled={bulkLoading}
               className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg disabled:opacity-50"
             >
               {bulkLoading ? 'Procesando...' : 'Aprobar seleccionadas'}
@@ -690,7 +670,7 @@ export default function DomainRequests() {
                 onClick={() => {
                   void handleRetryFailed();
                 }}
-                disabled={bulkLoading || (bulkFailedMode === 'approve' && !bulkGroupId)}
+                disabled={bulkLoading}
                 className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded disabled:opacity-50"
               >
                 Reintentar fallidas
@@ -930,23 +910,10 @@ export default function DomainRequests() {
               <strong>{approveModal.request.requesterEmail}</strong>
             </p>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Grupo de destino
-              </label>
-              <select
-                value={selectedGroupId}
-                onChange={(e) => setSelectedGroupId(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="">Seleccionar grupo...</option>
-                {groups.map((group) => (
-                  <option key={group.path} value={group.path}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <p className="text-sm text-slate-600 mb-4">
+              La solicitud se aprobara en el grupo original:{' '}
+              <strong>{getGroupName(approveModal.request.groupId)}</strong>
+            </p>
 
             <div className="flex gap-3 justify-end">
               <button
@@ -959,7 +926,7 @@ export default function DomainRequests() {
                 onClick={() => {
                   void handleApprove();
                 }}
-                disabled={!selectedGroupId || actionLoading}
+                disabled={actionLoading}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {actionLoading ? 'Aprobando...' : 'Aprobar'}

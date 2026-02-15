@@ -1,0 +1,75 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import DomainRequests from '../DomainRequests';
+
+const { mockListRequests, mockListGroups, mockApprove } = vi.hoisted(() => ({
+  mockListRequests: vi.fn(),
+  mockListGroups: vi.fn(),
+  mockApprove: vi.fn(),
+}));
+
+vi.mock('../../lib/trpc', () => ({
+  trpc: {
+    requests: {
+      list: {
+        query: mockListRequests,
+      },
+      listGroups: {
+        query: mockListGroups,
+      },
+      approve: {
+        mutate: mockApprove,
+      },
+      reject: {
+        mutate: vi.fn(),
+      },
+      delete: {
+        mutate: vi.fn(),
+      },
+    },
+  },
+}));
+
+describe('DomainRequests - Original group approval', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListRequests.mockResolvedValue([
+      {
+        id: 'req-1',
+        domain: 'example.com',
+        reason: 'Need for class',
+        requesterEmail: 'teacher@example.com',
+        groupId: 'group-1',
+        priority: 'normal',
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        resolvedAt: null,
+        resolvedBy: null,
+      },
+    ]);
+    mockListGroups.mockResolvedValue([{ id: 'group-1', path: 'group-1', name: 'Grupo 1' }]);
+    mockApprove.mockResolvedValue({ success: true });
+  });
+
+  it('approves using request id only and shows original group', async () => {
+    render(<DomainRequests />);
+
+    await screen.findByText('example.com');
+    fireEvent.click(screen.getByTitle('Aprobar'));
+
+    expect(await screen.findByText(/grupo original/i)).toBeInTheDocument();
+    expect(screen.queryByText('Grupo de destino')).not.toBeInTheDocument();
+
+    const approveButtons = screen.getAllByRole('button', { name: 'Aprobar' });
+    const modalApproveButton = approveButtons.at(-1);
+    if (!modalApproveButton) {
+      throw new Error('Modal approve button not found');
+    }
+    fireEvent.click(modalApproveButton);
+
+    await waitFor(() => {
+      expect(mockApprove).toHaveBeenCalledWith({ id: 'req-1' });
+    });
+  });
+});

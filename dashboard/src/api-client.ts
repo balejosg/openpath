@@ -292,17 +292,25 @@ export async function logout(accessToken: string, refreshTokenValue: string): Pr
  * Note: This endpoint may not exist in the current API and needs to be added.
  */
 export async function changePassword(
-  _accessToken: string,
-  _currentPassword: string,
-  _newPassword: string
+  accessToken: string,
+  currentPassword: string,
+  newPassword: string
 ): Promise<{ success: boolean; error?: string }> {
-  // TODO: Add changePassword endpoint to auth router
-  // For now, return an error indicating the feature is not available
-  logger.warn('changePassword called but endpoint not yet implemented');
-  return {
-    success: false,
-    error: 'Password change via API not yet implemented. Please use the API admin tools.',
-  };
+  const trpc = createTRPCWithAuth(accessToken);
+
+  try {
+    await (trpc as any).auth.changePassword.mutate({
+      currentPassword,
+      newPassword,
+    });
+    return { success: true };
+  } catch (error) {
+    logger.error('Change password failed', { error: getTRPCErrorMessage(error) });
+    return {
+      success: false,
+      error: getTRPCErrorMessage(error),
+    };
+  }
 }
 
 // =============================================================================

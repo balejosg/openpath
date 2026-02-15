@@ -9,9 +9,10 @@ function mapApiRole(role: string): UserRole {
     case 'admin':
       return UserRole.ADMIN;
     case 'teacher':
-      return UserRole.OPENPATH_ADMIN;
+      return UserRole.TEACHER;
+    case 'student':
     case 'user':
-      return UserRole.USER;
+      return UserRole.STUDENT;
     default:
       return UserRole.NO_ROLES;
   }
@@ -20,13 +21,14 @@ function mapApiRole(role: string): UserRole {
 const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
   const styles = {
     [UserRole.ADMIN]: 'bg-purple-50 text-purple-700 border-purple-200',
-    [UserRole.OPENPATH_ADMIN]: 'bg-blue-50 text-blue-700 border-blue-200',
-    [UserRole.USER]: 'bg-slate-100 text-slate-600 border-slate-200',
+    [UserRole.TEACHER]: 'bg-blue-50 text-blue-700 border-blue-200',
+    [UserRole.STUDENT]: 'bg-slate-100 text-slate-600 border-slate-200',
     [UserRole.NO_ROLES]: 'bg-red-50 text-red-600 border-red-200',
   };
+  const roleStyle = styles[role];
   return (
     <span
-      className={`px-2 py-0.5 rounded text-[11px] font-semibold border uppercase tracking-wide ${styles[role] || styles[UserRole.USER]}`}
+      className={`px-2 py-0.5 rounded text-[11px] font-semibold border uppercase tracking-wide ${roleStyle}`}
     >
       {role}
     </span>
@@ -51,6 +53,7 @@ const UsersView = () => {
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [newRole, setNewRole] = useState<'admin' | 'teacher' | 'student'>('student');
   const [newError, setNewError] = useState('');
 
   // Mutation loading states
@@ -143,12 +146,14 @@ const UsersView = () => {
         name: newName.trim(),
         email: newEmail.trim(),
         password: newPassword,
+        role: newRole,
       });
       // Refetch to get updated list
       await fetchUsers();
       setNewName('');
       setNewEmail('');
       setNewPassword('');
+      setNewRole('student');
       setShowNewModal(false);
     } catch (err) {
       console.error('Failed to create user:', err);
@@ -470,6 +475,21 @@ const UsersView = () => {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Rol</label>
+                <select
+                  value={newRole}
+                  onChange={(e) => {
+                    setNewRole(e.target.value as 'admin' | 'teacher' | 'student');
+                    if (newError) setNewError('');
+                  }}
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="student">student</option>
+                  <option value="teacher">teacher</option>
+                  <option value="admin">admin</option>
+                </select>
+              </div>
               {newError && (
                 <p className="text-red-500 text-xs flex items-center gap-1">
                   <AlertCircle size={12} /> {newError}
@@ -482,6 +502,7 @@ const UsersView = () => {
                     setNewName('');
                     setNewEmail('');
                     setNewPassword('');
+                    setNewRole('student');
                     setNewError('');
                   }}
                   disabled={saving}

@@ -42,6 +42,29 @@ await describe('Dashboard API Routes', async () => {
       const body = response.body as { success?: boolean };
       assert.strictEqual(body.success, true);
     });
+
+    await it('POST /api/auth/change-password returns 401 without auth', async () => {
+      const response = await request(app).post('/api/auth/change-password').send({
+        currentPassword: 'CurrentPassword123!',
+        newPassword: 'NewPassword123!',
+      });
+
+      assert.strictEqual(response.status, 401);
+    });
+
+    await it('POST /api/auth/change-password validates minimum length (8)', async () => {
+      const response = await request(app)
+        .post('/api/auth/change-password')
+        .set('Authorization', 'Bearer test-token')
+        .send({
+          currentPassword: 'CurrentPassword123!',
+          newPassword: 'short',
+        });
+
+      assert.strictEqual(response.status, 400);
+      const body = response.body as { error?: string };
+      assert.strictEqual(body.error, 'La contraseña debe tener al menos 8 caracteres');
+    });
   });
 
   await describe('Unauthenticated Access', async () => {

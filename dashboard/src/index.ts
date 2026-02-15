@@ -189,9 +189,9 @@ app.post(
     if (
       typeof currentPassword !== 'string' ||
       typeof newPassword !== 'string' ||
-      newPassword.length < 6
+      newPassword.length < 8
     ) {
-      res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
+      res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres' });
       return;
     }
 

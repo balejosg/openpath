@@ -62,6 +62,7 @@ const Settings: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   // System info from API
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
@@ -130,7 +131,7 @@ const Settings: React.FC = () => {
     setShowPasswordModal(false);
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     clearPasswordResetTimer();
     setPasswordError('');
 
@@ -149,16 +150,36 @@ const Settings: React.FC = () => {
       return;
     }
 
-    // Simulate success
-    setPasswordSuccess(true);
-    passwordResetTimerRef.current = setTimeout(() => {
-      setShowPasswordModal(false);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setPasswordSuccess(false);
-      passwordResetTimerRef.current = null;
-    }, 1500);
+    try {
+      setIsChangingPassword(true);
+      await (
+        trpc as unknown as {
+          auth: {
+            changePassword: {
+              mutate: (input: { currentPassword: string; newPassword: string }) => Promise<unknown>;
+            };
+          };
+        }
+      ).auth.changePassword.mutate({
+        currentPassword,
+        newPassword,
+      });
+
+      setPasswordSuccess(true);
+      passwordResetTimerRef.current = setTimeout(() => {
+        setShowPasswordModal(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setPasswordSuccess(false);
+        passwordResetTimerRef.current = null;
+      }, 1500);
+    } catch (err) {
+      console.error('Failed to change password:', err);
+      setPasswordError('No se pudo cambiar la contraseña. Verifica tu contraseña actual.');
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const openPasswordModal = () => {
@@ -551,10 +572,17 @@ const Settings: React.FC = () => {
                     Cancelar
                   </button>
                   <button
-                    onClick={handleChangePassword}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                    onClick={() => void handleChangePassword()}
+                    disabled={isChangingPassword}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Cambiar Contraseña
+                    {isChangingPassword ? (
+                      <span className="inline-flex items-center gap-2">
+                        <Loader2 size={16} className="animate-spin" /> Guardando...
+                      </span>
+                    ) : (
+                      'Cambiar Contraseña'
+                    )}
                   </button>
                 </div>
               </div>

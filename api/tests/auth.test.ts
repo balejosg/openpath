@@ -328,6 +328,88 @@ await describe(
     });
 
     // ============================================
+    // Change Password Tests
+    // ============================================
+    await describe('tRPC auth.changePassword - Change Password', async () => {
+      let testEmail: string;
+      let currentPassword: string;
+      let newPassword: string;
+      let accessToken: string;
+
+      before(async () => {
+        testEmail = `change-password-${String(Date.now())}-${Math.random().toString(36).slice(2)}@example.com`;
+        currentPassword = 'CurrentPassword123!';
+        newPassword = 'NewPassword456!';
+
+        const registerResponse = await trpcMutate('auth.register', {
+          email: testEmail,
+          password: currentPassword,
+          name: 'Change Password User',
+        });
+        assert.strictEqual(registerResponse.status, 200);
+
+        const loginResponse = await trpcMutate('auth.login', {
+          email: testEmail,
+          password: currentPassword,
+        });
+        assert.strictEqual(loginResponse.status, 200);
+
+        const parsedLogin = (await parseTRPC(loginResponse)) as { data?: AuthResult };
+        if (!parsedLogin.data?.accessToken) {
+          throw new Error('Expected accessToken after login');
+        }
+        accessToken = parsedLogin.data.accessToken;
+      });
+
+      await test('should require authentication', async () => {
+        const response = await trpcMutate('auth.changePassword', {
+          currentPassword,
+          newPassword,
+        });
+
+        assert.strictEqual(response.status, 401);
+      });
+
+      await test('should reject wrong current password', async () => {
+        const response = await trpcMutate(
+          'auth.changePassword',
+          {
+            currentPassword: 'WrongCurrentPassword123!',
+            newPassword,
+          },
+          { Authorization: `Bearer ${accessToken}` }
+        );
+
+        assert.strictEqual(response.status, 400);
+      });
+
+      await test('should change password and invalidate old credentials', async () => {
+        const changeResponse = await trpcMutate(
+          'auth.changePassword',
+          {
+            currentPassword,
+            newPassword,
+          },
+          { Authorization: `Bearer ${accessToken}` }
+        );
+
+        assert.strictEqual(changeResponse.status, 200);
+
+        const oldLoginResponse = await trpcMutate('auth.login', {
+          email: testEmail,
+          password: currentPassword,
+        });
+        assert.strictEqual(oldLoginResponse.status, 401);
+
+        const newLoginResponse = await trpcMutate('auth.login', {
+          email: testEmail,
+          password: newPassword,
+        });
+        assert.strictEqual(newLoginResponse.status, 200);
+      });
+    });
+
+    // ============================================
     // User Management Tests (Admin Only)
     // ============================================
     await describe('tRPC users - Admin User Management Endpoints', async () => {

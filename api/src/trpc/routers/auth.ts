@@ -112,4 +112,26 @@ export const authRouter = router({
       }
       return result.data;
     }),
+
+  /**
+   * Change password for authenticated user.
+   */
+  changePassword: protectedProcedure
+    .input(
+      z.object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(8),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const result = await AuthService.changePassword(
+        ctx.user.sub,
+        input.currentPassword,
+        input.newPassword
+      );
+      if (!result.ok) {
+        throw new TRPCError({ code: result.error.code, message: result.error.message });
+      }
+      return result.data;
+    }),
 });

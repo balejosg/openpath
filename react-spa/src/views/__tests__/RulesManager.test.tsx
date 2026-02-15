@@ -47,6 +47,54 @@ vi.mock('../../hooks/useRulesManager', () => ({
   FilterType: {},
 }));
 
+vi.mock('../../hooks/useGroupedRulesManager', () => ({
+  useGroupedRulesManager: () => ({
+    domainGroups: [
+      {
+        root: 'google.com',
+        rules: [
+          {
+            id: '1',
+            groupId: 'test-group',
+            type: 'whitelist',
+            value: 'google.com',
+            comment: null,
+            createdAt: '2024-01-15T10:00:00Z',
+          },
+        ],
+        status: 'allowed',
+      },
+    ],
+    totalGroups: 1,
+    totalRules: 1,
+    loading: false,
+    error: null,
+    page: 1,
+    setPage: vi.fn(),
+    totalPages: 1,
+    hasMore: false,
+    filter: 'all',
+    setFilter: vi.fn(),
+    search: '',
+    setSearch: vi.fn(),
+    counts: { all: 1, allowed: 1, blocked: 0 },
+    selectedIds: new Set<string>(),
+    toggleSelection: vi.fn(),
+    toggleSelectAll: vi.fn(),
+    selectGroup: vi.fn(),
+    deselectGroup: vi.fn(),
+    clearSelection: vi.fn(),
+    isAllSelected: false,
+    hasSelection: false,
+    addRule: vi.fn().mockResolvedValue(true),
+    deleteRule: vi.fn(),
+    bulkDeleteRules: vi.fn().mockResolvedValue(undefined),
+    bulkCreateRules: mockBulkCreateRules,
+    updateRule: vi.fn().mockResolvedValue(true),
+    refetch: vi.fn(),
+  }),
+}));
+
 const mockToastError = vi.fn();
 vi.mock('../../components/ui/Toast', () => ({
   useToast: () => ({
