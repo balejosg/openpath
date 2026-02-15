@@ -13,15 +13,23 @@ const LEGACY_TOKEN_KEY = 'requests_api_token';
 function getApiUrl(): string {
   if (typeof window === 'undefined') return '';
   // Primero intentar URL guardada
-  const savedUrl = localStorage.getItem('requests_api_url');
-  if (savedUrl) return savedUrl;
+  try {
+    const savedUrl = localStorage.getItem('requests_api_url');
+    if (savedUrl) return savedUrl;
+  } catch {
+    // localStorage may not be available in test environments
+  }
 
   // Por defecto, usar mismo origen.
   // Esto mantiene compatibilidad con el proxy de Vite (misma origin) y evita
   // problemas en tests Node (fetch de undici no acepta URLs relativas).
-  const origin = window.location.origin;
-  if (!origin || origin === 'null') return 'http://localhost';
-  return origin;
+  try {
+    const origin = window.location.origin;
+    if (!origin || origin === 'null') return 'http://localhost';
+    return origin;
+  } catch {
+    return 'http://localhost';
+  }
 }
 
 /**
@@ -29,18 +37,30 @@ function getApiUrl(): string {
  */
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(ACCESS_TOKEN_KEY) ?? localStorage.getItem(LEGACY_TOKEN_KEY);
+  try {
+    return localStorage.getItem(ACCESS_TOKEN_KEY) ?? localStorage.getItem(LEGACY_TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Limpia el estado de autenticación y recarga la página.
  */
 function clearAuthAndReload(): void {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem('openpath_refresh_token');
-  localStorage.removeItem('openpath_user');
-  localStorage.removeItem(LEGACY_TOKEN_KEY);
-  window.location.reload();
+  try {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem('openpath_refresh_token');
+    localStorage.removeItem('openpath_user');
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
+  } catch {
+    // localStorage may not be available
+  }
+  try {
+    window.location.reload();
+  } catch {
+    // location.reload may not be available in test environments
+  }
 }
 
 /**

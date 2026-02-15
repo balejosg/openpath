@@ -1,6 +1,24 @@
-# OpenPath System - sudo permissions
-# Allows all users to execute openpath commands without password
+# OpenPath System - sudo permissions (restrictive)
+# Only read-only commands are passwordless.
+# Destructive commands (update, enable, disable, force, restart, rotate-token,
+# enroll, self-update) REQUIRE root password.
 
-ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath *
+# Permitir a todos los usuarios ejecutar comandos de LECTURA sin contraseña
+# Estos son seguros: no modifican configuración ni desactivan protecciones
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath status
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath test
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath check *
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath health
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath domains
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath domains *
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath log
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath log *
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath logs
+ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath help
+
+# Comandos de sistema (solo internos, no expuestos al usuario)
 ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath-update.sh
 ALL ALL=(root) NOPASSWD: /usr/local/bin/dnsmasq-watchdog.sh
+
+# NOTA: Los siguientes comandos REQUIEREN contraseña de root:
+# openpath update, enable, disable, force, restart, rotate-token, enroll

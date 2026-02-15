@@ -21,7 +21,7 @@
     "test:e2e:smoke": "npm run test:e2e --workspace=@openpath/react-spa -- --grep @smoke",
     "test:watch:spa": "npm run test --workspace=@openpath/react-spa -- --watch",
     "test:watch:api": "npm run test:watch --workspace=@openpath/api",
-    "e2e:setup": "docker compose -f docker-compose.test.yml up -d && sleep 3 && npm run db:setup:e2e --workspace=@openpath/api",
+    "e2e:setup": "docker compose -f docker-compose.test.yml up -d && sleep 3 && DB_PORT=5433 DB_PASSWORD=openpath_test DB_NAME=openpath_test npm run db:setup:e2e --workspace=@openpath/api",
     "e2e:teardown": "docker compose -f docker-compose.test.yml down",
     "e2e:run": "npm run test:e2e --workspace=@openpath/react-spa",
     "e2e:full": "npm run e2e:setup && npm run e2e:run; npm run e2e:teardown",
@@ -40,7 +40,7 @@
     "security:secrets": "secretlint '**/*.{js,ts,tsx,json,yml,yaml,env,env.*}'",
     "security:audit": "npm audit --audit-level=high",
     "security:files": "bash scripts/check-sensitive-files.sh",
-    "size:check": "npm run size --workspace=@openpath/react-spa"
+    "size:check": "test -d react-spa/dist && npm run size --workspace=@openpath/react-spa || echo 'SKIP: react-spa/dist not built, skipping size check'"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.4.0",

@@ -49,6 +49,7 @@ const mockGroupedResult = {
           value: 'mail.google.com',
           comment: null,
           createdAt: '2024-01-01',
+          source: 'manual' as const,
         },
         {
           id: '2',
@@ -58,6 +59,7 @@ const mockGroupedResult = {
           value: 'drive.google.com',
           comment: null,
           createdAt: '2024-01-01',
+          source: 'manual' as const,
         },
       ],
       status: 'allowed' as const,
@@ -73,6 +75,7 @@ const mockGroupedResult = {
           value: 'facebook.com',
           comment: null,
           createdAt: '2024-01-01',
+          source: 'manual' as const,
         },
       ],
       status: 'blocked' as const,
