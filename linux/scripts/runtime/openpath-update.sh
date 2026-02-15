@@ -218,6 +218,41 @@ main() {
             cleanup_system
             return
         fi
+
+        # Offline expiration policy: check whitelist age
+        local max_age_hours="${WHITELIST_MAX_AGE_HOURS:-24}"
+        if [ "$max_age_hours" -gt 0 ] 2>/dev/null; then
+            local file_age_seconds
+            file_age_seconds=$(( $(date +%s) - $(stat -c %Y "$WHITELIST_FILE" 2>/dev/null || echo 0) ))
+            local max_age_seconds=$(( max_age_hours * 3600 ))
+
+            if [ "$file_age_seconds" -ge "$max_age_seconds" ]; then
+                local age_hours=$(( file_age_seconds / 3600 ))
+                log_warn "⚠ Whitelist expired: ${age_hours}h old (max: ${max_age_hours}h)"
+                log_warn "Entering fail-safe mode — blocking all DNS until fresh whitelist"
+
+                # Write fail-safe dnsmasq config: blocks everything, only allows
+                # the API and DNS server so the agent can re-download
+                cat > "$DNSMASQ_CONF" << EOF
+# FAIL-SAFE MODE — whitelist expired (${age_hours}h old, max ${max_age_hours}h)
+# Only allows DNS queries to the upstream server and API server
+no-resolv
+resolv-file=/run/dnsmasq/resolv.conf
+listen-address=127.0.0.1
+bind-interfaces
+server=$PRIMARY_DNS
+# Block all domains by default (return NXDOMAIN)
+address=/#/
+EOF
+                rm -f "$DNSMASQ_CONF_HASH" 2>/dev/null || true
+                systemctl restart dnsmasq 2>/dev/null || true
+                log "=== Sistema en modo fail-safe (whitelist expirada) ==="
+                return
+            else
+                local remaining_hours=$(( (max_age_seconds - file_age_seconds) / 3600 ))
+                log "Whitelist age OK (expires in ~${remaining_hours}h)"
+            fi
+        fi
     fi
     
     # SIEMPRE verificar desactivación (tanto si se descargó como si usamos el existente)
