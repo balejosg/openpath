@@ -48,9 +48,18 @@ $OpenPathRoot = "C:\OpenPath"
 
 # Validate classroom mode parameters
 if ($Classroom -and $ApiUrl) {
+    # Resolve token: command-line param → env var → interactive prompt
     if (-not $RegistrationToken) {
-        Write-Host "ERROR: -RegistrationToken is required in classroom mode" -ForegroundColor Red
-        Write-Host "  Get the registration token from the central server administrator" -ForegroundColor Yellow
+        if ($env:OPENPATH_TOKEN) {
+            $RegistrationToken = $env:OPENPATH_TOKEN
+        } else {
+            $RegistrationToken = Read-Host "Enter registration token"
+        }
+    }
+
+    if (-not $RegistrationToken) {
+        Write-Host "ERROR: Registration token is required in classroom mode" -ForegroundColor Red
+        Write-Host "  Provide via -RegistrationToken, `$env:OPENPATH_TOKEN, or interactive prompt" -ForegroundColor Yellow
         exit 1
     }
     
