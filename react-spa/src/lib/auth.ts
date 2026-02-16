@@ -115,12 +115,19 @@ export async function loginWithGoogle(idToken: string): Promise<User> {
  * Cierra la sesión actual.
  */
 export function logout(): void {
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+  void trpc.auth.logout
+    .mutate({})
+    .catch(() => {
+      // Ignore network/auth errors during logout cleanup.
+    })
+    .finally(() => {
+      localStorage.removeItem(ACCESS_TOKEN_KEY);
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
 
-  // Recargar para limpiar estado
-  window.location.reload();
+      // Recargar para limpiar estado
+      window.location.reload();
+    });
 }
 
 /**

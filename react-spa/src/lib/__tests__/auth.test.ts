@@ -1,5 +1,27 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getCurrentUser, isAdmin, isTeacher, isStudent, getTeacherGroups, User } from '../auth';
+import {
+  getCurrentUser,
+  isAdmin,
+  isTeacher,
+  isStudent,
+  getTeacherGroups,
+  logout,
+  User,
+} from '../auth';
+
+const { logoutMutateMock } = vi.hoisted(() => ({
+  logoutMutateMock: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../trpc', () => ({
+  trpc: {
+    auth: {
+      logout: {
+        mutate: logoutMutateMock,
+      },
+    },
+  },
+}));
 
 const USER_KEY = 'openpath_user';
 
@@ -7,6 +29,7 @@ describe('Auth functions', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    logoutMutateMock.mockResolvedValue(undefined);
   });
 
   describe('getCurrentUser', () => {
@@ -109,6 +132,37 @@ describe('Auth functions', () => {
       expect(groups).toContain('g1');
       expect(groups).toContain('g2');
       expect(groups).toContain('g3');
+    });
+  });
+
+  describe('logout', () => {
+    it('calls auth.logout and clears session storage before reload', async () => {
+      localStorage.setItem('openpath_access_token', 'token');
+      localStorage.setItem('openpath_refresh_token', 'refresh');
+      localStorage.setItem(USER_KEY, JSON.stringify({ id: '1' }));
+
+      logout();
+      await vi.waitFor(() => {
+        expect(logoutMutateMock).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem('openpath_access_token')).toBeNull();
+        expect(localStorage.getItem('openpath_refresh_token')).toBeNull();
+        expect(localStorage.getItem(USER_KEY)).toBeNull();
+      });
+    });
+
+    it('still clears session storage when auth.logout fails', async () => {
+      logoutMutateMock.mockRejectedValueOnce(new Error('network failure'));
+      localStorage.setItem('openpath_access_token', 'token');
+      localStorage.setItem('openpath_refresh_token', 'refresh');
+      localStorage.setItem(USER_KEY, JSON.stringify({ id: '1' }));
+
+      logout();
+      await vi.waitFor(() => {
+        expect(logoutMutateMock).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem('openpath_access_token')).toBeNull();
+        expect(localStorage.getItem('openpath_refresh_token')).toBeNull();
+        expect(localStorage.getItem(USER_KEY)).toBeNull();
+      });
     });
   });
 });
