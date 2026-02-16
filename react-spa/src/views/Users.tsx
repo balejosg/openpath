@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Search, Filter, Mail, Edit2, Trash, Key, X, Loader2, AlertCircle } from 'lucide-react';
 import { User, UserRole } from '../types';
 import { trpc } from '../lib/trpc';
+import { useUsersActions } from '../hooks/useUsersActions';
 
 // Map API user role to frontend UserRole enum
 function mapApiRole(role: string): UserRole {
@@ -54,12 +55,7 @@ const UsersView = () => {
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<'admin' | 'teacher' | 'student'>('student');
-  const [newError, setNewError] = useState('');
   const [exportMessage, setExportMessage] = useState<string | null>(null);
-
-  // Mutation loading states
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   // Fetch users from API
   const fetchUsers = useCallback(async () => {
@@ -88,6 +84,20 @@ const UsersView = () => {
     void fetchUsers();
   }, [fetchUsers]);
 
+  const {
+    saving,
+    deleting,
+    createError,
+    setCreateError,
+    deleteError,
+    deleteTarget,
+    handleSaveEdit,
+    handleCreateUser,
+    requestDeleteUser,
+    clearDeleteState,
+    handleConfirmDeleteUser,
+  } = useUsersActions({ fetchUsers });
+
   // Filter users based on search
   const filteredUsers = useMemo(() => {
     if (!searchQuery.trim()) return users;
@@ -105,92 +115,35 @@ const UsersView = () => {
     setShowEditModal(true);
   };
 
-  const handleSaveEdit = async () => {
+  const handleSaveEditSubmit = async () => {
     if (!selectedUser) return;
 
-    try {
-      setSaving(true);
-      await trpc.users.update.mutate({
-        id: selectedUser.id,
-        name: editName,
-        email: editEmail,
-      });
-      // Refetch to get updated data
-      await fetchUsers();
+    const ok = await handleSaveEdit({
+      id: selectedUser.id,
+      name: editName,
+      email: editEmail,
+    });
+
+    if (ok) {
       setShowEditModal(false);
-    } catch (err) {
-      console.error('Failed to update user:', err);
-      // Show error inline or via toast
-    } finally {
-      setSaving(false);
     }
   };
 
-  const handleCreateUser = async () => {
-    if (!newName.trim()) {
-      setNewError('El nombre es obligatorio');
-      return;
-    }
-    if (!newEmail.trim()) {
-      setNewError('El email es obligatorio');
-      return;
-    }
-    if (!newPassword.trim() || newPassword.length < 8) {
-      setNewError('La contraseña debe tener al menos 8 caracteres');
-      return;
-    }
+  const handleCreateUserSubmit = async () => {
+    const ok = await handleCreateUser({
+      name: newName,
+      email: newEmail,
+      password: newPassword,
+      role: newRole,
+    });
 
-    try {
-      setSaving(true);
-      setNewError('');
-      await trpc.users.create.mutate({
-        name: newName.trim(),
-        email: newEmail.trim(),
-        password: newPassword,
-        role: newRole,
-      });
-      // Refetch to get updated list
-      await fetchUsers();
-      setNewName('');
-      setNewEmail('');
-      setNewPassword('');
-      setNewRole('student');
-      setShowNewModal(false);
-    } catch (err) {
-      console.error('Failed to create user:', err);
+    if (!ok) return;
 
-      const errorMessage =
-        err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
-
-      if (errorMessage.includes('invalid email') || errorMessage.includes('email inválido')) {
-        setNewError('El email no es válido');
-      } else if (
-        errorMessage.includes('already exists') ||
-        errorMessage.includes('already in use') ||
-        errorMessage.includes('duplicate')
-      ) {
-        setNewError('Ya existe un usuario con ese email');
-      } else {
-        setNewError('Error al crear usuario. Intenta nuevamente.');
-      }
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm('¿Estás seguro de que quieres eliminar este usuario?')) return;
-
-    try {
-      setDeleting(true);
-      await trpc.users.delete.mutate({ id: userId });
-      await fetchUsers();
-    } catch (err) {
-      console.error('Failed to delete user:', err);
-      alert('Error al eliminar usuario');
-    } finally {
-      setDeleting(false);
-    }
+    setNewName('');
+    setNewEmail('');
+    setNewPassword('');
+    setNewRole('student');
+    setShowNewModal(false);
   };
 
   const toggleRole = (role: UserRole) => {
@@ -380,10 +333,11 @@ const UsersView = () => {
                           <Key size={16} />
                         </button>
                         <button
-                          onClick={() => void handleDeleteUser(user.id)}
+                          onClick={() => requestDeleteUser(user)}
                           disabled={deleting}
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
                           title="Eliminar"
+                          aria-label={`Eliminar usuario ${user.name}`}
                         >
                           <Trash size={16} />
                         </button>
@@ -478,7 +432,7 @@ const UsersView = () => {
                   Cancelar
                 </button>
                 <button
-                  onClick={() => void handleSaveEdit()}
+                  onClick={() => void handleSaveEditSubmit()}
                   disabled={saving}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
@@ -513,7 +467,7 @@ const UsersView = () => {
                   value={newName}
                   onChange={(e) => {
                     setNewName(e.target.value);
-                    if (newError) setNewError('');
+                    if (createError) setCreateError('');
                   }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
@@ -526,7 +480,7 @@ const UsersView = () => {
                   value={newEmail}
                   onChange={(e) => {
                     setNewEmail(e.target.value);
-                    if (newError) setNewError('');
+                    if (createError) setCreateError('');
                   }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
@@ -539,7 +493,7 @@ const UsersView = () => {
                   value={newPassword}
                   onChange={(e) => {
                     setNewPassword(e.target.value);
-                    if (newError) setNewError('');
+                    if (createError) setCreateError('');
                   }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 />
@@ -550,7 +504,7 @@ const UsersView = () => {
                   value={newRole}
                   onChange={(e) => {
                     setNewRole(e.target.value as 'admin' | 'teacher' | 'student');
-                    if (newError) setNewError('');
+                    if (createError) setCreateError('');
                   }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 >
@@ -559,9 +513,9 @@ const UsersView = () => {
                   <option value="admin">admin</option>
                 </select>
               </div>
-              {newError && (
+              {createError && (
                 <p className="text-red-500 text-xs flex items-center gap-1">
-                  <AlertCircle size={12} /> {newError}
+                  <AlertCircle size={12} /> {createError}
                 </p>
               )}
               <div className="flex gap-3 pt-2">
@@ -572,7 +526,7 @@ const UsersView = () => {
                     setNewEmail('');
                     setNewPassword('');
                     setNewRole('student');
-                    setNewError('');
+                    setCreateError('');
                   }}
                   disabled={saving}
                   className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -580,7 +534,7 @@ const UsersView = () => {
                   Cancelar
                 </button>
                 <button
-                  onClick={() => void handleCreateUser()}
+                  onClick={() => void handleCreateUserSubmit()}
                   disabled={saving}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                 >
@@ -588,6 +542,53 @@ const UsersView = () => {
                   Crear Usuario
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmar Eliminacion */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-slate-800">Eliminar Usuario</h3>
+              <button
+                onClick={clearDeleteState}
+                className="text-slate-400 hover:text-slate-600"
+                aria-label="Cerrar confirmación de eliminación"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-slate-600">
+              ¿Estás seguro de que quieres eliminar a{' '}
+              <span className="font-semibold text-slate-800">{deleteTarget.name}</span>?
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Esta acción no se puede deshacer.</p>
+
+            {deleteError && (
+              <p className="text-red-500 text-xs flex items-center gap-1 mt-3">
+                <AlertCircle size={12} /> {deleteError}
+              </p>
+            )}
+
+            <div className="flex gap-3 pt-5">
+              <button
+                onClick={clearDeleteState}
+                disabled={deleting}
+                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void handleConfirmDeleteUser()}
+                disabled={deleting}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deleting && <Loader2 size={16} className="animate-spin" />}
+                Eliminar usuario
+              </button>
             </div>
           </div>
         </div>

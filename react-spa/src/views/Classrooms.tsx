@@ -13,8 +13,10 @@ import {
   Copy,
   Check,
 } from 'lucide-react';
-import type { Classroom, ScheduleWithPermissions } from '../types';
+import type { Classroom } from '../types';
 import { trpc } from '../lib/trpc';
+import { useClassroomConfigActions } from '../hooks/useClassroomConfigActions';
+import { useClassroomSchedules } from '../hooks/useClassroomSchedules';
 import WeeklyCalendar from '../components/WeeklyCalendar';
 import ScheduleFormModal from '../components/ScheduleFormModal';
 
@@ -35,19 +37,6 @@ const Classrooms = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Schedules state
-  const [schedules, setSchedules] = useState<ScheduleWithPermissions[]>([]);
-  const [loadingSchedules, setLoadingSchedules] = useState(false);
-  const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
-  const [editingSchedule, setEditingSchedule] = useState<ScheduleWithPermissions | null>(null);
-  const [scheduleFormDay, setScheduleFormDay] = useState<number | undefined>(undefined);
-  const [scheduleFormStartTime, setScheduleFormStartTime] = useState<string | undefined>(undefined);
-  const [scheduleSaving, setScheduleSaving] = useState(false);
-  const [scheduleError, setScheduleError] = useState('');
-  const [scheduleDeleteTarget, setScheduleDeleteTarget] = useState<ScheduleWithPermissions | null>(
-    null
-  );
-
   // Enrollment state
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [enrollToken, setEnrollToken] = useState<string | null>(null);
@@ -62,7 +51,6 @@ const Classrooms = () => {
   // Mutation loading states
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [classroomConfigError, setClassroomConfigError] = useState('');
 
   // Fetch classrooms and groups from API
   const fetchData = useCallback(async () => {
@@ -111,29 +99,6 @@ const Classrooms = () => {
   useEffect(() => {
     void fetchData();
   }, []);
-
-  const fetchSchedules = useCallback(async (classroomId: string) => {
-    try {
-      setLoadingSchedules(true);
-      setScheduleError('');
-      const result = await trpc.schedules.getByClassroom.query({ classroomId });
-      setSchedules(result.schedules);
-    } catch (err) {
-      console.error('Failed to fetch schedules:', err);
-      setScheduleError('Error al cargar horarios');
-      setSchedules([]);
-    } finally {
-      setLoadingSchedules(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!selectedClassroom) {
-      setSchedules([]);
-      return;
-    }
-    void fetchSchedules(selectedClassroom.id);
-  }, [selectedClassroom?.id, fetchSchedules]);
 
   // Refetch when needed (without dependency on selectedClassroom)
   const refetchClassrooms = useCallback(async () => {
@@ -214,58 +179,12 @@ const Classrooms = () => {
     }
   };
 
-  const handleGroupChange = async (groupId: string) => {
-    if (!selectedClassroom) return;
-
-    try {
-      setClassroomConfigError('');
-      await trpc.classrooms.setActiveGroup.mutate({
-        id: selectedClassroom.id,
-        groupId: groupId || null,
-      });
-      const updatedClassrooms = await refetchClassrooms();
-      // Update local selected classroom from the updated list
-      const updated = updatedClassrooms.find((c) => c.id === selectedClassroom.id);
-      if (updated) {
-        setSelectedClassroom(updated);
-      }
-    } catch (err) {
-      console.error('Failed to update active group:', err);
-    }
-  };
-
-  const handleDefaultGroupChange = async (groupId: string) => {
-    if (!selectedClassroom) return;
-
-    try {
-      setClassroomConfigError('');
-      await trpc.classrooms.update.mutate({
-        id: selectedClassroom.id,
-        defaultGroupId: groupId || null,
-      });
-      const updatedClassrooms = await refetchClassrooms();
-      const updated = updatedClassrooms.find((c) => c.id === selectedClassroom.id);
-      if (updated) {
-        setSelectedClassroom(updated);
-      }
-    } catch (err) {
-      console.error('Failed to update default group:', err);
-
-      const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
-      if (
-        message.includes('default') ||
-        message.includes('required') ||
-        message.includes('400') ||
-        groupId === ''
-      ) {
-        setClassroomConfigError(
-          'No puedes dejar el aula sin grupo por defecto mientras no exista un grupo activo válido.'
-        );
-      } else {
-        setClassroomConfigError('No se pudo actualizar el grupo por defecto. Intenta nuevamente.');
-      }
-    }
-  };
+  const { classroomConfigError, handleGroupChange, handleDefaultGroupChange } =
+    useClassroomConfigActions({
+      selectedClassroom,
+      refetchClassrooms,
+      setSelectedClassroom,
+    });
 
   const openNewModal = () => {
     setNewName('');
@@ -274,87 +193,24 @@ const Classrooms = () => {
     setShowNewModal(true);
   };
 
-  const openScheduleCreate = (dayOfWeek?: number, startTime?: string) => {
-    setScheduleError('');
-    setEditingSchedule(null);
-    setScheduleFormDay(dayOfWeek);
-    setScheduleFormStartTime(startTime);
-    setScheduleFormOpen(true);
-  };
-
-  const openScheduleEdit = (schedule: ScheduleWithPermissions) => {
-    setScheduleError('');
-    setEditingSchedule(schedule);
-    setScheduleFormDay(undefined);
-    setScheduleFormStartTime(undefined);
-    setScheduleFormOpen(true);
-  };
-
-  const handleScheduleSave = async (data: {
-    dayOfWeek: number;
-    startTime: string;
-    endTime: string;
-    groupId: string;
-  }) => {
-    if (!selectedClassroom) return;
-
-    try {
-      setScheduleSaving(true);
-      setScheduleError('');
-      if (editingSchedule) {
-        await trpc.schedules.update.mutate({
-          id: editingSchedule.id,
-          dayOfWeek: data.dayOfWeek,
-          startTime: data.startTime,
-          endTime: data.endTime,
-          groupId: data.groupId,
-        });
-      } else {
-        await trpc.schedules.create.mutate({
-          classroomId: selectedClassroom.id,
-          dayOfWeek: data.dayOfWeek,
-          startTime: data.startTime,
-          endTime: data.endTime,
-          groupId: data.groupId,
-        });
-      }
-
-      await fetchSchedules(selectedClassroom.id);
-      setScheduleFormOpen(false);
-      setEditingSchedule(null);
-      setScheduleFormDay(undefined);
-      setScheduleFormStartTime(undefined);
-    } catch (err: unknown) {
-      console.error('Failed to save schedule:', err);
-      const message = err instanceof Error ? err.message : 'Error al guardar horario';
-      setScheduleError(message);
-    } finally {
-      setScheduleSaving(false);
-    }
-  };
-
-  const requestScheduleDelete = (schedule: ScheduleWithPermissions) => {
-    setScheduleError('');
-    setScheduleDeleteTarget(schedule);
-  };
-
-  const handleConfirmDeleteSchedule = async () => {
-    if (!selectedClassroom || !scheduleDeleteTarget) return;
-
-    try {
-      setScheduleSaving(true);
-      setScheduleError('');
-      await trpc.schedules.delete.mutate({ id: scheduleDeleteTarget.id });
-      await fetchSchedules(selectedClassroom.id);
-      setScheduleDeleteTarget(null);
-    } catch (err: unknown) {
-      console.error('Failed to delete schedule:', err);
-      const message = err instanceof Error ? err.message : 'Error al eliminar horario';
-      setScheduleError(message);
-    } finally {
-      setScheduleSaving(false);
-    }
-  };
+  const {
+    schedules,
+    loadingSchedules,
+    scheduleFormOpen,
+    editingSchedule,
+    scheduleFormDay,
+    scheduleFormStartTime,
+    scheduleSaving,
+    scheduleError,
+    scheduleDeleteTarget,
+    openScheduleCreate,
+    openScheduleEdit,
+    closeScheduleForm,
+    handleScheduleSave,
+    requestScheduleDelete,
+    closeScheduleDelete,
+    handleConfirmDeleteSchedule,
+  } = useClassroomSchedules({ selectedClassroomId: selectedClassroom?.id ?? null });
 
   const openEnrollModal = async () => {
     setLoadingToken(true);
@@ -812,14 +668,7 @@ const Classrooms = () => {
           saving={scheduleSaving}
           error={scheduleError}
           onSave={(data) => void handleScheduleSave(data)}
-          onClose={() => {
-            if (scheduleSaving) return;
-            setScheduleFormOpen(false);
-            setEditingSchedule(null);
-            setScheduleFormDay(undefined);
-            setScheduleFormStartTime(undefined);
-            setScheduleError('');
-          }}
+          onClose={closeScheduleForm}
         />
       )}
 
@@ -878,11 +727,7 @@ const Classrooms = () => {
               )}
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    if (scheduleSaving) return;
-                    setScheduleDeleteTarget(null);
-                    setScheduleError('');
-                  }}
+                  onClick={closeScheduleDelete}
                   disabled={scheduleSaving}
                   className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
                 >

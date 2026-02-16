@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import UsersView from '../Users';
 
-const { mockUsersList, mockCreateUser } = vi.hoisted(() => ({
+const { mockUsersList, mockCreateUser, mockDeleteUser } = vi.hoisted(() => ({
   mockUsersList: vi.fn(),
   mockCreateUser: vi.fn(),
+  mockDeleteUser: vi.fn(),
 }));
 
 vi.mock('../../lib/trpc', () => ({
@@ -20,7 +21,7 @@ vi.mock('../../lib/trpc', () => ({
         mutate: vi.fn(),
       },
       delete: {
-        mutate: vi.fn(),
+        mutate: mockDeleteUser,
       },
     },
   },
@@ -31,6 +32,7 @@ describe('Users View', () => {
     vi.clearAllMocks();
     mockUsersList.mockResolvedValue([]);
     mockCreateUser.mockResolvedValue({});
+    mockDeleteUser.mockResolvedValue({});
   });
 
   it('shows role selector with default student', async () => {
@@ -155,5 +157,52 @@ describe('Users View', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Crear Usuario' }));
 
     expect(await screen.findByText('Ya existe un usuario con ese email')).toBeInTheDocument();
+  });
+
+  it('opens delete confirmation modal and deletes user on confirm', async () => {
+    mockUsersList.mockResolvedValue([
+      {
+        id: 'user-1',
+        name: 'Delete Me',
+        email: 'delete@example.com',
+        isActive: true,
+        roles: [{ role: 'student' }],
+      },
+    ]);
+
+    render(<UsersView />);
+
+    await screen.findByText('Delete Me');
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar usuario Delete Me' }));
+
+    expect(await screen.findByText('Eliminar Usuario')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar usuario' }));
+
+    await waitFor(() => {
+      expect(mockDeleteUser).toHaveBeenCalledWith({ id: 'user-1' });
+    });
+  });
+
+  it('shows inline error when delete fails', async () => {
+    mockUsersList.mockResolvedValue([
+      {
+        id: 'user-2',
+        name: 'Cannot Delete',
+        email: 'cant-delete@example.com',
+        isActive: true,
+        roles: [{ role: 'student' }],
+      },
+    ]);
+    mockDeleteUser.mockRejectedValueOnce(new Error('backend failure'));
+
+    render(<UsersView />);
+
+    await screen.findByText('Cannot Delete');
+    fireEvent.click(screen.getByRole('button', { name: 'Eliminar usuario Cannot Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Eliminar usuario' }));
+
+    expect(
+      await screen.findByText('No se pudo eliminar usuario. Intenta nuevamente.')
+    ).toBeInTheDocument();
   });
 });

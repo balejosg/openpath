@@ -16,6 +16,7 @@ import {
   Check,
 } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import { usePersistentNotificationPrefs } from '../hooks/usePersistentNotificationPrefs';
 
 interface SystemInfo {
   version: string;
@@ -54,42 +55,6 @@ interface NewTokenResponse {
   expiresAt: string | null;
   createdAt: string;
 }
-
-interface NotificationPrefs {
-  securityAlerts: boolean;
-  domainRequests: boolean;
-  weeklyReports: boolean;
-}
-
-const NOTIFICATION_PREFS_KEY = 'openpath.notificationPrefs';
-
-const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
-  securityAlerts: true,
-  domainRequests: true,
-  weeklyReports: false,
-};
-
-const getStoredNotificationPrefs = (): NotificationPrefs => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_NOTIFICATION_PREFS;
-  }
-
-  const raw = window.localStorage.getItem(NOTIFICATION_PREFS_KEY);
-  if (!raw) {
-    return DEFAULT_NOTIFICATION_PREFS;
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<NotificationPrefs>;
-    return {
-      securityAlerts: parsed.securityAlerts ?? DEFAULT_NOTIFICATION_PREFS.securityAlerts,
-      domainRequests: parsed.domainRequests ?? DEFAULT_NOTIFICATION_PREFS.domainRequests,
-      weeklyReports: parsed.weeklyReports ?? DEFAULT_NOTIFICATION_PREFS.weeklyReports,
-    };
-  } catch {
-    return DEFAULT_NOTIFICATION_PREFS;
-  }
-};
 
 const Settings: React.FC = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -157,23 +122,7 @@ const Settings: React.FC = () => {
     };
   }, [fetchTokens]);
 
-  // Notification preferences state
-  const [securityAlerts, setSecurityAlerts] = useState(
-    () => getStoredNotificationPrefs().securityAlerts
-  );
-  const [domainRequests, setDomainRequests] = useState(
-    () => getStoredNotificationPrefs().domainRequests
-  );
-  const [weeklyReports, setWeeklyReports] = useState(
-    () => getStoredNotificationPrefs().weeklyReports
-  );
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      NOTIFICATION_PREFS_KEY,
-      JSON.stringify({ securityAlerts, domainRequests, weeklyReports })
-    );
-  }, [securityAlerts, domainRequests, weeklyReports]);
+  const { prefs, setPrefs } = usePersistentNotificationPrefs();
 
   const closePasswordModal = () => {
     clearPasswordResetTimer();
@@ -377,8 +326,10 @@ const Settings: React.FC = () => {
               <span className="text-sm text-slate-600">Alertas de seguridad</span>
               <input
                 type="checkbox"
-                checked={securityAlerts}
-                onChange={(e) => setSecurityAlerts(e.target.checked)}
+                checked={prefs.securityAlerts}
+                onChange={(e) =>
+                  setPrefs((previous) => ({ ...previous, securityAlerts: e.target.checked }))
+                }
                 className="w-4 h-4 text-blue-600 rounded"
               />
             </label>
@@ -386,8 +337,10 @@ const Settings: React.FC = () => {
               <span className="text-sm text-slate-600">Nuevas solicitudes de dominio</span>
               <input
                 type="checkbox"
-                checked={domainRequests}
-                onChange={(e) => setDomainRequests(e.target.checked)}
+                checked={prefs.domainRequests}
+                onChange={(e) =>
+                  setPrefs((previous) => ({ ...previous, domainRequests: e.target.checked }))
+                }
                 className="w-4 h-4 text-blue-600 rounded"
               />
             </label>
@@ -395,8 +348,10 @@ const Settings: React.FC = () => {
               <span className="text-sm text-slate-600">Reportes semanales</span>
               <input
                 type="checkbox"
-                checked={weeklyReports}
-                onChange={(e) => setWeeklyReports(e.target.checked)}
+                checked={prefs.weeklyReports}
+                onChange={(e) =>
+                  setPrefs((previous) => ({ ...previous, weeklyReports: e.target.checked }))
+                }
                 className="w-4 h-4 text-blue-600 rounded"
               />
             </label>
