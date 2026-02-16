@@ -72,4 +72,33 @@ describe('DomainRequests - Original group approval', () => {
       expect(mockApprove).toHaveBeenCalledWith({ id: 'req-1' });
     });
   });
+
+  it('refreshes list when the window regains focus', async () => {
+    render(<DomainRequests />);
+
+    await waitFor(() => {
+      expect(mockListRequests).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent(window, new Event('focus'));
+
+    await waitFor(() => {
+      expect(mockListRequests).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it('clears bulk reject reason when clearing selection', async () => {
+    render(<DomainRequests />);
+
+    await screen.findByText('example.com');
+    fireEvent.click(screen.getByLabelText('Seleccionar example.com'));
+
+    const reasonInput = screen.getByPlaceholderText('Motivo para rechazo en lote (opcional)');
+    fireEvent.change(reasonInput, { target: { value: 'No aplica' } });
+    expect(screen.getByDisplayValue('No aplica')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar seleccion' }));
+
+    expect(screen.queryByDisplayValue('No aplica')).not.toBeInTheDocument();
+  });
 });

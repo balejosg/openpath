@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, CheckCircle, XCircle, Trash2, Clock, AlertTriangle, Filter } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
@@ -81,6 +81,7 @@ export default function DomainRequests() {
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [bulkFailedIds, setBulkFailedIds] = useState<string[]>([]);
   const [bulkFailedMode, setBulkFailedMode] = useState<'approve' | 'reject' | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   // Modal states
   const [approveModal, setApproveModal] = useState<{
@@ -102,27 +103,51 @@ export default function DomainRequests() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [requestsData, groupsData] = await Promise.all([
+        trpc.requests.list.query(statusFilter === 'all' ? {} : { status: statusFilter }),
+        trpc.requests.listGroups.query(),
+      ]);
+      setRequests(requestsData as DomainRequest[]);
+      setGroups(groupsData as Group[]);
+      setError(null);
+    } catch (err) {
+      setError('Error al cargar las solicitudes');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
   // Fetch requests and groups
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const [requestsData, groupsData] = await Promise.all([
-          trpc.requests.list.query(statusFilter === 'all' ? {} : { status: statusFilter }),
-          trpc.requests.listGroups.query(),
-        ]);
-        setRequests(requestsData as DomainRequest[]);
-        setGroups(groupsData as Group[]);
-        setError(null);
-      } catch (err) {
-        setError('Error al cargar las solicitudes');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
     void fetchData();
-  }, [statusFilter]);
+  }, [fetchData, refreshTick]);
+
+  // Keep list updated without requiring filter changes.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setRefreshTick((tick) => tick + 1);
+    }, 10000);
+
+    const onFocus = () => {
+      setRefreshTick((tick) => tick + 1);
+    };
+
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!bulkMessage) return;
+    const timeout = window.setTimeout(() => setBulkMessage(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [bulkMessage]);
 
   // Filter requests by search term
   const filteredRequests = useMemo(
@@ -627,6 +652,7 @@ export default function DomainRequests() {
                 setSelectedRequestIds([]);
                 setBulkFailedIds([]);
                 setBulkFailedMode(null);
+                setBulkRejectReason('');
               }}
               disabled={bulkLoading}
               className="px-3 py-2 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg disabled:opacity-50"
@@ -856,12 +882,16 @@ export default function DomainRequests() {
       )}
 
       {/* No results after filtering */}
-      {!loading && filteredRequests.length === 0 && (searchTerm || statusFilter !== 'all') && (
-        <div className="bg-white border border-slate-200 rounded-lg p-8 shadow-sm text-center">
-          <Search size={32} className="mx-auto text-slate-300 mb-3" />
-          <p className="text-slate-500">No se encontraron solicitudes con los filtros aplicados</p>
-        </div>
-      )}
+      {!loading &&
+        filteredRequests.length === 0 &&
+        (searchTerm || statusFilter !== 'all' || sourceFilter !== 'all') && (
+          <div className="bg-white border border-slate-200 rounded-lg p-8 shadow-sm text-center">
+            <Search size={32} className="mx-auto text-slate-300 mb-3" />
+            <p className="text-slate-500">
+              No se encontraron solicitudes con los filtros aplicados
+            </p>
+          </div>
+        )}
 
       {!loading && sortedRequests.length > 0 && (
         <div className="flex items-center justify-between text-sm text-slate-600">

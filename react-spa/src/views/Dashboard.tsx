@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Folder,
   CheckCircle,
@@ -96,35 +96,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setLoading(true);
-        const [groupStats, requestStats, sysStatus] = await Promise.all([
-          trpc.groups.stats.query(),
-          trpc.requests.stats.query(),
-          trpc.groups.systemStatus.query(),
-        ]);
-        setStats({
-          groupCount: groupStats.groupCount,
-          whitelistCount: groupStats.whitelistCount,
-          blockedCount: groupStats.blockedCount,
-          pendingRequests: requestStats.pending,
-        });
-        setSystemStatus({
-          enabled: sysStatus.enabled,
-          lastChecked: new Date(),
-        });
-        setError(null);
-      } catch (err) {
-        console.error('Failed to fetch dashboard stats:', err);
-        setError('Error al cargar estadísticas');
-      } finally {
-        setLoading(false);
-      }
-    };
-    void fetchStats();
+  const fetchStats = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [groupStats, requestStats, sysStatus] = await Promise.all([
+        trpc.groups.stats.query(),
+        trpc.requests.stats.query(),
+        trpc.groups.systemStatus.query(),
+      ]);
+      setStats({
+        groupCount: groupStats.groupCount,
+        whitelistCount: groupStats.whitelistCount,
+        blockedCount: groupStats.blockedCount,
+        pendingRequests: requestStats.pending,
+      });
+      setSystemStatus({
+        enabled: sysStatus.enabled,
+        lastChecked: new Date(),
+      });
+      setError(null);
+    } catch (err) {
+      console.error('Failed to fetch dashboard stats:', err);
+      setError('Error al cargar estadísticas');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void fetchStats();
+
+    const interval = window.setInterval(() => {
+      void fetchStats();
+    }, 10000);
+
+    const onFocus = () => {
+      void fetchStats();
+    };
+
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [fetchStats]);
 
   // Fetch groups for quick access
   useEffect(() => {

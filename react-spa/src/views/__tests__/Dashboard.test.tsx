@@ -303,6 +303,24 @@ describe('Dashboard', () => {
     expect(screen.getByText('Cargando grupos...')).toBeInTheDocument();
   });
 
+  it('refreshes pending requests count when the window regains focus', async () => {
+    mockRequestsStatsQuery
+      .mockResolvedValueOnce({ pending: 5 })
+      .mockResolvedValueOnce({ pending: 7 });
+
+    render(<Dashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('5')).toBeInTheDocument();
+    });
+
+    fireEvent(window, new Event('focus'));
+
+    await waitFor(() => {
+      expect(screen.getByText('7')).toBeInTheDocument();
+    });
+  });
+
   it('shows error state when groups fail to load', async () => {
     mockGroupsListQuery.mockRejectedValue(new Error('Network error'));
 
