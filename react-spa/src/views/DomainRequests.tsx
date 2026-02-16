@@ -218,6 +218,15 @@ export default function DomainRequests() {
     [paginatedRequests]
   );
 
+  const hasActiveFilters =
+    normalizedSearchTerm.length > 0 || statusFilter !== 'all' || sourceFilter !== 'all';
+  const canBulkSelectInPage = pendingIdsInPage.length > 0;
+  const bulkSelectTitle = canBulkSelectInPage
+    ? 'Seleccionar elementos pendientes de esta pagina'
+    : statusFilter === 'approved' || statusFilter === 'rejected'
+      ? 'Seleccion masiva no disponible en este filtro'
+      : 'No hay elementos pendientes seleccionables en esta pagina';
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter, sourceFilter, sortBy, pageSize]);
@@ -526,8 +535,20 @@ export default function DomainRequests() {
     }
   };
 
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setSourceFilter('all');
+    clearSearch();
+  };
+
   // Empty state
-  if (!loading && filteredRequests.length === 0 && statusFilter === 'all' && !searchTerm) {
+  if (
+    !loading &&
+    filteredRequests.length === 0 &&
+    statusFilter === 'all' &&
+    sourceFilter === 'all' &&
+    !normalizedSearchTerm
+  ) {
     return (
       <div className="space-y-6">
         {/* Description */}
@@ -593,6 +614,7 @@ export default function DomainRequests() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as RequestStatus | 'all')}
+              aria-label="Filtrar por estado"
               className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="all">Todos</option>
@@ -603,6 +625,7 @@ export default function DomainRequests() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
+              aria-label="Ordenar solicitudes"
               className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="sla">SLA (pendientes primero)</option>
@@ -615,6 +638,7 @@ export default function DomainRequests() {
               onChange={(e) =>
                 setSourceFilter(e.target.value as 'all' | 'firefox-extension' | 'manual')
               }
+              aria-label="Filtrar por fuente"
               className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="all">Todas las fuentes</option>
@@ -624,6 +648,7 @@ export default function DomainRequests() {
             <select
               value={String(pageSize)}
               onChange={(e) => setPageSize(Number(e.target.value))}
+              aria-label="Elementos por pagina"
               className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="10">10/pag</option>
@@ -775,12 +800,14 @@ export default function DomainRequests() {
                     <input
                       type="checkbox"
                       checked={
-                        pendingIdsInPage.length > 0 &&
+                        canBulkSelectInPage &&
                         pendingIdsInPage.every((id) => selectedRequestIds.includes(id))
                       }
                       onChange={toggleSelectAllInPage}
+                      disabled={!canBulkSelectInPage}
                       className="rounded border-slate-300"
-                      title="Seleccionar pendientes de esta pagina"
+                      title={bulkSelectTitle}
+                      aria-label="Seleccion masiva de pagina"
                     />
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">
@@ -918,16 +945,19 @@ export default function DomainRequests() {
       )}
 
       {/* No results after filtering */}
-      {!loading &&
-        filteredRequests.length === 0 &&
-        (searchTerm || statusFilter !== 'all' || sourceFilter !== 'all') && (
-          <div className="bg-white border border-slate-200 rounded-lg p-8 shadow-sm text-center">
-            <Search size={32} className="mx-auto text-slate-300 mb-3" />
-            <p className="text-slate-500">
-              No se encontraron solicitudes con los filtros aplicados
-            </p>
-          </div>
-        )}
+      {!loading && filteredRequests.length === 0 && hasActiveFilters && (
+        <div className="bg-white border border-slate-200 rounded-lg p-8 shadow-sm text-center">
+          <Search size={32} className="mx-auto text-slate-300 mb-3" />
+          <p className="text-slate-500">No hay solicitudes para los filtros seleccionados</p>
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="mt-4 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      )}
 
       {!loading && sortedRequests.length > 0 && (
         <div className="flex items-center justify-between text-sm text-slate-600">

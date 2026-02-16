@@ -143,7 +143,7 @@ describe('DomainRequests - Original group approval', () => {
     fireEvent.change(searchInput, { target: { value: 'zzzz-not-found' } });
 
     expect(
-      screen.getByText('No se encontraron solicitudes con los filtros aplicados')
+      screen.getByText('No hay solicitudes para los filtros seleccionados')
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Limpiar busqueda' }));
@@ -162,7 +162,81 @@ describe('DomainRequests - Original group approval', () => {
 
     expect(screen.getByText('example.com')).toBeInTheDocument();
     expect(
-      screen.queryByText('No se encontraron solicitudes con los filtros aplicados')
+      screen.queryByText('No hay solicitudes para los filtros seleccionados')
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps filters visible and allows clearing when source filter has no matches', async () => {
+    render(<DomainRequests />);
+
+    await screen.findByText('example.com');
+
+    const sourceFilter = screen.getByRole('combobox', { name: 'Filtrar por fuente' });
+    fireEvent.change(sourceFilter, { target: { value: 'firefox-extension' } });
+
+    expect(screen.queryByText('Todo en orden')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('No hay solicitudes para los filtros seleccionados')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Limpiar filtros' })).toBeInTheDocument();
+    expect(sourceFilter).toHaveValue('firefox-extension');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
+
+    expect(sourceFilter).toHaveValue('all');
+    expect(screen.getByText('example.com')).toBeInTheDocument();
+  });
+
+  it('disables bulk selection header in approved filter with contextual title', async () => {
+    const pendingRequest = {
+      id: 'req-pending',
+      domain: 'pending.example.com',
+      reason: 'Need for class',
+      requesterEmail: 'teacher@example.com',
+      groupId: 'group-1',
+      priority: 'normal',
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      resolvedAt: null,
+      resolvedBy: null,
+    };
+    const approvedRequest = {
+      id: 'req-approved',
+      domain: 'approved.example.com',
+      reason: 'Already approved',
+      requesterEmail: 'teacher@example.com',
+      groupId: 'group-1',
+      priority: 'normal',
+      status: 'approved',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      resolvedAt: new Date().toISOString(),
+      resolvedBy: 'admin@example.com',
+    };
+
+    mockListRequests.mockImplementation((input?: { status?: string }) => {
+      if (input?.status === 'approved') {
+        return Promise.resolve([approvedRequest]);
+      }
+      return Promise.resolve([pendingRequest, approvedRequest]);
+    });
+
+    render(<DomainRequests />);
+
+    await screen.findByText('pending.example.com');
+
+    const statusFilter = screen.getByRole('combobox', { name: 'Filtrar por estado' });
+    fireEvent.change(statusFilter, { target: { value: 'approved' } });
+
+    await screen.findByText('approved.example.com');
+
+    const bulkSelectHeader = screen.getByRole('checkbox', { name: 'Seleccion masiva de pagina' });
+    expect(bulkSelectHeader).toBeDisabled();
+    expect(bulkSelectHeader).toHaveAttribute(
+      'title',
+      'Seleccion masiva no disponible en este filtro'
+    );
+    expect(screen.queryByLabelText('Seleccionar approved.example.com')).not.toBeInTheDocument();
   });
 });
