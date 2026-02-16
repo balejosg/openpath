@@ -270,13 +270,36 @@ const Settings: React.FC = () => {
     }
   };
 
-  const closeTokenModal = () => {
+  const closeTokenModal = useCallback(() => {
     setShowCreateTokenModal(false);
     setNewTokenName('');
     setNewTokenExpiry(null);
     setCreatedToken(null);
     setTokenError('');
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!showCreateTokenModal) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      if (tokenActionLoading === 'create') {
+        return;
+      }
+
+      closeTokenModal();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showCreateTokenModal, tokenActionLoading, closeTokenModal]);
 
   return (
     <div className="space-y-6">
@@ -599,7 +622,11 @@ const Settings: React.FC = () => {
               <h3 className="text-lg font-bold text-slate-800">
                 {createdToken ? 'Token Creado' : 'Crear Token API'}
               </h3>
-              <button onClick={closeTokenModal} className="text-slate-400 hover:text-slate-600">
+              <button
+                onClick={closeTokenModal}
+                className="text-slate-400 hover:text-slate-600"
+                aria-label="Cerrar modal de token API"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -666,7 +693,12 @@ const Settings: React.FC = () => {
                   <input
                     type="text"
                     value={newTokenName}
-                    onChange={(e) => setNewTokenName(e.target.value)}
+                    onChange={(e) => {
+                      setNewTokenName(e.target.value);
+                      if (tokenError) {
+                        setTokenError('');
+                      }
+                    }}
                     placeholder="Ej: API de producción"
                     maxLength={100}
                     className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"

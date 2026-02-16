@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Settings from '../Settings';
 
-const { mockChangePassword } = vi.hoisted(() => ({
+const { mockChangePassword, mockListTokens, mockCreateToken } = vi.hoisted(() => ({
   mockChangePassword: vi.fn(),
+  mockListTokens: vi.fn(),
+  mockCreateToken: vi.fn(),
 }));
 
 vi.mock('../../lib/trpc', () => ({
@@ -25,9 +27,9 @@ vi.mock('../../lib/trpc', () => ({
     },
     apiTokens: {
       list: {
-        query: vi.fn().mockResolvedValue([]),
+        query: mockListTokens,
       },
-      create: { mutate: vi.fn() },
+      create: { mutate: mockCreateToken },
       revoke: { mutate: vi.fn() },
       regenerate: { mutate: vi.fn() },
     },
@@ -43,6 +45,14 @@ describe('Settings View - Change Password', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockChangePassword.mockResolvedValue({ success: true });
+    mockListTokens.mockResolvedValue([]);
+    mockCreateToken.mockResolvedValue({
+      id: 'new-token-id',
+      name: 'api-token',
+      token: 'op_example_token_value',
+      expiresAt: null,
+      createdAt: new Date().toISOString(),
+    });
   });
 
   it('blocks submit when required fields are missing', async () => {
@@ -102,5 +112,61 @@ describe('Settings View - Change Password', () => {
     });
 
     expect(await screen.findByText('¡Contraseña actualizada correctamente!')).toBeInTheDocument();
+  });
+
+  it('closes create token modal via Cancelar, X and Escape after validation error', async () => {
+    render(<Settings />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear token' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Token' }));
+    expect(await screen.findByText('El nombre es obligatorio')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => {
+      expect(screen.queryByText('Crear Token API')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear token' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Token' }));
+    expect(await screen.findByText('El nombre es obligatorio')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar modal de token API' }));
+    await waitFor(() => {
+      expect(screen.queryByText('Crear Token API')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear token' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Token' }));
+    expect(await screen.findByText('El nombre es obligatorio')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByText('Crear Token API')).not.toBeInTheDocument();
+    });
+  });
+
+  it('clears required error when token name is corrected and allows submit', async () => {
+    render(<Settings />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear token' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Token' }));
+    expect(await screen.findByText('El nombre es obligatorio')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('Ej: API de producción'), {
+      target: { value: '  api-token-fixed  ' },
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('El nombre es obligatorio')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Token' }));
+
+    await waitFor(() => {
+      expect(mockCreateToken).toHaveBeenCalledWith({
+        name: 'api-token-fixed',
+        expiresInDays: undefined,
+      });
+    });
   });
 });
