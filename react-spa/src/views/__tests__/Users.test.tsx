@@ -114,4 +114,46 @@ describe('Users View', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('No hay usuarios para exportar');
   });
+
+  it('shows specific message when email format is invalid', async () => {
+    mockCreateUser.mockRejectedValueOnce(new Error('Invalid email'));
+
+    render(<UsersView />);
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
+    fireEvent.change(await screen.findByPlaceholderText('Nombre completo'), {
+      target: { value: 'Usuario Test' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('usuario@dominio.com'), {
+      target: { value: 'a' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Mínimo 8 caracteres'), {
+      target: { value: 'SecurePass123!' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Usuario' }));
+
+    expect(await screen.findByText('El email no es válido')).toBeInTheDocument();
+  });
+
+  it('shows duplicate-email message when backend reports conflict', async () => {
+    mockCreateUser.mockRejectedValueOnce(new Error('User already exists'));
+
+    render(<UsersView />);
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
+    fireEvent.change(await screen.findByPlaceholderText('Nombre completo'), {
+      target: { value: 'Usuario Repetido' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('usuario@dominio.com'), {
+      target: { value: 'dup@example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Mínimo 8 caracteres'), {
+      target: { value: 'SecurePass123!' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Usuario' }));
+
+    expect(await screen.findByText('Ya existe un usuario con ese email')).toBeInTheDocument();
+  });
 });

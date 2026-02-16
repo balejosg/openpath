@@ -158,7 +158,21 @@ const UsersView = () => {
       setShowNewModal(false);
     } catch (err) {
       console.error('Failed to create user:', err);
-      setNewError('Error al crear usuario. El email puede ya existir.');
+
+      const errorMessage =
+        err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+
+      if (errorMessage.includes('invalid email') || errorMessage.includes('email inválido')) {
+        setNewError('El email no es válido');
+      } else if (
+        errorMessage.includes('already exists') ||
+        errorMessage.includes('already in use') ||
+        errorMessage.includes('duplicate')
+      ) {
+        setNewError('Ya existe un usuario con ese email');
+      } else {
+        setNewError('Error al crear usuario. Intenta nuevamente.');
+      }
     } finally {
       setSaving(false);
     }
