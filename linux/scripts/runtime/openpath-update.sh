@@ -46,7 +46,10 @@ if ! timeout 30 flock -x 200; then
 fi
 
 # Load additional libraries
-load_libraries
+if ! load_libraries; then
+    echo "ERROR: Could not load required OpenPath libraries"
+    exit 1
+fi
 
 # Whitelist URL - always reads from whitelist-url.conf
 # In Classroom mode, install.sh saves the tokenized URL during registration

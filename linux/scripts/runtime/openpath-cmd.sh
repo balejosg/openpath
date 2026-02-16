@@ -27,7 +27,10 @@ source "$INSTALL_DIR/lib/common.sh" 2>/dev/null || {
     echo "ERROR: Sistema no instalado correctamente"
     exit 1
 }
-load_libraries
+if ! load_libraries; then
+    echo "ERROR: Missing required OpenPath libraries"
+    exit 1
+fi
 
 # Colores
 RED='\033[0;31m'

@@ -27,7 +27,10 @@ set -o pipefail
 # Cargar librerías
 INSTALL_DIR="/usr/local/lib/openpath"
 source "$INSTALL_DIR/lib/common.sh"
-load_libraries
+if ! load_libraries; then
+    echo "ERROR: Missing required OpenPath libraries" >&2
+    exit 1
+fi
 
 HEALTH_FILE="$CONFIG_DIR/health-status"
 FAIL_COUNT_FILE="$CONFIG_DIR/watchdog-fails"
@@ -37,7 +40,13 @@ MAX_CONSECUTIVE_FAILS=3
 # Obtener/incrementar contador de fallos
 get_fail_count() {
     if [ -f "$FAIL_COUNT_FILE" ]; then
-        cat "$FAIL_COUNT_FILE"
+        local count
+        count=$(cat "$FAIL_COUNT_FILE")
+        if [[ "$count" =~ ^[0-9]+$ ]]; then
+            echo "$count"
+        else
+            echo "0"
+        fi
     else
         echo "0"
     fi

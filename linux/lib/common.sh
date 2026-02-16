@@ -344,11 +344,17 @@ CRITICAL_FILES=(
 # Load all libraries
 load_libraries() {
     local lib_dir="${1:-$INSTALL_DIR/lib}"
+    local lib
 
     for lib in dns.sh firewall.sh browser.sh services.sh rollback.sh; do
-        if [ -f "$lib_dir/$lib" ]; then
-            # shellcheck disable=SC1090  # Dynamic source path is intentional
-            source "$lib_dir/$lib"
+        if [ ! -f "$lib_dir/$lib" ]; then
+            log_error "Required library not found: $lib_dir/$lib"
+            return 1
         fi
+
+        # shellcheck disable=SC1090  # Dynamic source path is intentional
+        source "$lib_dir/$lib"
     done
+
+    return 0
 }

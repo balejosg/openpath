@@ -22,9 +22,23 @@
 
 set -euo pipefail
 
-# Load common library (standard pattern)
+# Load common library (installed path first, source-tree + legacy fallback)
 INSTALL_DIR="/usr/local/lib/openpath"
-source "$INSTALL_DIR/lib/common.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ -f "$INSTALL_DIR/lib/common.sh" ]; then
+    # shellcheck source=/usr/local/lib/openpath/lib/common.sh
+    source "$INSTALL_DIR/lib/common.sh"
+elif [ -f "$SCRIPT_DIR/../../lib/common.sh" ]; then
+    # shellcheck source=../../lib/common.sh
+    source "$SCRIPT_DIR/../../lib/common.sh"
+elif [ -f "/usr/local/lib/openpath/common.sh" ]; then
+    # shellcheck source=/usr/local/lib/openpath/common.sh
+    source "/usr/local/lib/openpath/common.sh"
+else
+    echo "ERROR: common.sh not found" >&2
+    exit 1
+fi
 
 # =============================================================================
 # Configuration
