@@ -55,6 +55,7 @@ const UsersView = () => {
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<'admin' | 'teacher' | 'student'>('student');
   const [newError, setNewError] = useState('');
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   // Mutation loading states
   const [saving, setSaving] = useState(false);
@@ -186,6 +187,41 @@ const UsersView = () => {
     }
   };
 
+  const handleExportUsers = () => {
+    if (filteredUsers.length === 0) {
+      setExportMessage('No hay usuarios para exportar');
+      return;
+    }
+
+    const headers = ['Nombre', 'Email', 'Roles', 'Estado'];
+    const rows = filteredUsers.map((user) => [
+      user.name,
+      user.email,
+      user.roles.join('|'),
+      user.status,
+    ]);
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'usuarios.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setExportMessage('Exportación iniciada');
+  };
+
+  const visibleCount = filteredUsers.length;
+  const totalCount = users.length;
+  const rangeStart = visibleCount === 0 ? 0 : 1;
+  const rangeEnd = visibleCount === 0 ? 0 : visibleCount;
+
   return (
     <div className="space-y-6">
       {/* Toolbar */}
@@ -218,11 +254,20 @@ const UsersView = () => {
           <button className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition-colors">
             <Filter size={16} /> Filtros
           </button>
-          <button className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+          <button
+            onClick={handleExportUsers}
+            className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+          >
             Exportar
           </button>
         </div>
       </div>
+
+      {exportMessage && (
+        <p className="text-sm text-slate-600" role="status">
+          {exportMessage}
+        </p>
+      )}
 
       {/* Table */}
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
@@ -336,13 +381,19 @@ const UsersView = () => {
         {/* Pagination Mock */}
         <div className="px-6 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 bg-slate-50">
           <span>
-            Mostrando 1-{filteredUsers.length} de {users.length} usuarios
+            Mostrando {rangeStart}-{rangeEnd} de {totalCount} usuarios
           </span>
           <div className="flex gap-2">
-            <button className="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors shadow-sm">
+            <button
+              disabled={visibleCount === 0}
+              className="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Anterior
             </button>
-            <button className="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors shadow-sm">
+            <button
+              disabled={visibleCount === 0}
+              className="px-3 py-1 bg-white border border-slate-300 rounded hover:bg-slate-100 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Siguiente
             </button>
           </div>

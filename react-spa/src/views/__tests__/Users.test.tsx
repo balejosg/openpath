@@ -26,7 +26,7 @@ vi.mock('../../lib/trpc', () => ({
   },
 }));
 
-describe('Users View - Create User Role', () => {
+describe('Users View', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUsersList.mockResolvedValue([]);
@@ -95,5 +95,22 @@ describe('Users View - Create User Role', () => {
         role: 'student',
       });
     });
+  });
+
+  it('shows valid empty pagination range and disables navigation on empty state', async () => {
+    render(<UsersView />);
+
+    expect(await screen.findByText('Mostrando 0-0 de 0 usuarios')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Siguiente' })).toBeDisabled();
+  });
+
+  it('shows feedback when exporting with no users', async () => {
+    render(<UsersView />);
+
+    await screen.findByText('Mostrando 0-0 de 0 usuarios');
+    fireEvent.click(screen.getByRole('button', { name: 'Exportar' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent('No hay usuarios para exportar');
   });
 });

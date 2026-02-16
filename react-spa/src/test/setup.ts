@@ -1,13 +1,13 @@
 // Polyfill localStorage for jsdom environments where it may not be fully functional
 if (
   typeof globalThis.localStorage === 'undefined' ||
-  typeof globalThis.localStorage?.getItem !== 'function'
+  typeof globalThis.localStorage.getItem !== 'function'
 ) {
   const store = new Map<string, string>();
   Object.defineProperty(globalThis, 'localStorage', {
     value: {
       getItem: (key: string) => store.get(key) ?? null,
-      setItem: (key: string, value: string) => store.set(key, String(value)),
+      setItem: (key: string, value: string) => store.set(key, value),
       removeItem: (key: string) => store.delete(key),
       clear: () => store.clear(),
       get length() {
