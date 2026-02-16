@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search, CheckCircle, XCircle, Trash2, Clock, AlertTriangle, Filter } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 
@@ -82,6 +82,7 @@ export default function DomainRequests() {
   const [bulkFailedIds, setBulkFailedIds] = useState<string[]>([]);
   const [bulkFailedMode, setBulkFailedMode] = useState<'approve' | 'reject' | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Modal states
   const [approveModal, setApproveModal] = useState<{
@@ -514,6 +515,14 @@ export default function DomainRequests() {
     await handleBulkReject();
   };
 
+  const clearSearch = () => {
+    setSearchTerm('');
+    if (searchInputRef.current) {
+      searchInputRef.current.value = '';
+      searchInputRef.current.focus();
+    }
+  };
+
   // Empty state
   if (!loading && filteredRequests.length === 0 && statusFilter === 'all' && !searchTerm) {
     return (
@@ -551,12 +560,28 @@ export default function DomainRequests() {
           <div className="relative flex-1">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
+              ref={searchInputRef}
               type="text"
+              name="domain-requests-search"
+              autoComplete="off"
               placeholder="Buscar por dominio o email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              onFocus={(e) => {
+                if (e.currentTarget.value !== searchTerm) {
+                  setSearchTerm(e.currentTarget.value);
+                }
+              }}
+              className="w-full pl-10 pr-24 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+            <button
+              type="button"
+              onClick={clearSearch}
+              aria-label="Limpiar busqueda"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50"
+            >
+              Limpiar
+            </button>
           </div>
 
           {/* Status filter */}

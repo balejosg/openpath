@@ -133,4 +133,22 @@ describe('DomainRequests - Original group approval', () => {
 
     confirmSpy.mockRestore();
   });
+
+  it('clears search and restores the table when using clear button', async () => {
+    render(<DomainRequests />);
+
+    await screen.findByText('example.com');
+
+    const searchInput = screen.getByPlaceholderText('Buscar por dominio o email...');
+    fireEvent.change(searchInput, { target: { value: 'zzzz-not-found' } });
+
+    expect(
+      screen.getByText('No se encontraron solicitudes con los filtros aplicados')
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limpiar busqueda' }));
+
+    expect(searchInput).toHaveValue('');
+    expect(screen.getByText('example.com')).toBeInTheDocument();
+  });
 });
