@@ -101,6 +101,7 @@ describe('Users View', () => {
     render(<UsersView />);
 
     expect(await screen.findByText('Mostrando 0-0 de 0 usuarios')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Filtros' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Anterior' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Siguiente' })).toBeDisabled();
   });

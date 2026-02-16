@@ -251,7 +251,11 @@ const UsersView = () => {
           />
         </div>
         <div className="flex gap-2 w-full md:w-auto">
-          <button className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-700 hover:bg-slate-50 transition-colors">
+          <button
+            disabled
+            title="Filtros próximamente"
+            className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-500 opacity-60 cursor-not-allowed"
+          >
             <Filter size={16} /> Filtros
           </button>
           <button
