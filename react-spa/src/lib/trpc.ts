@@ -4,6 +4,7 @@ import type { AppRouter } from '@openpath/api';
 // Claves de localStorage (DEBEN coincidir con spa/src/auth.ts)
 const ACCESS_TOKEN_KEY = 'openpath_access_token';
 const LEGACY_TOKEN_KEY = 'requests_api_token';
+const COOKIE_SESSION_MARKER = 'cookie-session';
 
 /**
  * Obtiene la URL base de la API.
@@ -38,7 +39,11 @@ function getApiUrl(): string {
 function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    return localStorage.getItem(ACCESS_TOKEN_KEY) ?? localStorage.getItem(LEGACY_TOKEN_KEY);
+    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (token && token !== COOKIE_SESSION_MARKER) {
+      return token;
+    }
+    return localStorage.getItem(LEGACY_TOKEN_KEY);
   } catch {
     return null;
   }
@@ -82,7 +87,10 @@ export const trpc = createTRPCClient<AppRouter>({
       },
       // Interceptar respuestas 401 (UNAUTHORIZED) para limpiar auth y redirigir
       fetch(url, options) {
-        return fetch(url, options).then((res) => {
+        return fetch(url, {
+          ...options,
+          credentials: 'include',
+        }).then((res) => {
           if (res.status === 401) {
             // No redirigir si el error ocurre durante el login o registro
             let urlString = res.url;
