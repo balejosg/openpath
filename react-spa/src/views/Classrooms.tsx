@@ -17,6 +17,8 @@ import type { Classroom } from '../types';
 import { trpc } from '../lib/trpc';
 import { useClassroomConfigActions } from '../hooks/useClassroomConfigActions';
 import { useClassroomSchedules } from '../hooks/useClassroomSchedules';
+import { useListDetailSelection } from '../hooks/useListDetailSelection';
+import { normalizeSearchTerm, useNormalizedSearch } from '../hooks/useNormalizedSearch';
 import WeeklyCalendar from '../components/WeeklyCalendar';
 import ScheduleFormModal from '../components/ScheduleFormModal';
 
@@ -32,10 +34,10 @@ const Classrooms = () => {
   const [groups, setGroups] = useState<GroupOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedClassroom, setSelectedClassroom] = useState<Classroom | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const normalizedSearchQuery = useNormalizedSearch(searchQuery);
 
   // Enrollment state
   const [showEnrollModal, setShowEnrollModal] = useState(false);
@@ -83,18 +85,13 @@ const Classrooms = () => {
           displayName: g.displayName || g.name,
         }))
       );
-
-      // Select first classroom if none selected
-      if (mappedClassrooms.length > 0 && !selectedClassroom) {
-        setSelectedClassroom(mappedClassrooms[0]);
-      }
     } catch (err) {
       console.error('Failed to fetch classrooms:', err);
       setError('Error al cargar aulas');
     } finally {
       setLoading(false);
     }
-  }, [selectedClassroom]);
+  }, []);
 
   useEffect(() => {
     void fetchData();
@@ -125,14 +122,18 @@ const Classrooms = () => {
 
   // Filter classrooms based on search
   const filteredClassrooms = useMemo(() => {
-    if (!searchQuery.trim()) return classrooms;
-    const query = searchQuery.toLowerCase();
+    if (!normalizedSearchQuery) return classrooms;
     return classrooms.filter(
       (room) =>
-        room.name.toLowerCase().includes(query) ||
-        (room.activeGroup?.toLowerCase().includes(query) ?? false)
+        normalizeSearchTerm(room.name).includes(normalizedSearchQuery) ||
+        (room.activeGroup
+          ? normalizeSearchTerm(room.activeGroup).includes(normalizedSearchQuery)
+          : false)
     );
-  }, [classrooms, searchQuery]);
+  }, [classrooms, normalizedSearchQuery]);
+
+  const { selectedItem: selectedClassroom, setSelectedId: setSelectedClassroomId } =
+    useListDetailSelection(filteredClassrooms);
 
   const handleCreateClassroom = async () => {
     if (!newName.trim()) {
@@ -150,7 +151,7 @@ const Classrooms = () => {
       const updated = await refetchClassrooms();
       const newClassroom = updated.find((c) => c.id === created.id);
       if (newClassroom) {
-        setSelectedClassroom(newClassroom);
+        setSelectedClassroomId(newClassroom.id);
       }
       setNewName('');
       setNewGroup('');
@@ -170,7 +171,7 @@ const Classrooms = () => {
       setDeleting(true);
       await trpc.classrooms.delete.mutate({ id: selectedClassroom.id });
       const updated = await refetchClassrooms();
-      setSelectedClassroom(updated[0] ?? null);
+      setSelectedClassroomId(updated[0]?.id ?? null);
       setShowDeleteConfirm(false);
     } catch (err) {
       console.error('Failed to delete classroom:', err);
@@ -183,7 +184,7 @@ const Classrooms = () => {
     useClassroomConfigActions({
       selectedClassroom,
       refetchClassrooms,
-      setSelectedClassroom,
+      setSelectedClassroom: (classroom) => setSelectedClassroomId(classroom?.id ?? null),
     });
 
   const openNewModal = () => {
@@ -338,7 +339,7 @@ const Classrooms = () => {
               return (
                 <div
                   key={room.id}
-                  onClick={() => setSelectedClassroom(room)}
+                  onClick={() => setSelectedClassroomId(room.id)}
                   className={`p-4 rounded-lg border cursor-pointer transition-all ${
                     selectedClassroom?.id === room.id
                       ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200 shadow-sm'

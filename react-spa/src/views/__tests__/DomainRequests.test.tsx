@@ -151,4 +151,18 @@ describe('DomainRequests - Original group approval', () => {
     expect(searchInput).toHaveValue('');
     expect(screen.getByText('example.com')).toBeInTheDocument();
   });
+
+  it('matches search even with extra spaces and uppercase text', async () => {
+    render(<DomainRequests />);
+
+    await screen.findByText('example.com');
+
+    const searchInput = screen.getByPlaceholderText('Buscar por dominio o email...');
+    fireEvent.change(searchInput, { target: { value: '   EXAMPLE.COM   ' } });
+
+    expect(screen.getByText('example.com')).toBeInTheDocument();
+    expect(
+      screen.queryByText('No se encontraron solicitudes con los filtros aplicados')
+    ).not.toBeInTheDocument();
+  });
 });

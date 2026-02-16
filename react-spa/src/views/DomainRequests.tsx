@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Search, CheckCircle, XCircle, Trash2, Clock, AlertTriangle, Filter } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import { normalizeSearchTerm, useNormalizedSearch } from '../hooks/useNormalizedSearch';
 
 type RequestStatus = 'pending' | 'approved' | 'rejected';
 type RequestPriority = 'low' | 'normal' | 'high' | 'urgent';
@@ -65,6 +66,7 @@ export default function DomainRequests() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const normalizedSearchTerm = useNormalizedSearch(searchTerm);
   const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'firefox-extension' | 'manual'>('all');
   const [sortBy, setSortBy] = useState<SortOption>('sla');
@@ -155,15 +157,16 @@ export default function DomainRequests() {
     () =>
       requests.filter((req) => {
         const matchesSearch =
-          req.domain.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          req.requesterEmail.toLowerCase().includes(searchTerm.toLowerCase());
+          !normalizedSearchTerm ||
+          normalizeSearchTerm(req.domain).includes(normalizedSearchTerm) ||
+          normalizeSearchTerm(req.requesterEmail).includes(normalizedSearchTerm);
 
         if (!matchesSearch) return false;
         if (sourceFilter === 'all') return true;
         if (sourceFilter === 'firefox-extension') return req.source === 'firefox-extension';
         return (req.source ?? 'manual') !== 'firefox-extension';
       }),
-    [requests, searchTerm, sourceFilter]
+    [requests, normalizedSearchTerm, sourceFilter]
   );
 
   const sortedRequests = useMemo(() => {

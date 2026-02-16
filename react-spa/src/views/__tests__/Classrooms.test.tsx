@@ -150,4 +150,61 @@ describe('Classrooms', () => {
       )
     ).toBeInTheDocument();
   });
+
+  it('keeps classroom search usable with extra spaces and uppercase input', async () => {
+    mockClassroomsListQuery.mockResolvedValue([
+      {
+        id: 'classroom-1',
+        name: 'Laboratorio Norte',
+        displayName: 'Laboratorio Norte',
+        defaultGroupId: null,
+        activeGroupId: null,
+        currentGroupId: null,
+        status: 'operational',
+        machineCount: 0,
+        onlineMachineCount: 0,
+      },
+    ]);
+
+    render(<Classrooms />);
+
+    expect((await screen.findAllByText('Laboratorio Norte')).length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByPlaceholderText('Buscar aula...'), {
+      target: { value: '   LABORATORIO   NORTE  ' },
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Laboratorio Norte').length).toBeGreaterThan(0);
+      expect(screen.queryByText('No se encontraron aulas')).not.toBeInTheDocument();
+    });
+  });
+
+  it('clears detail panel when filters leave the list empty', async () => {
+    mockClassroomsListQuery.mockResolvedValue([
+      {
+        id: 'classroom-1',
+        name: 'Laboratorio Norte',
+        displayName: 'Laboratorio Norte',
+        defaultGroupId: null,
+        activeGroupId: null,
+        currentGroupId: null,
+        status: 'operational',
+        machineCount: 0,
+        onlineMachineCount: 0,
+      },
+    ]);
+
+    render(<Classrooms />);
+
+    await screen.findByText('Configuración y estado del aula');
+
+    fireEvent.change(screen.getByPlaceholderText('Buscar aula...'), {
+      target: { value: 'no-match-value' },
+    });
+
+    expect(screen.getByText('No se encontraron aulas')).toBeInTheDocument();
+    expect(screen.queryByText('Configuración y estado del aula')).not.toBeInTheDocument();
+    expect(screen.getByText('Sin aulas')).toBeInTheDocument();
+  });
 });

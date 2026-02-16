@@ -11,6 +11,7 @@ import {
 import { Group } from '../types';
 import { trpc } from '../lib/trpc';
 import { useToast } from '../components/ui/Toast';
+import { useMutationFeedback } from '../hooks/useMutationFeedback';
 
 interface GroupsProps {
   onNavigateToRules: (group: { id: string; name: string }) => void;
@@ -38,6 +39,16 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
 
   // Mutation loading states
   const [saving, setSaving] = useState(false);
+  const {
+    error: configError,
+    clearError: clearConfigError,
+    captureError: captureConfigError,
+  } = useMutationFeedback({
+    badRequest: 'Revisa los datos del grupo antes de guardar.',
+    conflict:
+      'No se pudo guardar porque el grupo fue modificado recientemente. Recarga e intenta de nuevo.',
+    fallback: 'No se pudo guardar la configuración del grupo. Intenta nuevamente.',
+  });
 
   // Fetch groups from API
   const fetchGroups = useCallback(async () => {
@@ -96,6 +107,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
 
     try {
       setSaving(true);
+      clearConfigError();
       await trpc.groups.update.mutate({
         id: selectedGroup.id,
         displayName: configDescription,
@@ -105,6 +117,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
       setShowConfigModal(false);
     } catch (err) {
       console.error('Failed to update group:', err);
+      captureConfigError(err);
     } finally {
       setSaving(false);
     }
@@ -121,6 +134,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
     setSelectedGroup(group);
     setConfigDescription(group.description);
     setConfigStatus(group.status);
+    clearConfigError();
     setShowConfigModal(true);
   };
 
@@ -281,7 +295,10 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold text-slate-800">Configurar: {selectedGroup.name}</h3>
               <button
-                onClick={() => setShowConfigModal(false)}
+                onClick={() => {
+                  clearConfigError();
+                  setShowConfigModal(false);
+                }}
                 className="text-slate-400 hover:text-slate-600"
               >
                 <X size={20} />
@@ -330,9 +347,18 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
                   </button>
                 </div>
               </div>
+              {configError && (
+                <p className="text-sm text-red-600 flex items-start gap-2">
+                  <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                  <span>{configError}</span>
+                </p>
+              )}
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={() => setShowConfigModal(false)}
+                  onClick={() => {
+                    clearConfigError();
+                    setShowConfigModal(false);
+                  }}
                   disabled={saving}
                   className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
