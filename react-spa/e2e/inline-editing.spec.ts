@@ -6,22 +6,15 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { RulesManagerPage, LoginPage } from './fixtures/page-objects';
-import { getCredentials } from './fixtures/test-utils';
+import { RulesManagerPage } from './fixtures/page-objects';
+import { loginAsAdmin, waitForNetworkIdle } from './fixtures/test-utils';
 
 test.describe('Inline Editing @smoke', () => {
   let rulesManager: RulesManagerPage;
 
   test.beforeEach(async ({ page }) => {
-    const loginPage = new LoginPage(page);
-    const { email, password } = getCredentials();
-
-    await loginPage.goto();
-    await loginPage.login(email, password);
-
-    // Wait for dashboard to load
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByText(/Panel de Control|Dashboard/i)).toBeVisible({ timeout: 15000 });
+    await loginAsAdmin(page);
+    await waitForNetworkIdle(page);
 
     rulesManager = new RulesManagerPage(page);
     await rulesManager.open();
@@ -118,14 +111,8 @@ test.describe('Inline Editing - Save Operations', () => {
   const testDomain = `test-edit-${Date.now()}.example.com`;
 
   test.beforeEach(async ({ page }) => {
-    const loginPage = new LoginPage(page);
-    const { email, password } = getCredentials();
-
-    await loginPage.goto();
-    await loginPage.login(email, password);
-
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByText(/Panel de Control|Dashboard/i)).toBeVisible({ timeout: 15000 });
+    await loginAsAdmin(page);
+    await waitForNetworkIdle(page);
 
     rulesManager = new RulesManagerPage(page);
     await rulesManager.open();
@@ -250,14 +237,8 @@ test.describe('Inline Editing - Edge Cases', () => {
   let rulesManager: RulesManagerPage;
 
   test.beforeEach(async ({ page }) => {
-    const loginPage = new LoginPage(page);
-    const { email, password } = getCredentials();
-
-    await loginPage.goto();
-    await loginPage.login(email, password);
-
-    await page.waitForLoadState('networkidle');
-    await expect(page.getByText(/Panel de Control|Dashboard/i)).toBeVisible({ timeout: 15000 });
+    await loginAsAdmin(page);
+    await waitForNetworkIdle(page);
 
     rulesManager = new RulesManagerPage(page);
     await rulesManager.open();

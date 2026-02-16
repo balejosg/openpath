@@ -198,11 +198,6 @@ export class DomainRequestsPage {
     await this.page.waitForLoadState('networkidle');
   }
 
-  async goto() {
-    await this.page.goto('./requests');
-    await this.page.waitForLoadState('networkidle');
-  }
-
   async approveRequest(domain: string) {
     const row = this.page.getByText(domain).locator('..').locator('..');
     await row.getByRole('button', { name: /Aprobar/i }).click();
