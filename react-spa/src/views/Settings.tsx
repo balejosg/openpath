@@ -55,6 +55,42 @@ interface NewTokenResponse {
   createdAt: string;
 }
 
+interface NotificationPrefs {
+  securityAlerts: boolean;
+  domainRequests: boolean;
+  weeklyReports: boolean;
+}
+
+const NOTIFICATION_PREFS_KEY = 'openpath.notificationPrefs';
+
+const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  securityAlerts: true,
+  domainRequests: true,
+  weeklyReports: false,
+};
+
+const getStoredNotificationPrefs = (): NotificationPrefs => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_NOTIFICATION_PREFS;
+  }
+
+  const raw = window.localStorage.getItem(NOTIFICATION_PREFS_KEY);
+  if (!raw) {
+    return DEFAULT_NOTIFICATION_PREFS;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<NotificationPrefs>;
+    return {
+      securityAlerts: parsed.securityAlerts ?? DEFAULT_NOTIFICATION_PREFS.securityAlerts,
+      domainRequests: parsed.domainRequests ?? DEFAULT_NOTIFICATION_PREFS.domainRequests,
+      weeklyReports: parsed.weeklyReports ?? DEFAULT_NOTIFICATION_PREFS.weeklyReports,
+    };
+  } catch {
+    return DEFAULT_NOTIFICATION_PREFS;
+  }
+};
+
 const Settings: React.FC = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -122,9 +158,22 @@ const Settings: React.FC = () => {
   }, [fetchTokens]);
 
   // Notification preferences state
-  const [securityAlerts, setSecurityAlerts] = useState(true);
-  const [domainRequests, setDomainRequests] = useState(true);
-  const [weeklyReports, setWeeklyReports] = useState(false);
+  const [securityAlerts, setSecurityAlerts] = useState(
+    () => getStoredNotificationPrefs().securityAlerts
+  );
+  const [domainRequests, setDomainRequests] = useState(
+    () => getStoredNotificationPrefs().domainRequests
+  );
+  const [weeklyReports, setWeeklyReports] = useState(
+    () => getStoredNotificationPrefs().weeklyReports
+  );
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      NOTIFICATION_PREFS_KEY,
+      JSON.stringify({ securityAlerts, domainRequests, weeklyReports })
+    );
+  }, [securityAlerts, domainRequests, weeklyReports]);
 
   const closePasswordModal = () => {
     clearPasswordResetTimer();

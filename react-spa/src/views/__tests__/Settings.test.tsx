@@ -44,6 +44,7 @@ vi.mock('../../lib/trpc', () => ({
 describe('Settings View - Change Password', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     mockChangePassword.mockResolvedValue({ success: true });
     mockListTokens.mockResolvedValue([]);
     mockCreateToken.mockResolvedValue({
@@ -168,5 +169,22 @@ describe('Settings View - Change Password', () => {
         expiresInDays: undefined,
       });
     });
+  });
+
+  it('persists notification toggles across remounts', async () => {
+    const { unmount } = render(<Settings />);
+
+    const weeklyReportsCheckbox = await screen.findByRole('checkbox', {
+      name: 'Reportes semanales',
+    });
+    expect(weeklyReportsCheckbox).not.toBeChecked();
+
+    fireEvent.click(weeklyReportsCheckbox);
+    expect(weeklyReportsCheckbox).toBeChecked();
+
+    unmount();
+    render(<Settings />);
+
+    expect(await screen.findByRole('checkbox', { name: 'Reportes semanales' })).toBeChecked();
   });
 });
