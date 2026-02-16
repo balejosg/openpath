@@ -19,6 +19,8 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen }) => {
+  const normalizedActiveTab = activeTab === 'rules' ? 'groups' : activeTab;
+
   const navItems: NavItem[] = [
     { id: 'dashboard', label: 'Panel de Control', icon: <LayoutDashboard size={20} /> },
     { id: 'classrooms', label: 'Aulas Seguras', icon: <MonitorPlay size={20} /> },
@@ -50,15 +52,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen }) =>
           <button
             key={item.id}
             onClick={() => setActiveTab(item.id)}
+            aria-current={normalizedActiveTab === item.id ? 'page' : undefined}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${
-              activeTab === item.id
+              normalizedActiveTab === item.id
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-900/20'
                 : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
             }`}
           >
             <span
               className={
-                activeTab === item.id ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'
+                normalizedActiveTab === item.id
+                  ? 'text-white'
+                  : 'text-slate-400 group-hover:text-slate-200'
               }
             >
               {item.icon}
@@ -72,8 +77,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen }) =>
       <div className="p-4 bg-slate-950 border-t border-slate-800">
         <button
           onClick={() => setActiveTab('settings')}
+          aria-current={normalizedActiveTab === 'settings' ? 'page' : undefined}
           className={`flex items-center gap-3 px-3 py-2 w-full transition-colors rounded-lg mb-1 ${
-            activeTab === 'settings'
+            normalizedActiveTab === 'settings'
               ? 'text-white bg-slate-800'
               : 'text-slate-400 hover:text-white hover:bg-slate-800'
           }`}
