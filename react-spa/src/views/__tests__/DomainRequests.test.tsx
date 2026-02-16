@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import DomainRequests from '../DomainRequests';
 
-const { mockListRequests, mockListGroups, mockApprove } = vi.hoisted(() => ({
+const { mockListRequests, mockListGroups, mockApprove, mockReject } = vi.hoisted(() => ({
   mockListRequests: vi.fn(),
   mockListGroups: vi.fn(),
   mockApprove: vi.fn(),
+  mockReject: vi.fn(),
 }));
 
 vi.mock('../../lib/trpc', () => ({
@@ -21,7 +22,7 @@ vi.mock('../../lib/trpc', () => ({
         mutate: mockApprove,
       },
       reject: {
-        mutate: vi.fn(),
+        mutate: mockReject,
       },
       delete: {
         mutate: vi.fn(),
@@ -50,6 +51,7 @@ describe('DomainRequests - Original group approval', () => {
     ]);
     mockListGroups.mockResolvedValue([{ id: 'group-1', path: 'group-1', name: 'Grupo 1' }]);
     mockApprove.mockResolvedValue({ success: true });
+    mockReject.mockResolvedValue({ success: true });
   });
 
   it('approves using request id only and shows original group', async () => {
@@ -100,5 +102,35 @@ describe('DomainRequests - Original group approval', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Limpiar seleccion' }));
 
     expect(screen.queryByDisplayValue('No aplica')).not.toBeInTheDocument();
+  });
+
+  it('asks confirmation before bulk approve', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    render(<DomainRequests />);
+
+    await screen.findByText('example.com');
+    fireEvent.click(screen.getByLabelText('Seleccionar example.com'));
+    fireEvent.click(screen.getByRole('button', { name: 'Aprobar seleccionadas' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(mockApprove).not.toHaveBeenCalled();
+
+    confirmSpy.mockRestore();
+  });
+
+  it('asks confirmation before bulk reject', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    render(<DomainRequests />);
+
+    await screen.findByText('example.com');
+    fireEvent.click(screen.getByLabelText('Seleccionar example.com'));
+    fireEvent.click(screen.getByRole('button', { name: 'Rechazar seleccionadas' }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(mockReject).not.toHaveBeenCalled();
+
+    confirmSpy.mockRestore();
   });
 });

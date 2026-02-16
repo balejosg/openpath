@@ -373,6 +373,10 @@ export default function DomainRequests() {
 
   const handleBulkApprove = async () => {
     if (selectedPendingRequests.length === 0) return;
+    const confirmed = window.confirm(
+      `¿Aprobar ${selectedPendingRequests.length} solicitudes seleccionadas?`
+    );
+    if (!confirmed) return;
 
     setBulkMessage(null);
     setBulkLoading(true);
@@ -428,6 +432,10 @@ export default function DomainRequests() {
 
   const handleBulkReject = async () => {
     if (selectedPendingRequests.length === 0) return;
+    const confirmed = window.confirm(
+      `¿Rechazar ${selectedPendingRequests.length} solicitudes seleccionadas?`
+    );
+    if (!confirmed) return;
 
     setBulkMessage(null);
     setBulkLoading(true);
