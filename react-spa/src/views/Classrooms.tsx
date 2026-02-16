@@ -62,6 +62,7 @@ const Classrooms = () => {
   // Mutation loading states
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [classroomConfigError, setClassroomConfigError] = useState('');
 
   // Fetch classrooms and groups from API
   const fetchData = useCallback(async () => {
@@ -217,6 +218,7 @@ const Classrooms = () => {
     if (!selectedClassroom) return;
 
     try {
+      setClassroomConfigError('');
       await trpc.classrooms.setActiveGroup.mutate({
         id: selectedClassroom.id,
         groupId: groupId || null,
@@ -236,6 +238,7 @@ const Classrooms = () => {
     if (!selectedClassroom) return;
 
     try {
+      setClassroomConfigError('');
       await trpc.classrooms.update.mutate({
         id: selectedClassroom.id,
         defaultGroupId: groupId || null,
@@ -247,6 +250,20 @@ const Classrooms = () => {
       }
     } catch (err) {
       console.error('Failed to update default group:', err);
+
+      const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+      if (
+        message.includes('default') ||
+        message.includes('required') ||
+        message.includes('400') ||
+        groupId === ''
+      ) {
+        setClassroomConfigError(
+          'No puedes dejar el aula sin grupo por defecto mientras no exista un grupo activo válido.'
+        );
+      } else {
+        setClassroomConfigError('No se pudo actualizar el grupo por defecto. Intenta nuevamente.');
+      }
     }
   };
 
@@ -592,6 +609,12 @@ const Classrooms = () => {
                   <p className="mt-2 text-xs text-slate-500 italic">
                     Se usa cuando no hay grupo activo ni bloque de horario vigente.
                   </p>
+                  {classroomConfigError && (
+                    <p className="mt-2 text-xs text-red-600 flex items-start gap-1">
+                      <AlertCircle size={12} className="mt-0.5 flex-shrink-0" />
+                      <span>{classroomConfigError}</span>
+                    </p>
+                  )}
                 </div>
                 <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 flex items-center justify-between">
                   <div>

@@ -120,4 +120,34 @@ describe('Classrooms', () => {
       });
     });
   });
+
+  it('shows actionable feedback when clearing default group fails with 4xx', async () => {
+    mockClassroomsListQuery.mockResolvedValue([
+      {
+        id: 'classroom-1',
+        name: 'Aula 1',
+        displayName: 'Aula 1',
+        defaultGroupId: 'group-default',
+        activeGroupId: null,
+        currentGroupId: 'group-default',
+        status: 'operational',
+        machineCount: 0,
+        onlineMachineCount: 0,
+      },
+    ]);
+    mockClassroomsUpdateMutate.mockRejectedValueOnce(
+      new Error('BAD_REQUEST: default group required')
+    );
+
+    render(<Classrooms />);
+
+    const defaultGroupSelect = await screen.findByLabelText(/grupo por defecto/i);
+    fireEvent.change(defaultGroupSelect, { target: { value: '' } });
+
+    expect(
+      await screen.findByText(
+        'No puedes dejar el aula sin grupo por defecto mientras no exista un grupo activo válido.'
+      )
+    ).toBeInTheDocument();
+  });
 });
