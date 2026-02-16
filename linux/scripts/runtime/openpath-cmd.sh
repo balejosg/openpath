@@ -27,6 +27,7 @@ source "$INSTALL_DIR/lib/common.sh" 2>/dev/null || {
     echo "ERROR: Sistema no instalado correctamente"
     exit 1
 }
+load_libraries
 
 # Colores
 RED='\033[0;31m'
@@ -406,9 +407,6 @@ except Exception:
 
 # Forzar aplicación
 cmd_force() {
-    source "$INSTALL_DIR/lib/firewall.sh"
-    source "$INSTALL_DIR/lib/browser.sh"
-    
     echo -e "${BLUE}Forzando aplicación de cambios...${NC}"
     echo -e "${YELLOW}Se cerrarán los navegadores${NC}"
     echo ""
@@ -422,10 +420,6 @@ cmd_force() {
 
 # Habilitar
 cmd_enable() {
-    source "$INSTALL_DIR/lib/services.sh"
-    source "$INSTALL_DIR/lib/firewall.sh"
-    source "$INSTALL_DIR/lib/browser.sh"
-
     echo -e "${BLUE}Habilitando sistema...${NC}"
     enable_services
     /usr/local/bin/openpath-update.sh
@@ -439,9 +433,6 @@ cmd_enable() {
 
 # Deshabilitar
 cmd_disable() {
-    source "$INSTALL_DIR/lib/firewall.sh"
-    source "$INSTALL_DIR/lib/browser.sh"
-    
     echo -e "${YELLOW}Deshabilitando sistema...${NC}"
     
     systemctl stop openpath-dnsmasq.timer

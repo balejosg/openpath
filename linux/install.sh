@@ -152,141 +152,117 @@ fi
 echo ""
 
 # ============================================================================
-# [1/13] INSTALAR LIBRERÍAS
+# Installation Step Functions
 # ============================================================================
-echo "[1/13] Instalando librerías..."
 
-mkdir -p "$INSTALL_DIR/lib"
-mkdir -p "$CONFIG_DIR"
+step_install_libraries() {
+    echo "[1/13] Instalando librerías..."
+    mkdir -p "$INSTALL_DIR/lib"
+    mkdir -p "$CONFIG_DIR"
 
-# Copiar librerías
-cp "$SCRIPT_DIR/lib/common.sh" "$INSTALL_DIR/lib/"
-cp "$SCRIPT_DIR/lib/dns.sh" "$INSTALL_DIR/lib/"
-cp "$SCRIPT_DIR/lib/firewall.sh" "$INSTALL_DIR/lib/"
-cp "$SCRIPT_DIR/lib/browser.sh" "$INSTALL_DIR/lib/"
-cp "$SCRIPT_DIR/lib/services.sh" "$INSTALL_DIR/lib/"
-cp "$SCRIPT_DIR/lib/rollback.sh" "$INSTALL_DIR/lib/"
+    cp "$SCRIPT_DIR/lib/common.sh" "$INSTALL_DIR/lib/"
+    cp "$SCRIPT_DIR/lib/dns.sh" "$INSTALL_DIR/lib/"
+    cp "$SCRIPT_DIR/lib/firewall.sh" "$INSTALL_DIR/lib/"
+    cp "$SCRIPT_DIR/lib/browser.sh" "$INSTALL_DIR/lib/"
+    cp "$SCRIPT_DIR/lib/services.sh" "$INSTALL_DIR/lib/"
+    cp "$SCRIPT_DIR/lib/rollback.sh" "$INSTALL_DIR/lib/"
 
-chmod +x "$INSTALL_DIR/lib/"*.sh
-echo "✓ Librerías instaladas"
+    chmod +x "$INSTALL_DIR/lib/"*.sh
+    echo "✓ Librerías instaladas"
 
-# Cargar librerías
-source "$INSTALL_DIR/lib/common.sh"
-source "$INSTALL_DIR/lib/dns.sh"
-source "$INSTALL_DIR/lib/firewall.sh"
-source "$INSTALL_DIR/lib/browser.sh"
-source "$INSTALL_DIR/lib/services.sh"
+    # Load all libraries at once
+    source "$INSTALL_DIR/lib/common.sh"
+    load_libraries
+}
 
-# ============================================================================
-# [2/13] INSTALAR DEPENDENCIAS
-# ============================================================================
-echo ""
-echo "[2/13] Instalando dependencias..."
+step_install_dependencies() {
+    echo ""
+    echo "[2/13] Instalando dependencias..."
 
-apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    iptables iptables-persistent ipset curl \
-    libcap2-bin dnsutils conntrack python3 >/dev/null
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        iptables iptables-persistent ipset curl \
+        libcap2-bin dnsutils conntrack python3 >/dev/null
 
-# Instalar dnsmasq sin iniciarlo
-RUNLEVEL=1 apt-get install -y dnsmasq >/dev/null
+    RUNLEVEL=1 apt-get install -y dnsmasq >/dev/null
 
-# Evitar conflicto con resolvconf
-if [ -d /etc/default ]; then
-    grep -q "IGNORE_RESOLVCONF" /etc/default/dnsmasq 2>/dev/null || \
-        echo "IGNORE_RESOLVCONF=yes" >> /etc/default/dnsmasq
-fi
-
-# Dar capacidades a dnsmasq
-setcap 'cap_net_bind_service,cap_net_admin=+ep' /usr/sbin/dnsmasq 2>/dev/null || true
-
-echo "✓ Dependencias instaladas"
-
-# ============================================================================
-# [3/13] LIBERAR PUERTO 53
-# ============================================================================
-echo ""
-echo "[3/13] Liberando puerto 53..."
-
-free_port_53
-echo "✓ Puerto 53 liberado"
-
-# ============================================================================
-# [4/13] DETECTAR DNS
-# ============================================================================
-echo ""
-echo "[4/13] Detectando DNS primario..."
-
-PRIMARY_DNS=$(detect_primary_dns)
-echo "$PRIMARY_DNS" > "$CONFIG_DIR/original-dns.conf"
-echo "✓ DNS primario: $PRIMARY_DNS"
-
-# ============================================================================
-# [5/13] INSTALAR SCRIPTS
-# ============================================================================
-echo ""
-echo "[5/13] Instalando scripts..."
-
-# Script principal de actualización
-cp "$SCRIPT_DIR/scripts/runtime/openpath-update.sh" "$SCRIPTS_DIR/"
-chmod +x "$SCRIPTS_DIR/openpath-update.sh"
-
-# Script watchdog
-cp "$SCRIPT_DIR/scripts/runtime/dnsmasq-watchdog.sh" "$SCRIPTS_DIR/"
-chmod +x "$SCRIPTS_DIR/dnsmasq-watchdog.sh"
-
-# Script detector portal cautivo
-cp "$SCRIPT_DIR/scripts/runtime/captive-portal-detector.sh" "$SCRIPTS_DIR/"
-chmod +x "$SCRIPTS_DIR/captive-portal-detector.sh"
-
-# Comando unificado
-cp "$SCRIPT_DIR/scripts/runtime/openpath-cmd.sh" "$SCRIPTS_DIR/openpath"
-chmod +x "$SCRIPTS_DIR/openpath"
-
-# Script de auto-actualización
-cp "$SCRIPT_DIR/scripts/runtime/openpath-self-update.sh" "$SCRIPTS_DIR/"
-chmod +x "$SCRIPTS_DIR/openpath-self-update.sh"
-
-# Script de inicialización DNS
-create_dns_init_script
-
-# Create config directory (Debian FHS compliant)
-mkdir -p "$ETC_CONFIG_DIR"
-
-# Guardar URL del whitelist
-echo "$WHITELIST_URL" > "$WHITELIST_URL_CONF"
-
-# Guardar configuración de health API (para monitoreo centralizado)
-if [ -n "$HEALTH_API_URL" ]; then
-    echo "$HEALTH_API_URL" > "$HEALTH_API_URL_CONF"
-    echo "  → Health API URL configurada"
-fi
-if [ -n "$HEALTH_API_SECRET" ]; then
-    echo "$HEALTH_API_SECRET" > "$HEALTH_API_SECRET_CONF"
-    chmod 600 "$HEALTH_API_SECRET_CONF"
-    echo "  → Health API secret configurado"
-fi
-
-# Guardar configuración de modo Aula (para whitelist dinámica)
-if [ -n "$CLASSROOM_NAME" ] && [ -n "$API_URL" ]; then
-    echo "$CLASSROOM_NAME" > "$ETC_CONFIG_DIR/classroom.conf"
-    echo "$API_URL" > "$ETC_CONFIG_DIR/api-url.conf"
-    # Copy shared secret for machine registration
-    if [ -n "$HEALTH_API_SECRET" ]; then
-        cp "$HEALTH_API_SECRET_CONF" "$ETC_CONFIG_DIR/api-secret.conf"
+    if [ -d /etc/default ]; then
+        grep -q "IGNORE_RESOLVCONF" /etc/default/dnsmasq 2>/dev/null || \
+            echo "IGNORE_RESOLVCONF=yes" >> /etc/default/dnsmasq
     fi
-    echo "  → Modo Aula configurado: $CLASSROOM_NAME"
-fi
 
-echo "✓ Scripts instalados"
+    setcap 'cap_net_bind_service,cap_net_admin=+ep' /usr/sbin/dnsmasq 2>/dev/null || true
+    echo "✓ Dependencias instaladas"
+}
 
-# ============================================================================
-# [6/13] CONFIGURAR SUDOERS PARA WHITELIST
-# ============================================================================
-echo ""
-echo "[6/13] Configurando permisos sudo..."
+step_free_port_53() {
+    echo ""
+    echo "[3/13] Liberando puerto 53..."
 
-cat > /etc/sudoers.d/openpath << 'EOF'
+    free_port_53
+    echo "✓ Puerto 53 liberado"
+}
+
+step_detect_dns() {
+    echo ""
+    echo "[4/13] Detectando DNS primario..."
+
+    PRIMARY_DNS=$(detect_primary_dns)
+    echo "$PRIMARY_DNS" > "$CONFIG_DIR/original-dns.conf"
+    echo "✓ DNS primario: $PRIMARY_DNS"
+}
+
+step_install_scripts() {
+    echo ""
+    echo "[5/13] Instalando scripts..."
+
+    cp "$SCRIPT_DIR/scripts/runtime/openpath-update.sh" "$SCRIPTS_DIR/"
+    chmod +x "$SCRIPTS_DIR/openpath-update.sh"
+
+    cp "$SCRIPT_DIR/scripts/runtime/dnsmasq-watchdog.sh" "$SCRIPTS_DIR/"
+    chmod +x "$SCRIPTS_DIR/dnsmasq-watchdog.sh"
+
+    cp "$SCRIPT_DIR/scripts/runtime/captive-portal-detector.sh" "$SCRIPTS_DIR/"
+    chmod +x "$SCRIPTS_DIR/captive-portal-detector.sh"
+
+    cp "$SCRIPT_DIR/scripts/runtime/openpath-cmd.sh" "$SCRIPTS_DIR/openpath"
+    chmod +x "$SCRIPTS_DIR/openpath"
+
+    cp "$SCRIPT_DIR/scripts/runtime/openpath-self-update.sh" "$SCRIPTS_DIR/"
+    chmod +x "$SCRIPTS_DIR/openpath-self-update.sh"
+
+    create_dns_init_script
+
+    mkdir -p "$ETC_CONFIG_DIR"
+    echo "$WHITELIST_URL" > "$WHITELIST_URL_CONF"
+
+    if [ -n "$HEALTH_API_URL" ]; then
+        echo "$HEALTH_API_URL" > "$HEALTH_API_URL_CONF"
+        echo "  → Health API URL configurada"
+    fi
+    if [ -n "$HEALTH_API_SECRET" ]; then
+        echo "$HEALTH_API_SECRET" > "$HEALTH_API_SECRET_CONF"
+        chmod 600 "$HEALTH_API_SECRET_CONF"
+        echo "  → Health API secret configurado"
+    fi
+
+    if [ -n "$CLASSROOM_NAME" ] && [ -n "$API_URL" ]; then
+        echo "$CLASSROOM_NAME" > "$ETC_CONFIG_DIR/classroom.conf"
+        echo "$API_URL" > "$ETC_CONFIG_DIR/api-url.conf"
+        if [ -n "$HEALTH_API_SECRET" ]; then
+            cp "$HEALTH_API_SECRET_CONF" "$ETC_CONFIG_DIR/api-secret.conf"
+        fi
+        echo "  → Modo Aula configurado: $CLASSROOM_NAME"
+    fi
+
+    echo "✓ Scripts instalados"
+}
+
+step_configure_sudoers() {
+    echo ""
+    echo "[6/13] Configurando permisos sudo..."
+
+    cat > /etc/sudoers.d/openpath << 'EOF'
 # Permitir a todos los usuarios ejecutar comandos de LECTURA sin contraseña
 # Estos son seguros: no modifican configuración ni desactivan protecciones
 ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath status
@@ -308,47 +284,41 @@ ALL ALL=(root) NOPASSWD: /usr/local/bin/dnsmasq-watchdog.sh
 # openpath update, enable, disable, force, restart, rotate-token, enroll
 EOF
 
-chmod 440 /etc/sudoers.d/openpath
+    chmod 440 /etc/sudoers.d/openpath
+    echo "✓ Permisos sudo configurados"
+}
 
-echo "✓ Permisos sudo configurados"
+step_create_services() {
+    echo ""
+    echo "[7/13] Creando servicios systemd..."
 
-# ============================================================================
-# [7/13] CREAR SERVICIOS SYSTEMD
-# ============================================================================
-echo ""
-echo "[7/13] Creando servicios systemd..."
+    create_systemd_services
+    create_logrotate_config
+    create_tmpfiles_config
 
-create_systemd_services
-create_logrotate_config
-create_tmpfiles_config
+    echo "✓ Servicios creados"
+}
 
-echo "✓ Servicios creados"
+step_configure_dns() {
+    echo ""
+    echo "[8/13] Configurando DNS..."
 
-# ============================================================================
-# [8/13] CONFIGURAR DNS
-# ============================================================================
-echo ""
-echo "[8/13] Configurando DNS..."
+    configure_upstream_dns
+    configure_resolv_conf
 
-configure_upstream_dns
-configure_resolv_conf
+    echo "✓ DNS configurado"
+}
 
-echo "✓ DNS configurado"
+step_configure_dnsmasq() {
+    echo ""
+    echo "[9/13] Configurando dnsmasq..."
 
-# ============================================================================
-# [9/13] CONFIGURACIÓN INICIAL DNSMASQ
-# ============================================================================
-echo ""
-echo "[9/13] Configurando dnsmasq..."
+    if [ -f /etc/dnsmasq.conf ]; then
+        sed -i 's/^no-resolv/#no-resolv/g' /etc/dnsmasq.conf 2>/dev/null || true
+        sed -i 's/^cache-size=/#cache-size=/g' /etc/dnsmasq.conf 2>/dev/null || true
+    fi
 
-# Comentar directivas conflictivas en /etc/dnsmasq.conf para evitar duplicados
-if [ -f /etc/dnsmasq.conf ]; then
-    sed -i 's/^no-resolv/#no-resolv/g' /etc/dnsmasq.conf 2>/dev/null || true
-    sed -i 's/^cache-size=/#cache-size=/g' /etc/dnsmasq.conf 2>/dev/null || true
-fi
-
-# Configuración inicial permisiva
-cat > /etc/dnsmasq.d/openpath.conf << EOF
+    cat > /etc/dnsmasq.d/openpath.conf << EOF
 # Configuración inicial - será sobrescrita por dnsmasq-whitelist.sh
 no-resolv
 resolv-file=/run/dnsmasq/resolv.conf
@@ -358,180 +328,175 @@ cache-size=1000
 server=$PRIMARY_DNS
 EOF
 
-# Reiniciar dnsmasq
-systemctl restart dnsmasq
+    systemctl restart dnsmasq
 
-# Esperar a que dnsmasq esté listo (máx 5 segundos)
-echo "  Esperando a que dnsmasq esté activo..."
-for _ in $(seq 1 5); do
+    echo "  Esperando a que dnsmasq esté activo..."
+    for _ in $(seq 1 5); do
+        if systemctl is-active --quiet dnsmasq; then
+            break
+        fi
+        sleep 1
+    done
+
     if systemctl is-active --quiet dnsmasq; then
-        break
+        echo "✓ dnsmasq activo"
+    else
+        echo "✗ ERROR: dnsmasq no arrancó"
+        journalctl -u dnsmasq -n 10 --no-pager
+        exit 1
     fi
-    sleep 1
-done
+}
 
-if systemctl is-active --quiet dnsmasq; then
-    echo "✓ dnsmasq activo"
-else
-    echo "✗ ERROR: dnsmasq no arrancó"
-    journalctl -u dnsmasq -n 10 --no-pager
-    exit 1
-fi
-
-# ============================================================================
-# [10/13] INSTALAR FIREFOX ESR
-# ============================================================================
-echo ""
-echo "[10/13] Instalando Firefox ESR..."
-
-install_firefox_esr
-echo "✓ Firefox ESR instalado"
-
-# ============================================================================
-# [11/13] APLICAR POLÍTICAS DE NAVEGADORES
-# ============================================================================
-echo ""
-echo "[11/13] Aplicando políticas de navegadores..."
-
-apply_search_engine_policies
-echo "✓ Políticas aplicadas"
-
-# ============================================================================
-# [12/13] INSTALAR EXTENSIÓN FIREFOX
-# ============================================================================
-echo ""
-echo "[12/13] Instalando extensión Firefox..."
-
-if [ "$INSTALL_EXTENSION" = true ]; then
-    install_firefox_extension "$SCRIPT_DIR/firefox-extension"
-    if [ "$INSTALL_NATIVE_HOST" = true ]; then
-        install_native_host "$SCRIPT_DIR/firefox-extension/native"
-    fi
-    echo "✓ Extensión Firefox instalada"
-else
-    echo "⊘ Extensión Firefox omitida (--no-extension)"
-fi
-
-# ============================================================================
-# [13/13] HABILITAR SERVICIOS Y PRIMERA EJECUCIÓN
-# ============================================================================
-echo ""
-echo "[13/13] Habilitando servicios..."
-
-enable_services
-
-# Generate integrity baseline for anti-tampering watchdog
-echo "Generando hashes de integridad..."
-source "$INSTALL_DIR/lib/common.sh"
-INTEGRITY_HASH_FILE="$VAR_STATE_DIR/integrity.sha256"
-CRITICAL_INSTALL_FILES=(
-    "$INSTALL_DIR/lib/common.sh"
-    "$INSTALL_DIR/lib/dns.sh"
-    "$INSTALL_DIR/lib/firewall.sh"
-    "$INSTALL_DIR/lib/browser.sh"
-    "$INSTALL_DIR/lib/services.sh"
-    "$INSTALL_DIR/lib/rollback.sh"
-    "$SCRIPTS_DIR/openpath-update.sh"
-    "$SCRIPTS_DIR/dnsmasq-watchdog.sh"
-    "$SCRIPTS_DIR/openpath"
-)
-> "$INTEGRITY_HASH_FILE"
-for f in "${CRITICAL_INSTALL_FILES[@]}"; do
-    [ -f "$f" ] && sha256sum "$f" >> "$INTEGRITY_HASH_FILE"
-done
-chmod 600 "$INTEGRITY_HASH_FILE"
-echo "✓ Hashes de integridad generados"
-
-# Primera ejecución del whitelist
-echo "Ejecutando primera actualización..."
-"$SCRIPTS_DIR/openpath-update.sh" || echo "⚠ Primera actualización falló (el timer lo reintentará)"
-
-echo "✓ Servicios habilitados"
-
-# ============================================================================
-# SMOKE TESTS POST-INSTALACIÓN
-# ============================================================================
-
-# Instalar script de smoke tests
-if [ -f "$SCRIPT_DIR/scripts/runtime/smoke-test.sh" ]; then
-    cp "$SCRIPT_DIR/scripts/runtime/smoke-test.sh" "$SCRIPTS_DIR/"
-    chmod +x "$SCRIPTS_DIR/smoke-test.sh"
-fi
-
-echo ""
-echo "Ejecutando smoke tests..."
-if "$SCRIPTS_DIR/smoke-test.sh" --quick 2>/dev/null; then
-    SMOKE_STATUS="PASSED"
-else
-    SMOKE_STATUS="FAILED"
-fi
-
-# ============================================================================
-# REGISTRAR MÁQUINA Y OBTENER WHITELIST URL TOKENIZADA
-# ============================================================================
-MACHINE_REGISTERED=""
-if [ -n "$CLASSROOM_NAME" ] && [ -n "$API_URL" ]; then
+step_install_firefox() {
     echo ""
-    echo "Registrando máquina en aula..."
-    HOSTNAME=$(hostname)
-    
-    REGISTER_PAYLOAD=$(HN="$HOSTNAME" CNAME="$CLASSROOM_NAME" VER="$VERSION" python3 -c 'import json,os
-print(json.dumps({"hostname": os.environ.get("HN",""), "classroomName": os.environ.get("CNAME",""), "version": os.environ.get("VER","unknown")}))')
-    REGISTER_RESPONSE=$(curl -s -X POST \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $REGISTRATION_TOKEN" \
-        -d "$REGISTER_PAYLOAD" \
-        "$API_URL/api/machines/register" 2>/dev/null || echo "{\"success\":false}")
-    
-    if echo "$REGISTER_RESPONSE" | grep -q '"success":true'; then
-        MACHINE_REGISTERED="REGISTERED"
-        TOKENIZED_URL=$(echo "$REGISTER_RESPONSE" | grep -o '"whitelistUrl":"[^"]*"' | sed 's/"whitelistUrl":"//;s/"$//')
-        if [ -n "$TOKENIZED_URL" ]; then
-            echo "$TOKENIZED_URL" > "$WHITELIST_URL_CONF"
-            WHITELIST_URL="$TOKENIZED_URL"
-            echo "✓ Máquina registrada en aula: $CLASSROOM_NAME"
-            echo "  → Whitelist URL tokenizada guardada"
+    echo "[10/13] Instalando Firefox ESR..."
+
+    install_firefox_esr
+    echo "✓ Firefox ESR instalado"
+}
+
+step_apply_policies() {
+    echo ""
+    echo "[11/13] Aplicando políticas de navegadores..."
+
+    apply_search_engine_policies
+    echo "✓ Políticas aplicadas"
+}
+
+step_install_extension() {
+    echo ""
+    echo "[12/13] Instalando extensión Firefox..."
+
+    if [ "$INSTALL_EXTENSION" = true ]; then
+        install_firefox_extension "$SCRIPT_DIR/firefox-extension"
+        if [ "$INSTALL_NATIVE_HOST" = true ]; then
+            install_native_host "$SCRIPT_DIR/firefox-extension/native"
+        fi
+        echo "✓ Extensión Firefox instalada"
+    else
+        echo "⊘ Extensión Firefox omitida (--no-extension)"
+    fi
+}
+
+step_enable_services() {
+    echo ""
+    echo "[13/13] Habilitando servicios..."
+
+    enable_services
+
+    # Generate integrity baseline for anti-tampering watchdog
+    echo "Generando hashes de integridad..."
+    source "$INSTALL_DIR/lib/common.sh"
+    INTEGRITY_HASH_FILE="$VAR_STATE_DIR/integrity.sha256"
+    # Uses CRITICAL_FILES from common.sh (single source of truth)
+    > "$INTEGRITY_HASH_FILE"
+    for f in "${CRITICAL_FILES[@]}"; do
+        [ -f "$f" ] && sha256sum "$f" >> "$INTEGRITY_HASH_FILE"
+    done
+    chmod 600 "$INTEGRITY_HASH_FILE"
+    echo "✓ Hashes de integridad generados"
+
+    # Primera ejecución del whitelist
+    echo "Ejecutando primera actualización..."
+    "$SCRIPTS_DIR/openpath-update.sh" || echo "⚠ Primera actualización falló (el timer lo reintentará)"
+
+    echo "✓ Servicios habilitados"
+}
+
+run_smoke_tests() {
+    if [ -f "$SCRIPT_DIR/scripts/runtime/smoke-test.sh" ]; then
+        cp "$SCRIPT_DIR/scripts/runtime/smoke-test.sh" "$SCRIPTS_DIR/"
+        chmod +x "$SCRIPTS_DIR/smoke-test.sh"
+    fi
+
+    echo ""
+    echo "Ejecutando smoke tests..."
+    if "$SCRIPTS_DIR/smoke-test.sh" --quick 2>/dev/null; then
+        SMOKE_STATUS="PASSED"
+    else
+        SMOKE_STATUS="FAILED"
+    fi
+}
+
+run_classroom_registration() {
+    MACHINE_REGISTERED=""
+    if [ -n "$CLASSROOM_NAME" ] && [ -n "$API_URL" ]; then
+        echo ""
+        echo "Registrando máquina en aula..."
+
+        if register_machine "$(hostname)" "$CLASSROOM_NAME" "$VERSION" "$API_URL" "$REGISTRATION_TOKEN"; then
+            MACHINE_REGISTERED="REGISTERED"
+            if [ -n "$TOKENIZED_URL" ]; then
+                echo "$TOKENIZED_URL" > "$WHITELIST_URL_CONF"
+                WHITELIST_URL="$TOKENIZED_URL"
+                echo "✓ Máquina registrada en aula: $CLASSROOM_NAME"
+                echo "  → Whitelist URL tokenizada guardada"
+            else
+                MACHINE_REGISTERED="FAILED"
+                echo "⚠ Registro exitoso pero no se recibió URL tokenizada"
+            fi
         else
             MACHINE_REGISTERED="FAILED"
-            echo "⚠ Registro exitoso pero no se recibió URL tokenizada"
+            echo "⚠ Error al registrar máquina"
+            echo "  Respuesta: $REGISTER_RESPONSE"
         fi
-    else
-        MACHINE_REGISTERED="FAILED"
-        echo "⚠ Error al registrar máquina"
-        echo "  Respuesta: $REGISTER_RESPONSE"
     fi
-fi
+}
+
+print_summary() {
+    echo ""
+    echo "======================================================"
+    echo "  ✓ INSTALACIÓN COMPLETADA"
+    echo "======================================================"
+    echo ""
+    echo "Estado:"
+    echo "  - dnsmasq: $(systemctl is-active dnsmasq)"
+    echo "  - Timer: $(systemctl is-active openpath-dnsmasq.timer)"
+    echo "  - Watchdog: $(systemctl is-active dnsmasq-watchdog.timer)"
+    echo "  - Smoke Tests: $SMOKE_STATUS"
+    if [ -n "$MACHINE_REGISTERED" ]; then
+        echo "  - Registro Aula: $MACHINE_REGISTERED"
+    fi
+    echo ""
+    echo "Configuración:"
+    echo "  - Whitelist: $WHITELIST_URL"
+    echo "  - DNS upstream: $PRIMARY_DNS"
+    echo ""
+    echo "Comando de gestión: openpath"
+    echo "  openpath status  - Ver estado"
+    echo "  openpath test    - Probar DNS"
+    echo "  openpath update  - Forzar actualización"
+    echo "  openpath help    - Ver ayuda completa"
+    echo ""
+    echo "Tests manuales:"
+    echo "  sudo smoke-test.sh        - Ejecutar smoke tests completos"
+    echo "  sudo smoke-test.sh --quick - Solo tests críticos"
+    echo ""
+    echo "Desinstalar: sudo $SCRIPT_DIR/uninstall.sh"
+    echo ""
+}
 
 # ============================================================================
-# RESUMEN FINAL
+# Main Entry Point
 # ============================================================================
-echo ""
-echo "======================================================"
-echo "  ✓ INSTALACIÓN COMPLETADA"
-echo "======================================================"
-echo ""
-echo "Estado:"
-echo "  - dnsmasq: $(systemctl is-active dnsmasq)"
-echo "  - Timer: $(systemctl is-active openpath-dnsmasq.timer)"
-echo "  - Watchdog: $(systemctl is-active dnsmasq-watchdog.timer)"
-echo "  - Smoke Tests: $SMOKE_STATUS"
-if [ -n "$MACHINE_REGISTERED" ]; then
-    echo "  - Registro Aula: $MACHINE_REGISTERED"
-fi
-echo ""
-echo "Configuración:"
-echo "  - Whitelist: $WHITELIST_URL"
-echo "  - DNS upstream: $PRIMARY_DNS"
-echo ""
-echo "Comando de gestión: openpath"
-echo "  openpath status  - Ver estado"
-echo "  openpath test    - Probar DNS"
-echo "  openpath update  - Forzar actualización"
-echo "  openpath help    - Ver ayuda completa"
-echo ""
-echo "Tests manuales:"
-echo "  sudo smoke-test.sh        - Ejecutar smoke tests completos"
-echo "  sudo smoke-test.sh --quick - Solo tests críticos"
-echo ""
-echo "Desinstalar: sudo $SCRIPT_DIR/uninstall.sh"
-echo ""
+
+main() {
+    step_install_libraries
+    step_install_dependencies
+    step_free_port_53
+    step_detect_dns
+    step_install_scripts
+    step_configure_sudoers
+    step_create_services
+    step_configure_dns
+    step_configure_dnsmasq
+    step_install_firefox
+    step_apply_policies
+    step_install_extension
+    step_enable_services
+    run_smoke_tests
+    run_classroom_registration
+    print_summary
+}
+
+main

@@ -27,26 +27,12 @@ set -o pipefail
 # Cargar librerías
 INSTALL_DIR="/usr/local/lib/openpath"
 source "$INSTALL_DIR/lib/common.sh"
-source "$INSTALL_DIR/lib/dns.sh"
-source "$INSTALL_DIR/lib/rollback.sh"
+load_libraries
 
 HEALTH_FILE="$CONFIG_DIR/health-status"
 FAIL_COUNT_FILE="$CONFIG_DIR/watchdog-fails"
 INTEGRITY_HASH_FILE="$CONFIG_DIR/integrity.sha256"
 MAX_CONSECUTIVE_FAILS=3
-
-# Critical files that must not be tampered with
-CRITICAL_FILES=(
-    "$INSTALL_DIR/lib/common.sh"
-    "$INSTALL_DIR/lib/dns.sh"
-    "$INSTALL_DIR/lib/firewall.sh"
-    "$INSTALL_DIR/lib/browser.sh"
-    "$INSTALL_DIR/lib/services.sh"
-    "$INSTALL_DIR/lib/rollback.sh"
-    "/usr/local/bin/openpath-update.sh"
-    "/usr/local/bin/dnsmasq-watchdog.sh"
-    "/usr/local/bin/openpath"
-)
 
 # Obtener/incrementar contador de fallos
 get_fail_count() {
@@ -213,7 +199,6 @@ main() {
         else
             # Rollback failed, enter fail-open mode
             log "[WATCHDOG] Entrando en modo fail-open"
-            source "$INSTALL_DIR/lib/firewall.sh"
             deactivate_firewall
             
             # Guardar estado
@@ -351,20 +336,25 @@ report_health_to_api() {
     local hostname
     hostname=$(hostname)
 
-    # Build tRPC payload with json wrapper
+    # Build tRPC payload using python3 for safe JSON escaping
+    local dnsmasq_running dns_resolving fail_count
+    dnsmasq_running=$(check_dnsmasq_running && echo "true" || echo "false")
+    dns_resolving=$(check_dns_resolving && echo "true" || echo "false")
+    fail_count=$(get_fail_count)
+
     local payload
-    payload=$(cat << EOF
-{"json": {
-    "hostname": "$hostname",
-    "status": "$status",
-    "dnsmasqRunning": $(check_dnsmasq_running && echo "true" || echo "false"),
-    "dnsResolving": $(check_dns_resolving && echo "true" || echo "false"),
-    "failCount": $(get_fail_count),
-    "actions": "$actions",
-    "version": "${VERSION:-1.0.4}"
-}}
-EOF
-)
+    payload=$(HN="$hostname" ST="$status" DR="$dnsmasq_running" DRE="$dns_resolving" \
+        FC="$fail_count" AC="$actions" VER="${VERSION:-1.0.4}" python3 -c '
+import json, os
+print(json.dumps({"json": {
+    "hostname": os.environ["HN"],
+    "status": os.environ["ST"],
+    "dnsmasqRunning": os.environ["DR"] == "true",
+    "dnsResolving": os.environ["DRE"] == "true",
+    "failCount": int(os.environ["FC"]),
+    "actions": os.environ["AC"],
+    "version": os.environ["VER"]
+}}))')
 
     # Send report to tRPC endpoint (fire and forget, don't block watchdog)
     # Build curl command with optional auth header

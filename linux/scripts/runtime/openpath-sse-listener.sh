@@ -22,18 +22,9 @@
 
 set -euo pipefail
 
-# shellcheck source=../../lib/common.sh
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_DIR="${SCRIPT_DIR}/../../lib"
-
-if [ -f "$LIB_DIR/common.sh" ]; then
-    # shellcheck source=/dev/null
-    source "$LIB_DIR/common.sh"
-else
-    # Installed layout: /usr/local/bin/openpath-sse-listener.sh
-    # shellcheck source=/dev/null
-    source /usr/local/lib/openpath/common.sh 2>/dev/null || true
-fi
+# Load common library (standard pattern)
+INSTALL_DIR="/usr/local/lib/openpath"
+source "$INSTALL_DIR/lib/common.sh"
 
 # =============================================================================
 # Configuration

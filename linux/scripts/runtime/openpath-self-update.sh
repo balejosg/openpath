@@ -23,28 +23,9 @@
 
 set -euo pipefail
 
-# shellcheck source=../../lib/common.sh
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LIB_DIR="${SCRIPT_DIR}/../../lib"
-
-if [ -f "$LIB_DIR/common.sh" ]; then
-    # shellcheck source=/dev/null
-    source "$LIB_DIR/common.sh"
-elif [ -f "/usr/local/lib/openpath/lib/common.sh" ]; then
-    # shellcheck source=/dev/null
-    source "/usr/local/lib/openpath/lib/common.sh"
-else
-    # Backward-compatible fallback for older installations.
-    # shellcheck source=/dev/null
-    source /usr/local/lib/openpath/common.sh 2>/dev/null || true
-fi
-
-if ! declare -F log >/dev/null 2>&1; then
-    log() { echo "$*"; }
-    log_warn() { echo "$*" >&2; }
-    log_error() { echo "$*" >&2; }
-    log_debug() { :; }
-fi
+# Load common library (standard pattern)
+INSTALL_DIR="/usr/local/lib/openpath"
+source "$INSTALL_DIR/lib/common.sh"
 
 # =============================================================================
 # Configuration

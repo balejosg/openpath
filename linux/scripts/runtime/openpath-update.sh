@@ -46,10 +46,7 @@ if ! timeout 30 flock -x 200; then
 fi
 
 # Load additional libraries
-source "$INSTALL_DIR/lib/dns.sh"
-source "$INSTALL_DIR/lib/firewall.sh"
-source "$INSTALL_DIR/lib/browser.sh"
-source "$INSTALL_DIR/lib/rollback.sh"
+load_libraries
 
 # Whitelist URL - always reads from whitelist-url.conf
 # In Classroom mode, install.sh saves the tokenized URL during registration

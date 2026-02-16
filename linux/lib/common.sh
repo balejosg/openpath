@@ -290,11 +290,62 @@ check_root() {
     fi
 }
 
+# Register machine with central API
+# Args: $1=hostname $2=classroom_name $3=version $4=api_url $5=auth_token
+# Sets global: REGISTER_RESPONSE (raw JSON), TOKENIZED_URL (extracted URL or empty)
+# Returns: 0 on success, 1 on failure
+register_machine() {
+    local hostname="$1"
+    local classroom_name="$2"
+    local version="$3"
+    local api_url="$4"
+    local auth_token="$5"
+
+    local payload
+    payload=$(HN="$hostname" CNAME="$classroom_name" VER="$version" python3 -c '
+import json, os
+print(json.dumps({
+    "hostname": os.environ.get("HN", ""),
+    "classroomName": os.environ.get("CNAME", ""),
+    "version": os.environ.get("VER", "unknown")
+}))')
+
+    REGISTER_RESPONSE=$(curl -s -X POST \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $auth_token" \
+        -d "$payload" \
+        "$api_url/api/machines/register" 2>/dev/null || echo '{"success":false}')
+
+    if echo "$REGISTER_RESPONSE" | grep -q '"success":true'; then
+        TOKENIZED_URL=$(echo "$REGISTER_RESPONSE" | grep -o '"whitelistUrl":"[^"]*"' | sed 's/"whitelistUrl":"//;s/"$//')
+        return 0
+    else
+        # shellcheck disable=SC2034  # Used by callers of register_machine
+        TOKENIZED_URL=""
+        return 1
+    fi
+}
+
+# Critical files for integrity checks (single source of truth)
+# Used by install.sh, dnsmasq-watchdog.sh, and openpath-self-update.sh
+# shellcheck disable=SC2034  # Used by scripts that source common.sh
+CRITICAL_FILES=(
+    "$INSTALL_DIR/lib/common.sh"
+    "$INSTALL_DIR/lib/dns.sh"
+    "$INSTALL_DIR/lib/firewall.sh"
+    "$INSTALL_DIR/lib/browser.sh"
+    "$INSTALL_DIR/lib/services.sh"
+    "$INSTALL_DIR/lib/rollback.sh"
+    "$SCRIPTS_DIR/openpath-update.sh"
+    "$SCRIPTS_DIR/dnsmasq-watchdog.sh"
+    "$SCRIPTS_DIR/openpath"
+)
+
 # Load all libraries
 load_libraries() {
     local lib_dir="${1:-$INSTALL_DIR/lib}"
 
-    for lib in dns.sh firewall.sh browser.sh services.sh; do
+    for lib in dns.sh firewall.sh browser.sh services.sh rollback.sh; do
         if [ -f "$lib_dir/$lib" ]; then
             # shellcheck disable=SC1090  # Dynamic source path is intentional
             source "$lib_dir/$lib"
