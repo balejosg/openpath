@@ -15,7 +15,7 @@
 # Maintains a persistent connection to the API's Server-Sent Events (SSE)
 # endpoint. When a whitelist rule change is detected, immediately triggers
 # openpath-update.sh to apply the new rules without waiting for the
-# 15-minute fallback timer.
+# periodic fallback timer.
 #
 # Reconnects automatically with exponential backoff on connection failure.
 ################################################################################

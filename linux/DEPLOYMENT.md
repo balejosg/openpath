@@ -42,8 +42,9 @@ sudo ./install.sh \
 
 ```bash
 # Non-interactive install with all parameters
+# HEALTH_API_URL must be the API base URL (agent posts to /trpc/healthReports.submit)
 sudo WHITELIST_URL="https://api.example.com/w/TOKEN/whitelist.txt" \
-     HEALTH_API_URL="https://api.example.com/api/health" \
+     HEALTH_API_URL="https://api.example.com" \
      HEALTH_API_SECRET="secret123" \
      ./install.sh --unattended
 ```

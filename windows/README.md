@@ -76,7 +76,8 @@ Edit `C:\OpenPath\data\config.json`:
   "enableBrowserPolicies": true,
   "sseReconnectMin": 5,
   "sseReconnectMax": 60,
-  "sseUpdateCooldown": 10
+  "sseUpdateCooldown": 10,
+  "healthApiSecret": "optional-shared-secret"
 }
 ```
 

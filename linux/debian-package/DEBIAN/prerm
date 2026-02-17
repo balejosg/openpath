@@ -15,10 +15,12 @@ case "$1" in
         systemctl stop dnsmasq-watchdog.timer 2>/dev/null || true
         
         # Stop services
+        systemctl stop openpath-sse-listener.service 2>/dev/null || true
         systemctl stop captive-portal-detector.service 2>/dev/null || true
         systemctl stop dnsmasq 2>/dev/null || true
         
         # Disable services (but don't fail if they don't exist)
+        systemctl disable openpath-sse-listener.service 2>/dev/null || true
         systemctl disable openpath-dnsmasq.timer 2>/dev/null || true
         systemctl disable dnsmasq-watchdog.timer 2>/dev/null || true
         systemctl disable captive-portal-detector.service 2>/dev/null || true

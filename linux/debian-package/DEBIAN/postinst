@@ -107,6 +107,7 @@ EOF
         systemctl enable openpath-dnsmasq.timer
         systemctl enable dnsmasq-watchdog.timer
         systemctl enable captive-portal-detector.service
+        systemctl enable openpath-sse-listener.service
         
         # Step 10b: Enable unattended-upgrades if available
         if command -v unattended-upgrade &>/dev/null; then
@@ -130,6 +131,7 @@ EOF
         systemctl start openpath-dnsmasq.timer
         systemctl start dnsmasq-watchdog.timer
         systemctl start captive-portal-detector.service
+        systemctl start openpath-sse-listener.service
         
         # Step 12: Run initial whitelist update
         echo "  Ejecutando primera actualización..."

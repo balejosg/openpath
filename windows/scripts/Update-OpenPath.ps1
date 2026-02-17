@@ -71,7 +71,7 @@ try {
         $whitelist = Get-OpenPathFromUrl -Url $config.whitelistUrl
 
         # Check for deactivation flag
-        if ($whitelist.Whitelist -contains "#DESACTIVADO" -or $whitelist.Whitelist[0] -match "^#DESACTIVADO") {
+        if ($whitelist.IsDisabled) {
             Write-OpenPathLog "DEACTIVATION FLAG detected - entering fail-open mode" -Level WARN
 
             # Restore normal DNS
@@ -109,21 +109,43 @@ try {
             # Send health report to central API (best-effort, non-blocking)
             if ($config.apiUrl) {
                 try {
-                    $healthReport = @{
-                        hostname       = $env:COMPUTERNAME
-                        status         = "ok"
-                        platform       = "windows"
-                        domainsCount   = $whitelist.Whitelist.Count
-                        firewallActive = [bool](Test-FirewallActive)
-                        acrylicRunning = ((Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1).Status -eq 'Running')
-                        lastUpdate     = (Get-Date -Format "o")
-                    } | ConvertTo-Json
+                    $acrylicRunning = ((Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1).Status -eq 'Running')
+                    $dnsResolving = [bool](Test-DNSResolution -Domain "google.com")
+                    $version = if ($config.PSObject.Properties['version']) { $config.version } else { "unknown" }
 
-                    Invoke-RestMethod -Uri "$($config.apiUrl)/api/machines/$($env:COMPUTERNAME)/health" `
-                        -Method Post -Body $healthReport -ContentType "application/json" `
+                    $healthApiSecret = ""
+                    if ($config.PSObject.Properties['healthApiSecret'] -and $config.healthApiSecret) {
+                        $healthApiSecret = [string]$config.healthApiSecret
+                    }
+                    elseif ($env:OPENPATH_HEALTH_API_SECRET) {
+                        $healthApiSecret = [string]$env:OPENPATH_HEALTH_API_SECRET
+                    }
+
+                    $healthBody = @{
+                        json = @{
+                            hostname = $env:COMPUTERNAME
+                            status = "OK"
+                            dnsmasqRunning = [bool]$acrylicRunning
+                            dnsResolving = [bool]$dnsResolving
+                            failCount = 0
+                            actions = "update"
+                            version = [string]$version
+                        }
+                    } | ConvertTo-Json -Depth 8
+
+                    $healthUrl = "$($config.apiUrl.TrimEnd('/'))/trpc/healthReports.submit"
+                    $headers = @{ "Content-Type" = "application/json" }
+                    if ($healthApiSecret) {
+                        $headers["Authorization"] = "Bearer $healthApiSecret"
+                    }
+                    else {
+                        Write-OpenPathLog "Health report sent without shared secret (set healthApiSecret or OPENPATH_HEALTH_API_SECRET if required)" -Level WARN
+                    }
+
+                    Invoke-RestMethod -Uri $healthUrl -Method Post -Headers $headers -Body $healthBody `
                         -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
 
-                    Write-OpenPathLog "Health report sent to API"
+                    Write-OpenPathLog "Health report sent to API via tRPC"
                 }
                 catch {
                     Write-OpenPathLog "Health report failed (non-critical): $_" -Level WARN

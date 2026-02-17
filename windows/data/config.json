@@ -9,6 +9,7 @@
   "sseReconnectMin": 5,
   "sseReconnectMax": 60,
   "sseUpdateCooldown": 10,
+  "healthApiSecret": "",
   "maxDomains": 500,
   "logLevel": "INFO"
 }

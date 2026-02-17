@@ -40,7 +40,8 @@ param(
     [switch]$SkipAcrylic,
     [string]$Classroom = "",
     [string]$ApiUrl = "",
-    [string]$RegistrationToken = ""
+    [string]$RegistrationToken = "",
+    [string]$HealthApiSecret = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -81,6 +82,10 @@ if ($Classroom -and $ApiUrl) {
     }
 }
 
+if (-not $HealthApiSecret -and $env:OPENPATH_HEALTH_API_SECRET) {
+    $HealthApiSecret = $env:OPENPATH_HEALTH_API_SECRET
+}
+
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "  OpenPath DNS para Windows - Instalador" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
@@ -88,6 +93,12 @@ Write-Host ""
 if ($Classroom -and $ApiUrl) {
     Write-Host "Classroom Mode: $Classroom"
     Write-Host "API URL: $ApiUrl"
+    if ($HealthApiSecret) {
+        Write-Host "Health API secret: configured"
+    }
+    else {
+        Write-Host "Health API secret: not configured (health reports may be rejected if SHARED_SECRET is required)" -ForegroundColor Yellow
+    }
 }
 elseif ($WhitelistUrl) {
     Write-Host "URL: $WhitelistUrl"
@@ -193,6 +204,9 @@ $config = @{
 if ($Classroom -and $ApiUrl) {
     $config.classroom = $Classroom
     $config.apiUrl = $ApiUrl
+}
+if ($HealthApiSecret) {
+    $config.healthApiSecret = $HealthApiSecret
 }
 
 $config | ConvertTo-Json -Depth 10 | Set-Content "$OpenPathRoot\data\config.json" -Encoding UTF8

@@ -96,15 +96,34 @@ Describe "Common Module - Mocked Tests" {
     Context "Get-OpenPathFromUrl parsing" {
         It "Parses whitelist sections correctly" {
             Mock Invoke-WebRequest {
-                @{ Content = "domain1.com`ndomain2.com`n## BLOCKED-SUBDOMAINS`nbad.domain.com`n## BLOCKED-PATHS`n/blocked/path" }
+                @{ Content = "domain1.com`ndomain2.com`ndomain3.com`n## BLOCKED-SUBDOMAINS`nbad.domain.com`n## BLOCKED-PATHS`n/blocked/path" }
             } -ModuleName Common
 
             $result = Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt"
-            $result.Whitelist | Should -HaveCount 2
+            $result.Whitelist | Should -HaveCount 3
             $result.Whitelist[0] | Should -Be "domain1.com"
             $result.BlockedSubdomains | Should -HaveCount 1
             $result.BlockedSubdomains[0] | Should -Be "bad.domain.com"
             $result.BlockedPaths | Should -HaveCount 1
+        }
+
+        It "Detects #DESACTIVADO marker" {
+            Mock Invoke-WebRequest {
+                @{ Content = "#DESACTIVADO`ndomain1.com`ndomain2.com`ndomain3.com" }
+            } -ModuleName Common
+
+            $result = Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt"
+            $result.IsDisabled | Should -BeTrue
+        }
+
+        It "Accepts disabled whitelist even without minimum domains" {
+            Mock Invoke-WebRequest {
+                @{ Content = "#DESACTIVADO" }
+            } -ModuleName Common
+
+            $result = Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt"
+            $result.IsDisabled | Should -BeTrue
+            $result.Whitelist | Should -HaveCount 0
         }
 
         It "Skips comment lines and empty lines" {
@@ -350,9 +369,9 @@ Describe "Update Script" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'healthReport'
-            $content | Should -Match '/api/machines/.*/health'
-            $content | Should -Match 'platform.*windows'
+            $content | Should -Match 'healthBody'
+            $content | Should -Match '/trpc/healthReports\.submit'
+            $content | Should -Match 'dnsmasqRunning'
         }
     }
 }

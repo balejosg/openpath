@@ -225,6 +225,9 @@ step_install_scripts() {
     cp "$SCRIPT_DIR/scripts/runtime/captive-portal-detector.sh" "$SCRIPTS_DIR/"
     chmod +x "$SCRIPTS_DIR/captive-portal-detector.sh"
 
+    cp "$SCRIPT_DIR/scripts/runtime/openpath-sse-listener.sh" "$SCRIPTS_DIR/"
+    chmod +x "$SCRIPTS_DIR/openpath-sse-listener.sh"
+
     cp "$SCRIPT_DIR/scripts/runtime/openpath-cmd.sh" "$SCRIPTS_DIR/openpath"
     chmod +x "$SCRIPTS_DIR/openpath"
 

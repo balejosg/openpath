@@ -191,13 +191,13 @@ disable_services() {
     log "Disabling services..."
     
     systemctl stop openpath-sse-listener.service 2>/dev/null || true
-    systemctl stop dnsmasq-whitelist.timer 2>/dev/null || true
+    systemctl stop openpath-dnsmasq.timer 2>/dev/null || true
     systemctl stop dnsmasq-watchdog.timer 2>/dev/null || true
     systemctl stop captive-portal-detector.service 2>/dev/null || true
     systemctl stop dnsmasq 2>/dev/null || true
     
     systemctl disable openpath-sse-listener.service 2>/dev/null || true
-    systemctl disable dnsmasq-whitelist.timer 2>/dev/null || true
+    systemctl disable openpath-dnsmasq.timer 2>/dev/null || true
     systemctl disable dnsmasq-watchdog.timer 2>/dev/null || true
     systemctl disable captive-portal-detector.service 2>/dev/null || true
     

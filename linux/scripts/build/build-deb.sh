@@ -51,7 +51,9 @@ mkdir -p "$BUILD_DIR/usr/local/bin"
 cp "$LINUX_DIR/scripts/runtime/openpath-update.sh" "$BUILD_DIR/usr/local/bin/"
 cp "$LINUX_DIR/scripts/runtime/dnsmasq-watchdog.sh" "$BUILD_DIR/usr/local/bin/"
 cp "$LINUX_DIR/scripts/runtime/captive-portal-detector.sh" "$BUILD_DIR/usr/local/bin/"
+cp "$LINUX_DIR/scripts/runtime/openpath-sse-listener.sh" "$BUILD_DIR/usr/local/bin/"
 cp "$LINUX_DIR/scripts/runtime/smoke-test.sh" "$BUILD_DIR/usr/local/bin/"
+cp "$LINUX_DIR/scripts/runtime/openpath-self-update.sh" "$BUILD_DIR/usr/local/bin/"
 cp "$LINUX_DIR/scripts/runtime/openpath-cmd.sh" "$BUILD_DIR/usr/local/bin/openpath"
 chmod +x "$BUILD_DIR/usr/local/bin/"*
 

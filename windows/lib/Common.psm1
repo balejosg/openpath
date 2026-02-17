@@ -168,6 +168,7 @@ function Get-OpenPathFromUrl {
         Whitelist = @()
         BlockedSubdomains = @()
         BlockedPaths = @()
+        IsDisabled = $false
     }
     
     $currentSection = "WHITELIST"
@@ -179,6 +180,11 @@ function Get-OpenPathFromUrl {
         if (-not $line) { continue }
         
         # Check for section headers
+        if ($line -match '^#\s*DESACTIVADO\b') {
+            $result.IsDisabled = $true
+            continue
+        }
+
         if ($line -match "^##\s*(.+)$") {
             $currentSection = $Matches[1].Trim().ToUpper()
             continue
@@ -195,7 +201,12 @@ function Get-OpenPathFromUrl {
         }
     }
     
-    Write-OpenPathLog "Parsed: $($result.Whitelist.Count) whitelisted, $($result.BlockedSubdomains.Count) blocked subdomains, $($result.BlockedPaths.Count) blocked paths"
+    Write-OpenPathLog "Parsed: $($result.Whitelist.Count) whitelisted, $($result.BlockedSubdomains.Count) blocked subdomains, $($result.BlockedPaths.Count) blocked paths, disabled=$($result.IsDisabled)"
+
+    if ($result.IsDisabled) {
+        Write-OpenPathLog "Remote disable marker detected - skipping minimum-domain validation" -Level WARN
+        return $result
+    }
 
     # Validate that the downloaded content looks like a real whitelist
     $validDomains = $result.Whitelist | Where-Object { $_ -match '^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$' }
