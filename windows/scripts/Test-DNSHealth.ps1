@@ -32,6 +32,65 @@ Import-Module "$OpenPathRoot\lib\DNS.psm1" -Force
 Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
 
 $issues = @()
+$watchdogFailCountPath = "$OpenPathRoot\data\watchdog-fails.txt"
+$staleFailsafeStatePath = "$OpenPathRoot\data\stale-failsafe-state.json"
+
+function Get-WatchdogFailCount {
+    if (-not (Test-Path $watchdogFailCountPath)) {
+        return 0
+    }
+
+    try {
+        $rawValue = Get-Content $watchdogFailCountPath -Raw -ErrorAction Stop
+        return [int]$rawValue
+    }
+    catch {
+        return 0
+    }
+}
+
+function Set-WatchdogFailCount {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$Count
+    )
+
+    Set-Content $watchdogFailCountPath -Value ([Math]::Max($Count, 0)) -Encoding UTF8
+}
+
+function Increment-WatchdogFailCount {
+    $newCount = (Get-WatchdogFailCount) + 1
+    Set-WatchdogFailCount -Count $newCount
+    return $newCount
+}
+
+function Reset-WatchdogFailCount {
+    Set-WatchdogFailCount -Count 0
+}
+
+function Get-OpenPathRuntimeHealth {
+    $acrylicRunning = $false
+    $dnsResolving = $false
+
+    try {
+        $acrylicRunning = ((Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1).Status -eq 'Running')
+    }
+    catch {
+        $acrylicRunning = $false
+    }
+
+    try {
+        $dnsResolving = [bool](Test-DNSResolution -Domain "google.com")
+    }
+    catch {
+        $dnsResolving = $false
+    }
+
+    return [PSCustomObject]@{
+        DnsServiceRunning = [bool]$acrylicRunning
+        DnsResolving = [bool]$dnsResolving
+    }
+}
 
 # Check 1: Acrylic service running
 try {
@@ -112,7 +171,50 @@ catch {
     Write-OpenPathLog "Watchdog: Error checking SSE listener: $_" -Level ERROR
 }
 
-# Check 7: Captive portal detection
+# Check 7: Stale fail-safe marker
+$staleFailsafeActive = $false
+if (Test-Path $staleFailsafeStatePath) {
+    $staleFailsafeActive = $true
+    Write-OpenPathLog "Watchdog: stale whitelist fail-safe mode is currently active" -Level WARN
+}
+
+# Check 8: Integrity baseline checks (anti-tampering)
+$integrityTampered = $false
+try {
+    $config = Get-OpenPathConfig
+    $integrityChecksEnabled = $true
+    if ($config.PSObject.Properties['enableIntegrityChecks']) {
+        $integrityChecksEnabled = [bool]$config.enableIntegrityChecks
+    }
+
+    if ($integrityChecksEnabled) {
+        $integrityResult = Test-OpenPathIntegrity
+
+        if (-not $integrityResult.BaselinePresent) {
+            Write-OpenPathLog "Watchdog: Integrity baseline missing, creating baseline" -Level WARN
+            Save-OpenPathIntegrityBackup | Out-Null
+            New-OpenPathIntegrityBaseline | Out-Null
+        }
+        elseif (-not $integrityResult.Healthy) {
+            Write-OpenPathLog "Watchdog: Integrity mismatch detected, attempting restore" -Level WARN
+            $restoreResult = Restore-OpenPathIntegrity -IntegrityResult $integrityResult
+            if (-not $restoreResult.Healthy) {
+                $integrityTampered = $true
+                $issues += "Integrity tampering detected"
+                Write-OpenPathLog "Watchdog: Integrity restore incomplete" -Level ERROR
+            }
+            else {
+                Write-OpenPathLog "Watchdog: Integrity restored from backup" -Level WARN
+            }
+        }
+    }
+}
+catch {
+    $issues += "Integrity check error"
+    Write-OpenPathLog "Watchdog: Error during integrity checks: $_" -Level ERROR
+}
+
+# Check 9: Captive portal detection
 # If we're behind a captive portal (WiFi login), temporarily allow full access
 try {
     $captiveResponse = Invoke-WebRequest -Uri "http://www.msftconnecttest.com/connecttest.txt" `
@@ -148,11 +250,62 @@ if ($isCaptive -and (Test-InternetConnection)) {
 }
 
 # Summary
-if ($issues.Count -eq 0) {
-    # All checks passed - silent success
-    exit 0
+$status = 'HEALTHY'
+if ($integrityTampered) {
+    $status = 'TAMPERED'
+}
+elseif ($staleFailsafeActive) {
+    $status = 'STALE_FAILSAFE'
+}
+elseif ($issues.Count -gt 0) {
+    $status = 'DEGRADED'
+}
+
+$watchdogFailCount = 0
+if ($status -eq 'HEALTHY' -or $status -eq 'STALE_FAILSAFE') {
+    Reset-WatchdogFailCount
 }
 else {
-    Write-OpenPathLog "Watchdog completed with $($issues.Count) issue(s) detected and handled"
-    exit 0
+    $watchdogFailCount = Increment-WatchdogFailCount
+    if ($status -eq 'DEGRADED' -and $watchdogFailCount -ge 3) {
+        $status = 'CRITICAL'
+    }
 }
+
+$actions = if ($issues.Count -gt 0) {
+    ($issues | Sort-Object -Unique) -join '; '
+}
+else {
+    'watchdog_ok'
+}
+
+if ($staleFailsafeActive) {
+    if ($actions -eq 'watchdog_ok') {
+        $actions = 'stale_failsafe_active'
+    }
+    else {
+        $actions = "$actions; stale_failsafe_active"
+    }
+}
+
+if ($integrityTampered) {
+    if ($actions -eq 'watchdog_ok') {
+        $actions = 'integrity_tampered'
+    }
+    else {
+        $actions = "$actions; integrity_tampered"
+    }
+}
+
+$runtimeHealth = Get-OpenPathRuntimeHealth
+Send-OpenPathHealthReport -Status $status `
+    -DnsServiceRunning $runtimeHealth.DnsServiceRunning `
+    -DnsResolving $runtimeHealth.DnsResolving `
+    -FailCount $watchdogFailCount `
+    -Actions $actions | Out-Null
+
+if ($status -ne 'HEALTHY') {
+    Write-OpenPathLog "Watchdog status=$status failCount=$watchdogFailCount actions=$actions"
+}
+
+exit 0

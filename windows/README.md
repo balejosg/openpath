@@ -7,9 +7,12 @@ Internet access control system using a DNS sinkhole for Windows, powered by Acry
 ✅ **DNS Sinkhole** - Blocks all domains except for the whitelist.  
 ✅ **Acrylic DNS Proxy** - Local DNS server with wildcard support.  
 ✅ **Windows Firewall** - Blocks external DNS, VPNs, and Tor.  
+✅ **DoH Egress Blocking** - Blocks known DNS-over-HTTPS resolver IPs on 443.  
 ✅ **Browser Policies** - Supports Firefox, Chrome, and Edge.  
 ✅ **Real-Time SSE Updates** - Instant rule changes via Server-Sent Events.  
 ✅ **Auto-Update Fallback** - Syncs every 15 minutes via Task Scheduler.  
+✅ **Stale Whitelist Fail-Safe** - Enters safe restrictive mode when cache expires offline.  
+✅ **Integrity Baseline** - Detects script/module tampering and attempts bounded restore.  
 ✅ **Watchdog** - Automatic failure recovery.
 
 ## Requirements
@@ -74,6 +77,10 @@ Edit `C:\OpenPath\data\config.json`:
   "primaryDNS": "8.8.8.8",
   "enableFirewall": true,
   "enableBrowserPolicies": true,
+  "enableStaleFailsafe": true,
+  "staleWhitelistMaxAgeHours": 24,
+  "enableIntegrityChecks": true,
+  "enableDohIpBlocking": true,
   "sseReconnectMin": 5,
   "sseReconnectMax": 60,
   "sseUpdateCooldown": 10,

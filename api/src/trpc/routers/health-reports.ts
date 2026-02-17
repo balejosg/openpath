@@ -77,7 +77,14 @@ export const healthReportsRouter = router({
     .input(z.object({ staleThreshold: z.number().default(10) }))
     .query(async ({ input }) => {
       const data = await healthReports.getAllReports();
-      const problemStatuses = ['FAIL_OPEN', 'CRITICAL', 'WARNING'];
+      const problemStatuses = [
+        'FAIL_OPEN',
+        'CRITICAL',
+        'WARNING',
+        'DEGRADED',
+        'STALE_FAILSAFE',
+        'TAMPERED',
+      ];
       const now = new Date();
       const alerts: {
         hostname: string;

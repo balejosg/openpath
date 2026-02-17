@@ -7,8 +7,11 @@ Sistema de control de acceso a internet mediante DNS sinkhole para Windows, usan
 ✅ **DNS Sinkhole** - Bloquea todos los dominios excepto whitelist  
 ✅ **Acrylic DNS Proxy** - Servidor DNS local con soporte wildcards  
 ✅ **Windows Firewall** - Bloquea DNS externo, VPNs, Tor  
+✅ **Bloqueo de salida DoH** - Bloquea IPs conocidas de resolutores DNS-over-HTTPS por 443  
 ✅ **Políticas de navegadores** - Firefox y Chrome/Edge  
 ✅ **Actualización automática** - Cada 15 minutos vía Task Scheduler  
+✅ **Fail-safe por whitelist caducada** - Modo restrictivo seguro cuando la caché expira sin conexión  
+✅ **Baseline de integridad** - Detecta manipulación de scripts/módulos e intenta restauración acotada  
 ✅ **Watchdog** - Auto-recuperación de fallos
 
 ## Requisitos
@@ -72,6 +75,10 @@ Editar `C:\OpenPath\data\config.json`:
   "primaryDNS": "8.8.8.8",
   "enableFirewall": true,
   "enableBrowserPolicies": true,
+  "enableStaleFailsafe": true,
+  "staleWhitelistMaxAgeHours": 24,
+  "enableIntegrityChecks": true,
+  "enableDohIpBlocking": true,
   "healthApiSecret": "secreto-compartido-opcional"
 }
 ```

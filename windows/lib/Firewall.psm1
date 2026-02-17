@@ -106,7 +106,63 @@ function Set-OpenPathFirewall {
             -Action Block `
             -Profile Any `
             -Description "Block DNS-over-TLS to prevent bypass" | Out-Null
-        
+
+        # 4b. Block known DNS-over-HTTPS resolver IPs on 443
+        $enableDohIpBlocking = $true
+        try {
+            $config = Get-OpenPathConfig
+            if ($config.PSObject.Properties['enableDohIpBlocking']) {
+                $enableDohIpBlocking = [bool]$config.enableDohIpBlocking
+            }
+        }
+        catch {
+            # Keep defaults if config cannot be read
+        }
+
+        if ($enableDohIpBlocking) {
+            $dohResolvers = @(
+                "8.8.8.8", "8.8.4.4",
+                "1.1.1.1", "1.0.0.1",
+                "9.9.9.9", "149.112.112.112",
+                "94.140.14.14", "94.140.15.15",
+                "76.76.2.0", "76.76.10.0"
+            )
+
+            $dohRuleCount = 0
+            foreach ($resolverIp in ($dohResolvers | Sort-Object -Unique)) {
+                if ($resolverIp -eq $UpstreamDNS) {
+                    continue
+                }
+
+                $resolverId = $resolverIp -replace '[^0-9A-Za-z]', '-'
+
+                New-NetFirewallRule -DisplayName "$script:RulePrefix-Block-DoH-$resolverId-TCP443" `
+                    -Direction Outbound `
+                    -Protocol TCP `
+                    -RemoteAddress $resolverIp `
+                    -RemotePort 443 `
+                    -Action Block `
+                    -Profile Any `
+                    -Description "Block DoH resolver $resolverIp over TCP/443" | Out-Null
+
+                New-NetFirewallRule -DisplayName "$script:RulePrefix-Block-DoH-$resolverId-UDP443" `
+                    -Direction Outbound `
+                    -Protocol UDP `
+                    -RemoteAddress $resolverIp `
+                    -RemotePort 443 `
+                    -Action Block `
+                    -Profile Any `
+                    -Description "Block DoH resolver $resolverIp over UDP/443" | Out-Null
+
+                $dohRuleCount += 2
+            }
+
+            Write-OpenPathLog "Added $dohRuleCount DoH egress block rules"
+        }
+        else {
+            Write-OpenPathLog "DoH IP blocking disabled by configuration" -Level WARN
+        }
+
         # 5. Block common VPN ports
         $vpnPorts = @(
             @{Port = 1194; Name = "OpenVPN"; Protocol = "UDP"},

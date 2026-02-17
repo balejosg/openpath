@@ -245,6 +245,19 @@ Describe "Firewall Module" {
             $status.BlockRules | Should -Not -BeNullOrEmpty
         }
     }
+
+    Context "DoH egress blocking" {
+        It "Firewall module blocks known DoH resolver IPs on TCP/UDP 443" {
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "Firewall.psm1"
+            $content = Get-Content $modulePath -Raw
+
+            $content | Should -Match 'enableDohIpBlocking'
+            $content | Should -Match 'Block-DoH'
+            $content | Should -Match 'RemotePort 443'
+            $content | Should -Match '8\.8\.8\.8'
+            $content | Should -Match '1\.1\.1\.1'
+        }
+    }
 }
 
 Describe "Browser Module" {
@@ -367,11 +380,24 @@ Describe "Update Script" {
     Context "Health report" {
         It "Sends health report to API after successful update" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $commonPath = Join-Path $PSScriptRoot ".." "lib" "Common.psm1"
+            $updateContent = Get-Content $scriptPath -Raw
+            $commonContent = Get-Content $commonPath -Raw
+
+            $updateContent | Should -Match 'Send-OpenPathHealthReport'
+            $commonContent | Should -Match '/trpc/healthReports\.submit'
+            $commonContent | Should -Match 'dnsmasqRunning'
+        }
+    }
+
+    Context "Stale whitelist fail-safe" {
+        It "Includes stale threshold logic and STALE_FAILSAFE handling" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'healthBody'
-            $content | Should -Match '/trpc/healthReports\.submit'
-            $content | Should -Match 'dnsmasqRunning'
+            $content | Should -Match 'staleWhitelistMaxAgeHours'
+            $content | Should -Match 'Enter-StaleWhitelistFailsafe'
+            $content | Should -Match 'STALE_FAILSAFE'
         }
     }
 }
@@ -403,6 +429,28 @@ Describe "Watchdog Script" {
 
             $content | Should -Match 'Captive portal resolved.*restoring DNS protection'
             $content | Should -Match 'Set-LocalDNS'
+        }
+    }
+
+    Context "Integrity checks" {
+        It "Verifies baseline integrity and handles tampering" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'Test-OpenPathIntegrity'
+            $content | Should -Match 'Restore-OpenPathIntegrity'
+            $content | Should -Match 'TAMPERED'
+        }
+    }
+
+    Context "Watchdog health states" {
+        It "Reports STALE_FAILSAFE and CRITICAL states" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'STALE_FAILSAFE'
+            $content | Should -Match 'CRITICAL'
+            $content | Should -Match 'Send-OpenPathHealthReport'
         }
     }
 }

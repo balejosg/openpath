@@ -39,6 +39,99 @@ $shouldRunUpdate = $true
 $exitCode = 0
 $whitelistPath = "$OpenPathRoot\data\whitelist.txt"
 $backupPath = "$OpenPathRoot\data\whitelist.backup.txt"
+$staleFailsafeStatePath = "$OpenPathRoot\data\stale-failsafe-state.json"
+
+function Get-HostFromUrl {
+    param(
+        [string]$Url
+    )
+
+    if (-not $Url) {
+        return $null
+    }
+
+    try {
+        return ([System.Uri]$Url).Host
+    }
+    catch {
+        return $null
+    }
+}
+
+function Clear-StaleFailsafeState {
+    if (Test-Path $staleFailsafeStatePath) {
+        Remove-Item $staleFailsafeStatePath -Force -ErrorAction SilentlyContinue
+        Write-OpenPathLog "Cleared stale fail-safe marker"
+    }
+}
+
+function Get-OpenPathRuntimeHealth {
+    $acrylicRunning = $false
+    $dnsResolving = $false
+
+    try {
+        $acrylicRunning = ((Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1).Status -eq 'Running')
+    }
+    catch {
+        $acrylicRunning = $false
+    }
+
+    try {
+        $dnsResolving = [bool](Test-DNSResolution -Domain "google.com")
+    }
+    catch {
+        $dnsResolving = $false
+    }
+
+    return [PSCustomObject]@{
+        DnsServiceRunning = [bool]$acrylicRunning
+        DnsResolving = [bool]$dnsResolving
+    }
+}
+
+function Enter-StaleWhitelistFailsafe {
+    param(
+        [Parameter(Mandatory = $true)]
+        [PSCustomObject]$Config,
+
+        [Parameter(Mandatory = $true)]
+        [double]$WhitelistAgeHours
+    )
+
+    $controlDomains = @()
+    $whitelistHost = Get-HostFromUrl -Url $Config.whitelistUrl
+    if ($whitelistHost) {
+        $controlDomains += $whitelistHost
+    }
+
+    if ($Config.PSObject.Properties['apiUrl']) {
+        $apiHost = Get-HostFromUrl -Url $Config.apiUrl
+        if ($apiHost) {
+            $controlDomains += $apiHost
+        }
+    }
+
+    $controlDomains = @($controlDomains | Where-Object { $_ } | Sort-Object -Unique)
+
+    Write-OpenPathLog "Entering stale-whitelist fail-safe mode (age=$WhitelistAgeHours h)" -Level WARN
+    Update-AcrylicHost -WhitelistedDomains $controlDomains -BlockedSubdomains @()
+    Restart-AcrylicService | Out-Null
+
+    if ($Config.enableFirewall) {
+        $acrylicPath = Get-AcrylicPath
+        Set-OpenPathFirewall -UpstreamDNS $Config.primaryDNS -AcrylicPath $acrylicPath | Out-Null
+    }
+
+    Set-LocalDNS
+
+    @{
+        enteredAt = (Get-Date -Format 'o')
+        whitelistAgeHours = [Math]::Round($WhitelistAgeHours, 2)
+        controlDomains = $controlDomains
+    } | ConvertTo-Json -Depth 8 | Set-Content $staleFailsafeStatePath -Encoding UTF8
+
+    Write-OpenPathLog "Stale fail-safe active. Control domains: $($controlDomains -join ', ')" -Level WARN
+}
 
 try {
     $mutex = [System.Threading.Mutex]::new($false, $script:UpdateMutexName)
@@ -61,6 +154,24 @@ try {
         # Load configuration
         $config = Get-OpenPathConfig
 
+        $staleWhitelistMaxAgeHours = 24
+        if ($config.PSObject.Properties['staleWhitelistMaxAgeHours']) {
+            try {
+                $configuredMaxAge = [int]$config.staleWhitelistMaxAgeHours
+                if ($configuredMaxAge -ge 0) {
+                    $staleWhitelistMaxAgeHours = $configuredMaxAge
+                }
+            }
+            catch {
+                Write-OpenPathLog "Invalid staleWhitelistMaxAgeHours value, using default: $_" -Level WARN
+            }
+        }
+
+        $enableStaleFailsafe = $true
+        if ($config.PSObject.Properties['enableStaleFailsafe']) {
+            $enableStaleFailsafe = [bool]$config.enableStaleFailsafe
+        }
+
         # Backup current whitelist for rollback
         if (Test-Path $whitelistPath) {
             Copy-Item $whitelistPath $backupPath -Force
@@ -68,91 +179,99 @@ try {
         }
 
         # Download and parse whitelist
-        $whitelist = Get-OpenPathFromUrl -Url $config.whitelistUrl
+        $whitelist = $null
+        $downloadFailed = $false
+        try {
+            $whitelist = Get-OpenPathFromUrl -Url $config.whitelistUrl
+        }
+        catch {
+            $downloadFailed = $true
+            Write-OpenPathLog "Whitelist download failed: $_" -Level WARN
+        }
 
-        # Check for deactivation flag
-        if ($whitelist.IsDisabled) {
-            Write-OpenPathLog "DEACTIVATION FLAG detected - entering fail-open mode" -Level WARN
+        if ($downloadFailed) {
+            if (-not (Test-Path $whitelistPath)) {
+                throw "No local whitelist available and download failed"
+            }
 
-            # Restore normal DNS
-            Restore-OriginalDNS
-
-            # Remove firewall rules
-            Remove-OpenPathFirewall
-
-            # Remove browser policies
-            Remove-BrowserPolicy
-
-            Write-OpenPathLog "System in fail-open mode"
+            $cachedAgeHours = Get-OpenPathFileAgeHours -Path $whitelistPath
+            if ($enableStaleFailsafe -and $staleWhitelistMaxAgeHours -gt 0 -and $cachedAgeHours -ge $staleWhitelistMaxAgeHours) {
+                Enter-StaleWhitelistFailsafe -Config $config -WhitelistAgeHours $cachedAgeHours
+                $runtimeHealth = Get-OpenPathRuntimeHealth
+                Send-OpenPathHealthReport -Status 'STALE_FAILSAFE' `
+                    -DnsServiceRunning $runtimeHealth.DnsServiceRunning `
+                    -DnsResolving $runtimeHealth.DnsResolving `
+                    -FailCount 0 `
+                    -Actions "stale_whitelist_failsafe age=${cachedAgeHours}h" | Out-Null
+                Write-OpenPathLog "Stale fail-safe activated after download failure (age=$cachedAgeHours h)" -Level WARN
+            }
+            else {
+                $runtimeHealth = Get-OpenPathRuntimeHealth
+                Send-OpenPathHealthReport -Status 'DEGRADED' `
+                    -DnsServiceRunning $runtimeHealth.DnsServiceRunning `
+                    -DnsResolving $runtimeHealth.DnsResolving `
+                    -FailCount 0 `
+                    -Actions 'download_failed_cached_whitelist' | Out-Null
+                Write-OpenPathLog "Using cached whitelist (age=$cachedAgeHours h) until next successful download" -Level WARN
+            }
         }
         else {
-            # Save whitelist to local file
-            $whitelist.Whitelist | Set-Content $whitelistPath -Encoding UTF8
+            # Check for deactivation flag
+            if ($whitelist.IsDisabled) {
+                Write-OpenPathLog "DEACTIVATION FLAG detected - entering fail-open mode" -Level WARN
 
-            # Update Acrylic DNS hosts
-            Update-AcrylicHost -WhitelistedDomains $whitelist.Whitelist -BlockedSubdomains $whitelist.BlockedSubdomains
+                # Restore normal DNS
+                Restore-OriginalDNS
 
-            # Restart Acrylic to apply changes
-            Restart-AcrylicService
+                # Remove firewall rules
+                Remove-OpenPathFirewall
 
-            # Configure firewall (if enabled)
-            if ($config.enableFirewall) {
-                $acrylicPath = Get-AcrylicPath
-                Set-OpenPathFirewall -UpstreamDNS $config.primaryDNS -AcrylicPath $acrylicPath
+                # Remove browser policies
+                Remove-BrowserPolicy
+
+                Clear-StaleFailsafeState
+
+                $runtimeHealth = Get-OpenPathRuntimeHealth
+                Send-OpenPathHealthReport -Status 'FAIL_OPEN' `
+                    -DnsServiceRunning $runtimeHealth.DnsServiceRunning `
+                    -DnsResolving $runtimeHealth.DnsResolving `
+                    -FailCount 0 `
+                    -Actions 'remote_disable_marker' | Out-Null
+
+                Write-OpenPathLog "System in fail-open mode"
             }
+            else {
+                # Save whitelist to local file
+                $whitelist.Whitelist | Set-Content $whitelistPath -Encoding UTF8
 
-            # Configure browser policies (if enabled)
-            if ($config.enableBrowserPolicies) {
-                Set-AllBrowserPolicy -BlockedPaths $whitelist.BlockedPaths
-            }
+                # Update Acrylic DNS hosts
+                Update-AcrylicHost -WhitelistedDomains $whitelist.Whitelist -BlockedSubdomains $whitelist.BlockedSubdomains
 
-            # Send health report to central API (best-effort, non-blocking)
-            if ($config.apiUrl) {
-                try {
-                    $acrylicRunning = ((Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1).Status -eq 'Running')
-                    $dnsResolving = [bool](Test-DNSResolution -Domain "google.com")
-                    $version = if ($config.PSObject.Properties['version']) { $config.version } else { "unknown" }
+                # Restart Acrylic to apply changes
+                Restart-AcrylicService | Out-Null
 
-                    $healthApiSecret = ""
-                    if ($config.PSObject.Properties['healthApiSecret'] -and $config.healthApiSecret) {
-                        $healthApiSecret = [string]$config.healthApiSecret
-                    }
-                    elseif ($env:OPENPATH_HEALTH_API_SECRET) {
-                        $healthApiSecret = [string]$env:OPENPATH_HEALTH_API_SECRET
-                    }
-
-                    $healthBody = @{
-                        json = @{
-                            hostname = $env:COMPUTERNAME
-                            status = "OK"
-                            dnsmasqRunning = [bool]$acrylicRunning
-                            dnsResolving = [bool]$dnsResolving
-                            failCount = 0
-                            actions = "update"
-                            version = [string]$version
-                        }
-                    } | ConvertTo-Json -Depth 8
-
-                    $healthUrl = "$($config.apiUrl.TrimEnd('/'))/trpc/healthReports.submit"
-                    $headers = @{ "Content-Type" = "application/json" }
-                    if ($healthApiSecret) {
-                        $headers["Authorization"] = "Bearer $healthApiSecret"
-                    }
-                    else {
-                        Write-OpenPathLog "Health report sent without shared secret (set healthApiSecret or OPENPATH_HEALTH_API_SECRET if required)" -Level WARN
-                    }
-
-                    Invoke-RestMethod -Uri $healthUrl -Method Post -Headers $headers -Body $healthBody `
-                        -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
-
-                    Write-OpenPathLog "Health report sent to API via tRPC"
+                # Configure firewall (if enabled)
+                if ($config.enableFirewall) {
+                    $acrylicPath = Get-AcrylicPath
+                    Set-OpenPathFirewall -UpstreamDNS $config.primaryDNS -AcrylicPath $acrylicPath | Out-Null
                 }
-                catch {
-                    Write-OpenPathLog "Health report failed (non-critical): $_" -Level WARN
-                }
-            }
 
-            Write-OpenPathLog "=== OpenPath update completed successfully ==="
+                # Configure browser policies (if enabled)
+                if ($config.enableBrowserPolicies) {
+                    Set-AllBrowserPolicy -BlockedPaths $whitelist.BlockedPaths
+                }
+
+                Clear-StaleFailsafeState
+
+                $runtimeHealth = Get-OpenPathRuntimeHealth
+                Send-OpenPathHealthReport -Status 'HEALTHY' `
+                    -DnsServiceRunning $runtimeHealth.DnsServiceRunning `
+                    -DnsResolving $runtimeHealth.DnsResolving `
+                    -FailCount 0 `
+                    -Actions 'update' | Out-Null
+
+                Write-OpenPathLog "=== OpenPath update completed successfully ==="
+            }
         }
     }
 }
@@ -175,6 +294,18 @@ catch {
         catch {
             Write-OpenPathLog "Rollback also failed: $_" -Level ERROR
         }
+    }
+
+    try {
+        $runtimeHealth = Get-OpenPathRuntimeHealth
+        Send-OpenPathHealthReport -Status 'CRITICAL' `
+            -DnsServiceRunning $runtimeHealth.DnsServiceRunning `
+            -DnsResolving $runtimeHealth.DnsResolving `
+            -FailCount 1 `
+            -Actions 'update_failed_rollback' | Out-Null
+    }
+    catch {
+        # Ignore health reporting errors while handling critical failure
     }
 
     $exitCode = 1

@@ -195,6 +195,10 @@ $config = @{
     acrylicPath = "${env:ProgramFiles(x86)}\Acrylic DNS Proxy"
     enableFirewall = $true
     enableBrowserPolicies = $true
+    enableStaleFailsafe = $true
+    staleWhitelistMaxAgeHours = 24
+    enableIntegrityChecks = $true
+    enableDohIpBlocking = $true
     sseReconnectMin = 5
     sseReconnectMax = 60
     sseUpdateCooldown = 10
@@ -263,6 +267,18 @@ try {
 }
 catch {
     Write-Host "  ADVERTENCIA: Primera actualización fallida (se reintentará)" -ForegroundColor Yellow
+}
+
+# Create integrity backup and baseline (best effort)
+try {
+    if (Save-OpenPathIntegrityBackup) {
+        if (New-OpenPathIntegrityBaseline) {
+            Write-Host "  Baseline de integridad generada" -ForegroundColor Green
+        }
+    }
+}
+catch {
+    Write-Host "  ADVERTENCIA: No se pudo inicializar baseline de integridad" -ForegroundColor Yellow
 }
 
 # Register machine in classroom mode

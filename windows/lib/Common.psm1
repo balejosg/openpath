@@ -9,6 +9,8 @@ param()
 $script:OpenPathRoot = "C:\OpenPath"
 $script:ConfigPath = "$script:OpenPathRoot\data\config.json"
 $script:LogPath = "$script:OpenPathRoot\data\logs\openpath.log"
+$script:IntegrityBaselinePath = "$script:OpenPathRoot\data\integrity-baseline.json"
+$script:IntegrityBackupPath = "$script:OpenPathRoot\data\integrity-backup"
 
 function Test-AdminPrivileges {
     <#
@@ -111,6 +113,276 @@ function Set-OpenPathConfig {
     if ($PSCmdlet.ShouldProcess($script:ConfigPath, "Save configuration")) {
         $Config | ConvertTo-Json -Depth 10 | Set-Content $script:ConfigPath -Encoding UTF8
         Write-OpenPathLog "Configuration saved"
+    }
+}
+
+function Get-OpenPathFileAgeHours {
+    <#
+    .SYNOPSIS
+        Returns file age in hours since last write time
+    .PARAMETER Path
+        Full file path
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        return [double]::PositiveInfinity
+    }
+
+    try {
+        $file = Get-Item $Path -ErrorAction Stop
+        $age = (New-TimeSpan -Start $file.LastWriteTimeUtc -End (Get-Date).ToUniversalTime()).TotalHours
+        return [Math]::Max([Math]::Round($age, 2), 0)
+    }
+    catch {
+        return [double]::PositiveInfinity
+    }
+}
+
+function Get-OpenPathCriticalFiles {
+    <#
+    .SYNOPSIS
+        Returns critical files covered by integrity baseline checks
+    #>
+    $files = @(
+        "$script:OpenPathRoot\lib\Common.psm1",
+        "$script:OpenPathRoot\lib\DNS.psm1",
+        "$script:OpenPathRoot\lib\Firewall.psm1",
+        "$script:OpenPathRoot\lib\Browser.psm1",
+        "$script:OpenPathRoot\lib\Services.psm1",
+        "$script:OpenPathRoot\scripts\Update-OpenPath.ps1",
+        "$script:OpenPathRoot\scripts\Test-DNSHealth.ps1",
+        "$script:OpenPathRoot\scripts\Start-SSEListener.ps1"
+    )
+
+    return $files | Where-Object { Test-Path $_ }
+}
+
+function Get-OpenPathRelativePath {
+    <#
+    .SYNOPSIS
+        Converts an absolute OpenPath path into a path relative to C:\OpenPath
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if ($Path.StartsWith($script:OpenPathRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $Path.Substring($script:OpenPathRoot.Length).TrimStart('\')
+    }
+
+    return [System.IO.Path]::GetFileName($Path)
+}
+
+function Save-OpenPathIntegrityBackup {
+    <#
+    .SYNOPSIS
+        Saves backup copies of critical files used for integrity restoration
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if (-not $PSCmdlet.ShouldProcess($script:IntegrityBackupPath, 'Save integrity backup')) {
+        return $false
+    }
+
+    try {
+        New-Item -ItemType Directory -Path $script:IntegrityBackupPath -Force | Out-Null
+
+        foreach ($file in Get-OpenPathCriticalFiles) {
+            $relativePath = Get-OpenPathRelativePath -Path $file
+            $backupPath = Join-Path $script:IntegrityBackupPath $relativePath
+            $backupDir = Split-Path $backupPath -Parent
+            if (-not (Test-Path $backupDir)) {
+                New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+            }
+
+            Copy-Item $file $backupPath -Force
+        }
+
+        Write-OpenPathLog 'Integrity backup saved'
+        return $true
+    }
+    catch {
+        Write-OpenPathLog "Failed to save integrity backup: $_" -Level WARN
+        return $false
+    }
+}
+
+function New-OpenPathIntegrityBaseline {
+    <#
+    .SYNOPSIS
+        Creates integrity baseline hashes for critical files
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    if (-not $PSCmdlet.ShouldProcess($script:IntegrityBaselinePath, 'Generate integrity baseline')) {
+        return $false
+    }
+
+    try {
+        $entries = @()
+        foreach ($file in Get-OpenPathCriticalFiles) {
+            $hash = (Get-FileHash -Path $file -Algorithm SHA256 -ErrorAction Stop).Hash
+            $entries += [PSCustomObject]@{
+                path = $file
+                hash = $hash
+            }
+        }
+
+        $baseline = [PSCustomObject]@{
+            generatedAt = (Get-Date -Format 'o')
+            entryCount = $entries.Count
+            entries = $entries
+        }
+
+        $baseline | ConvertTo-Json -Depth 10 | Set-Content $script:IntegrityBaselinePath -Encoding UTF8
+        Write-OpenPathLog "Integrity baseline generated for $($entries.Count) files"
+        return $true
+    }
+    catch {
+        Write-OpenPathLog "Failed to generate integrity baseline: $_" -Level ERROR
+        return $false
+    }
+}
+
+function Test-OpenPathIntegrity {
+    <#
+    .SYNOPSIS
+        Checks critical files against the integrity baseline
+    #>
+    $result = [ordered]@{
+        Healthy = $true
+        BaselinePresent = $false
+        CheckedFiles = 0
+        TamperedFiles = @()
+        MissingFiles = @()
+        Errors = @()
+    }
+
+    if (-not (Test-Path $script:IntegrityBaselinePath)) {
+        return [PSCustomObject]$result
+    }
+
+    $result.BaselinePresent = $true
+
+    try {
+        $baseline = Get-Content $script:IntegrityBaselinePath -Raw | ConvertFrom-Json
+        $entries = @($baseline.entries)
+    }
+    catch {
+        $result.Healthy = $false
+        $result.Errors += "Invalid integrity baseline: $_"
+        return [PSCustomObject]$result
+    }
+
+    foreach ($entry in $entries) {
+        $path = [string]$entry.path
+        $expectedHash = [string]$entry.hash
+        if (-not $path -or -not $expectedHash) {
+            continue
+        }
+
+        $result.CheckedFiles += 1
+
+        if (-not (Test-Path $path)) {
+            $result.MissingFiles += $path
+            continue
+        }
+
+        try {
+            $currentHash = (Get-FileHash -Path $path -Algorithm SHA256 -ErrorAction Stop).Hash
+            if ($currentHash -ne $expectedHash) {
+                $result.TamperedFiles += $path
+            }
+        }
+        catch {
+            $result.Errors += "Unable to hash $path : $_"
+        }
+    }
+
+    if (($result.TamperedFiles.Count -gt 0) -or ($result.MissingFiles.Count -gt 0) -or ($result.Errors.Count -gt 0)) {
+        $result.Healthy = $false
+    }
+
+    return [PSCustomObject]$result
+}
+
+function Restore-OpenPathIntegrity {
+    <#
+    .SYNOPSIS
+        Attempts bounded restoration of integrity using local backup copies
+    .PARAMETER IntegrityResult
+        Optional result from Test-OpenPathIntegrity to avoid re-checking
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [PSCustomObject]$IntegrityResult
+    )
+
+    if (-not $IntegrityResult) {
+        $IntegrityResult = Test-OpenPathIntegrity
+    }
+
+    if (-not $IntegrityResult.BaselinePresent) {
+        $baselineCreated = New-OpenPathIntegrityBaseline
+        return [PSCustomObject]@{
+            RestoredFiles = @()
+            PendingFiles = @()
+            Healthy = [bool]$baselineCreated
+            BaselineRecreated = [bool]$baselineCreated
+        }
+    }
+
+    $restoredFiles = @()
+    $pendingFiles = @()
+    $targets = @($IntegrityResult.MissingFiles + $IntegrityResult.TamperedFiles)
+    $targets = @($targets | Sort-Object -Unique)
+
+    foreach ($path in $targets) {
+        $relativePath = Get-OpenPathRelativePath -Path $path
+        $backupPath = Join-Path $script:IntegrityBackupPath $relativePath
+
+        if (-not (Test-Path $backupPath)) {
+            $pendingFiles += $path
+            continue
+        }
+
+        if (-not $PSCmdlet.ShouldProcess($path, "Restore from $backupPath")) {
+            $pendingFiles += $path
+            continue
+        }
+
+        try {
+            $destinationDir = Split-Path $path -Parent
+            if (-not (Test-Path $destinationDir)) {
+                New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
+            }
+
+            Copy-Item $backupPath $path -Force
+            $restoredFiles += $path
+        }
+        catch {
+            $pendingFiles += $path
+            Write-OpenPathLog "Failed to restore $path : $_" -Level WARN
+        }
+    }
+
+    if ($restoredFiles.Count -gt 0) {
+        New-OpenPathIntegrityBaseline | Out-Null
+    }
+
+    $postCheck = Test-OpenPathIntegrity
+    return [PSCustomObject]@{
+        RestoredFiles = $restoredFiles
+        PendingFiles = ($pendingFiles | Sort-Object -Unique)
+        Healthy = [bool]$postCheck.Healthy
+        BaselineRecreated = $false
     }
 }
 
@@ -235,13 +507,106 @@ function Test-InternetConnection {
     }
 }
 
+function Send-OpenPathHealthReport {
+    <#
+    .SYNOPSIS
+        Sends machine health status to central API via tRPC
+    .PARAMETER Status
+        Health state string (HEALTHY, DEGRADED, STALE_FAILSAFE, TAMPERED, etc.)
+    .PARAMETER DnsServiceRunning
+        Whether local DNS service is running
+    .PARAMETER DnsResolving
+        Whether DNS resolution is currently working
+    .PARAMETER FailCount
+        Consecutive watchdog fail count
+    .PARAMETER Actions
+        Short reason code(s) describing the current state
+    .PARAMETER Version
+        Agent version string
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Status,
+
+        [bool]$DnsServiceRunning = $false,
+
+        [bool]$DnsResolving = $false,
+
+        [int]$FailCount = 0,
+
+        [string]$Actions = '',
+
+        [string]$Version = 'unknown'
+    )
+
+    $config = $null
+    try {
+        $config = Get-OpenPathConfig
+    }
+    catch {
+        return $false
+    }
+
+    if (-not ($config.PSObject.Properties['apiUrl']) -or -not $config.apiUrl) {
+        return $false
+    }
+
+    $versionToSend = $Version
+    if ($versionToSend -eq 'unknown' -and $config.PSObject.Properties['version'] -and $config.version) {
+        $versionToSend = [string]$config.version
+    }
+
+    $healthApiSecret = ''
+    if ($config.PSObject.Properties['healthApiSecret'] -and $config.healthApiSecret) {
+        $healthApiSecret = [string]$config.healthApiSecret
+    }
+    elseif ($env:OPENPATH_HEALTH_API_SECRET) {
+        $healthApiSecret = [string]$env:OPENPATH_HEALTH_API_SECRET
+    }
+
+    $payload = @{
+        json = @{
+            hostname = $env:COMPUTERNAME
+            status = $Status
+            dnsmasqRunning = [bool]$DnsServiceRunning
+            dnsResolving = [bool]$DnsResolving
+            failCount = [int]$FailCount
+            actions = [string]$Actions
+            version = [string]$versionToSend
+        }
+    } | ConvertTo-Json -Depth 8
+
+    $healthUrl = "$($config.apiUrl.TrimEnd('/'))/trpc/healthReports.submit"
+    $headers = @{ 'Content-Type' = 'application/json' }
+    if ($healthApiSecret) {
+        $headers['Authorization'] = "Bearer $healthApiSecret"
+    }
+
+    try {
+        Invoke-RestMethod -Uri $healthUrl -Method Post -Headers $headers -Body $payload `
+            -TimeoutSec 10 -ErrorAction Stop | Out-Null
+        return $true
+    }
+    catch {
+        Write-OpenPathLog "Health report failed (non-critical): $_" -Level WARN
+        return $false
+    }
+}
+
 # Export module members
 Export-ModuleMember -Function @(
     'Test-AdminPrivileges',
     'Write-OpenPathLog',
     'Get-OpenPathConfig',
     'Set-OpenPathConfig',
+    'Get-OpenPathFileAgeHours',
+    'Get-OpenPathCriticalFiles',
+    'Save-OpenPathIntegrityBackup',
+    'New-OpenPathIntegrityBaseline',
+    'Test-OpenPathIntegrity',
+    'Restore-OpenPathIntegrity',
     'Get-PrimaryDNS',
     'Get-OpenPathFromUrl',
-    'Test-InternetConnection'
+    'Test-InternetConnection',
+    'Send-OpenPathHealthReport'
 )
