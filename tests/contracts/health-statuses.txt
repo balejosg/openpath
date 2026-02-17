@@ -1,0 +1,7 @@
+# Shared canonical health status values
+HEALTHY
+DEGRADED
+CRITICAL
+FAIL_OPEN
+STALE_FAILSAFE
+TAMPERED

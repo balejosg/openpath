@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { readFileSync } from 'node:fs';
 import {
   DomainSchema,
   RequestStatus,
@@ -86,6 +87,16 @@ describe('Enum Schemas', () => {
   });
 
   describe('HealthStatus', () => {
+    it('matches shared contract fixture', () => {
+      const fixturePath = new URL('../../tests/contracts/health-statuses.txt', import.meta.url);
+      const expected = readFileSync(fixturePath, 'utf8')
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !line.startsWith('#'));
+
+      assert.deepStrictEqual(HealthStatus.options, expected);
+    });
+
     it('accepts valid values', () => {
       assert.doesNotThrow(() => HealthStatus.parse('HEALTHY'));
       assert.doesNotThrow(() => HealthStatus.parse('DEGRADED'));
