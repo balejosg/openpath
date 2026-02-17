@@ -9,13 +9,12 @@ export const RequestPriority = z.enum(['low', 'normal', 'high', 'urgent']);
 export const UserRole = z.enum(['admin', 'teacher', 'student']);
 export const MachineStatus = z.enum(['online', 'offline', 'unknown']);
 export const HealthStatus = z.enum([
-  'healthy',
-  'warning',
-  'error',
-  'OK',
-  'WARNING',
+  'HEALTHY',
+  'DEGRADED',
   'CRITICAL',
   'FAIL_OPEN',
+  'STALE_FAILSAFE',
+  'TAMPERED',
 ]);
 
 // =============================================================================

@@ -191,8 +191,9 @@ EOF
 
 # Principal
 main() {
-    local status="OK"
+    local status="HEALTHY"
     local actions=""
+    local recovered_cycle=false
     local fail_count
     fail_count=$(get_fail_count)
     
@@ -202,8 +203,9 @@ main() {
         
         # First, try to rollback to a previous working checkpoint
         if attempt_rollback_recovery; then
-            status="RECOVERED"
+            status="DEGRADED"
             actions="rollback_recovery"
+            recovered_cycle=true
             # Don't enter fail-open, rollback succeeded
         else
             # Rollback failed, enter fail-open mode
@@ -237,21 +239,21 @@ EOF
     
     # Check 2: upstream DNS config
     if ! check_upstream_dns; then
-        [ "$status" = "OK" ] && status="WARNING"
+        [ "$status" = "HEALTHY" ] && status="DEGRADED"
         actions="$actions upstream_dns"
         log "[WATCHDOG] ADVERTENCIA: /run/dnsmasq/resolv.conf no existe"
     fi
     
     # Check 3: resolv.conf
     if ! check_resolv_conf; then
-        [ "$status" = "OK" ] && status="WARNING"
+        [ "$status" = "HEALTHY" ] && status="DEGRADED"
         actions="$actions resolv_conf"
         log "[WATCHDOG] ADVERTENCIA: /etc/resolv.conf no apunta a localhost"
     fi
     
     # Check 4: file integrity (anti-tampering)
     if ! check_integrity; then
-        [ "$status" = "OK" ] && status="WARNING"
+        [ "$status" = "HEALTHY" ] && status="DEGRADED"
         actions="$actions integrity_recovery"
         log "[WATCHDOG] ALERTA: Integridad de archivos comprometida"
     fi
@@ -271,7 +273,8 @@ EOF
                 integrity_recovery)
                     if recover_integrity; then
                         log "[WATCHDOG] ✓ Integridad restaurada"
-                        status="RECOVERED"
+                        status="DEGRADED"
+                        recovered_cycle=true
                     else
                         status="TAMPERED"
                         report_health_to_api "TAMPERED" "integrity_failure"
@@ -290,9 +293,10 @@ EOF
                     done
                     if check_dnsmasq_running; then
                         log "[WATCHDOG] ✓ dnsmasq reiniciado"
-                        status="RECOVERED"
+                        status="DEGRADED"
+                        recovered_cycle=true
                     else
-                        status="FAILED"
+                        status="CRITICAL"
                         increment_fail_count
                     fi
                     ;;
@@ -300,8 +304,8 @@ EOF
         done
     fi
     
-    # Si todo OK, resetear contador de fallos
-    if [ "$status" = "OK" ] || [ "$status" = "RECOVERED" ]; then
+    # Si está sano o recuperado en este ciclo, resetear contador de fallos
+    if [ "$status" = "HEALTHY" ] || [ "$recovered_cycle" = true ]; then
         reset_fail_count
     fi
     
@@ -320,7 +324,7 @@ EOF
     # Report health to central API (mandatory)
     report_health_to_api "$status" "$actions"
     
-    [ "$status" = "OK" ] || [ "$status" = "RECOVERED" ]
+    [ "$status" = "HEALTHY" ] || [ "$recovered_cycle" = true ]
 }
 
 # Report health status to central monitoring API (using tRPC)

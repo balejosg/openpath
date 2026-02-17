@@ -87,13 +87,19 @@ describe('Enum Schemas', () => {
 
   describe('HealthStatus', () => {
     it('accepts valid values', () => {
-      assert.doesNotThrow(() => HealthStatus.parse('healthy'));
-      assert.doesNotThrow(() => HealthStatus.parse('warning'));
-      assert.doesNotThrow(() => HealthStatus.parse('error'));
+      assert.doesNotThrow(() => HealthStatus.parse('HEALTHY'));
+      assert.doesNotThrow(() => HealthStatus.parse('DEGRADED'));
+      assert.doesNotThrow(() => HealthStatus.parse('CRITICAL'));
+      assert.doesNotThrow(() => HealthStatus.parse('FAIL_OPEN'));
+      assert.doesNotThrow(() => HealthStatus.parse('STALE_FAILSAFE'));
+      assert.doesNotThrow(() => HealthStatus.parse('TAMPERED'));
     });
 
     it('rejects invalid values', () => {
-      assert.throws(() => HealthStatus.parse('critical'));
+      assert.throws(() => HealthStatus.parse('healthy'));
+      assert.throws(() => HealthStatus.parse('warning'));
+      assert.throws(() => HealthStatus.parse('OK'));
+      assert.throws(() => HealthStatus.parse('FAILED'));
     });
   });
 });
@@ -442,7 +448,7 @@ describe('Entity Schemas', () => {
       const report = {
         id: 'report-123',
         hostname: 'pc-01',
-        status: 'healthy',
+        status: 'HEALTHY',
         dnsmasqRunning: 1,
         dnsResolving: 1,
         failCount: 0,
@@ -457,7 +463,7 @@ describe('Entity Schemas', () => {
       const report = {
         id: 'report-123',
         hostname: 'pc-01',
-        status: 'warning',
+        status: 'DEGRADED',
         reportedAt: '2025-01-01T12:00:00Z',
       };
       assert.doesNotThrow(() => HealthReport.parse(report));

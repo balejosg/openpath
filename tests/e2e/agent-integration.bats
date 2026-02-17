@@ -125,7 +125,7 @@ EOF
     local health_file="$LIB_DIR/health-status"
     cat > "$health_file" << 'EOF'
 {
-  "status": "OK",
+  "status": "HEALTHY",
   "timestamp": "2025-01-03T15:00:00Z",
   "dnsmasq": "running",
   "last_sync": "2025-01-03T14:55:00Z"

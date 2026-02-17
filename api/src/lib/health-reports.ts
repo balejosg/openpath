@@ -10,6 +10,7 @@
 import { eq, desc, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { healthReports, machines } from '../db/schema.js';
+import { normalizeHealthActions, normalizeHealthStatus } from './health-status.js';
 
 // =============================================================================
 // Types
@@ -52,15 +53,17 @@ export async function saveHealthReport(
   reportData: Omit<HealthReport, 'timestamp'>
 ): Promise<void> {
   const now = new Date();
+  const normalized = normalizeHealthStatus(reportData.status);
+  const normalizedActions = normalizeHealthActions(reportData.actions, normalized);
 
   // Insert new health report
   await db.insert(healthReports).values({
     hostname,
-    status: reportData.status,
+    status: normalized.status,
     dnsmasqRunning: reportData.dnsmasqRunning === null ? null : reportData.dnsmasqRunning ? 1 : 0,
     dnsResolving: reportData.dnsResolving === null ? null : reportData.dnsResolving ? 1 : 0,
     failCount: reportData.failCount,
-    actions: reportData.actions,
+    actions: normalizedActions,
     version: reportData.version,
     reportedAt: now,
   });
@@ -121,7 +124,7 @@ export async function getAllReports(): Promise<ReportsData> {
     // First report for this host is the most recent (due to ordering)
     if (host.reports.length === 0) {
       host.lastSeen = timestamp;
-      host.currentStatus = report.status;
+      host.currentStatus = normalizeHealthStatus(report.status).status;
       if (report.version) {
         host.version = report.version;
       }
@@ -129,7 +132,7 @@ export async function getAllReports(): Promise<ReportsData> {
 
     host.reports.push({
       timestamp,
-      status: report.status,
+      status: normalizeHealthStatus(report.status).status,
       dnsmasqRunning: report.dnsmasqRunning === null ? null : report.dnsmasqRunning === 1,
       dnsResolving: report.dnsResolving === null ? null : report.dnsResolving === 1,
       failCount: report.failCount ?? 0,
@@ -162,10 +165,11 @@ export async function getHostReports(hostname: string): Promise<HostData | null>
   }
 
   const firstReport = reports[0];
+  const currentStatus = firstReport ? normalizeHealthStatus(firstReport.status).status : null;
   const hostData: HostData = {
     reports: reports.map((report) => ({
       timestamp: report.reportedAt?.toISOString() ?? new Date().toISOString(),
-      status: report.status,
+      status: normalizeHealthStatus(report.status).status,
       dnsmasqRunning: report.dnsmasqRunning === null ? null : report.dnsmasqRunning === 1,
       dnsResolving: report.dnsResolving === null ? null : report.dnsResolving === 1,
       failCount: report.failCount ?? 0,
@@ -173,7 +177,7 @@ export async function getHostReports(hostname: string): Promise<HostData | null>
       version: report.version ?? '',
     })),
     lastSeen: firstReport?.reportedAt?.toISOString() ?? null,
-    currentStatus: firstReport?.status ?? null,
+    currentStatus,
   };
 
   if (firstReport?.version) {

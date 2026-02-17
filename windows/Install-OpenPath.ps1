@@ -38,6 +38,7 @@
 param(
     [string]$WhitelistUrl = "",
     [switch]$SkipAcrylic,
+    [switch]$SkipPreflight,
     [string]$Classroom = "",
     [string]$ApiUrl = "",
     [string]$RegistrationToken = "",
@@ -46,6 +47,21 @@ param(
 
 $ErrorActionPreference = "Stop"
 $OpenPathRoot = "C:\OpenPath"
+$scriptDir = $PSScriptRoot
+
+# Verify that modules exist at the expected location
+if (-not (Test-Path "$scriptDir\lib\*.psm1")) {
+    # Try parent directory (in case script is run from workspace root)
+    $parentDir = Split-Path $scriptDir -Parent
+    if (Test-Path "$parentDir\windows\lib\*.psm1") {
+        $scriptDir = "$parentDir\windows"
+    }
+    else {
+        Write-Host "ERROR: Modules not found in $scriptDir\lib\" -ForegroundColor Red
+        Write-Host "  Ensure lib\*.psm1 files are in the same directory as the installer" -ForegroundColor Yellow
+        exit 1
+    }
+}
 
 # Validate classroom mode parameters
 if ($Classroom -and $ApiUrl) {
@@ -108,6 +124,27 @@ else {
 }
 Write-Host ""
 
+if ($SkipPreflight) {
+    Write-Host "[Preflight] Omitido por -SkipPreflight" -ForegroundColor Yellow
+    Write-Host ""
+}
+else {
+    $validationScript = Join-Path $scriptDir "tests\Pre-Install-Validation.ps1"
+    if (Test-Path $validationScript) {
+        Write-Host "[Preflight] Ejecutando validación previa..." -ForegroundColor Yellow
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $validationScript
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "ERROR: Pre-install validation failed" -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "[Preflight] Validación completada" -ForegroundColor Green
+    }
+    else {
+        Write-Host "[Preflight] ADVERTENCIA: Script no encontrado ($validationScript)" -ForegroundColor Yellow
+    }
+    Write-Host ""
+}
+
 # Step 1: Create directory structure
 Write-Host "[1/7] Creando estructura de directorios..." -ForegroundColor Yellow
 
@@ -149,22 +186,6 @@ catch {
 # Step 2: Copy modules and scripts
 Write-Host "[2/7] Copiando módulos y scripts..." -ForegroundColor Yellow
 
-$scriptDir = $PSScriptRoot
-
-# Verify that modules exist at the expected location
-if (-not (Test-Path "$scriptDir\lib\*.psm1")) {
-    # Try parent directory (in case script is run from windows/ subdirectory)
-    $parentDir = Split-Path $scriptDir -Parent
-    if (Test-Path "$parentDir\windows\lib\*.psm1") {
-        $scriptDir = "$parentDir\windows"
-    }
-    else {
-        Write-Host "ERROR: Modules not found in $scriptDir\lib\" -ForegroundColor Red
-        Write-Host "  Ensure lib\*.psm1 files are in the same directory as the installer" -ForegroundColor Yellow
-        exit 1
-    }
-}
-
 # Copy lib modules
 Get-ChildItem "$scriptDir\lib\*.psm1" -ErrorAction SilentlyContinue | 
     Copy-Item -Destination "$OpenPathRoot\lib\" -Force
@@ -172,6 +193,15 @@ Get-ChildItem "$scriptDir\lib\*.psm1" -ErrorAction SilentlyContinue |
 # Copy scripts
 Get-ChildItem "$scriptDir\scripts\*.ps1" -ErrorAction SilentlyContinue | 
     Copy-Item -Destination "$OpenPathRoot\scripts\" -Force
+
+# Copy root operational scripts
+$rootScripts = @('OpenPath.ps1', 'Rotate-Token.ps1')
+foreach ($rootScript in $rootScripts) {
+    $sourcePath = Join-Path $scriptDir $rootScript
+    if (Test-Path $sourcePath) {
+        Copy-Item $sourcePath -Destination (Join-Path $OpenPathRoot $rootScript) -Force
+    }
+}
 
 Write-Host "  Módulos copiados" -ForegroundColor Green
 
@@ -288,45 +318,37 @@ $machineRegistered = ""
 if ($Classroom -and $ApiUrl) {
     Write-Host ""
     Write-Host "Registering machine in classroom..." -ForegroundColor Yellow
-    $hostname = $env:COMPUTERNAME
-    
-    try {
-        $registerBody = @{
-            hostname = $hostname
-            classroomName = $Classroom
-            version = "1.0.0"
-        } | ConvertTo-Json
-        
-        $headers = @{
-            "Authorization" = "Bearer $RegistrationToken"
-            "Content-Type" = "application/json"
-        }
-        
-        $registerResponse = Invoke-RestMethod -Uri "$ApiUrl/api/machines/register" `
-            -Method Post -Body $registerBody -Headers $headers -ErrorAction Stop
-        
-        if ($registerResponse.success) {
-            $machineRegistered = "REGISTERED"
-            if ($registerResponse.whitelistUrl) {
-                $config.whitelistUrl = $registerResponse.whitelistUrl
-                $WhitelistUrl = $registerResponse.whitelistUrl
-                $config | ConvertTo-Json -Depth 10 | Set-Content "$OpenPathRoot\data\config.json" -Encoding UTF8
-                Write-Host "  Machine registered in classroom: $Classroom" -ForegroundColor Green
-                Write-Host "  Tokenized whitelist URL saved" -ForegroundColor Green
+
+    $enrollScript = "$OpenPathRoot\scripts\Enroll-Machine.ps1"
+    if (-not (Test-Path $enrollScript)) {
+        $machineRegistered = "FAILED"
+        Write-Host "  Enrollment script not found: $enrollScript" -ForegroundColor Yellow
+    }
+    else {
+        try {
+            $enrollResult = & $enrollScript `
+                -Classroom $Classroom `
+                -ApiUrl $ApiUrl `
+                -RegistrationToken $RegistrationToken `
+                -OpenPathRoot $OpenPathRoot `
+                -SkipTokenValidation
+
+            if ($enrollResult -and $enrollResult.Success) {
+                $machineRegistered = "REGISTERED"
+                if ($enrollResult.WhitelistUrl) {
+                    $WhitelistUrl = [string]$enrollResult.WhitelistUrl
+                }
+                Write-Host "  Machine registration completed" -ForegroundColor Green
             }
             else {
                 $machineRegistered = "FAILED"
-                Write-Host "  Registration successful but no tokenized URL received" -ForegroundColor Yellow
+                Write-Host "  Failed to register machine" -ForegroundColor Yellow
             }
         }
-        else {
+        catch {
             $machineRegistered = "FAILED"
-            Write-Host "  Failed to register machine" -ForegroundColor Yellow
+            Write-Host "  Error registering machine: $_" -ForegroundColor Yellow
         }
-    }
-    catch {
-        $machineRegistered = "FAILED"
-        Write-Host "  Error registering machine: $_" -ForegroundColor Yellow
     }
 }
 
@@ -395,10 +417,14 @@ Write-Host "  - DNS upstream: $primaryDNS"
 Write-Host "  - Actualización: SSE real-time + cada 15 min (fallback)"
 Write-Host ""
 Write-Host "Comandos útiles:"
+Write-Host "  .\OpenPath.ps1 status          # Estado del agente"
+Write-Host "  .\OpenPath.ps1 update          # Forzar actualización"
+Write-Host "  .\OpenPath.ps1 health          # Ejecutar watchdog"
 Write-Host "  nslookup google.com 127.0.0.1  # Probar DNS"
 Write-Host "  Get-ScheduledTask OpenPath-*  # Ver tareas"
 if ($Classroom -and $ApiUrl) {
-    Write-Host "  .\Rotate-Token.ps1             # Rotar token"
+    Write-Host "  .\OpenPath.ps1 rotate-token -Secret <secret>  # Rotar token"
+    Write-Host "  .\OpenPath.ps1 enroll -Classroom <aula> -ApiUrl <url> -RegistrationToken <token>"
 }
 Write-Host ""
 Write-Host "Desinstalar: .\Uninstall-OpenPath.ps1"

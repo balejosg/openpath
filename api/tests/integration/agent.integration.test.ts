@@ -114,6 +114,37 @@ void describe('Agent & Health Integration', () => {
     assert.ok(!staleAlert, 'Agent should not be stale yet');
   });
 
+  void test('should normalize legacy health statuses to canonical values', async () => {
+    const legacyHostname = 'legacy-status-agent';
+
+    await trpcMutate(
+      API_URL,
+      'healthReports.submit',
+      {
+        hostname: legacyHostname,
+        status: 'OK',
+        actions: 'legacy_probe',
+      },
+      bearerAuth(SHARED_SECRET)
+    );
+
+    const listResp = await trpcQuery(
+      API_URL,
+      'healthReports.list',
+      undefined,
+      bearerAuth(ADMIN_TOKEN)
+    );
+    assertStatus(listResp, 200);
+
+    const { data: summary } = (await parseTRPC(listResp)) as {
+      data: { hosts: { hostname: string; status: string }[] };
+    };
+
+    const host = summary.hosts.find((h) => h.hostname === legacyHostname);
+    assert.ok(host, 'Legacy host should exist in health list');
+    assert.strictEqual(host.status, 'HEALTHY');
+  });
+
   void test('should include tampered agents in status alerts', async () => {
     const tamperedHostname = 'tampered-agent';
 
@@ -143,5 +174,36 @@ void describe('Agent & Health Integration', () => {
       (a) => a.hostname === tamperedHostname && a.type === 'status' && a.status === 'TAMPERED'
     );
     assert.ok(tamperedAlert, 'Tampered agent should appear in status alerts');
+  });
+
+  void test('should map legacy WARNING status to DEGRADED alerts', async () => {
+    const warningHostname = 'legacy-warning-agent';
+
+    await trpcMutate(
+      API_URL,
+      'healthReports.submit',
+      {
+        hostname: warningHostname,
+        status: 'WARNING',
+      },
+      bearerAuth(SHARED_SECRET)
+    );
+
+    const alertsResp = await trpcQuery(
+      API_URL,
+      'healthReports.getAlerts',
+      { staleThreshold: 60 },
+      bearerAuth(ADMIN_TOKEN)
+    );
+
+    assertStatus(alertsResp, 200);
+    const { data: alerts } = (await parseTRPC(alertsResp)) as {
+      data: { alerts: { hostname: string; type: string; status: string }[] };
+    };
+
+    const degradedAlert = alerts.alerts.find(
+      (a) => a.hostname === warningHostname && a.type === 'status' && a.status === 'DEGRADED'
+    );
+    assert.ok(degradedAlert, 'Legacy WARNING status should surface as DEGRADED');
   });
 });

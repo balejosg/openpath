@@ -26,6 +26,24 @@ Sistema de control de acceso a internet mediante DNS sinkhole para Windows, usan
 ```powershell
 # Ejecutar como Administrador
 .\Install-OpenPath.ps1 -WhitelistUrl "http://tu-servidor:3000/export/grupo.txt"
+
+# Opcional: omitir validación previa en entornos controlados
+.\Install-OpenPath.ps1 -WhitelistUrl "http://tu-servidor:3000/export/grupo.txt" -SkipPreflight
+```
+
+El instalador ejecuta `tests\Pre-Install-Validation.ps1` por defecto antes de aplicar cambios.
+
+## Comandos Operativos
+
+```powershell
+# Punto de entrada unificado
+.\OpenPath.ps1 status
+.\OpenPath.ps1 update
+.\OpenPath.ps1 health
+
+# Operaciones de aula
+.\OpenPath.ps1 enroll -Classroom "Aula-01" -ApiUrl "https://api.example.com" -RegistrationToken "<token>"
+.\OpenPath.ps1 rotate-token -Secret "<shared-secret>"
 ```
 
 ## Verificar Instalación
@@ -48,8 +66,10 @@ Get-NetFirewallRule -DisplayName "OpenPath-*"
 
 ```
 C:\OpenPath\
+├── OpenPath.ps1               # Comando operativo unificado
 ├── Install-OpenPath.ps1        # Instalador
 ├── Uninstall-OpenPath.ps1      # Desinstalador
+├── Rotate-Token.ps1            # Rotación de token
 ├── lib\
 │   ├── Common.psm1             # Funciones comunes
 │   ├── DNS.psm1                # Gestión Acrylic
@@ -58,6 +78,8 @@ C:\OpenPath\
 │   └── Services.psm1           # Task Scheduler
 ├── scripts\
 │   ├── Update-OpenPath.ps1     # Actualización periódica
+│   ├── Enroll-Machine.ps1      # Registro/re-registro de máquina
+│   ├── Start-SSEListener.ps1   # Listener SSE en tiempo real
 │   └── Test-DNSHealth.ps1      # Watchdog
 └── data\
     ├── config.json             # Configuración

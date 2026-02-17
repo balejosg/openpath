@@ -347,6 +347,32 @@ Describe "SSE Listener" {
     }
 }
 
+Describe "Operational Command Script" {
+    Context "Script existence" {
+        It "OpenPath.ps1 exists" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "OpenPath.ps1"
+            Test-Path $scriptPath | Should -BeTrue
+        }
+    }
+
+    Context "Command routing" {
+        It "Routes key commands through a unified dispatcher" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match "switch \(\$commandName\)"
+            $content | Should -Match "'status'"
+            $content | Should -Match "'update'"
+            $content | Should -Match "'health'"
+            $content | Should -Match "'enroll'"
+            $content | Should -Match "'rotate-token'"
+            $content | Should -Match "'restart'"
+            $content | Should -Match 'Show-OpenPathStatus'
+            $content | Should -Match 'Enroll-Machine\.ps1'
+        }
+    }
+}
+
 Describe "Update Script" {
     Context "Concurrency guard" {
         It "Update-OpenPath.ps1 uses a global mutex lock" {
@@ -503,6 +529,39 @@ Describe "Installer" {
 
             $content | Should -Match 'enableCheckpointRollback'
             $content | Should -Match 'maxCheckpoints'
+        }
+    }
+
+    Context "Enrollment extraction" {
+        It "Uses Enroll-Machine script for classroom registration" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $enrollScriptPath = Join-Path $PSScriptRoot ".." "scripts" "Enroll-Machine.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Test-Path $enrollScriptPath | Should -BeTrue
+            $content | Should -Match 'Enroll-Machine\.ps1'
+            $content | Should -Match 'SkipTokenValidation'
+            $content | Should -Match 'Machine registration completed'
+        }
+    }
+
+    Context "Operational script installation" {
+        It "Copies OpenPath.ps1 and Rotate-Token.ps1 into install root" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match "'OpenPath\.ps1', 'Rotate-Token\.ps1'"
+        }
+    }
+
+    Context "Pre-install validation integration" {
+        It "Runs pre-install validation by default and supports SkipPreflight" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'SkipPreflight'
+            $content | Should -Match 'Pre-Install-Validation\.ps1'
+            $content | Should -Match 'powershell\.exe\s+-NoProfile\s+-ExecutionPolicy\s+Bypass\s+-File'
         }
     }
 }

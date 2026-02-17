@@ -9,6 +9,7 @@
  */
 
 import * as healthReports from '../lib/health-reports.js';
+import { normalizeHealthActions, normalizeHealthStatus } from '../lib/health-status.js';
 
 // =============================================================================
 // Types
@@ -57,12 +58,15 @@ export async function submitHealthReport(
   }
 
   // Save the health report with normalized values
+  const normalized = normalizeHealthStatus(input.status ?? 'unknown');
+  const normalizedActions = normalizeHealthActions(input.actions, normalized);
+
   await healthReports.saveHealthReport(input.hostname, {
-    status: input.status ?? 'unknown',
+    status: normalized.status,
     dnsmasqRunning: input.dnsmasqRunning ?? null,
     dnsResolving: input.dnsResolving ?? null,
     failCount: input.failCount ?? 0,
-    actions: input.actions ?? '',
+    actions: normalizedActions,
     version: input.version ?? 'unknown',
   });
 

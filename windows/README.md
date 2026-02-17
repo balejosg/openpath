@@ -27,6 +27,24 @@ Internet access control system using a DNS sinkhole for Windows, powered by Acry
 ```powershell
 # Run as Administrator
 .\Install-OpenPath.ps1 -WhitelistUrl "http://your-server:3000/export/group.txt"
+
+# Optional: skip pre-install validation in controlled environments
+.\Install-OpenPath.ps1 -WhitelistUrl "http://your-server:3000/export/group.txt" -SkipPreflight
+```
+
+The installer executes `tests\Pre-Install-Validation.ps1` by default before making changes.
+
+## Operational Commands
+
+```powershell
+# Unified command entrypoint
+.\OpenPath.ps1 status
+.\OpenPath.ps1 update
+.\OpenPath.ps1 health
+
+# Classroom operations
+.\OpenPath.ps1 enroll -Classroom "Lab-01" -ApiUrl "https://api.example.com" -RegistrationToken "<token>"
+.\OpenPath.ps1 rotate-token -Secret "<shared-secret>"
 ```
 
 ## Verify Installation
@@ -49,8 +67,10 @@ Get-NetFirewallRule -DisplayName "OpenPath-*"
 
 ```
 C:\OpenPath\
+├── OpenPath.ps1               # Unified operational command
 ├── Install-OpenPath.ps1        # Installer
 ├── Uninstall-OpenPath.ps1      # Uninstaller
+├── Rotate-Token.ps1            # Token rotation helper
 ├── lib\
 │   ├── Common.psm1             # Common functions
 │   ├── DNS.psm1                # Acrylic management
@@ -59,6 +79,7 @@ C:\OpenPath\
 │   └── Services.psm1           # Task Scheduler
 ├── scripts\
 │   ├── Update-OpenPath.ps1     # Periodic update (fallback)
+│   ├── Enroll-Machine.ps1      # Machine enrollment/re-enrollment
 │   ├── Start-SSEListener.ps1   # Real-time SSE listener
 │   └── Test-DNSHealth.ps1      # Watchdog
 └── data\

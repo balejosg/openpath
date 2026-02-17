@@ -3,6 +3,7 @@ import { router, adminProcedure, sharedSecretProcedure } from '../trpc.js';
 import { TRPCError } from '@trpc/server';
 import * as healthReports from '../../lib/health-reports.js';
 import { HealthReport } from '../../lib/health-reports.js';
+import { PROBLEM_HEALTH_STATUSES } from '../../lib/health-status.js';
 import { stripUndefined } from '../../lib/utils.js';
 
 export const healthReportsRouter = router({
@@ -77,14 +78,6 @@ export const healthReportsRouter = router({
     .input(z.object({ staleThreshold: z.number().default(10) }))
     .query(async ({ input }) => {
       const data = await healthReports.getAllReports();
-      const problemStatuses = [
-        'FAIL_OPEN',
-        'CRITICAL',
-        'WARNING',
-        'DEGRADED',
-        'STALE_FAILSAFE',
-        'TAMPERED',
-      ];
       const now = new Date();
       const alerts: {
         hostname: string;
@@ -101,7 +94,7 @@ export const healthReportsRouter = router({
         if (
           host.currentStatus !== null &&
           host.currentStatus !== '' &&
-          problemStatuses.includes(host.currentStatus)
+          PROBLEM_HEALTH_STATUSES.has(host.currentStatus)
         ) {
           alerts.push({
             hostname,
