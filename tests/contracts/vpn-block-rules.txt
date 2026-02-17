@@ -1,0 +1,7 @@
+# Shared default VPN egress block rules
+udp:1194:OpenVPN
+tcp:1194:OpenVPN-TCP
+udp:51820:WireGuard
+tcp:1723:PPTP
+udp:500:IKE
+udp:4500:IPSec-NAT

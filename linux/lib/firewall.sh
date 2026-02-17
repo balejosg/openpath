@@ -191,7 +191,7 @@ activate_firewall() {
     # the DNS sinkhole via HTTPS (port 443). We block traffic to their IPs entirely.
     # Note: $PRIMARY_DNS is already ACCEPT'd above, so if the upstream DNS is one
     # of these, it won't be affected (ACCEPT rules come before these DROPs).
-    local doh_resolvers_raw="${DOH_RESOLVERS:-8.8.8.8,8.8.4.4,1.1.1.1,1.0.0.1,9.9.9.9,149.112.112.112,208.67.222.222,208.67.220.220,45.90.28.0,45.90.30.0,194.242.2.2,194.242.2.3}"
+    local doh_resolvers_raw="${DOH_RESOLVERS:-8.8.8.8,8.8.4.4,1.1.1.1,1.0.0.1,9.9.9.9,149.112.112.112,208.67.222.222,208.67.220.220,45.90.28.0,45.90.30.0,194.242.2.2,194.242.2.3,94.140.14.14,94.140.15.15,76.76.2.0,76.76.10.0}"
     local doh_resolvers=()
     IFS=',' read -r -a doh_resolvers <<< "$doh_resolvers_raw"
 
@@ -217,7 +217,7 @@ activate_firewall() {
 
     # 8. Block common VPNs - prevents bypass via VPN tunnels
     # Format: protocol:port:name (name optional)
-    local vpn_block_rules_raw="${VPN_BLOCK_RULES:-udp:1194:OpenVPN,udp:51820:WireGuard,tcp:1723:PPTP}"
+    local vpn_block_rules_raw="${VPN_BLOCK_RULES:-udp:1194:OpenVPN,tcp:1194:OpenVPN-TCP,udp:51820:WireGuard,tcp:1723:PPTP,udp:500:IKE,udp:4500:IPSec-NAT}"
     local vpn_block_rules=()
     IFS=',' read -r -a vpn_block_rules <<< "$vpn_block_rules_raw"
 
@@ -250,7 +250,7 @@ activate_firewall() {
     done
 
     # 9. Block Tor - prevents anonymous browsing bypass
-    local tor_ports_raw="${TOR_BLOCK_PORTS:-9001,9030}"
+    local tor_ports_raw="${TOR_BLOCK_PORTS:-9001,9030,9050,9051,9150}"
     local tor_ports=()
     IFS=',' read -r -a tor_ports <<< "$tor_ports_raw"
 

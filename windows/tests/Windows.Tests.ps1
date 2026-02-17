@@ -81,6 +81,26 @@ BeforeAll {
 
         Mock Test-Path { $false } -ModuleName Firewall -ParameterFilter { $Path -like '*AcrylicService.exe' }
     }
+
+    function Get-ContractFixtureLines {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$FileName
+        )
+
+        $contractsDir = Join-Path $PSScriptRoot '..' '..' 'tests' 'contracts'
+        $fixturePath = Join-Path $contractsDir $FileName
+
+        if (-not (Test-Path $fixturePath)) {
+            throw "Contract fixture not found: $fixturePath"
+        }
+
+        return @(
+            Get-Content $fixturePath -ErrorAction Stop |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ -and -not $_.StartsWith('#') }
+        )
+    }
 }
 
 Describe "Common Module" {
@@ -195,6 +215,18 @@ Describe "Common Module" {
             (Test-OpenPathDomainFormat -Domain '-bad.example.com') | Should -BeFalse
             (Test-OpenPathDomainFormat -Domain '') | Should -BeFalse
             (Test-OpenPathDomainFormat -Domain $null) | Should -BeFalse
+        }
+
+        It "Matches shared domain contract fixtures" {
+            $validDomains = Get-ContractFixtureLines -FileName 'domain-valid.txt'
+            foreach ($domain in $validDomains) {
+                (Test-OpenPathDomainFormat -Domain $domain) | Should -BeTrue
+            }
+
+            $invalidDomains = Get-ContractFixtureLines -FileName 'domain-invalid.txt'
+            foreach ($domain in $invalidDomains) {
+                (Test-OpenPathDomainFormat -Domain $domain) | Should -BeFalse
+            }
         }
     }
 
@@ -515,6 +547,14 @@ Describe "Firewall Module" {
     }
 
     Context "DoH egress blocking" {
+        It "Matches shared DoH resolver contract fixture" {
+            $expectedResolvers = @(Get-ContractFixtureLines -FileName 'doh-resolvers.txt' | Sort-Object -Unique)
+            $actualResolvers = @((Get-DefaultDohResolverIps) | Sort-Object -Unique)
+
+            $diff = Compare-Object -ReferenceObject $expectedResolvers -DifferenceObject $actualResolvers
+            $diff | Should -BeNullOrEmpty
+        }
+
         It "Exposes a default DoH resolver catalog" {
             $resolvers = Get-DefaultDohResolverIps
 
@@ -599,6 +639,24 @@ Describe "Firewall Module" {
     }
 
     Context "VPN and Tor egress blocking" {
+        It "Matches shared VPN/Tor contract fixtures" {
+            $expectedVpnRules = @(Get-ContractFixtureLines -FileName 'vpn-block-rules.txt' | Sort-Object -Unique)
+            $actualVpnRules = @(
+                (Get-DefaultVpnBlockRules | ForEach-Object {
+                    "$(($_.Protocol).ToString().ToLowerInvariant()):$($_.Port):$($_.Name)"
+                }) | Sort-Object -Unique
+            )
+
+            $vpnDiff = Compare-Object -ReferenceObject $expectedVpnRules -DifferenceObject $actualVpnRules
+            $vpnDiff | Should -BeNullOrEmpty
+
+            $expectedTorPorts = @(Get-ContractFixtureLines -FileName 'tor-block-ports.txt' | Sort-Object -Unique)
+            $actualTorPorts = @((Get-DefaultTorBlockPorts | ForEach-Object { [string]$_ }) | Sort-Object -Unique)
+
+            $torDiff = Compare-Object -ReferenceObject $expectedTorPorts -DifferenceObject $actualTorPorts
+            $torDiff | Should -BeNullOrEmpty
+        }
+
         It "Exposes default VPN and Tor block catalogs" {
             $vpnRules = @((Get-DefaultVpnBlockRules))
             $torPorts = @((Get-DefaultTorBlockPorts))

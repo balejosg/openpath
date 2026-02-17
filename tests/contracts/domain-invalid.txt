@@ -1,0 +1,6 @@
+# Shared invalid domain fixtures
+invalid domain
+bad..domain.com
+-bad.example.com
+bad-.example.com
+example.local

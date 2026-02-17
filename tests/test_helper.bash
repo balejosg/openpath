@@ -71,3 +71,29 @@ mock_command() {
     eval "$cmd() { echo '$output'; return $exit_code; }"
     export -f "$cmd"
 }
+
+# Helper: load non-empty, non-comment lines from shared contract fixtures
+load_contract_fixture_lines() {
+    local fixture_file="$1"
+    local fixture_path="$PROJECT_DIR/tests/contracts/$fixture_file"
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%$'\r'}"
+        [[ -z "${line//[[:space:]]/}" ]] && continue
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        printf '%s\n' "$line"
+    done < "$fixture_path"
+}
+
+# Helper: split comma-separated values into normalized lines
+csv_to_lines() {
+    local csv="$1"
+    local entry
+    local values=()
+
+    IFS=',' read -r -a values <<< "$csv"
+    for entry in "${values[@]}"; do
+        entry="${entry//[[:space:]]/}"
+        [ -n "$entry" ] && printf '%s\n' "$entry"
+    done
+}

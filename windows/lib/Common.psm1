@@ -178,7 +178,17 @@ function Test-OpenPathDomainFormat {
         return $false
     }
 
-    return ($Domain.Trim() -match $script:DomainPattern)
+    $trimmedDomain = $Domain.Trim()
+
+    if ($trimmedDomain.Length -lt 4 -or $trimmedDomain.Length -gt 253) {
+        return $false
+    }
+
+    if ($trimmedDomain.EndsWith('.local', [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+
+    return ($trimmedDomain -match $script:DomainPattern)
 }
 
 function Get-OpenPathRuntimeHealth {

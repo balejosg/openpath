@@ -1,0 +1,6 @@
+# Shared valid domain fixtures (wildcard-free intersection)
+google.com
+sub.example.org
+a-b.co
+xn--caf-dma.com
+classroompath.net

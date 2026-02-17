@@ -113,6 +113,26 @@ teardown() {
     [ "$valid" = false ]
 }
 
+@test "validate_domain accepts shared valid contract fixtures" {
+    source "$PROJECT_DIR/linux/lib/common.sh"
+    source "$PROJECT_DIR/linux/lib/dns.sh"
+
+    while IFS= read -r domain; do
+        run validate_domain "$domain"
+        [ "$status" -eq 0 ]
+    done < <(load_contract_fixture_lines "domain-valid.txt")
+}
+
+@test "validate_domain rejects shared invalid contract fixtures" {
+    source "$PROJECT_DIR/linux/lib/common.sh"
+    source "$PROJECT_DIR/linux/lib/dns.sh"
+
+    while IFS= read -r domain; do
+        run validate_domain "$domain"
+        [ "$status" -eq 1 ]
+    done < <(load_contract_fixture_lines "domain-invalid.txt")
+}
+
 # ============== Tests de parse_whitelist_sections ==============
 
 @test "parse_whitelist_sections fills arrays correctly" {

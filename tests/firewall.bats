@@ -216,6 +216,38 @@ EOF
     [[ "$output" == *"conntrack not available"* ]]
 }
 
+# ============== Shared contract fixture tests ==============
+
+@test "default DoH resolver catalog matches shared contract fixture" {
+    source "$PROJECT_DIR/linux/lib/common.sh"
+
+    local expected actual
+    expected=$(load_contract_fixture_lines "doh-resolvers.txt" | sort)
+    actual=$(csv_to_lines "$DOH_RESOLVERS" | sort)
+
+    [ "$actual" = "$expected" ]
+}
+
+@test "default VPN block rules match shared contract fixture" {
+    source "$PROJECT_DIR/linux/lib/common.sh"
+
+    local expected actual
+    expected=$(load_contract_fixture_lines "vpn-block-rules.txt" | sort)
+    actual=$(csv_to_lines "$VPN_BLOCK_RULES" | sort)
+
+    [ "$actual" = "$expected" ]
+}
+
+@test "default Tor block ports match shared contract fixture" {
+    source "$PROJECT_DIR/linux/lib/common.sh"
+
+    local expected actual
+    expected=$(load_contract_fixture_lines "tor-block-ports.txt" | sort)
+    actual=$(csv_to_lines "$TOR_BLOCK_PORTS" | sort)
+
+    [ "$actual" = "$expected" ]
+}
+
 # ============== Tests de activate_firewall ==============
 
 @test "activate_firewall adds loopback rule" {

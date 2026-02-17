@@ -1,0 +1,6 @@
+# Shared default Tor ports to block
+9001
+9030
+9050
+9051
+9150
