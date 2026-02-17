@@ -20,55 +20,6 @@ function Test-IsAdmin {
     return $false
 }
 
-function Assert-ContentContainsAll {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Content,
-
-        [Parameter(Mandatory = $true)]
-        [string[]]$Needles
-    )
-
-    foreach ($needle in $Needles) {
-        $Content.Contains($needle) | Should -BeTrue -Because "Expected content to include '$needle'"
-    }
-}
-
-function Initialize-FirewallRuleCaptureMocks {
-    $script:createdFirewallRules = @()
-
-    Mock Test-AdminPrivileges { $true } -ModuleName Firewall
-    Mock Remove-OpenPathFirewall { $true } -ModuleName Firewall
-
-    Mock New-NetFirewallRule {
-        param(
-            [string]$DisplayName,
-            [string]$Direction,
-            [string]$Protocol,
-            [object]$RemoteAddress,
-            [object]$RemotePort,
-            [string]$Action,
-            [string]$Profile,
-            [string]$Description,
-            [string]$Program
-        )
-
-        $script:createdFirewallRules += [PSCustomObject]@{
-            DisplayName = $DisplayName
-            Direction = $Direction
-            Protocol = $Protocol
-            RemoteAddress = [string]$RemoteAddress
-            RemotePort = [string]$RemotePort
-            Action = $Action
-            Program = $Program
-        }
-
-        return [PSCustomObject]@{ DisplayName = $DisplayName }
-    } -ModuleName Firewall
-
-    Mock Test-Path { $false } -ModuleName Firewall -ParameterFilter { $Path -like '*AcrylicService.exe' }
-}
-
 # Import modules at script scope for discovery-time availability
 $script:modulePath = Join-Path $PSScriptRoot ".." "lib"
 Import-Module "$script:modulePath\Common.psm1" -Force -ErrorAction SilentlyContinue
@@ -81,6 +32,55 @@ BeforeAll {
     # Re-import modules in BeforeAll to ensure fresh state for tests
     $modulePath = Join-Path $PSScriptRoot ".." "lib"
     Import-Module "$modulePath\Common.psm1" -Force
+
+    function Assert-ContentContainsAll {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$Content,
+
+            [Parameter(Mandatory = $true)]
+            [string[]]$Needles
+        )
+
+        foreach ($needle in $Needles) {
+            $Content.Contains($needle) | Should -BeTrue -Because "Expected content to include '$needle'"
+        }
+    }
+
+    function Initialize-FirewallRuleCaptureMocks {
+        $script:createdFirewallRules = @()
+
+        Mock Test-AdminPrivileges { $true } -ModuleName Firewall
+        Mock Remove-OpenPathFirewall { $true } -ModuleName Firewall
+
+        Mock New-NetFirewallRule {
+            param(
+                [string]$DisplayName,
+                [string]$Direction,
+                [string]$Protocol,
+                [object]$RemoteAddress,
+                [object]$RemotePort,
+                [string]$Action,
+                [string]$Profile,
+                [string]$Description,
+                [string]$Program
+            )
+
+            $script:createdFirewallRules += [PSCustomObject]@{
+                DisplayName = $DisplayName
+                Direction = $Direction
+                Protocol = $Protocol
+                RemoteAddress = [string]$RemoteAddress
+                RemotePort = [string]$RemotePort
+                Action = $Action
+                Program = $Program
+            }
+
+            return [PSCustomObject]@{ DisplayName = $DisplayName }
+        } -ModuleName Firewall
+
+        Mock Test-Path { $false } -ModuleName Firewall -ParameterFilter { $Path -like '*AcrylicService.exe' }
+    }
 }
 
 Describe "Common Module" {
@@ -168,18 +168,18 @@ Describe "Common Module" {
 
     Context "Get-HostFromUrl" {
         It "Returns host for a valid URL" {
-            $host = Get-HostFromUrl -Url 'https://api.example.com/path?x=1'
-            $host | Should -Be 'api.example.com'
+            $parsedHost = Get-HostFromUrl -Url 'https://api.example.com/path?x=1'
+            $parsedHost | Should -Be 'api.example.com'
         }
 
         It "Returns null for invalid URL" {
-            $host = Get-HostFromUrl -Url 'not-a-valid-url'
-            $host | Should -BeNullOrEmpty
+            $parsedHost = Get-HostFromUrl -Url 'not-a-valid-url'
+            $parsedHost | Should -BeNullOrEmpty
         }
 
         It "Returns null for empty URL" {
-            $host = Get-HostFromUrl -Url ''
-            $host | Should -BeNullOrEmpty
+            $parsedHost = Get-HostFromUrl -Url ''
+            $parsedHost | Should -BeNullOrEmpty
         }
     }
 
@@ -438,7 +438,7 @@ Describe "Common Module - Mocked Tests" {
                 $result = Restore-OpenPathLatestCheckpoint -Config $config -WhitelistPath $targetWhitelistPath
 
                 $result.Success | Should -BeFalse
-                $result.Error | Should -Contain 'no valid domains'
+                $result.Error | Should -BeLike '*no valid domains*'
             }
             finally {
                 Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
