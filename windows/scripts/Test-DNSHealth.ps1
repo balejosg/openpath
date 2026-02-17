@@ -34,6 +34,15 @@ Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
 $issues = @()
 $watchdogFailCountPath = "$OpenPathRoot\data\watchdog-fails.txt"
 $staleFailsafeStatePath = "$OpenPathRoot\data\stale-failsafe-state.json"
+$config = $null
+
+try {
+    $config = Get-OpenPathConfig
+}
+catch {
+    $issues += "Configuration load failed"
+    Write-OpenPathLog "Watchdog: Error loading configuration: $_" -Level ERROR
+}
 
 function Get-WatchdogFailCount {
     if (-not (Test-Path $watchdogFailCountPath)) {
@@ -92,6 +101,67 @@ function Get-OpenPathRuntimeHealth {
     }
 }
 
+function Get-ValidWhitelistDomainsFromFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        return @()
+    }
+
+    $domainPattern = '^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$'
+    return @(Get-Content $Path -ErrorAction SilentlyContinue | ForEach-Object { $_.Trim() } | Where-Object { $_ -match $domainPattern })
+}
+
+function Restore-CheckpointFromWatchdog {
+    param(
+        [Parameter(Mandatory = $true)]
+        [PSCustomObject]$Config
+    )
+
+    $checkpoint = Get-OpenPathLatestCheckpoint
+    if (-not $checkpoint) {
+        Write-OpenPathLog "Watchdog: No checkpoint available for recovery" -Level WARN
+        return $false
+    }
+
+    $whitelistPath = "$OpenPathRoot\data\whitelist.txt"
+
+    try {
+        Copy-Item $checkpoint.WhitelistPath $whitelistPath -Force
+        $domains = Get-ValidWhitelistDomainsFromFile -Path $whitelistPath
+        if ($domains.Count -lt 1) {
+            Write-OpenPathLog "Watchdog: Checkpoint whitelist has no valid domains" -Level WARN
+            return $false
+        }
+
+        Update-AcrylicHost -WhitelistedDomains $domains -BlockedSubdomains @() | Out-Null
+        Restart-AcrylicService | Out-Null
+
+        if ($Config.enableFirewall) {
+            $acrylicPath = Get-AcrylicPath
+            Set-OpenPathFirewall -UpstreamDNS $Config.primaryDNS -AcrylicPath $acrylicPath | Out-Null
+        }
+
+        Set-LocalDNS
+        Start-Sleep -Seconds 2
+
+        if ((Test-DNSResolution -Domain "google.com") -and (Test-DNSSinkhole -Domain "this-should-be-blocked-test-12345.com")) {
+            Write-OpenPathLog "Watchdog: Checkpoint recovery succeeded from $($checkpoint.Path)" -Level WARN
+            return $true
+        }
+
+        Write-OpenPathLog "Watchdog: Checkpoint recovery did not fully restore DNS behavior" -Level WARN
+        return $false
+    }
+    catch {
+        Write-OpenPathLog "Watchdog: Checkpoint recovery failed: $_" -Level ERROR
+        return $false
+    }
+}
+
 # Check 1: Acrylic service running
 try {
     $acrylicService = Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -134,7 +204,9 @@ try {
     if (-not (Test-FirewallActive)) {
         $issues += "Firewall rules not active"
         Write-OpenPathLog "Watchdog: Firewall rules missing, reconfiguring..." -Level WARN
-        $config = Get-OpenPathConfig
+        if (-not $config) {
+            $config = Get-OpenPathConfig
+        }
         $acrylicPath = Get-AcrylicPath
         Set-OpenPathFirewall -UpstreamDNS $config.primaryDNS -AcrylicPath $acrylicPath
     }
@@ -181,9 +253,8 @@ if (Test-Path $staleFailsafeStatePath) {
 # Check 8: Integrity baseline checks (anti-tampering)
 $integrityTampered = $false
 try {
-    $config = Get-OpenPathConfig
     $integrityChecksEnabled = $true
-    if ($config.PSObject.Properties['enableIntegrityChecks']) {
+    if ($config -and $config.PSObject.Properties['enableIntegrityChecks']) {
         $integrityChecksEnabled = [bool]$config.enableIntegrityChecks
     }
 
@@ -272,6 +343,28 @@ else {
     }
 }
 
+$checkpointRecovered = $false
+if ($status -eq 'CRITICAL' -and $config) {
+    $checkpointRollbackEnabled = $true
+    if ($config.PSObject.Properties['enableCheckpointRollback']) {
+        $checkpointRollbackEnabled = [bool]$config.enableCheckpointRollback
+    }
+
+    if ($checkpointRollbackEnabled) {
+        Write-OpenPathLog "Watchdog: CRITICAL state reached, attempting checkpoint recovery" -Level WARN
+        if (Restore-CheckpointFromWatchdog -Config $config) {
+            $checkpointRecovered = $true
+            $status = 'DEGRADED'
+            $watchdogFailCount = 0
+            Reset-WatchdogFailCount
+            $issues += "Checkpoint rollback restored DNS state"
+        }
+        else {
+            $issues += "Checkpoint rollback failed"
+        }
+    }
+}
+
 $actions = if ($issues.Count -gt 0) {
     ($issues | Sort-Object -Unique) -join '; '
 }
@@ -294,6 +387,15 @@ if ($integrityTampered) {
     }
     else {
         $actions = "$actions; integrity_tampered"
+    }
+}
+
+if ($checkpointRecovered) {
+    if ($actions -eq 'watchdog_ok') {
+        $actions = 'checkpoint_recovery_applied'
+    }
+    else {
+        $actions = "$actions; checkpoint_recovery_applied"
     }
 }
 

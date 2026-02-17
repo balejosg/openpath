@@ -11,6 +11,7 @@ $script:ConfigPath = "$script:OpenPathRoot\data\config.json"
 $script:LogPath = "$script:OpenPathRoot\data\logs\openpath.log"
 $script:IntegrityBaselinePath = "$script:OpenPathRoot\data\integrity-baseline.json"
 $script:IntegrityBackupPath = "$script:OpenPathRoot\data\integrity-backup"
+$script:CheckpointPath = "$script:OpenPathRoot\data\checkpoints"
 
 function Test-AdminPrivileges {
     <#
@@ -139,6 +140,126 @@ function Get-OpenPathFileAgeHours {
     }
     catch {
         return [double]::PositiveInfinity
+    }
+}
+
+function Save-OpenPathWhitelistCheckpoint {
+    <#
+    .SYNOPSIS
+        Saves the current whitelist into a timestamped checkpoint folder
+    .PARAMETER WhitelistPath
+        Path to current whitelist file
+    .PARAMETER MaxCheckpoints
+        Maximum number of checkpoint folders to keep
+    .PARAMETER Reason
+        Reason for checkpoint creation
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$WhitelistPath,
+
+        [int]$MaxCheckpoints = 3,
+
+        [string]$Reason = 'pre-update'
+    )
+
+    if (-not (Test-Path $WhitelistPath)) {
+        return [PSCustomObject]@{
+            Success = $false
+            CheckpointPath = $null
+            Error = 'Whitelist file not found'
+        }
+    }
+
+    try {
+        if (-not (Test-Path $script:CheckpointPath)) {
+            New-Item -ItemType Directory -Path $script:CheckpointPath -Force | Out-Null
+        }
+
+        $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+        $checkpointPath = Join-Path $script:CheckpointPath "checkpoint-$timestamp"
+
+        if (-not $PSCmdlet.ShouldProcess($checkpointPath, 'Create whitelist checkpoint')) {
+            return [PSCustomObject]@{
+                Success = $false
+                CheckpointPath = $null
+                Error = 'Operation cancelled by WhatIf/Confirm'
+            }
+        }
+
+        New-Item -ItemType Directory -Path $checkpointPath -Force | Out-Null
+        Copy-Item $WhitelistPath (Join-Path $checkpointPath 'whitelist.txt') -Force
+
+        @{
+            createdAt = (Get-Date -Format 'o')
+            reason = $Reason
+            source = $WhitelistPath
+        } | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $checkpointPath 'metadata.json') -Encoding UTF8
+
+        if ($MaxCheckpoints -lt 1) {
+            $MaxCheckpoints = 1
+        }
+
+        $checkpoints = Get-ChildItem $script:CheckpointPath -Directory -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTimeUtc -Descending
+
+        if ($checkpoints.Count -gt $MaxCheckpoints) {
+            $checkpoints | Select-Object -Skip $MaxCheckpoints | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        }
+
+        return [PSCustomObject]@{
+            Success = $true
+            CheckpointPath = $checkpointPath
+            Error = $null
+        }
+    }
+    catch {
+        return [PSCustomObject]@{
+            Success = $false
+            CheckpointPath = $null
+            Error = "Failed to create checkpoint: $_"
+        }
+    }
+}
+
+function Get-OpenPathLatestCheckpoint {
+    <#
+    .SYNOPSIS
+        Returns latest available whitelist checkpoint metadata
+    #>
+    if (-not (Test-Path $script:CheckpointPath)) {
+        return $null
+    }
+
+    $latest = Get-ChildItem $script:CheckpointPath -Directory -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTimeUtc -Descending |
+        Select-Object -First 1
+
+    if (-not $latest) {
+        return $null
+    }
+
+    $checkpointWhitelist = Join-Path $latest.FullName 'whitelist.txt'
+    if (-not (Test-Path $checkpointWhitelist)) {
+        return $null
+    }
+
+    $metadataPath = Join-Path $latest.FullName 'metadata.json'
+    $metadata = $null
+    if (Test-Path $metadataPath) {
+        try {
+            $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+        }
+        catch {
+            $metadata = $null
+        }
+    }
+
+    return [PSCustomObject]@{
+        Path = $latest.FullName
+        WhitelistPath = $checkpointWhitelist
+        Metadata = $metadata
     }
 }
 
@@ -600,6 +721,8 @@ Export-ModuleMember -Function @(
     'Get-OpenPathConfig',
     'Set-OpenPathConfig',
     'Get-OpenPathFileAgeHours',
+    'Save-OpenPathWhitelistCheckpoint',
+    'Get-OpenPathLatestCheckpoint',
     'Get-OpenPathCriticalFiles',
     'Save-OpenPathIntegrityBackup',
     'New-OpenPathIntegrityBaseline',

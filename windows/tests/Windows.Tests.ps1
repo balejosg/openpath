@@ -360,19 +360,27 @@ Describe "Update Script" {
     }
 
     Context "Rollback system" {
-        It "Backs up whitelist before applying new one" {
+        It "Creates rolling checkpoints before applying new whitelist" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $commonPath = Join-Path $PSScriptRoot ".." "lib" "Common.psm1"
             $content = Get-Content $scriptPath -Raw
+            $commonContent = Get-Content $commonPath -Raw
 
             $content | Should -Match 'whitelist\.backup\.txt'
             $content | Should -Match 'Copy-Item.*\$whitelistPath.*\$backupPath'
+            $content | Should -Match 'Save-OpenPathWhitelistCheckpoint'
+            $content | Should -Match 'maxCheckpoints'
+            $commonContent | Should -Match 'Save-OpenPathWhitelistCheckpoint'
+            $commonContent | Should -Match 'Get-OpenPathLatestCheckpoint'
         }
 
-        It "Restores backup on update failure" {
+        It "Restores checkpoint and falls back to backup on update failure" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'Rolling back to previous whitelist'
+            $content | Should -Match 'Restore-OpenPathCheckpoint'
+            $content | Should -Match 'Attempting checkpoint rollback'
+            $content | Should -Match 'Falling back to backup whitelist rollback'
             $content | Should -Match 'Copy-Item.*\$backupPath.*\$whitelistPath'
         }
     }
@@ -453,6 +461,17 @@ Describe "Watchdog Script" {
             $content | Should -Match 'Send-OpenPathHealthReport'
         }
     }
+
+    Context "Checkpoint recovery" {
+        It "Attempts checkpoint recovery when watchdog reaches CRITICAL" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'enableCheckpointRollback'
+            $content | Should -Match 'Restore-CheckpointFromWatchdog'
+            $content | Should -Match 'Checkpoint rollback restored DNS state'
+        }
+    }
 }
 
 Describe "Installer" {
@@ -474,6 +493,16 @@ Describe "Installer" {
 
             $content | Should -Match 'Modules not found'
             $content | Should -Match 'Test-Path.*lib.*psm1'
+        }
+    }
+
+    Context "Checkpoint defaults" {
+        It "Configures checkpoint rollback defaults during install" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match 'enableCheckpointRollback'
+            $content | Should -Match 'maxCheckpoints'
         }
     }
 }

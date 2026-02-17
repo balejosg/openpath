@@ -133,6 +133,60 @@ function Enter-StaleWhitelistFailsafe {
     Write-OpenPathLog "Stale fail-safe active. Control domains: $($controlDomains -join ', ')" -Level WARN
 }
 
+function Get-ValidWhitelistDomainsFromFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        return @()
+    }
+
+    $domainPattern = '^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$'
+    return @(Get-Content $Path -ErrorAction SilentlyContinue | ForEach-Object { $_.Trim() } | Where-Object { $_ -match $domainPattern })
+}
+
+function Restore-OpenPathCheckpoint {
+    param(
+        [Parameter(Mandatory = $true)]
+        [PSCustomObject]$Config
+    )
+
+    $checkpoint = Get-OpenPathLatestCheckpoint
+    if (-not $checkpoint) {
+        Write-OpenPathLog 'No checkpoint available for rollback' -Level WARN
+        return $false
+    }
+
+    try {
+        Copy-Item $checkpoint.WhitelistPath $whitelistPath -Force
+
+        $domains = Get-ValidWhitelistDomainsFromFile -Path $whitelistPath
+        if ($domains.Count -lt 1) {
+            Write-OpenPathLog 'Checkpoint restore aborted: no valid domains in checkpoint whitelist' -Level WARN
+            return $false
+        }
+
+        Update-AcrylicHost -WhitelistedDomains $domains -BlockedSubdomains @()
+        Restart-AcrylicService | Out-Null
+
+        if ($Config.enableFirewall) {
+            $acrylicPath = Get-AcrylicPath
+            Set-OpenPathFirewall -UpstreamDNS $Config.primaryDNS -AcrylicPath $acrylicPath | Out-Null
+        }
+
+        Set-LocalDNS
+        Clear-StaleFailsafeState
+        Write-OpenPathLog "Checkpoint rollback applied from $($checkpoint.Path)" -Level WARN
+        return $true
+    }
+    catch {
+        Write-OpenPathLog "Checkpoint rollback failed: $_" -Level WARN
+        return $false
+    }
+}
+
 try {
     $mutex = [System.Threading.Mutex]::new($false, $script:UpdateMutexName)
     try {
@@ -172,10 +226,38 @@ try {
             $enableStaleFailsafe = [bool]$config.enableStaleFailsafe
         }
 
+        $enableCheckpointRollback = $true
+        if ($config.PSObject.Properties['enableCheckpointRollback']) {
+            $enableCheckpointRollback = [bool]$config.enableCheckpointRollback
+        }
+
+        $maxCheckpoints = 3
+        if ($config.PSObject.Properties['maxCheckpoints']) {
+            try {
+                $configuredMaxCheckpoints = [int]$config.maxCheckpoints
+                if ($configuredMaxCheckpoints -ge 1) {
+                    $maxCheckpoints = $configuredMaxCheckpoints
+                }
+            }
+            catch {
+                Write-OpenPathLog "Invalid maxCheckpoints value, using default: $_" -Level WARN
+            }
+        }
+
         # Backup current whitelist for rollback
         if (Test-Path $whitelistPath) {
             Copy-Item $whitelistPath $backupPath -Force
             Write-OpenPathLog "Backed up current whitelist for rollback"
+
+            if ($enableCheckpointRollback) {
+                $checkpointResult = Save-OpenPathWhitelistCheckpoint -WhitelistPath $whitelistPath -MaxCheckpoints $maxCheckpoints -Reason 'pre-update'
+                if ($checkpointResult.Success) {
+                    Write-OpenPathLog "Checkpoint created at $($checkpointResult.CheckpointPath)"
+                }
+                else {
+                    Write-OpenPathLog "Checkpoint creation failed (non-critical): $($checkpointResult.Error)" -Level WARN
+                }
+            }
         }
 
         # Download and parse whitelist
@@ -278,31 +360,55 @@ try {
 catch {
     Write-OpenPathLog "Update failed: $_" -Level ERROR
 
-    # Rollback: restore previous whitelist and restart Acrylic
-    if (Test-Path $backupPath) {
-        Write-OpenPathLog "Rolling back to previous whitelist..." -Level WARN
+    $checkpointRollbackEnabled = $true
+    if ($config -and $config.PSObject.Properties['enableCheckpointRollback']) {
+        $checkpointRollbackEnabled = [bool]$config.enableCheckpointRollback
+    }
+
+    $rollbackMethod = 'none'
+    $rollbackSucceeded = $false
+    if ($checkpointRollbackEnabled -and $config) {
+        Write-OpenPathLog 'Attempting checkpoint rollback...' -Level WARN
+        $rollbackSucceeded = Restore-OpenPathCheckpoint -Config $config
+        if ($rollbackSucceeded) {
+            $rollbackMethod = 'checkpoint'
+        }
+    }
+
+    # Fallback rollback: restore previous whitelist and restart Acrylic
+    if (-not $rollbackSucceeded -and (Test-Path $backupPath)) {
+        Write-OpenPathLog 'Falling back to backup whitelist rollback...' -Level WARN
         try {
             Copy-Item $backupPath $whitelistPath -Force
-
-            # Re-parse the backup and re-apply
-            $backupContent = Get-Content $whitelistPath
+            $backupContent = Get-ValidWhitelistDomainsFromFile -Path $whitelistPath
             Update-AcrylicHost -WhitelistedDomains $backupContent -BlockedSubdomains @() -ErrorAction SilentlyContinue
             Restart-AcrylicService -ErrorAction SilentlyContinue
 
-            Write-OpenPathLog "Rollback completed successfully" -Level WARN
+            if ($config -and $config.enableFirewall) {
+                $acrylicPath = Get-AcrylicPath
+                Set-OpenPathFirewall -UpstreamDNS $config.primaryDNS -AcrylicPath $acrylicPath -ErrorAction SilentlyContinue | Out-Null
+            }
+
+            Set-LocalDNS -ErrorAction SilentlyContinue
+            $rollbackSucceeded = $true
+            $rollbackMethod = 'backup'
+            Write-OpenPathLog 'Backup rollback completed successfully' -Level WARN
         }
         catch {
-            Write-OpenPathLog "Rollback also failed: $_" -Level ERROR
+            Write-OpenPathLog "Backup rollback also failed: $_" -Level ERROR
         }
     }
 
     try {
         $runtimeHealth = Get-OpenPathRuntimeHealth
-        Send-OpenPathHealthReport -Status 'CRITICAL' `
+        $failureAction = if ($rollbackSucceeded) { "update_failed_rollback_$rollbackMethod" } else { 'update_failed_no_rollback' }
+        $failureStatus = if ($rollbackSucceeded) { 'DEGRADED' } else { 'CRITICAL' }
+        $failureCount = if ($rollbackSucceeded) { 0 } else { 1 }
+        Send-OpenPathHealthReport -Status $failureStatus `
             -DnsServiceRunning $runtimeHealth.DnsServiceRunning `
             -DnsResolving $runtimeHealth.DnsResolving `
-            -FailCount 1 `
-            -Actions 'update_failed_rollback' | Out-Null
+            -FailCount $failureCount `
+            -Actions $failureAction | Out-Null
     }
     catch {
         # Ignore health reporting errors while handling critical failure

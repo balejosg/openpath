@@ -12,6 +12,7 @@ Sistema de control de acceso a internet mediante DNS sinkhole para Windows, usan
 ✅ **Actualización automática** - Cada 15 minutos vía Task Scheduler  
 ✅ **Fail-safe por whitelist caducada** - Modo restrictivo seguro cuando la caché expira sin conexión  
 ✅ **Baseline de integridad** - Detecta manipulación de scripts/módulos e intenta restauración acotada  
+✅ **Rollback por checkpoints** - Guarda checkpoints rotativos de whitelist para recuperación del watchdog  
 ✅ **Watchdog** - Auto-recuperación de fallos
 
 ## Requisitos
@@ -79,6 +80,8 @@ Editar `C:\OpenPath\data\config.json`:
   "staleWhitelistMaxAgeHours": 24,
   "enableIntegrityChecks": true,
   "enableDohIpBlocking": true,
+  "enableCheckpointRollback": true,
+  "maxCheckpoints": 3,
   "healthApiSecret": "secreto-compartido-opcional"
 }
 ```

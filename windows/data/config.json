@@ -10,6 +10,8 @@
   "staleWhitelistMaxAgeHours": 24,
   "enableIntegrityChecks": true,
   "enableDohIpBlocking": true,
+  "enableCheckpointRollback": true,
+  "maxCheckpoints": 3,
   "sseReconnectMin": 5,
   "sseReconnectMax": 60,
   "sseUpdateCooldown": 10,

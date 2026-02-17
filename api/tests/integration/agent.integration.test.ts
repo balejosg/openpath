@@ -113,4 +113,35 @@ void describe('Agent & Health Integration', () => {
     );
     assert.ok(!staleAlert, 'Agent should not be stale yet');
   });
+
+  void test('should include tampered agents in status alerts', async () => {
+    const tamperedHostname = 'tampered-agent';
+
+    await trpcMutate(
+      API_URL,
+      'healthReports.submit',
+      {
+        hostname: tamperedHostname,
+        status: 'TAMPERED',
+      },
+      bearerAuth(SHARED_SECRET)
+    );
+
+    const alertsResp = await trpcQuery(
+      API_URL,
+      'healthReports.getAlerts',
+      { staleThreshold: 60 },
+      bearerAuth(ADMIN_TOKEN)
+    );
+
+    assertStatus(alertsResp, 200);
+    const { data: alerts } = (await parseTRPC(alertsResp)) as {
+      data: { alerts: { hostname: string; type: string; status: string }[] };
+    };
+
+    const tamperedAlert = alerts.alerts.find(
+      (a) => a.hostname === tamperedHostname && a.type === 'status' && a.status === 'TAMPERED'
+    );
+    assert.ok(tamperedAlert, 'Tampered agent should appear in status alerts');
+  });
 });

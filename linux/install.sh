@@ -28,6 +28,7 @@
 #   sudo ./install.sh --unattended  (modo desatendido)
 #   sudo ./install.sh --no-extension  (sin extensión Firefox)
 #   sudo ./install.sh --with-native-host  (incluir native messaging)
+#   sudo ./install.sh --skip-preflight  (omitir validación previa)
 #
 ################################################################################
 
@@ -49,6 +50,7 @@ WHITELIST_URL="$DEFAULT_WHITELIST_URL"
 UNATTENDED=false
 INSTALL_EXTENSION=true
 INSTALL_NATIVE_HOST=false
+SKIP_PREFLIGHT=false
 HEALTH_API_URL=""
 HEALTH_API_SECRET=""
 CLASSROOM_NAME=""
@@ -80,6 +82,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --with-native-host)
             INSTALL_NATIVE_HOST=true
+            shift
+            ;;
+        --skip-preflight)
+            SKIP_PREFLIGHT=true
             shift
             ;;
         --classroom)
@@ -154,6 +160,85 @@ echo ""
 # ============================================================================
 # Installation Step Functions
 # ============================================================================
+
+run_pre_install_validation() {
+    local errors=0
+    local warnings=0
+
+    echo ""
+    echo "[Preflight] Validando requisitos del sistema..."
+
+    if [ "$EUID" -ne 0 ]; then
+        echo "  ✗ Requiere privilegios root"
+        errors=$((errors + 1))
+    else
+        echo "  ✓ Privilegios root detectados"
+    fi
+
+    if [ ! -d /run/systemd/system ]; then
+        echo "  ✗ systemd no está activo (requerido para timers/servicios)"
+        errors=$((errors + 1))
+    else
+        echo "  ✓ systemd activo"
+    fi
+
+    if ! command -v apt-get >/dev/null 2>&1; then
+        echo "  ✗ apt-get no disponible (se requiere distribución Debian/Ubuntu)"
+        errors=$((errors + 1))
+    else
+        echo "  ✓ apt-get disponible"
+    fi
+
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "  ✗ systemctl no disponible"
+        errors=$((errors + 1))
+    else
+        echo "  ✓ systemctl disponible"
+    fi
+
+    local free_mb
+    free_mb=$(df -Pm / | awk 'NR==2 {print $4}')
+    if [ -n "$free_mb" ] && [ "$free_mb" -lt 200 ]; then
+        echo "  ✗ Espacio insuficiente en / (${free_mb}MB libres, mínimo 200MB)"
+        errors=$((errors + 1))
+    else
+        echo "  ✓ Espacio en disco suficiente"
+    fi
+
+    if ! ip -o link show up 2>/dev/null | grep -q "state UP"; then
+        echo "  ⚠ No se detecta interfaz de red activa"
+        warnings=$((warnings + 1))
+    else
+        echo "  ✓ Interfaz de red activa detectada"
+    fi
+
+    if ! timeout 5 getent hosts github.com >/dev/null 2>&1; then
+        echo "  ⚠ DNS/Internet no verificado (continuará igualmente)"
+        warnings=$((warnings + 1))
+    else
+        echo "  ✓ Resolución DNS funcional"
+    fi
+
+    if ss -lntu 2>/dev/null | grep -qE '[:.]53\s'; then
+        echo "  ⚠ Puerto 53 ya en uso (se intentará liberar durante la instalación)"
+        warnings=$((warnings + 1))
+    else
+        echo "  ✓ Puerto 53 disponible"
+    fi
+
+    if [ "$errors" -gt 0 ]; then
+        echo ""
+        echo "✗ Preflight fallido: ${errors} error(es), ${warnings} advertencia(s)"
+        echo "  Corrija los errores o use --skip-preflight bajo su propio riesgo"
+        exit 1
+    fi
+
+    if [ "$warnings" -gt 0 ]; then
+        echo "  ✓ Preflight completado con ${warnings} advertencia(s)"
+    else
+        echo "  ✓ Preflight completado sin advertencias"
+    fi
+}
 
 step_install_libraries() {
     echo "[1/13] Instalando librerías..."
@@ -237,14 +322,26 @@ step_install_scripts() {
     create_dns_init_script
 
     mkdir -p "$ETC_CONFIG_DIR"
+    chown root:root "$ETC_CONFIG_DIR" "$CONFIG_DIR" 2>/dev/null || true
+    chmod 750 "$ETC_CONFIG_DIR" 2>/dev/null || true
+
     echo "$WHITELIST_URL" > "$WHITELIST_URL_CONF"
+    chown root:root "$WHITELIST_URL_CONF" 2>/dev/null || true
+    chmod 640 "$WHITELIST_URL_CONF"
 
     if [ -n "$HEALTH_API_URL" ]; then
         echo "$HEALTH_API_URL" > "$HEALTH_API_URL_CONF"
+        chown root:root "$HEALTH_API_URL_CONF" 2>/dev/null || true
+        chmod 640 "$HEALTH_API_URL_CONF"
         echo "  → Health API URL configurada"
     fi
     if [ -n "$HEALTH_API_SECRET" ]; then
+        local old_umask
+        old_umask=$(umask)
+        umask 077
         echo "$HEALTH_API_SECRET" > "$HEALTH_API_SECRET_CONF"
+        umask "$old_umask"
+        chown root:root "$HEALTH_API_SECRET_CONF" 2>/dev/null || true
         chmod 600 "$HEALTH_API_SECRET_CONF"
         echo "  → Health API secret configurado"
     fi
@@ -252,8 +349,12 @@ step_install_scripts() {
     if [ -n "$CLASSROOM_NAME" ] && [ -n "$API_URL" ]; then
         echo "$CLASSROOM_NAME" > "$ETC_CONFIG_DIR/classroom.conf"
         echo "$API_URL" > "$ETC_CONFIG_DIR/api-url.conf"
+        chown root:root "$ETC_CONFIG_DIR/classroom.conf" "$ETC_CONFIG_DIR/api-url.conf" 2>/dev/null || true
+        chmod 640 "$ETC_CONFIG_DIR/classroom.conf" "$ETC_CONFIG_DIR/api-url.conf"
         if [ -n "$HEALTH_API_SECRET" ]; then
             cp "$HEALTH_API_SECRET_CONF" "$ETC_CONFIG_DIR/api-secret.conf"
+            chown root:root "$ETC_CONFIG_DIR/api-secret.conf" 2>/dev/null || true
+            chmod 600 "$ETC_CONFIG_DIR/api-secret.conf"
         fi
         echo "  → Modo Aula configurado: $CLASSROOM_NAME"
     fi
@@ -484,6 +585,13 @@ print_summary() {
 # ============================================================================
 
 main() {
+    if [ "$SKIP_PREFLIGHT" = true ]; then
+        echo ""
+        echo "[Preflight] Omitido por --skip-preflight"
+    else
+        run_pre_install_validation
+    fi
+
     step_install_libraries
     step_install_dependencies
     step_free_port_53

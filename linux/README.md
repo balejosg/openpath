@@ -28,6 +28,9 @@ The Linux agent enforces DNS whitelisting at the network level using `dnsmasq` a
 sudo ./install.sh
 ```
 
+The installer runs a preflight validation before making changes (systemd, disk space, network, tooling).
+Use `--skip-preflight` only for controlled environments where those checks are intentionally bypassed.
+
 ### Advanced Installation
 
 Use the `quick-install.sh` script for non-interactive installations:

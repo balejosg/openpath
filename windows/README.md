@@ -13,6 +13,7 @@ Internet access control system using a DNS sinkhole for Windows, powered by Acry
 ✅ **Auto-Update Fallback** - Syncs every 15 minutes via Task Scheduler.  
 ✅ **Stale Whitelist Fail-Safe** - Enters safe restrictive mode when cache expires offline.  
 ✅ **Integrity Baseline** - Detects script/module tampering and attempts bounded restore.  
+✅ **Checkpoint Rollback** - Stores rolling whitelist checkpoints for watchdog recovery.  
 ✅ **Watchdog** - Automatic failure recovery.
 
 ## Requirements
@@ -81,6 +82,8 @@ Edit `C:\OpenPath\data\config.json`:
   "staleWhitelistMaxAgeHours": 24,
   "enableIntegrityChecks": true,
   "enableDohIpBlocking": true,
+  "enableCheckpointRollback": true,
+  "maxCheckpoints": 3,
   "sseReconnectMin": 5,
   "sseReconnectMax": 60,
   "sseUpdateCooldown": 10,
