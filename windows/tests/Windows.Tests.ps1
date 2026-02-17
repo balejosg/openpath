@@ -360,7 +360,7 @@ Describe "Operational Command Script" {
             $scriptPath = Join-Path $PSScriptRoot ".." "OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match "switch \(\$commandName\)"
+            $content | Should -Match 'switch \(\$commandName\)'
             $content | Should -Match "'status'"
             $content | Should -Match "'update'"
             $content | Should -Match "'health'"
