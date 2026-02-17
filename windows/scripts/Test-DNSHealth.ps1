@@ -77,79 +77,30 @@ function Reset-WatchdogFailCount {
     Set-WatchdogFailCount -Count 0
 }
 
-function Get-OpenPathRuntimeHealth {
-    $acrylicRunning = $false
-    $dnsResolving = $false
-
-    try {
-        $acrylicRunning = ((Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1).Status -eq 'Running')
-    }
-    catch {
-        $acrylicRunning = $false
-    }
-
-    try {
-        $dnsResolving = [bool](Test-DNSResolution -Domain "google.com")
-    }
-    catch {
-        $dnsResolving = $false
-    }
-
-    return [PSCustomObject]@{
-        DnsServiceRunning = [bool]$acrylicRunning
-        DnsResolving = [bool]$dnsResolving
-    }
-}
-
-function Get-ValidWhitelistDomainsFromFile {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    if (-not (Test-Path $Path)) {
-        return @()
-    }
-
-    $domainPattern = '^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$'
-    return @(Get-Content $Path -ErrorAction SilentlyContinue | ForEach-Object { $_.Trim() } | Where-Object { $_ -match $domainPattern })
-}
-
 function Restore-CheckpointFromWatchdog {
     param(
         [Parameter(Mandatory = $true)]
         [PSCustomObject]$Config
     )
 
-    $checkpoint = Get-OpenPathLatestCheckpoint
-    if (-not $checkpoint) {
-        Write-OpenPathLog "Watchdog: No checkpoint available for recovery" -Level WARN
+    $whitelistPath = "$OpenPathRoot\data\whitelist.txt"
+
+    $restoreResult = Restore-OpenPathLatestCheckpoint -Config $Config -WhitelistPath $whitelistPath
+    if (-not $restoreResult.Success) {
+        if ($restoreResult.Error) {
+            Write-OpenPathLog "Watchdog: $($restoreResult.Error)" -Level WARN
+        }
+        else {
+            Write-OpenPathLog 'Watchdog: Checkpoint recovery failed for unknown reason' -Level WARN
+        }
         return $false
     }
 
-    $whitelistPath = "$OpenPathRoot\data\whitelist.txt"
-
     try {
-        Copy-Item $checkpoint.WhitelistPath $whitelistPath -Force
-        $domains = Get-ValidWhitelistDomainsFromFile -Path $whitelistPath
-        if ($domains.Count -lt 1) {
-            Write-OpenPathLog "Watchdog: Checkpoint whitelist has no valid domains" -Level WARN
-            return $false
-        }
-
-        Update-AcrylicHost -WhitelistedDomains $domains -BlockedSubdomains @() | Out-Null
-        Restart-AcrylicService | Out-Null
-
-        if ($Config.enableFirewall) {
-            $acrylicPath = Get-AcrylicPath
-            Set-OpenPathFirewall -UpstreamDNS $Config.primaryDNS -AcrylicPath $acrylicPath | Out-Null
-        }
-
-        Set-LocalDNS
         Start-Sleep -Seconds 2
 
         if ((Test-DNSResolution -Domain "google.com") -and (Test-DNSSinkhole -Domain "this-should-be-blocked-test-12345.com")) {
-            Write-OpenPathLog "Watchdog: Checkpoint recovery succeeded from $($checkpoint.Path)" -Level WARN
+            Write-OpenPathLog "Watchdog: Checkpoint recovery succeeded from $($restoreResult.CheckpointPath)" -Level WARN
             return $true
         }
 

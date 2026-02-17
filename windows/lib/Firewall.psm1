@@ -7,6 +7,43 @@ Import-Module "$modulePath\lib\Common.psm1" -Force -ErrorAction SilentlyContinue
 
 $script:RulePrefix = "OpenPath-DNS"
 
+function Get-DefaultDohResolverIps {
+    <#
+    .SYNOPSIS
+        Returns default DoH resolver IP catalog used for egress blocking
+    #>
+    return @(
+        "8.8.8.8", "8.8.4.4",
+        "1.1.1.1", "1.0.0.1",
+        "9.9.9.9", "149.112.112.112",
+        "94.140.14.14", "94.140.15.15",
+        "76.76.2.0", "76.76.10.0"
+    )
+}
+
+function Get-DefaultVpnBlockRules {
+    <#
+    .SYNOPSIS
+        Returns default VPN egress block rules (protocol/port/name)
+    #>
+    return @(
+        [PSCustomObject]@{ Protocol = 'UDP'; Port = 1194; Name = 'OpenVPN' },
+        [PSCustomObject]@{ Protocol = 'TCP'; Port = 1194; Name = 'OpenVPN-TCP' },
+        [PSCustomObject]@{ Protocol = 'UDP'; Port = 51820; Name = 'WireGuard' },
+        [PSCustomObject]@{ Protocol = 'TCP'; Port = 1723; Name = 'PPTP' },
+        [PSCustomObject]@{ Protocol = 'UDP'; Port = 500; Name = 'IKE' },
+        [PSCustomObject]@{ Protocol = 'UDP'; Port = 4500; Name = 'IPSec-NAT' }
+    )
+}
+
+function Get-DefaultTorBlockPorts {
+    <#
+    .SYNOPSIS
+        Returns default Tor-related TCP ports to block
+    #>
+    return @(9001, 9030, 9050, 9051, 9150)
+}
+
 function Set-OpenPathFirewall {
     <#
     .SYNOPSIS
@@ -109,10 +146,94 @@ function Set-OpenPathFirewall {
 
         # 4b. Block known DNS-over-HTTPS resolver IPs on 443
         $enableDohIpBlocking = $true
+        $dohResolvers = Get-DefaultDohResolverIps
+        $vpnPorts = Get-DefaultVpnBlockRules
+        $torPorts = Get-DefaultTorBlockPorts
+
         try {
             $config = Get-OpenPathConfig
             if ($config.PSObject.Properties['enableDohIpBlocking']) {
                 $enableDohIpBlocking = [bool]$config.enableDohIpBlocking
+            }
+
+            if ($config.PSObject.Properties['dohResolverIps'] -and $config.dohResolverIps) {
+                $configuredResolvers = @($config.dohResolverIps | ForEach-Object { [string]$_ } | Where-Object { $_.Trim() })
+                if ($configuredResolvers.Count -gt 0) {
+                    $dohResolvers = $configuredResolvers
+                }
+            }
+
+            if ($config.PSObject.Properties['vpnBlockRules'] -and $config.vpnBlockRules) {
+                $configuredVpnRules = @()
+                foreach ($rule in @($config.vpnBlockRules)) {
+                    try {
+                        $protocol = ''
+                        $port = 0
+                        $name = ''
+
+                        if ($rule -is [string]) {
+                            $parts = @($rule -split ':', 3)
+                            if ($parts.Count -lt 2) {
+                                continue
+                            }
+                            $protocol = [string]$parts[0]
+                            $port = [int]$parts[1]
+                            if ($parts.Count -ge 3) {
+                                $name = [string]$parts[2]
+                            }
+                        }
+                        else {
+                            $protocol = if ($rule.PSObject.Properties['Protocol']) { [string]$rule.Protocol } else { '' }
+                            $port = if ($rule.PSObject.Properties['Port']) { [int]$rule.Port } else { 0 }
+                            $name = if ($rule.PSObject.Properties['Name']) { [string]$rule.Name } else { '' }
+                        }
+
+                        $protocolUpper = $protocol.Trim().ToUpperInvariant()
+                        if ($protocolUpper -notin @('TCP', 'UDP')) {
+                            continue
+                        }
+
+                        if ($port -lt 1 -or $port -gt 65535) {
+                            continue
+                        }
+
+                        if (-not $name) {
+                            $name = "VPN-$protocolUpper-$port"
+                        }
+
+                        $configuredVpnRules += [PSCustomObject]@{
+                            Protocol = $protocolUpper
+                            Port = $port
+                            Name = $name
+                        }
+                    }
+                    catch {
+                        continue
+                    }
+                }
+
+                if ($configuredVpnRules.Count -gt 0) {
+                    $vpnPorts = $configuredVpnRules
+                }
+            }
+
+            if ($config.PSObject.Properties['torBlockPorts'] -and $config.torBlockPorts) {
+                $configuredTorPorts = @()
+                foreach ($torPort in @($config.torBlockPorts)) {
+                    try {
+                        $candidatePort = [int]$torPort
+                        if ($candidatePort -ge 1 -and $candidatePort -le 65535) {
+                            $configuredTorPorts += $candidatePort
+                        }
+                    }
+                    catch {
+                        continue
+                    }
+                }
+
+                if ($configuredTorPorts.Count -gt 0) {
+                    $torPorts = @($configuredTorPorts | Sort-Object -Unique)
+                }
             }
         }
         catch {
@@ -120,16 +241,13 @@ function Set-OpenPathFirewall {
         }
 
         if ($enableDohIpBlocking) {
-            $dohResolvers = @(
-                "8.8.8.8", "8.8.4.4",
-                "1.1.1.1", "1.0.0.1",
-                "9.9.9.9", "149.112.112.112",
-                "94.140.14.14", "94.140.15.15",
-                "76.76.2.0", "76.76.10.0"
-            )
-
             $dohRuleCount = 0
-            foreach ($resolverIp in ($dohResolvers | Sort-Object -Unique)) {
+            foreach ($resolverIp in ($dohResolvers | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ } | Sort-Object -Unique)) {
+                if ($resolverIp -notmatch '^\d{1,3}(?:\.\d{1,3}){3}$') {
+                    Write-OpenPathLog "Skipping invalid DoH resolver IP: $resolverIp" -Level WARN
+                    continue
+                }
+
                 if ($resolverIp -eq $UpstreamDNS) {
                     continue
                 }
@@ -164,28 +282,36 @@ function Set-OpenPathFirewall {
         }
 
         # 5. Block common VPN ports
-        $vpnPorts = @(
-            @{Port = 1194; Name = "OpenVPN"; Protocol = "UDP"},
-            @{Port = 1194; Name = "OpenVPN-TCP"; Protocol = "TCP"},
-            @{Port = 51820; Name = "WireGuard"; Protocol = "UDP"},
-            @{Port = 1723; Name = "PPTP"; Protocol = "TCP"},
-            @{Port = 500; Name = "IKE"; Protocol = "UDP"},
-            @{Port = 4500; Name = "IPSec-NAT"; Protocol = "UDP"}
-        )
-        
-        foreach ($vpn in $vpnPorts) {
-            New-NetFirewallRule -DisplayName "$script:RulePrefix-Block-VPN-$($vpn.Name)" `
+        foreach ($vpn in @($vpnPorts)) {
+            $vpnProtocol = ([string]$vpn.Protocol).Trim().ToUpperInvariant()
+            $vpnPort = [int]$vpn.Port
+            $vpnName = [string]$vpn.Name
+
+            if ($vpnProtocol -notin @('TCP', 'UDP')) {
+                Write-OpenPathLog "Skipping invalid VPN protocol in rule: $vpnProtocol" -Level WARN
+                continue
+            }
+
+            if ($vpnPort -lt 1 -or $vpnPort -gt 65535) {
+                Write-OpenPathLog "Skipping invalid VPN port in rule: $vpnPort" -Level WARN
+                continue
+            }
+
+            if (-not $vpnName) {
+                $vpnName = "VPN-$vpnProtocol-$vpnPort"
+            }
+
+            New-NetFirewallRule -DisplayName "$script:RulePrefix-Block-VPN-$vpnName" `
                 -Direction Outbound `
-                -Protocol $vpn.Protocol `
-                -RemotePort $vpn.Port `
+                -Protocol $vpnProtocol `
+                -RemotePort $vpnPort `
                 -Action Block `
                 -Profile Any `
-                -Description "Block $($vpn.Name) VPN traffic" | Out-Null
+                -Description "Block $vpnName VPN traffic" | Out-Null
         }
         
         # 6. Block Tor ports
-        $torPorts = @(9001, 9030, 9050, 9051, 9150)
-        foreach ($port in $torPorts) {
+        foreach ($port in @($torPorts)) {
             New-NetFirewallRule -DisplayName "$script:RulePrefix-Block-Tor-$port" `
                 -Direction Outbound `
                 -Protocol TCP `
@@ -303,6 +429,9 @@ function Enable-OpenPathFirewall {
 
 # Export module members
 Export-ModuleMember -Function @(
+    'Get-DefaultDohResolverIps',
+    'Get-DefaultVpnBlockRules',
+    'Get-DefaultTorBlockPorts',
     'Set-OpenPathFirewall',
     'Remove-OpenPathFirewall',
     'Test-FirewallActive',

@@ -331,56 +331,12 @@ EOF
 report_health_to_api() {
     local status="$1"
     local actions="$2"
-
-    # Read API URL from config
-    local api_url_file="$CONFIG_DIR/health-api-url.conf"
-    local shared_secret_file="$CONFIG_DIR/health-api-secret.conf"
-
-    if [ ! -f "$api_url_file" ]; then
-        log_debug "[WATCHDOG] No health API configured (create $api_url_file)"
-        return 0
-    fi
-
-    local api_url
-    api_url=$(cat "$api_url_file")
-    local shared_secret=""
-    [ -f "$shared_secret_file" ] && shared_secret=$(cat "$shared_secret_file")
-
-    local hostname
-    hostname=$(hostname)
-
-    # Build tRPC payload using python3 for safe JSON escaping
     local dnsmasq_running dns_resolving fail_count
     dnsmasq_running=$(check_dnsmasq_running && echo "true" || echo "false")
     dns_resolving=$(check_dns_resolving && echo "true" || echo "false")
     fail_count=$(get_fail_count)
 
-    local payload
-    payload=$(HN="$hostname" ST="$status" DR="$dnsmasq_running" DRE="$dns_resolving" \
-        FC="$fail_count" AC="$actions" VER="${VERSION:-1.0.4}" python3 -c '
-import json, os
-print(json.dumps({"json": {
-    "hostname": os.environ["HN"],
-    "status": os.environ["ST"],
-    "dnsmasqRunning": os.environ["DR"] == "true",
-    "dnsResolving": os.environ["DRE"] == "true",
-    "failCount": int(os.environ["FC"]),
-    "actions": os.environ["AC"],
-    "version": os.environ["VER"]
-}}))')
-
-    # Send report to tRPC endpoint (fire and forget, don't block watchdog)
-    # Build curl command with optional auth header
-    if [ -n "$shared_secret" ]; then
-        timeout 5 curl -s -X POST "$api_url/trpc/healthReports.submit" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $shared_secret" \
-            -d "$payload" >/dev/null 2>&1 &
-    else
-        timeout 5 curl -s -X POST "$api_url/trpc/healthReports.submit" \
-            -H "Content-Type: application/json" \
-            -d "$payload" >/dev/null 2>&1 &
-    fi
+    send_health_report_to_api "$status" "$actions" "$dnsmasq_running" "$dns_resolving" "$fail_count" "${VERSION:-1.0.4}"
 }
 
 # Attempt rollback before entering fail-open mode

@@ -326,6 +326,69 @@ print(json.dumps({
     fi
 }
 
+# Send health report to central API (tRPC)
+# Args:
+#   $1 = status (HEALTHY, DEGRADED, CRITICAL, FAIL_OPEN, STALE_FAILSAFE, TAMPERED)
+#   $2 = actions (short reason codes)
+#   $3 = dnsmasq_running ("true"|"false")
+#   $4 = dns_resolving ("true"|"false")
+#   $5 = fail_count (integer)
+#   $6 = version (optional)
+# Returns: 0 always (fire-and-forget, non-blocking)
+send_health_report_to_api() {
+    local status="$1"
+    local actions="$2"
+    local dnsmasq_running="${3:-false}"
+    local dns_resolving="${4:-false}"
+    local fail_count="${5:-0}"
+    local version="${6:-${VERSION:-unknown}}"
+
+    if [ ! -f "$HEALTH_API_URL_CONF" ]; then
+        log_debug "[HEALTH] No health API configured (create $HEALTH_API_URL_CONF)"
+        return 0
+    fi
+
+    local api_url
+    api_url=$(cat "$HEALTH_API_URL_CONF" 2>/dev/null)
+    if [ -z "$api_url" ]; then
+        log_warn "[HEALTH] Health API URL file is empty: $HEALTH_API_URL_CONF"
+        return 0
+    fi
+
+    local shared_secret=""
+    [ -f "$HEALTH_API_SECRET_CONF" ] && shared_secret=$(cat "$HEALTH_API_SECRET_CONF" 2>/dev/null)
+
+    local hostname
+    hostname=$(hostname)
+
+    local payload
+    payload=$(HN="$hostname" ST="$status" DR="$dnsmasq_running" DRE="$dns_resolving" \
+        FC="$fail_count" AC="$actions" VER="$version" python3 -c '
+import json, os
+print(json.dumps({"json": {
+    "hostname": os.environ["HN"],
+    "status": os.environ["ST"],
+    "dnsmasqRunning": os.environ["DR"] == "true",
+    "dnsResolving": os.environ["DRE"] == "true",
+    "failCount": int(os.environ["FC"]),
+    "actions": os.environ["AC"],
+    "version": os.environ["VER"]
+}}))')
+
+    if [ -n "$shared_secret" ]; then
+        timeout 5 curl -s -X POST "$api_url/trpc/healthReports.submit" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $shared_secret" \
+            -d "$payload" >/dev/null 2>&1 &
+    else
+        timeout 5 curl -s -X POST "$api_url/trpc/healthReports.submit" \
+            -H "Content-Type: application/json" \
+            -d "$payload" >/dev/null 2>&1 &
+    fi
+
+    return 0
+}
+
 # Critical files for integrity checks (single source of truth)
 # Used by install.sh, dnsmasq-watchdog.sh, and openpath-self-update.sh
 # shellcheck disable=SC2034  # Used by scripts that source common.sh

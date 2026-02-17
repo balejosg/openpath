@@ -205,6 +205,10 @@ foreach ($rootScript in $rootScripts) {
 
 Write-Host "  Módulos copiados" -ForegroundColor Green
 
+# Import modules
+Import-Module "$OpenPathRoot\lib\Common.psm1" -Force
+Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
+
 # Step 3: Create configuration
 Write-Host "[3/7] Creando configuración..." -ForegroundColor Yellow
 
@@ -229,6 +233,9 @@ $config = @{
     staleWhitelistMaxAgeHours = 24
     enableIntegrityChecks = $true
     enableDohIpBlocking = $true
+    dohResolverIps = @(Get-DefaultDohResolverIps)
+    vpnBlockRules = @(Get-DefaultVpnBlockRules)
+    torBlockPorts = @(Get-DefaultTorBlockPorts)
     enableCheckpointRollback = $true
     maxCheckpoints = 3
     sseReconnectMin = 5
@@ -248,10 +255,7 @@ if ($HealthApiSecret) {
 $config | ConvertTo-Json -Depth 10 | Set-Content "$OpenPathRoot\data\config.json" -Encoding UTF8
 Write-Host "  DNS upstream: $primaryDNS" -ForegroundColor Green
 
-# Import modules
-Import-Module "$OpenPathRoot\lib\Common.psm1" -Force
 Import-Module "$OpenPathRoot\lib\DNS.psm1" -Force
-Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
 Import-Module "$OpenPathRoot\lib\Browser.psm1" -Force
 Import-Module "$OpenPathRoot\lib\Services.psm1" -Force
 

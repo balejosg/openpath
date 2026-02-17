@@ -304,6 +304,37 @@ EOF
     grep -q "\-A OUTPUT \-p tcp \-\-dport 853 \-j DROP" "$iptables_log"
 }
 
+@test "activate_firewall uses configurable DoH resolver list" {
+    local iptables_log="$TEST_TMP_DIR/iptables.log"
+
+    iptables() {
+        echo "$*" >> "$iptables_log"
+        return 0
+    }
+    export -f iptables
+
+    ip() {
+        echo "default via 192.168.1.1 dev eth0"
+    }
+    export -f ip
+
+    export PRIMARY_DNS="8.8.8.8"
+    export DOH_RESOLVERS="4.4.4.4,5.5.5.5"
+
+    source "$PROJECT_DIR/linux/lib/firewall.sh"
+
+    # Override save_firewall_rules and verify_firewall_rules AFTER sourcing
+    save_firewall_rules() { return 0; }
+    verify_firewall_rules() { return 0; }
+
+    activate_firewall
+
+    grep -q "\-d 4.4.4.4 \-p tcp \-\-dport 443 \-j DROP" "$iptables_log"
+    grep -q "\-d 4.4.4.4 \-p udp \-\-dport 443 \-j DROP" "$iptables_log"
+    grep -q "\-d 5.5.5.5 \-p tcp \-\-dport 443 \-j DROP" "$iptables_log"
+    grep -q "\-d 5.5.5.5 \-p udp \-\-dport 443 \-j DROP" "$iptables_log"
+}
+
 @test "activate_firewall adds VPN blocking rules" {
     local iptables_log="$TEST_TMP_DIR/iptables.log"
 
@@ -361,6 +392,64 @@ EOF
     # Check Tor blocking rules
     grep -q "\-\-dport 9001 \-j DROP" "$iptables_log"
     grep -q "\-\-dport 9030 \-j DROP" "$iptables_log"
+}
+
+@test "activate_firewall uses configurable VPN block rules" {
+    local iptables_log="$TEST_TMP_DIR/iptables.log"
+
+    iptables() {
+        echo "$*" >> "$iptables_log"
+        return 0
+    }
+    export -f iptables
+
+    ip() {
+        echo "default via 192.168.1.1 dev eth0"
+    }
+    export -f ip
+
+    export PRIMARY_DNS="8.8.8.8"
+    export VPN_BLOCK_RULES="tcp:9443:TestVPN,udp:5555:TestTunnel"
+
+    source "$PROJECT_DIR/linux/lib/firewall.sh"
+
+    # Override save_firewall_rules and verify_firewall_rules AFTER sourcing
+    save_firewall_rules() { return 0; }
+    verify_firewall_rules() { return 0; }
+
+    activate_firewall
+
+    grep -q "\-p tcp \-\-dport 9443 \-j DROP" "$iptables_log"
+    grep -q "\-p udp \-\-dport 5555 \-j DROP" "$iptables_log"
+}
+
+@test "activate_firewall uses configurable Tor block ports" {
+    local iptables_log="$TEST_TMP_DIR/iptables.log"
+
+    iptables() {
+        echo "$*" >> "$iptables_log"
+        return 0
+    }
+    export -f iptables
+
+    ip() {
+        echo "default via 192.168.1.1 dev eth0"
+    }
+    export -f ip
+
+    export PRIMARY_DNS="8.8.8.8"
+    export TOR_BLOCK_PORTS="10001,10002"
+
+    source "$PROJECT_DIR/linux/lib/firewall.sh"
+
+    # Override save_firewall_rules and verify_firewall_rules AFTER sourcing
+    save_firewall_rules() { return 0; }
+    verify_firewall_rules() { return 0; }
+
+    activate_firewall
+
+    grep -q "\-p tcp \-\-dport 10001 \-j DROP" "$iptables_log"
+    grep -q "\-p tcp \-\-dport 10002 \-j DROP" "$iptables_log"
 }
 
 @test "activate_firewall allows localhost DNS" {

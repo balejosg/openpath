@@ -12,6 +12,7 @@ $script:LogPath = "$script:OpenPathRoot\data\logs\openpath.log"
 $script:IntegrityBaselinePath = "$script:OpenPathRoot\data\integrity-baseline.json"
 $script:IntegrityBackupPath = "$script:OpenPathRoot\data\integrity-backup"
 $script:CheckpointPath = "$script:OpenPathRoot\data\checkpoints"
+$script:DomainPattern = '^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$'
 
 function Test-AdminPrivileges {
     <#
@@ -143,6 +144,99 @@ function Get-OpenPathFileAgeHours {
     }
 }
 
+function Get-HostFromUrl {
+    <#
+    .SYNOPSIS
+        Returns host component from a URL string
+    #>
+    param(
+        [string]$Url
+    )
+
+    if (-not $Url) {
+        return $null
+    }
+
+    try {
+        return ([System.Uri]$Url).Host
+    }
+    catch {
+        return $null
+    }
+}
+
+function Test-OpenPathDomainFormat {
+    <#
+    .SYNOPSIS
+        Validates a domain using OpenPath's shared allowlist domain format
+    #>
+    param(
+        [string]$Domain
+    )
+
+    if (-not $Domain) {
+        return $false
+    }
+
+    return ($Domain.Trim() -match $script:DomainPattern)
+}
+
+function Get-OpenPathRuntimeHealth {
+    <#
+    .SYNOPSIS
+        Returns current DNS runtime health status
+    .OUTPUTS
+        PSCustomObject with DnsServiceRunning and DnsResolving booleans
+    #>
+    $acrylicRunning = $false
+    $dnsResolving = $false
+
+    try {
+        $acrylicService = Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1
+        $acrylicRunning = [bool]($acrylicService -and $acrylicService.Status -eq 'Running')
+    }
+    catch {
+        $acrylicRunning = $false
+    }
+
+    if (Get-Command -Name 'Test-DNSResolution' -ErrorAction SilentlyContinue) {
+        try {
+            $dnsResolving = [bool](Test-DNSResolution -Domain 'google.com')
+        }
+        catch {
+            $dnsResolving = $false
+        }
+    }
+
+    return [PSCustomObject]@{
+        DnsServiceRunning = [bool]$acrylicRunning
+        DnsResolving = [bool]$dnsResolving
+    }
+}
+
+function Get-ValidWhitelistDomainsFromFile {
+    <#
+    .SYNOPSIS
+        Returns syntactically valid domains from a whitelist file
+    .PARAMETER Path
+        Full path to whitelist file
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        return @()
+    }
+
+    return @(
+        Get-Content $Path -ErrorAction SilentlyContinue |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { Test-OpenPathDomainFormat -Domain $_ }
+    )
+}
+
 function Save-OpenPathWhitelistCheckpoint {
     <#
     .SYNOPSIS
@@ -260,6 +354,72 @@ function Get-OpenPathLatestCheckpoint {
         Path = $latest.FullName
         WhitelistPath = $checkpointWhitelist
         Metadata = $metadata
+    }
+}
+
+function Restore-OpenPathLatestCheckpoint {
+    <#
+    .SYNOPSIS
+        Restores the latest whitelist checkpoint and reapplies DNS enforcement state
+    .PARAMETER Config
+        OpenPath config object with enableFirewall/primaryDNS settings
+    .PARAMETER WhitelistPath
+        Destination whitelist path to restore into
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [PSCustomObject]$Config,
+
+        [Parameter(Mandatory = $true)]
+        [string]$WhitelistPath
+    )
+
+    $result = [ordered]@{
+        Success = $false
+        CheckpointPath = $null
+        DomainCount = 0
+        Error = $null
+    }
+
+    $checkpoint = Get-OpenPathLatestCheckpoint
+    if (-not $checkpoint) {
+        $result.Error = 'No checkpoint available'
+        return [PSCustomObject]$result
+    }
+
+    if (-not $PSCmdlet.ShouldProcess($WhitelistPath, "Restore checkpoint from $($checkpoint.Path)")) {
+        $result.Error = 'Operation cancelled by WhatIf/Confirm'
+        return [PSCustomObject]$result
+    }
+
+    try {
+        Copy-Item $checkpoint.WhitelistPath $WhitelistPath -Force
+
+        $domains = Get-ValidWhitelistDomainsFromFile -Path $WhitelistPath
+        if ($domains.Count -lt 1) {
+            $result.Error = 'Checkpoint restore aborted: no valid domains in checkpoint whitelist'
+            return [PSCustomObject]$result
+        }
+
+        Update-AcrylicHost -WhitelistedDomains $domains -BlockedSubdomains @() | Out-Null
+        Restart-AcrylicService | Out-Null
+
+        if ($Config.enableFirewall) {
+            $acrylicPath = Get-AcrylicPath
+            Set-OpenPathFirewall -UpstreamDNS $Config.primaryDNS -AcrylicPath $acrylicPath | Out-Null
+        }
+
+        Set-LocalDNS
+
+        $result.Success = $true
+        $result.CheckpointPath = $checkpoint.Path
+        $result.DomainCount = $domains.Count
+        return [PSCustomObject]$result
+    }
+    catch {
+        $result.Error = "Checkpoint restore failed: $_"
+        return [PSCustomObject]$result
     }
 }
 
@@ -602,7 +762,7 @@ function Get-OpenPathFromUrl {
     }
 
     # Validate that the downloaded content looks like a real whitelist
-    $validDomains = $result.Whitelist | Where-Object { $_ -match '^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$' }
+    $validDomains = $result.Whitelist | Where-Object { Test-OpenPathDomainFormat -Domain $_ }
     $minRequiredDomains = 3
     if ($validDomains.Count -lt $minRequiredDomains) {
         Write-OpenPathLog "Downloaded whitelist appears invalid ($($validDomains.Count) valid domains, minimum $minRequiredDomains required)" -Level ERROR
@@ -721,8 +881,13 @@ Export-ModuleMember -Function @(
     'Get-OpenPathConfig',
     'Set-OpenPathConfig',
     'Get-OpenPathFileAgeHours',
+    'Get-HostFromUrl',
+    'Test-OpenPathDomainFormat',
+    'Get-OpenPathRuntimeHealth',
+    'Get-ValidWhitelistDomainsFromFile',
     'Save-OpenPathWhitelistCheckpoint',
     'Get-OpenPathLatestCheckpoint',
+    'Restore-OpenPathLatestCheckpoint',
     'Get-OpenPathCriticalFiles',
     'Save-OpenPathIntegrityBackup',
     'New-OpenPathIntegrityBaseline',

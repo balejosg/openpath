@@ -20,6 +20,55 @@ function Test-IsAdmin {
     return $false
 }
 
+function Assert-ContentContainsAll {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Content,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$Needles
+    )
+
+    foreach ($needle in $Needles) {
+        $Content.Contains($needle) | Should -BeTrue -Because "Expected content to include '$needle'"
+    }
+}
+
+function Initialize-FirewallRuleCaptureMocks {
+    $script:createdFirewallRules = @()
+
+    Mock Test-AdminPrivileges { $true } -ModuleName Firewall
+    Mock Remove-OpenPathFirewall { $true } -ModuleName Firewall
+
+    Mock New-NetFirewallRule {
+        param(
+            [string]$DisplayName,
+            [string]$Direction,
+            [string]$Protocol,
+            [object]$RemoteAddress,
+            [object]$RemotePort,
+            [string]$Action,
+            [string]$Profile,
+            [string]$Description,
+            [string]$Program
+        )
+
+        $script:createdFirewallRules += [PSCustomObject]@{
+            DisplayName = $DisplayName
+            Direction = $Direction
+            Protocol = $Protocol
+            RemoteAddress = [string]$RemoteAddress
+            RemotePort = [string]$RemotePort
+            Action = $Action
+            Program = $Program
+        }
+
+        return [PSCustomObject]@{ DisplayName = $DisplayName }
+    } -ModuleName Firewall
+
+    Mock Test-Path { $false } -ModuleName Firewall -ParameterFilter { $Path -like '*AcrylicService.exe' }
+}
+
 # Import modules at script scope for discovery-time availability
 $script:modulePath = Join-Path $PSScriptRoot ".." "lib"
 Import-Module "$script:modulePath\Common.psm1" -Force -ErrorAction SilentlyContinue
@@ -70,6 +119,82 @@ Describe "Common Module" {
             $dns = Get-PrimaryDNS
             $dns | Should -Not -BeNullOrEmpty
             $dns | Should -Match '^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'
+        }
+    }
+
+    Context "Get-OpenPathRuntimeHealth" {
+        It "Returns runtime health object with expected boolean properties" {
+            $health = Get-OpenPathRuntimeHealth
+
+            $health | Should -Not -BeNullOrEmpty
+            $health.PSObject.Properties.Name | Should -Contain 'DnsServiceRunning'
+            $health.PSObject.Properties.Name | Should -Contain 'DnsResolving'
+            $health.DnsServiceRunning | Should -BeOfType [bool]
+            $health.DnsResolving | Should -BeOfType [bool]
+        }
+    }
+
+    Context "Get-ValidWhitelistDomainsFromFile" {
+        It "Returns valid domains and ignores invalid entries" {
+            $tempFile = Join-Path $env:TEMP ("openpath-domains-" + [Guid]::NewGuid().ToString() + ".txt")
+
+            try {
+                @(
+                    'google.com',
+                    'example.org',
+                    'not-a-domain',
+                    'bad..domain.com',
+                    '# comment',
+                    ''
+                ) | Set-Content $tempFile -Encoding UTF8
+
+                $domains = Get-ValidWhitelistDomainsFromFile -Path $tempFile
+
+                $domains | Should -Contain 'google.com'
+                $domains | Should -Contain 'example.org'
+                $domains | Should -Not -Contain 'not-a-domain'
+                $domains | Should -Not -Contain 'bad..domain.com'
+            }
+            finally {
+                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        It "Returns an empty array when file does not exist" {
+            $domains = Get-ValidWhitelistDomainsFromFile -Path (Join-Path $env:TEMP ([Guid]::NewGuid().ToString() + '.txt'))
+            @($domains).Count | Should -Be 0
+        }
+    }
+
+    Context "Get-HostFromUrl" {
+        It "Returns host for a valid URL" {
+            $host = Get-HostFromUrl -Url 'https://api.example.com/path?x=1'
+            $host | Should -Be 'api.example.com'
+        }
+
+        It "Returns null for invalid URL" {
+            $host = Get-HostFromUrl -Url 'not-a-valid-url'
+            $host | Should -BeNullOrEmpty
+        }
+
+        It "Returns null for empty URL" {
+            $host = Get-HostFromUrl -Url ''
+            $host | Should -BeNullOrEmpty
+        }
+    }
+
+    Context "Test-OpenPathDomainFormat" {
+        It "Accepts syntactically valid domains" {
+            (Test-OpenPathDomainFormat -Domain 'google.com') | Should -BeTrue
+            (Test-OpenPathDomainFormat -Domain 'sub.example.org') | Should -BeTrue
+        }
+
+        It "Rejects invalid domain values" {
+            (Test-OpenPathDomainFormat -Domain 'invalid domain') | Should -BeFalse
+            (Test-OpenPathDomainFormat -Domain 'bad..domain.com') | Should -BeFalse
+            (Test-OpenPathDomainFormat -Domain '-bad.example.com') | Should -BeFalse
+            (Test-OpenPathDomainFormat -Domain '') | Should -BeFalse
+            (Test-OpenPathDomainFormat -Domain $null) | Should -BeFalse
         }
     }
 
@@ -180,6 +305,146 @@ Describe "Common Module - Mocked Tests" {
             $dns | Should -Be "8.8.8.8"
         }
     }
+
+    Context "Send-OpenPathHealthReport" {
+        It "Posts health reports to the tRPC endpoint with expected payload fields" {
+            $script:capturedUri = $null
+            $script:capturedHeaders = $null
+            $script:capturedBody = $null
+
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    apiUrl = 'https://api.example.com'
+                    healthApiSecret = 'shared-secret'
+                    version = '4.1.0'
+                }
+            } -ModuleName Common
+
+            Mock Invoke-RestMethod {
+                param(
+                    [string]$Uri,
+                    [string]$Method,
+                    [hashtable]$Headers,
+                    [string]$Body
+                )
+
+                $script:capturedUri = $Uri
+                $script:capturedHeaders = $Headers
+                $script:capturedBody = $Body
+
+                return @{ result = @{ data = @{ json = @{ ok = $true } } } }
+            } -ModuleName Common
+
+            $result = Send-OpenPathHealthReport -Status 'DEGRADED' -DnsServiceRunning:$true -DnsResolving:$false -FailCount 2 -Actions 'watchdog_repair' -Version '4.1.0'
+            $result | Should -BeTrue
+
+            $script:capturedUri | Should -Be 'https://api.example.com/trpc/healthReports.submit'
+            $script:capturedHeaders['Authorization'] | Should -Be 'Bearer shared-secret'
+
+            $payload = $script:capturedBody | ConvertFrom-Json
+            $payload.json.status | Should -Be 'DEGRADED'
+            $payload.json.hostname | Should -Not -BeNullOrEmpty
+            $payload.json.dnsmasqRunning | Should -BeTrue
+            $payload.json.dnsResolving | Should -BeFalse
+            $payload.json.failCount | Should -Be 2
+            $payload.json.actions | Should -Be 'watchdog_repair'
+            $payload.json.version | Should -Be '4.1.0'
+        }
+
+        It "Returns false when apiUrl is missing in config" {
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    version = '4.1.0'
+                }
+            } -ModuleName Common
+
+            Mock Invoke-RestMethod {
+                throw 'Invoke-RestMethod should not be called when apiUrl is missing'
+            } -ModuleName Common
+
+            $result = Send-OpenPathHealthReport -Status 'HEALTHY'
+            $result | Should -BeFalse
+        }
+    }
+
+    Context "Restore-OpenPathLatestCheckpoint" {
+        It "Restores checkpoint whitelist and reapplies DNS controls" {
+            $tempDir = Join-Path $env:TEMP ("openpath-checkpoint-" + [Guid]::NewGuid().ToString())
+            $checkpointDir = Join-Path $tempDir 'checkpoint-001'
+            $checkpointWhitelistPath = Join-Path $checkpointDir 'whitelist.txt'
+            $targetWhitelistPath = Join-Path $tempDir 'whitelist.txt'
+
+            try {
+                New-Item -ItemType Directory -Path $checkpointDir -Force | Out-Null
+                @('google.com', 'example.org') | Set-Content $checkpointWhitelistPath -Encoding UTF8
+
+                Mock Get-OpenPathLatestCheckpoint {
+                    [PSCustomObject]@{
+                        Path = $checkpointDir
+                        WhitelistPath = $checkpointWhitelistPath
+                        Metadata = $null
+                    }
+                } -ModuleName Common
+
+                Mock Update-AcrylicHost { $true } -ModuleName Common
+                Mock Restart-AcrylicService { $true } -ModuleName Common
+                Mock Get-AcrylicPath { 'C:\OpenPath\Acrylic DNS Proxy' } -ModuleName Common
+                Mock Set-OpenPathFirewall { $true } -ModuleName Common
+                Mock Set-LocalDNS { } -ModuleName Common
+
+                $config = [PSCustomObject]@{
+                    enableFirewall = $true
+                    primaryDNS = '8.8.8.8'
+                }
+
+                $result = Restore-OpenPathLatestCheckpoint -Config $config -WhitelistPath $targetWhitelistPath
+
+                $result.Success | Should -BeTrue
+                $result.DomainCount | Should -Be 2
+                $result.CheckpointPath | Should -Be $checkpointDir
+
+                $restoredContent = Get-Content $targetWhitelistPath -Raw
+                $restoredContent.Contains('google.com') | Should -BeTrue
+                $restoredContent.Contains('example.org') | Should -BeTrue
+            }
+            finally {
+                Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+        It "Returns failure when checkpoint whitelist has no valid domains" {
+            $tempDir = Join-Path $env:TEMP ("openpath-checkpoint-invalid-" + [Guid]::NewGuid().ToString())
+            $checkpointDir = Join-Path $tempDir 'checkpoint-001'
+            $checkpointWhitelistPath = Join-Path $checkpointDir 'whitelist.txt'
+            $targetWhitelistPath = Join-Path $tempDir 'whitelist.txt'
+
+            try {
+                New-Item -ItemType Directory -Path $checkpointDir -Force | Out-Null
+                @('not-a-domain', '# comment') | Set-Content $checkpointWhitelistPath -Encoding UTF8
+
+                Mock Get-OpenPathLatestCheckpoint {
+                    [PSCustomObject]@{
+                        Path = $checkpointDir
+                        WhitelistPath = $checkpointWhitelistPath
+                        Metadata = $null
+                    }
+                } -ModuleName Common
+
+                $config = [PSCustomObject]@{
+                    enableFirewall = $false
+                    primaryDNS = '8.8.8.8'
+                }
+
+                $result = Restore-OpenPathLatestCheckpoint -Config $config -WhitelistPath $targetWhitelistPath
+
+                $result.Success | Should -BeFalse
+                $result.Error | Should -Contain 'no valid domains'
+            }
+            finally {
+                Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
 }
 
 Describe "DNS Module" {
@@ -217,8 +482,11 @@ Describe "DNS Module" {
         It "Update-AcrylicHost code enforces a max domains limit" -Skip:(-not (Test-FunctionExists 'Update-AcrylicHost')) {
             $modulePath = Join-Path $PSScriptRoot ".." "lib" "DNS.psm1"
             $content = Get-Content $modulePath -Raw
-            $content | Should -Match 'maxDomains'
-            $content | Should -Match 'Truncating whitelist'
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'maxDomains',
+                'Truncating whitelist'
+            )
         }
     }
 }
@@ -247,15 +515,168 @@ Describe "Firewall Module" {
     }
 
     Context "DoH egress blocking" {
-        It "Firewall module blocks known DoH resolver IPs on TCP/UDP 443" {
-            $modulePath = Join-Path $PSScriptRoot ".." "lib" "Firewall.psm1"
-            $content = Get-Content $modulePath -Raw
+        It "Exposes a default DoH resolver catalog" {
+            $resolvers = Get-DefaultDohResolverIps
 
-            $content | Should -Match 'enableDohIpBlocking'
-            $content | Should -Match 'Block-DoH'
-            $content | Should -Match 'RemotePort 443'
-            $content | Should -Match '8\.8\.8\.8'
-            $content | Should -Match '1\.1\.1\.1'
+            $resolvers | Should -Not -BeNullOrEmpty
+            @($resolvers).Count | Should -BeGreaterThan 0
+            @($resolvers) | Should -Contain '8.8.8.8'
+            @($resolvers) | Should -Contain '1.1.1.1'
+
+            foreach ($resolver in @($resolvers)) {
+                $resolver | Should -Match '^\d{1,3}(?:\.\d{1,3}){3}$'
+            }
+        }
+
+        BeforeEach {
+            Initialize-FirewallRuleCaptureMocks
+        }
+
+        It "Creates TCP and UDP 443 DoH block rules from configured resolver list" {
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    enableDohIpBlocking = $true
+                    dohResolverIps = @('4.4.4.4', '5.5.5.5')
+                }
+            } -ModuleName Firewall
+
+            $result = Set-OpenPathFirewall -UpstreamDNS '8.8.8.8' -AcrylicPath 'C:\OpenPath\Acrylic DNS Proxy'
+            $result | Should -BeTrue
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.RemoteAddress -eq '4.4.4.4' -and $_.RemotePort -eq '443' -and $_.Protocol -eq 'TCP'
+                }).Count | Should -Be 1
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.RemoteAddress -eq '4.4.4.4' -and $_.RemotePort -eq '443' -and $_.Protocol -eq 'UDP'
+                }).Count | Should -Be 1
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.RemoteAddress -eq '5.5.5.5' -and $_.RemotePort -eq '443' -and $_.Protocol -eq 'TCP'
+                }).Count | Should -Be 1
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.RemoteAddress -eq '5.5.5.5' -and $_.RemotePort -eq '443' -and $_.Protocol -eq 'UDP'
+                }).Count | Should -Be 1
+        }
+
+        It "Skips upstream DNS and invalid DoH resolver entries" {
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    enableDohIpBlocking = $true
+                    dohResolverIps = @('8.8.8.8', 'invalid-ip', '6.6.6.6')
+                }
+            } -ModuleName Firewall
+
+            $result = Set-OpenPathFirewall -UpstreamDNS '8.8.8.8' -AcrylicPath 'C:\OpenPath\Acrylic DNS Proxy'
+            $result | Should -BeTrue
+
+            ($script:createdFirewallRules | Where-Object { $_.RemoteAddress -eq '8.8.8.8' -and $_.RemotePort -eq '443' }).Count | Should -Be 0
+            ($script:createdFirewallRules | Where-Object { $_.RemoteAddress -eq 'invalid-ip' -and $_.RemotePort -eq '443' }).Count | Should -Be 0
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.RemoteAddress -eq '6.6.6.6' -and $_.RemotePort -eq '443' -and $_.Protocol -eq 'TCP'
+                }).Count | Should -Be 1
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.RemoteAddress -eq '6.6.6.6' -and $_.RemotePort -eq '443' -and $_.Protocol -eq 'UDP'
+                }).Count | Should -Be 1
+        }
+
+        It "Does not create DoH 443 rules when DoH IP blocking is disabled" {
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    enableDohIpBlocking = $false
+                    dohResolverIps = @('4.4.4.4', '5.5.5.5')
+                }
+            } -ModuleName Firewall
+
+            $result = Set-OpenPathFirewall -UpstreamDNS '8.8.8.8' -AcrylicPath 'C:\OpenPath\Acrylic DNS Proxy'
+            $result | Should -BeTrue
+
+            ($script:createdFirewallRules | Where-Object { $_.DisplayName -like '*Block-DoH*' -and $_.RemotePort -eq '443' }).Count | Should -Be 0
+        }
+    }
+
+    Context "VPN and Tor egress blocking" {
+        It "Exposes default VPN and Tor block catalogs" {
+            $vpnRules = @((Get-DefaultVpnBlockRules))
+            $torPorts = @((Get-DefaultTorBlockPorts))
+
+            $vpnRules.Count | Should -BeGreaterThan 0
+            $torPorts.Count | Should -BeGreaterThan 0
+
+            ($vpnRules | Where-Object { $_.Protocol -eq 'UDP' -and $_.Port -eq 1194 }).Count | Should -Be 1
+            ($vpnRules | Where-Object { $_.Protocol -eq 'TCP' -and $_.Port -eq 1723 }).Count | Should -Be 1
+            @($torPorts) | Should -Contain 9001
+            @($torPorts) | Should -Contain 9030
+        }
+
+        BeforeEach {
+            Initialize-FirewallRuleCaptureMocks
+        }
+
+        It "Applies custom VPN and Tor block configuration" {
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    enableDohIpBlocking = $false
+                    vpnBlockRules = @(
+                        [PSCustomObject]@{ Protocol = 'TCP'; Port = 9443; Name = 'TestVPN-TCP' },
+                        [PSCustomObject]@{ Protocol = 'UDP'; Port = 5555; Name = 'TestVPN-UDP' }
+                    )
+                    torBlockPorts = @(10001, 10002)
+                }
+            } -ModuleName Firewall
+
+            $result = Set-OpenPathFirewall -UpstreamDNS '8.8.8.8' -AcrylicPath 'C:\OpenPath\Acrylic DNS Proxy'
+            $result | Should -BeTrue
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.DisplayName -like '*Block-VPN*' -and $_.Protocol -eq 'TCP' -and $_.RemotePort -eq '9443'
+                }).Count | Should -Be 1
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.DisplayName -like '*Block-VPN*' -and $_.Protocol -eq 'UDP' -and $_.RemotePort -eq '5555'
+                }).Count | Should -Be 1
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.DisplayName -like '*Block-Tor-10001' -and $_.Protocol -eq 'TCP' -and $_.RemotePort -eq '10001'
+                }).Count | Should -Be 1
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.DisplayName -like '*Block-Tor-10002' -and $_.Protocol -eq 'TCP' -and $_.RemotePort -eq '10002'
+                }).Count | Should -Be 1
+
+            ($script:createdFirewallRules | Where-Object { $_.DisplayName -like '*Block-Tor-9001' }).Count | Should -Be 0
+        }
+
+        It "Skips invalid VPN/Tor custom entries and keeps valid ones" {
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    enableDohIpBlocking = $false
+                    vpnBlockRules = @('udp:6000:GoodRule', 'bad-entry', 'tcp:notaport:BadRule', 'icmp:1200:InvalidProto')
+                    torBlockPorts = @('9050', 'bad', 70000)
+                }
+            } -ModuleName Firewall
+
+            $result = Set-OpenPathFirewall -UpstreamDNS '8.8.8.8' -AcrylicPath 'C:\OpenPath\Acrylic DNS Proxy'
+            $result | Should -BeTrue
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.DisplayName -like '*Block-VPN*' -and $_.Protocol -eq 'UDP' -and $_.RemotePort -eq '6000'
+                }).Count | Should -Be 1
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.DisplayName -like '*Block-VPN*' -and $_.RemotePort -eq '1200'
+                }).Count | Should -Be 0
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.DisplayName -like '*Block-Tor-9050' -and $_.Protocol -eq 'TCP' -and $_.RemotePort -eq '9050'
+                }).Count | Should -Be 1
+
+            ($script:createdFirewallRules | Where-Object {
+                    $_.DisplayName -like '*Block-Tor-70000'
+                }).Count | Should -Be 0
         }
     }
 }
@@ -280,18 +701,76 @@ Describe "Browser Module" {
     }
 
     Context "DoH blocking" {
-        It "Firefox policy includes DNSOverHTTPS disabled and locked" {
-            $modulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
-            $content = Get-Content $modulePath -Raw
-            $content | Should -Match 'DNSOverHTTPS'
-            $content | Should -Match 'Locked\s*=\s*\$true'
+        It "Set-FirefoxPolicy writes DNSOverHTTPS disabled and locked" {
+            $script:capturedFirefoxPolicyJson = $null
+
+            Mock Test-Path {
+                param([string]$Path)
+                if ($Path -like '*firefox.exe') {
+                    return $true
+                }
+                return $false
+            } -ModuleName Browser
+
+            Mock New-Item {
+                [PSCustomObject]@{ FullName = 'mock-path' }
+            } -ModuleName Browser
+
+            Mock Set-Content {
+                param(
+                    [string]$Path,
+                    [string]$Value,
+                    [string]$Encoding
+                )
+
+                if ($Path -like '*policies.json') {
+                    $script:capturedFirefoxPolicyJson = $Value
+                }
+            } -ModuleName Browser
+
+            Mock Write-OpenPathLog { } -ModuleName Browser
+
+            $result = Set-FirefoxPolicy -BlockedPaths @()
+            $result | Should -BeTrue
+            $script:capturedFirefoxPolicyJson | Should -Not -BeNullOrEmpty
+
+            $policy = $script:capturedFirefoxPolicyJson | ConvertFrom-Json
+            $policy.policies.DNSOverHTTPS.Enabled | Should -BeFalse
+            $policy.policies.DNSOverHTTPS.Locked | Should -BeTrue
         }
 
-        It "Chrome/Edge policy includes DnsOverHttpsMode off" {
-            $modulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
-            $content = Get-Content $modulePath -Raw
-            $content | Should -Match 'DnsOverHttpsMode'
-            $content | Should -Match '"off"'
+        It "Set-ChromePolicy sets DnsOverHttpsMode to off for managed browsers" {
+            $script:capturedRegistryWrites = @()
+
+            Mock Test-Path { $false } -ModuleName Browser
+            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-reg-path' } } -ModuleName Browser
+            Mock Remove-Item { } -ModuleName Browser
+
+            Mock Set-ItemProperty {
+                param(
+                    [string]$Path,
+                    [object]$Name,
+                    [object]$Value,
+                    [string]$Type
+                )
+
+                $script:capturedRegistryWrites += [PSCustomObject]@{
+                    Path = $Path
+                    Name = [string]$Name
+                    Value = [string]$Value
+                    Type = $Type
+                }
+            } -ModuleName Browser
+
+            Mock Write-OpenPathLog { } -ModuleName Browser
+
+            $result = Set-ChromePolicy -BlockedPaths @()
+            $result | Should -BeTrue
+
+            $dohModeWrites = @($script:capturedRegistryWrites | Where-Object {
+                    $_.Name -eq 'DnsOverHttpsMode' -and $_.Value -eq 'off'
+                })
+            $dohModeWrites.Count | Should -BeGreaterThan 0
         }
     }
 }
@@ -338,11 +817,13 @@ Describe "SSE Listener" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Start-SSEListener.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'OpenPath-SSE-Update'
-            $content | Should -Match 'Get-Job\s+-Name\s+\$script:UpdateJobName'
-            $content | Should -Match 'State\s+-notin\s+@\(''Completed'',\s*''Failed'',\s*''Stopped''\)'
-            $content | Should -Match 'Start-Job\s+-ScriptBlock'
-            $content | Should -Match '-Name\s+\$script:UpdateJobName'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'OpenPath-SSE-Update',
+                'Get-Job -Name $script:UpdateJobName',
+                "State -notin @('Completed', 'Failed', 'Stopped')",
+                'Start-Job -ScriptBlock',
+                '-Name $script:UpdateJobName'
+            )
         }
     }
 }
@@ -360,15 +841,15 @@ Describe "Operational Command Script" {
             $scriptPath = Join-Path $PSScriptRoot ".." "OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'switch \(\$commandName\)'
-            $content | Should -Match "'status'"
-            $content | Should -Match "'update'"
-            $content | Should -Match "'health'"
-            $content | Should -Match "'enroll'"
-            $content | Should -Match "'rotate-token'"
-            $content | Should -Match "'restart'"
-            $content | Should -Match 'Show-OpenPathStatus'
-            $content | Should -Match 'Enroll-Machine\.ps1'
+            $content.Contains('switch ($commandName)') | Should -BeTrue
+            $content.Contains("'status'") | Should -BeTrue
+            $content.Contains("'update'") | Should -BeTrue
+            $content.Contains("'health'") | Should -BeTrue
+            $content.Contains("'enroll'") | Should -BeTrue
+            $content.Contains("'rotate-token'") | Should -BeTrue
+            $content.Contains("'restart'") | Should -BeTrue
+            $content.Contains('Show-OpenPathStatus') | Should -BeTrue
+            $content.Contains('Enroll-Machine.ps1') | Should -BeTrue
         }
     }
 }
@@ -379,9 +860,11 @@ Describe "Update Script" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match "System\.Threading\.Mutex"
-            $content | Should -Match "Global\\OpenPathUpdateLock"
-            $content | Should -Match "WaitOne\(0\)"
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'System.Threading.Mutex',
+                'Global\OpenPathUpdateLock',
+                'WaitOne(0)'
+            )
         }
     }
 
@@ -392,22 +875,30 @@ Describe "Update Script" {
             $content = Get-Content $scriptPath -Raw
             $commonContent = Get-Content $commonPath -Raw
 
-            $content | Should -Match 'whitelist\.backup\.txt'
-            $content | Should -Match 'Copy-Item.*\$whitelistPath.*\$backupPath'
-            $content | Should -Match 'Save-OpenPathWhitelistCheckpoint'
-            $content | Should -Match 'maxCheckpoints'
-            $commonContent | Should -Match 'Save-OpenPathWhitelistCheckpoint'
-            $commonContent | Should -Match 'Get-OpenPathLatestCheckpoint'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'whitelist.backup.txt',
+                'Copy-Item $whitelistPath $backupPath -Force',
+                'Save-OpenPathWhitelistCheckpoint',
+                'maxCheckpoints'
+            )
+
+            Assert-ContentContainsAll -Content $commonContent -Needles @(
+                'Save-OpenPathWhitelistCheckpoint',
+                'Get-OpenPathLatestCheckpoint',
+                'Restore-OpenPathLatestCheckpoint'
+            )
         }
 
         It "Restores checkpoint and falls back to backup on update failure" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'Restore-OpenPathCheckpoint'
-            $content | Should -Match 'Attempting checkpoint rollback'
-            $content | Should -Match 'Falling back to backup whitelist rollback'
-            $content | Should -Match 'Copy-Item.*\$backupPath.*\$whitelistPath'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Restore-OpenPathCheckpoint',
+                'Attempting checkpoint rollback',
+                'Falling back to backup whitelist rollback',
+                'Copy-Item $backupPath $whitelistPath -Force'
+            )
         }
     }
 
@@ -418,9 +909,9 @@ Describe "Update Script" {
             $updateContent = Get-Content $scriptPath -Raw
             $commonContent = Get-Content $commonPath -Raw
 
-            $updateContent | Should -Match 'Send-OpenPathHealthReport'
-            $commonContent | Should -Match '/trpc/healthReports\.submit'
-            $commonContent | Should -Match 'dnsmasqRunning'
+            $updateContent.Contains('Send-OpenPathHealthReport') | Should -BeTrue
+            $commonContent.Contains('/trpc/healthReports.submit') | Should -BeTrue
+            $commonContent.Contains('dnsmasqRunning') | Should -BeTrue
         }
     }
 
@@ -429,9 +920,11 @@ Describe "Update Script" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'staleWhitelistMaxAgeHours'
-            $content | Should -Match 'Enter-StaleWhitelistFailsafe'
-            $content | Should -Match 'STALE_FAILSAFE'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'staleWhitelistMaxAgeHours',
+                'Enter-StaleWhitelistFailsafe',
+                'STALE_FAILSAFE'
+            )
         }
     }
 }
@@ -442,8 +935,10 @@ Describe "Watchdog Script" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'OpenPath-SSE'
-            $content | Should -Match 'Start-ScheduledTask.*OpenPath-SSE'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'OpenPath-SSE',
+                'Start-ScheduledTask -TaskName "OpenPath-SSE"'
+            )
         }
     }
 
@@ -452,17 +947,22 @@ Describe "Watchdog Script" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'msftconnecttest\.com'
-            $content | Should -Match 'Captive portal detected'
-            $content | Should -Match 'Restore-OriginalDNS'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'msftconnecttest.com',
+                'Captive portal detected',
+                'Restore-OriginalDNS'
+            )
         }
 
         It "Restores DNS protection after captive portal is resolved" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'Captive portal resolved.*restoring DNS protection'
-            $content | Should -Match 'Set-LocalDNS'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Captive portal resolved',
+                'restoring DNS protection',
+                'Set-LocalDNS'
+            )
         }
     }
 
@@ -471,9 +971,11 @@ Describe "Watchdog Script" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'Test-OpenPathIntegrity'
-            $content | Should -Match 'Restore-OpenPathIntegrity'
-            $content | Should -Match 'TAMPERED'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Test-OpenPathIntegrity',
+                'Restore-OpenPathIntegrity',
+                'TAMPERED'
+            )
         }
     }
 
@@ -482,9 +984,11 @@ Describe "Watchdog Script" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'STALE_FAILSAFE'
-            $content | Should -Match 'CRITICAL'
-            $content | Should -Match 'Send-OpenPathHealthReport'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'STALE_FAILSAFE',
+                'CRITICAL',
+                'Send-OpenPathHealthReport'
+            )
         }
     }
 
@@ -493,9 +997,11 @@ Describe "Watchdog Script" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'enableCheckpointRollback'
-            $content | Should -Match 'Restore-CheckpointFromWatchdog'
-            $content | Should -Match 'Checkpoint rollback restored DNS state'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'enableCheckpointRollback',
+                'Restore-CheckpointFromWatchdog',
+                'Checkpoint rollback restored DNS state'
+            )
         }
     }
 }
@@ -506,9 +1012,11 @@ Describe "Installer" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'SetAccessRuleProtection'
-            $content | Should -Match 'NT AUTHORITY\\SYSTEM'
-            $content | Should -Match 'BUILTIN\\Administrators'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'SetAccessRuleProtection',
+                'NT AUTHORITY\SYSTEM',
+                'BUILTIN\Administrators'
+            )
         }
     }
 
@@ -517,8 +1025,10 @@ Describe "Installer" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'Modules not found'
-            $content | Should -Match 'Test-Path.*lib.*psm1'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Modules not found',
+                'Test-Path "$scriptDir\lib\*.psm1"'
+            )
         }
     }
 
@@ -527,8 +1037,17 @@ Describe "Installer" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'enableCheckpointRollback'
-            $content | Should -Match 'maxCheckpoints'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'enableCheckpointRollback',
+                'maxCheckpoints',
+                'enableDohIpBlocking',
+                'dohResolverIps',
+                'vpnBlockRules',
+                'torBlockPorts'
+            )
+            $content.Contains('Get-DefaultDohResolverIps') | Should -BeTrue
+            $content.Contains('Get-DefaultVpnBlockRules') | Should -BeTrue
+            $content.Contains('Get-DefaultTorBlockPorts') | Should -BeTrue
         }
     }
 
@@ -539,9 +1058,11 @@ Describe "Installer" {
             $content = Get-Content $scriptPath -Raw
 
             Test-Path $enrollScriptPath | Should -BeTrue
-            $content | Should -Match 'Enroll-Machine\.ps1'
-            $content | Should -Match 'SkipTokenValidation'
-            $content | Should -Match 'Machine registration completed'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Enroll-Machine.ps1',
+                'SkipTokenValidation',
+                'Machine registration completed'
+            )
         }
     }
 
@@ -550,7 +1071,7 @@ Describe "Installer" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match "'OpenPath\.ps1', 'Rotate-Token\.ps1'"
+            $content.Contains("'OpenPath.ps1', 'Rotate-Token.ps1'") | Should -BeTrue
         }
     }
 
@@ -559,9 +1080,11 @@ Describe "Installer" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
-            $content | Should -Match 'SkipPreflight'
-            $content | Should -Match 'Pre-Install-Validation\.ps1'
-            $content | Should -Match 'powershell\.exe\s+-NoProfile\s+-ExecutionPolicy\s+Bypass\s+-File'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'SkipPreflight',
+                'Pre-Install-Validation.ps1',
+                'powershell.exe -NoProfile -ExecutionPolicy Bypass -File'
+            )
         }
     }
 }
@@ -572,8 +1095,10 @@ Describe "Whitelist Validation" {
             $modulePath = Join-Path $PSScriptRoot ".." "lib" "Common.psm1"
             $content = Get-Content $modulePath -Raw
 
-            $content | Should -Match 'minRequiredDomains'
-            $content | Should -Match 'Invalid whitelist content'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'minRequiredDomains',
+                'Invalid whitelist content'
+            )
         }
     }
 }
@@ -584,9 +1109,11 @@ Describe "Log Rotation" {
             $modulePath = Join-Path $PSScriptRoot ".." "lib" "Common.psm1"
             $content = Get-Content $modulePath -Raw
 
-            $content | Should -Match 'MaxLogSizeBytes'
-            $content | Should -Match 'Move-Item.*archivePath'
-            $content | Should -Match 'Select-Object -Skip 5'
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'MaxLogSizeBytes',
+                'Move-Item $script:LogPath $archivePath',
+                'Select-Object -Skip 5'
+            )
         }
     }
 }

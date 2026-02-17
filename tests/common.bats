@@ -218,3 +218,46 @@ teardown() {
     
     [ -d "$(dirname "$LOG_FILE")" ]
 }
+
+# ============== Health reporting tests ==============
+
+@test "send_health_report_to_api succeeds when health endpoint is not configured" {
+    HEALTH_API_URL_CONF="$TEST_TMP_DIR/missing-health-api-url.conf"
+    HEALTH_API_SECRET_CONF="$TEST_TMP_DIR/missing-health-api-secret.conf"
+
+    run send_health_report_to_api "HEALTHY" "watchdog_ok" "true" "true" "0" "4.1.0"
+    [ "$status" -eq 0 ]
+}
+
+@test "send_health_report_to_api targets tRPC endpoint with auth when configured" {
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
+    local bin_dir="$TEST_TMP_DIR/bin"
+    local curl_log="$TEST_TMP_DIR/curl-args.log"
+
+    mkdir -p "$etc_dir" "$bin_dir"
+
+    HEALTH_API_URL_CONF="$etc_dir/health-api-url.conf"
+    HEALTH_API_SECRET_CONF="$etc_dir/health-api-secret.conf"
+    echo "https://api.example.test" > "$HEALTH_API_URL_CONF"
+    echo "secret123" > "$HEALTH_API_SECRET_CONF"
+
+    cat > "$bin_dir/curl" << EOF
+#!/bin/bash
+echo "\$*" >> "$curl_log"
+exit 0
+EOF
+    chmod +x "$bin_dir/curl"
+    PATH="$bin_dir:$PATH"
+
+    run send_health_report_to_api "DEGRADED" "watchdog_repair" "true" "false" "2" "4.1.0"
+    [ "$status" -eq 0 ]
+
+    for _ in $(seq 1 20); do
+        [ -f "$curl_log" ] && break
+        sleep 0.1
+    done
+
+    [ -f "$curl_log" ]
+    grep -q "/trpc/healthReports.submit" "$curl_log"
+    grep -q "Authorization: Bearer secret123" "$curl_log"
+}

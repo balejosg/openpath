@@ -41,51 +41,10 @@ $whitelistPath = "$OpenPathRoot\data\whitelist.txt"
 $backupPath = "$OpenPathRoot\data\whitelist.backup.txt"
 $staleFailsafeStatePath = "$OpenPathRoot\data\stale-failsafe-state.json"
 
-function Get-HostFromUrl {
-    param(
-        [string]$Url
-    )
-
-    if (-not $Url) {
-        return $null
-    }
-
-    try {
-        return ([System.Uri]$Url).Host
-    }
-    catch {
-        return $null
-    }
-}
-
 function Clear-StaleFailsafeState {
     if (Test-Path $staleFailsafeStatePath) {
         Remove-Item $staleFailsafeStatePath -Force -ErrorAction SilentlyContinue
         Write-OpenPathLog "Cleared stale fail-safe marker"
-    }
-}
-
-function Get-OpenPathRuntimeHealth {
-    $acrylicRunning = $false
-    $dnsResolving = $false
-
-    try {
-        $acrylicRunning = ((Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1).Status -eq 'Running')
-    }
-    catch {
-        $acrylicRunning = $false
-    }
-
-    try {
-        $dnsResolving = [bool](Test-DNSResolution -Domain "google.com")
-    }
-    catch {
-        $dnsResolving = $false
-    }
-
-    return [PSCustomObject]@{
-        DnsServiceRunning = [bool]$acrylicRunning
-        DnsResolving = [bool]$dnsResolving
     }
 }
 
@@ -133,52 +92,26 @@ function Enter-StaleWhitelistFailsafe {
     Write-OpenPathLog "Stale fail-safe active. Control domains: $($controlDomains -join ', ')" -Level WARN
 }
 
-function Get-ValidWhitelistDomainsFromFile {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Path
-    )
-
-    if (-not (Test-Path $Path)) {
-        return @()
-    }
-
-    $domainPattern = '^[a-zA-Z0-9][a-zA-Z0-9.-]*\.[a-zA-Z]{2,}$'
-    return @(Get-Content $Path -ErrorAction SilentlyContinue | ForEach-Object { $_.Trim() } | Where-Object { $_ -match $domainPattern })
-}
-
 function Restore-OpenPathCheckpoint {
     param(
         [Parameter(Mandatory = $true)]
         [PSCustomObject]$Config
     )
 
-    $checkpoint = Get-OpenPathLatestCheckpoint
-    if (-not $checkpoint) {
-        Write-OpenPathLog 'No checkpoint available for rollback' -Level WARN
+    $restoreResult = Restore-OpenPathLatestCheckpoint -Config $Config -WhitelistPath $whitelistPath
+    if (-not $restoreResult.Success) {
+        if ($restoreResult.Error) {
+            Write-OpenPathLog $restoreResult.Error -Level WARN
+        }
+        else {
+            Write-OpenPathLog 'Checkpoint rollback failed for unknown reason' -Level WARN
+        }
         return $false
     }
 
     try {
-        Copy-Item $checkpoint.WhitelistPath $whitelistPath -Force
-
-        $domains = Get-ValidWhitelistDomainsFromFile -Path $whitelistPath
-        if ($domains.Count -lt 1) {
-            Write-OpenPathLog 'Checkpoint restore aborted: no valid domains in checkpoint whitelist' -Level WARN
-            return $false
-        }
-
-        Update-AcrylicHost -WhitelistedDomains $domains -BlockedSubdomains @()
-        Restart-AcrylicService | Out-Null
-
-        if ($Config.enableFirewall) {
-            $acrylicPath = Get-AcrylicPath
-            Set-OpenPathFirewall -UpstreamDNS $Config.primaryDNS -AcrylicPath $acrylicPath | Out-Null
-        }
-
-        Set-LocalDNS
         Clear-StaleFailsafeState
-        Write-OpenPathLog "Checkpoint rollback applied from $($checkpoint.Path)" -Level WARN
+        Write-OpenPathLog "Checkpoint rollback applied from $($restoreResult.CheckpointPath)" -Level WARN
         return $true
     }
     catch {

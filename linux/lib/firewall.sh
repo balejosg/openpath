@@ -191,22 +191,19 @@ activate_firewall() {
     # the DNS sinkhole via HTTPS (port 443). We block traffic to their IPs entirely.
     # Note: $PRIMARY_DNS is already ACCEPT'd above, so if the upstream DNS is one
     # of these, it won't be affected (ACCEPT rules come before these DROPs).
-    local doh_resolvers=(
-        # Google Public DNS
-        "8.8.8.8" "8.8.4.4"
-        # Cloudflare DNS
-        "1.1.1.1" "1.0.0.1"
-        # Quad9
-        "9.9.9.9" "149.112.112.112"
-        # OpenDNS
-        "208.67.222.222" "208.67.220.220"
-        # NextDNS
-        "45.90.28.0" "45.90.30.0"
-        # Mullvad DNS
-        "194.242.2.2" "194.242.2.3"
-    )
+    local doh_resolvers_raw="${DOH_RESOLVERS:-8.8.8.8,8.8.4.4,1.1.1.1,1.0.0.1,9.9.9.9,149.112.112.112,208.67.222.222,208.67.220.220,45.90.28.0,45.90.30.0,194.242.2.2,194.242.2.3}"
+    local doh_resolvers=()
+    IFS=',' read -r -a doh_resolvers <<< "$doh_resolvers_raw"
 
     for resolver_ip in "${doh_resolvers[@]}"; do
+        resolver_ip="${resolver_ip//[[:space:]]/}"
+        [ -z "$resolver_ip" ] && continue
+
+        if ! validate_ip "$resolver_ip"; then
+            log_warn "Skipping invalid DoH resolver IP: $resolver_ip"
+            continue
+        fi
+
         # Skip if this IP is our configured upstream DNS (already ACCEPT'd)
         if [ "$resolver_ip" = "$PRIMARY_DNS" ]; then
             log_debug "Skipping DoH block for $resolver_ip (is upstream DNS)"
@@ -219,18 +216,56 @@ activate_firewall() {
     done
 
     # 8. Block common VPNs - prevents bypass via VPN tunnels
-    add_important_rule "Block OpenVPN (port 1194)" \
-        iptables -A OUTPUT -p udp --dport 1194 -j DROP
-    add_important_rule "Block WireGuard (port 51820)" \
-        iptables -A OUTPUT -p udp --dport 51820 -j DROP
-    add_important_rule "Block PPTP (port 1723)" \
-        iptables -A OUTPUT -p tcp --dport 1723 -j DROP
+    # Format: protocol:port:name (name optional)
+    local vpn_block_rules_raw="${VPN_BLOCK_RULES:-udp:1194:OpenVPN,udp:51820:WireGuard,tcp:1723:PPTP}"
+    local vpn_block_rules=()
+    IFS=',' read -r -a vpn_block_rules <<< "$vpn_block_rules_raw"
+
+    for vpn_rule in "${vpn_block_rules[@]}"; do
+        vpn_rule="${vpn_rule//[[:space:]]/}"
+        [ -z "$vpn_rule" ] && continue
+
+        local vpn_protocol=""
+        local vpn_port=""
+        local vpn_name="VPN"
+
+        IFS=':' read -r vpn_protocol vpn_port vpn_name <<< "$vpn_rule"
+
+        vpn_protocol="$(printf '%s' "$vpn_protocol" | tr '[:upper:]' '[:lower:]')"
+
+        if [ "$vpn_protocol" != "tcp" ] && [ "$vpn_protocol" != "udp" ]; then
+            log_warn "Skipping invalid VPN rule protocol: $vpn_rule"
+            continue
+        fi
+
+        if ! [[ "$vpn_port" =~ ^[0-9]+$ ]] || [ "$vpn_port" -lt 1 ] || [ "$vpn_port" -gt 65535 ]; then
+            log_warn "Skipping invalid VPN rule port: $vpn_rule"
+            continue
+        fi
+
+        [ -z "$vpn_name" ] && vpn_name="VPN-$vpn_port"
+
+        add_important_rule "Block $vpn_name (port $vpn_port/$vpn_protocol)" \
+            iptables -A OUTPUT -p "$vpn_protocol" --dport "$vpn_port" -j DROP
+    done
 
     # 9. Block Tor - prevents anonymous browsing bypass
-    add_important_rule "Block Tor relay (port 9001)" \
-        iptables -A OUTPUT -p tcp --dport 9001 -j DROP
-    add_important_rule "Block Tor directory (port 9030)" \
-        iptables -A OUTPUT -p tcp --dport 9030 -j DROP
+    local tor_ports_raw="${TOR_BLOCK_PORTS:-9001,9030}"
+    local tor_ports=()
+    IFS=',' read -r -a tor_ports <<< "$tor_ports_raw"
+
+    for tor_port in "${tor_ports[@]}"; do
+        tor_port="${tor_port//[[:space:]]/}"
+        [ -z "$tor_port" ] && continue
+
+        if ! [[ "$tor_port" =~ ^[0-9]+$ ]] || [ "$tor_port" -lt 1 ] || [ "$tor_port" -gt 65535 ]; then
+            log_warn "Skipping invalid Tor port: $tor_port"
+            continue
+        fi
+
+        add_important_rule "Block Tor (port $tor_port)" \
+            iptables -A OUTPUT -p tcp --dport "$tor_port" -j DROP
+    done
 
     # =========================================================================
     # OPTIONAL RULES - Functionality, nice to have
