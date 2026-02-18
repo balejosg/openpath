@@ -68,6 +68,7 @@ function Show-OpenPathHelp {
     Write-Host '  .\OpenPath.ps1 update'
     Write-Host '  .\OpenPath.ps1 self-update --check'
     Write-Host '  .\OpenPath.ps1 enroll -Classroom Aula1 -ApiUrl https://api.example.com -RegistrationToken <token>'
+    Write-Host '  .\OpenPath.ps1 enroll -ApiUrl https://api.example.com -ClassroomId <id> -EnrollmentToken <token> -Unattended'
     Write-Host '  .\OpenPath.ps1 rotate-token -Secret <shared-secret>'
 }
 

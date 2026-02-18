@@ -1151,6 +1151,34 @@ Describe "Installer" {
         }
     }
 
+    Context "Unattended enrollment support" {
+        It "Supports enrollment-token unattended parameters in installer" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '[string]$EnrollmentToken = ""',
+                '[string]$ClassroomId = ""',
+                '[switch]$Unattended',
+                '-EnrollmentToken',
+                '-ClassroomId',
+                '-Unattended'
+            )
+        }
+    }
+
+    Context "Enrollment before first update" {
+        It "Skips first update when classroom registration fails" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Registro no completado; se omite primera actualización',
+                '$classroomModeRequested -and $machineRegistered -ne "REGISTERED"'
+            )
+        }
+    }
+
     Context "Operational script installation" {
         It "Copies OpenPath.ps1 and Rotate-Token.ps1 into install root" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
@@ -1169,6 +1197,25 @@ Describe "Installer" {
                 'SkipPreflight',
                 'Pre-Install-Validation.ps1',
                 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File'
+            )
+        }
+    }
+}
+
+Describe "Enrollment script" {
+    Context "Token modes" {
+        It "Supports registration and enrollment token parameters" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Enroll-Machine.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '[string]$EnrollmentToken = ""',
+                '[string]$ClassroomId = ""',
+                '[switch]$Unattended',
+                'RegistrationToken and EnrollmentToken cannot be used together',
+                'ClassroomId requires EnrollmentToken mode',
+                '$registerBody.classroomId = $ClassroomId',
+                '$registerBody.classroomName = $Classroom'
             )
         }
     }

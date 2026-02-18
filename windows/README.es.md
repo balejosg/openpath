@@ -27,11 +27,17 @@ Sistema de control de acceso a internet mediante DNS sinkhole para Windows, usan
 # Ejecutar como Administrador
 .\Install-OpenPath.ps1 -WhitelistUrl "http://tu-servidor:3000/export/grupo.txt"
 
+# Modo aula (no interactivo, token corto de inscripción)
+.\Install-OpenPath.ps1 -ApiUrl "https://api.example.com" -ClassroomId "<classroom-id>" -EnrollmentToken "<token>" -Unattended
+
 # Opcional: omitir validación previa en entornos controlados
 .\Install-OpenPath.ps1 -WhitelistUrl "http://tu-servidor:3000/export/grupo.txt" -SkipPreflight
 ```
 
 El instalador ejecuta `tests\Pre-Install-Validation.ps1` por defecto antes de aplicar cambios.
+
+Si usas el modal de aulas en la React SPA, se genera un one-liner para descargar y ejecutar
+`/api/enroll/<classroomId>/windows.ps1` directamente.
 
 ## Comandos Operativos
 
@@ -43,6 +49,7 @@ El instalador ejecuta `tests\Pre-Install-Validation.ps1` por defecto antes de ap
 
 # Operaciones de aula
 .\OpenPath.ps1 enroll -Classroom "Aula-01" -ApiUrl "https://api.example.com" -RegistrationToken "<token>"
+.\OpenPath.ps1 enroll -ApiUrl "https://api.example.com" -ClassroomId "<classroom-id>" -EnrollmentToken "<token>" -Unattended
 .\OpenPath.ps1 rotate-token -Secret "<shared-secret>"
 ```
 

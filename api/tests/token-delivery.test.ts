@@ -19,6 +19,8 @@ let PORT: number;
 let API_URL: string;
 let server: Server | undefined;
 let registrationToken: string;
+let adminEmail: string;
+let adminPassword: string;
 
 const GLOBAL_TIMEOUT = setTimeout(() => {
   console.error('\n❌ Token delivery tests timed out! Forcing exit...');
@@ -28,6 +30,35 @@ GLOBAL_TIMEOUT.unref();
 
 const trpcMutate = (procedure: string, input: unknown): Promise<Response> =>
   _trpcMutate(API_URL, procedure, input);
+
+async function getEnrollmentToken(classroomId: string): Promise<string> {
+  const loginResponse = await trpcMutate('auth.login', {
+    email: adminEmail,
+    password: adminPassword,
+  });
+  assert.strictEqual(loginResponse.status, 200);
+
+  const loginParsed = await parseTRPC(loginResponse);
+  const loginData = loginParsed.data as { accessToken?: string };
+  assert.ok(loginData.accessToken);
+
+  const ticketResponse = await fetch(`${API_URL}/api/enroll/${classroomId}/ticket`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${loginData.accessToken}`,
+    },
+  });
+  assert.strictEqual(ticketResponse.status, 200);
+
+  const ticketData = (await ticketResponse.json()) as {
+    success: boolean;
+    enrollmentToken?: string;
+  };
+  assert.strictEqual(ticketData.success, true);
+  assert.ok(ticketData.enrollmentToken);
+
+  return ticketData.enrollmentToken;
+}
 
 async function ensureGroupExists(groupId: string): Promise<void> {
   await db.execute(
@@ -74,10 +105,12 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
+    adminEmail = `token-admin-${String(Date.now())}@example.com`;
+    adminPassword = 'SecurePassword123!';
     const adminData = {
-      email: `token-admin-${String(Date.now())}@example.com`,
+      email: adminEmail,
       name: 'Token Test Admin',
-      password: 'SecurePassword123!',
+      password: adminPassword,
     };
 
     const response = await trpcMutate('setup.createFirstAdmin', adminData);
@@ -389,6 +422,86 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       assert.strictEqual(response.status, 200);
       const fileContent = await response.text();
       assert.ok(fileContent.length > 0);
+    });
+  });
+
+  await describe('Windows classroom bootstrap endpoints', async () => {
+    let enrollmentToken: string;
+    let classroomId: string;
+
+    before(async () => {
+      classroomId = await createTestClassroom(
+        'WindowsBootstrapClassroom',
+        'windows-bootstrap-group'
+      );
+      enrollmentToken = await getEnrollmentToken(classroomId);
+    });
+
+    await test('should return Windows enrollment script with enrollment token auth', async () => {
+      const response = await fetch(`${API_URL}/api/enroll/${classroomId}/windows.ps1`, {
+        headers: {
+          Authorization: `Bearer ${enrollmentToken}`,
+        },
+      });
+
+      assert.strictEqual(response.status, 200);
+      assert.match(response.headers.get('content-type') ?? '', /text\/x-powershell/);
+      const body = await response.text();
+      assert.match(body, /Install-OpenPath\.ps1/);
+      assert.match(body, /bootstrap\/latest\.json/);
+      assert.match(body, /-EnrollmentToken/);
+      assert.match(body, /-ClassroomId/);
+    });
+
+    await test('should reject Windows enrollment script with mismatched classroom', async () => {
+      const otherClassroomId = await createTestClassroom(
+        'WindowsBootstrapMismatchClassroom',
+        'windows-bootstrap-mismatch-group'
+      );
+
+      const response = await fetch(`${API_URL}/api/enroll/${otherClassroomId}/windows.ps1`, {
+        headers: {
+          Authorization: `Bearer ${enrollmentToken}`,
+        },
+      });
+
+      assert.strictEqual(response.status, 403);
+    });
+
+    await test('should require enrollment token for bootstrap manifest', async () => {
+      const response = await fetch(`${API_URL}/api/agent/windows/bootstrap/latest.json`);
+      assert.strictEqual(response.status, 401);
+    });
+
+    await test('should return bootstrap manifest and files for enrollment token', async () => {
+      const manifestResponse = await fetch(`${API_URL}/api/agent/windows/bootstrap/latest.json`, {
+        headers: {
+          Authorization: `Bearer ${enrollmentToken}`,
+        },
+      });
+
+      assert.strictEqual(manifestResponse.status, 200);
+      const manifest = (await manifestResponse.json()) as {
+        success: boolean;
+        files: { path: string; sha256: string; size: number }[];
+      };
+
+      assert.strictEqual(manifest.success, true);
+      assert.ok(manifest.files.some((file) => file.path === 'Install-OpenPath.ps1'));
+      assert.ok(manifest.files.some((file) => file.path === 'scripts/Enroll-Machine.ps1'));
+
+      const fileResponse = await fetch(
+        `${API_URL}/api/agent/windows/bootstrap/file?path=${encodeURIComponent('Install-OpenPath.ps1')}`,
+        {
+          headers: {
+            Authorization: `Bearer ${enrollmentToken}`,
+          },
+        }
+      );
+
+      assert.strictEqual(fileResponse.status, 200);
+      const fileText = await fileResponse.text();
+      assert.match(fileText, /OpenPath DNS para Windows - Instalador/);
     });
   });
 

@@ -22,32 +22,43 @@
 .SYNOPSIS
     Registers (or re-registers) a Windows agent in classroom mode.
 .DESCRIPTION
-    Validates enrollment token, registers machine in API, and updates local
+    Validates registration token when needed, registers machine in API, and updates local
     config.json with classroom/api/tokenized whitelist URL.
 .PARAMETER Classroom
-    Classroom name.
+    Classroom name (required with registration token mode).
 .PARAMETER ApiUrl
     Base URL for OpenPath API.
 .PARAMETER RegistrationToken
-    Enrollment token. If omitted, uses OPENPATH_TOKEN env var or prompt.
+    Long-lived registration token. If omitted, uses OPENPATH_TOKEN env var.
+.PARAMETER EnrollmentToken
+    Short-lived classroom enrollment token. If omitted, uses OPENPATH_ENROLLMENT_TOKEN env var.
+.PARAMETER ClassroomId
+    Classroom ID (recommended with EnrollmentToken mode).
 .PARAMETER OpenPathRoot
     OpenPath installation root.
 .PARAMETER SkipTokenValidation
-    Skip /api/setup/validate-token call before registration.
+    Skip /api/setup/validate-token call before registration (registration token mode only).
+.PARAMETER Unattended
+    Fail fast when required parameters are missing instead of prompting.
 #>
 
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$Classroom,
+    [string]$Classroom = "",
 
     [Parameter(Mandatory = $true)]
     [string]$ApiUrl,
 
     [string]$RegistrationToken = "",
 
+    [string]$EnrollmentToken = "",
+
+    [string]$ClassroomId = "",
+
     [string]$OpenPathRoot = "C:\OpenPath",
 
-    [switch]$SkipTokenValidation
+    [switch]$SkipTokenValidation,
+
+    [switch]$Unattended
 )
 
 $ErrorActionPreference = 'Stop'
@@ -64,22 +75,40 @@ if (-not (Test-Path $configPath)) {
     throw "Configuration file not found at $configPath"
 }
 
-if (-not $RegistrationToken) {
-    if ($env:OPENPATH_TOKEN) {
+if ($RegistrationToken -and $EnrollmentToken) {
+    throw 'RegistrationToken and EnrollmentToken cannot be used together'
+}
+
+if ($ClassroomId -and -not $EnrollmentToken) {
+    throw 'ClassroomId requires EnrollmentToken mode'
+}
+
+if (-not $RegistrationToken -and -not $EnrollmentToken) {
+    if ($env:OPENPATH_ENROLLMENT_TOKEN) {
+        $EnrollmentToken = $env:OPENPATH_ENROLLMENT_TOKEN
+    }
+    elseif ($env:OPENPATH_TOKEN) {
         $RegistrationToken = $env:OPENPATH_TOKEN
+    }
+    elseif ($Unattended) {
+        throw 'RegistrationToken or EnrollmentToken is required in unattended mode'
     }
     else {
         $RegistrationToken = Read-Host "Enter registration token"
     }
 }
 
-if (-not $RegistrationToken) {
-    throw "Registration token is required"
+if ($RegistrationToken -and -not $Classroom) {
+    throw 'Classroom is required when using RegistrationToken mode'
+}
+
+if (-not $RegistrationToken -and -not $EnrollmentToken) {
+    throw 'RegistrationToken or EnrollmentToken is required'
 }
 
 $apiBaseUrl = $ApiUrl.TrimEnd('/')
 
-if (-not $SkipTokenValidation) {
+if ($RegistrationToken -and -not $SkipTokenValidation) {
     Write-Host "Validating registration token..." -ForegroundColor Yellow
 
     $validateBody = @{ token = $RegistrationToken } | ConvertTo-Json
@@ -96,25 +125,64 @@ if (-not $SkipTokenValidation) {
 $hostname = $env:COMPUTERNAME
 $config = Get-OpenPathConfig
 $version = if ($config.PSObject.Properties['version'] -and $config.version) { [string]$config.version } else { '1.0.0' }
+$authToken = if ($EnrollmentToken) { $EnrollmentToken } else { $RegistrationToken }
+
+function Set-ConfigValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [PSCustomObject]$Config,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [object]$Value
+    )
+
+    if ($Config.PSObject.Properties[$Name]) {
+        $Config.$Name = $Value
+    }
+    else {
+        $Config | Add-Member -MemberType NoteProperty -Name $Name -Value $Value -Force
+    }
+}
 
 Write-Host "Registering machine in classroom..." -ForegroundColor Yellow
 Write-Host "  Hostname: $hostname"
-Write-Host "  Classroom: $Classroom"
+if ($Classroom) {
+    Write-Host "  Classroom: $Classroom"
+}
+if ($ClassroomId) {
+    Write-Host "  Classroom ID: $ClassroomId"
+}
 Write-Host "  API URL: $apiBaseUrl"
+Write-Host "  Auth mode: $(if ($EnrollmentToken) { 'enrollment token' } else { 'registration token' })"
 
-$registerBody = @{
+$registerBody = [ordered]@{
     hostname = $hostname
-    classroomName = $Classroom
     version = $version
-} | ConvertTo-Json
+}
+
+if ($EnrollmentToken) {
+    if ($ClassroomId) {
+        $registerBody.classroomId = $ClassroomId
+    }
+}
+else {
+    $registerBody.classroomName = $Classroom
+}
+
+$registerBodyJson = $registerBody | ConvertTo-Json
 
 $headers = @{
-    Authorization = "Bearer $RegistrationToken"
+    Authorization = "Bearer $authToken"
     'Content-Type' = 'application/json'
 }
 
 $registerResponse = Invoke-RestMethod -Uri "$apiBaseUrl/api/machines/register" `
-    -Method Post -Body $registerBody -Headers $headers -ErrorAction Stop
+    -Method Post -Body $registerBodyJson -Headers $headers -ErrorAction Stop
 
 if (-not $registerResponse.success) {
     throw "Machine registration failed: $($registerResponse | ConvertTo-Json -Compress)"
@@ -124,9 +192,34 @@ if (-not $registerResponse.whitelistUrl) {
     throw 'Registration succeeded but no tokenized whitelist URL was returned'
 }
 
-$config.classroom = $Classroom
-$config.apiUrl = $apiBaseUrl
-$config.whitelistUrl = [string]$registerResponse.whitelistUrl
+$resolvedClassroom = if ($registerResponse.PSObject.Properties['classroomName'] -and $registerResponse.classroomName) {
+    [string]$registerResponse.classroomName
+}
+elseif ($Classroom) {
+    $Classroom
+}
+else {
+    ''
+}
+
+$resolvedClassroomId = if ($registerResponse.PSObject.Properties['classroomId'] -and $registerResponse.classroomId) {
+    [string]$registerResponse.classroomId
+}
+elseif ($ClassroomId) {
+    $ClassroomId
+}
+else {
+    ''
+}
+
+if ($resolvedClassroom) {
+    Set-ConfigValue -Config $config -Name 'classroom' -Value $resolvedClassroom
+}
+if ($resolvedClassroomId) {
+    Set-ConfigValue -Config $config -Name 'classroomId' -Value $resolvedClassroomId
+}
+Set-ConfigValue -Config $config -Name 'apiUrl' -Value $apiBaseUrl
+Set-ConfigValue -Config $config -Name 'whitelistUrl' -Value ([string]$registerResponse.whitelistUrl)
 
 Set-OpenPathConfig -Config $config | Out-Null
 
@@ -136,6 +229,7 @@ Write-Host "  Tokenized whitelist URL saved" -ForegroundColor Green
 [PSCustomObject]@{
     Success = $true
     Hostname = $hostname
-    Classroom = $Classroom
+    Classroom = $resolvedClassroom
+    ClassroomId = $resolvedClassroomId
     WhitelistUrl = [string]$registerResponse.whitelistUrl
 }

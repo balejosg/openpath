@@ -29,11 +29,17 @@ Internet access control system using a DNS sinkhole for Windows, powered by Acry
 # Run as Administrator
 .\Install-OpenPath.ps1 -WhitelistUrl "http://your-server:3000/export/group.txt"
 
+# Classroom mode (non-interactive, short-lived enrollment token)
+.\Install-OpenPath.ps1 -ApiUrl "https://api.example.com" -ClassroomId "<classroom-id>" -EnrollmentToken "<token>" -Unattended
+
 # Optional: skip pre-install validation in controlled environments
 .\Install-OpenPath.ps1 -WhitelistUrl "http://your-server:3000/export/group.txt" -SkipPreflight
 ```
 
 The installer executes `tests\Pre-Install-Validation.ps1` by default before making changes.
+
+If you use the React SPA classroom modal, it provides a one-liner that downloads and runs
+`/api/enroll/<classroomId>/windows.ps1` directly.
 
 ## Operational Commands
 
@@ -46,6 +52,7 @@ The installer executes `tests\Pre-Install-Validation.ps1` by default before maki
 
 # Classroom operations
 .\OpenPath.ps1 enroll -Classroom "Lab-01" -ApiUrl "https://api.example.com" -RegistrationToken "<token>"
+.\OpenPath.ps1 enroll -ApiUrl "https://api.example.com" -ClassroomId "<classroom-id>" -EnrollmentToken "<token>" -Unattended
 .\OpenPath.ps1 rotate-token -Secret "<shared-secret>"
 ```
 
