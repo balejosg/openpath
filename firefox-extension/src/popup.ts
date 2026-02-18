@@ -4,6 +4,14 @@
  */
 
 import { logger, getErrorMessage } from './lib/logger.js';
+import { generateProofToken } from './lib/proof-token.js';
+import {
+  DEFAULT_REQUEST_CONFIG,
+  getRequestApiEndpoints as getApiEndpoints,
+  hasValidRequestConfig,
+  loadRequestConfig,
+  type RequestConfig,
+} from './lib/config-storage.js';
 
 interface BlockedDomainInfo {
   count?: number;
@@ -151,22 +159,11 @@ function normalizeDomainStatuses(response: unknown): Record<string, DomainStatus
 }
 
 function getRequestApiEndpoints(): string[] {
-  if (window.getAllApiUrls) {
-    return window.getAllApiUrls().filter((url) => typeof url === 'string' && url.length > 0);
-  }
-
-  return [CONFIG.requestApiUrl, ...CONFIG.fallbackApiUrls].filter((url) => url.length > 0);
+  return getApiEndpoints(CONFIG);
 }
 
 function isRequestConfigured(): boolean {
-  if (window.hasValidRequestConfig) {
-    return window.hasValidRequestConfig();
-  }
-  return (
-    CONFIG.enableRequests &&
-    CONFIG.sharedSecret.trim().length > 0 &&
-    getRequestApiEndpoints().length > 0
-  );
+  return hasValidRequestConfig(CONFIG);
 }
 
 async function fetchWithFallback(
@@ -197,13 +194,6 @@ async function fetchWithFallback(
   }
 
   throw lastError ?? new Error('No hay endpoint API disponible');
-}
-
-async function generateProofToken(hostname: string, secret: string): Promise<string> {
-  const data = new TextEncoder().encode(hostname + secret);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = new Uint8Array(hashBuffer);
-  return btoa(String.fromCharCode(...hashArray));
 }
 
 function statusMeta(status?: DomainStatus): {
@@ -478,13 +468,7 @@ function hideVerifyResults(): void {
   verifyListEl.innerHTML = '';
 }
 
-// Access global config from config.js (loaded before popup.ts via manifest)
-// Window interface is extended in types.d.ts for type-safe access
-// Runtime check ensures CONFIG is defined - throws if not
-if (window.OPENPATH_CONFIG === undefined) {
-  throw new Error('OpenPath config not loaded - config.js must be loaded first');
-}
-let CONFIG: Config = window.OPENPATH_CONFIG;
+let CONFIG: RequestConfig = { ...DEFAULT_REQUEST_CONFIG };
 
 /**
  * Check if the request API is available
@@ -720,9 +704,7 @@ async function retryDomainLocalUpdate(hostname: string): Promise<void> {
  */
 async function init(): Promise<void> {
   try {
-    if (window.loadOpenPathConfig) {
-      CONFIG = await window.loadOpenPathConfig();
-    }
+    CONFIG = await loadRequestConfig();
 
     // Obtener pestaña activa
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });

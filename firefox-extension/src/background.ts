@@ -14,6 +14,8 @@
 
 import { Browser, WebRequest, Runtime, WebNavigation } from 'webextension-polyfill';
 import { logger, getErrorMessage } from './lib/logger.js';
+import { generateProofToken } from './lib/proof-token.js';
+import { getRequestApiEndpoints, loadRequestConfig } from './lib/config-storage.js';
 
 declare const browser: Browser;
 
@@ -74,15 +76,6 @@ interface BlockedPathRulesState {
   rules: CompiledBlockedPathRule[];
 }
 
-interface RuntimeRequestConfig {
-  requestApiUrl: string;
-  fallbackApiUrls: string[];
-  requestTimeout: number;
-  enableRequests: boolean;
-  sharedSecret: string;
-  debugMode: boolean;
-}
-
 interface AutoAllowApiResponse {
   success: boolean;
   status?: 'approved' | 'duplicate';
@@ -108,15 +101,6 @@ interface BlockedScreenContext {
 const blockedDomains: BlockedDomainsMap = {};
 const domainStatuses: DomainStatusesMap = {};
 const inFlightAutoRequests = new Set<string>();
-
-const DEFAULT_REQUEST_CONFIG: RuntimeRequestConfig = {
-  requestApiUrl: '',
-  fallbackApiUrls: [],
-  requestTimeout: 10000,
-  enableRequests: true,
-  sharedSecret: '',
-  debugMode: false,
-};
 
 // Estado de Native Messaging
 
@@ -524,23 +508,6 @@ function isAutoAllowRequestType(type?: string): boolean {
   return AUTO_ALLOW_REQUEST_TYPES.has(type);
 }
 
-async function loadRuntimeConfig(): Promise<RuntimeRequestConfig> {
-  try {
-    const stored = await browser.storage.sync.get('config');
-    const incoming = stored.config as Partial<RuntimeRequestConfig> | undefined;
-    return {
-      ...DEFAULT_REQUEST_CONFIG,
-      ...(incoming ?? {}),
-    };
-  } catch {
-    return { ...DEFAULT_REQUEST_CONFIG };
-  }
-}
-
-function getRequestApiEndpoints(config: RuntimeRequestConfig): string[] {
-  return [config.requestApiUrl, ...config.fallbackApiUrls].filter((url) => url.length > 0);
-}
-
 async function fetchWithFallback(
   endpoints: string[],
   path: string,
@@ -569,13 +536,6 @@ async function fetchWithFallback(
   }
 
   throw lastError ?? new Error('No API endpoint available');
-}
-
-async function generateToken(hostname: string, secret: string): Promise<string> {
-  const data = new TextEncoder().encode(hostname + secret);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = new Uint8Array(hashBuffer);
-  return btoa(String.fromCharCode(...hashArray));
 }
 
 /**
@@ -823,7 +783,7 @@ async function autoAllowBlockedDomain(
   });
 
   try {
-    const requestConfig = await loadRuntimeConfig();
+    const requestConfig = await loadRequestConfig();
     const endpoints = getRequestApiEndpoints(requestConfig);
 
     if (!requestConfig.enableRequests || requestConfig.sharedSecret.trim().length === 0) {
@@ -863,7 +823,7 @@ async function autoAllowBlockedDomain(
     }
 
     const machineHostname = hostnameResponse.hostname;
-    const token = await generateToken(machineHostname, requestConfig.sharedSecret);
+    const token = await generateProofToken(machineHostname, requestConfig.sharedSecret.trim());
 
     const reason = `auto-allow ajax (${requestType})`;
     const response = await fetchWithFallback(

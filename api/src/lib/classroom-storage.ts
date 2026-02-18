@@ -355,17 +355,18 @@ export async function removeMachinesByClassroom(classroomId: string): Promise<nu
 }
 
 /**
- * Get the correct whitelist URL for a machine based on its classroom state.
+ * Resolve the correct whitelist group for a machine based on its classroom state.
  * Priority:
  * 1. Active override group (if set by teacher)
  * 2. Scheduled class group (if current time matches a schedule)
  * 3. Default classroom group
  *
  * @param hostname - Machine hostname
- * @returns Promise resolving to whitelist result or null if machine/classroom not found
+ * @returns Promise resolving to group context or null if machine/classroom not found
  */
-export async function getWhitelistUrlForMachine(
-  hostname: string
+export async function resolveMachineGroupContext(
+  hostname: string,
+  now: Date = new Date()
 ): Promise<WhitelistUrlResult | null> {
   const machine = await getMachineByHostname(hostname);
   if (!machine) return null;
@@ -381,7 +382,7 @@ export async function getWhitelistUrlForMachine(
     // Try to get from schedule
     try {
       const { getCurrentSchedule } = await import('./schedule-storage.js');
-      const currentSchedule = await getCurrentSchedule(classroom.id);
+      const currentSchedule = await getCurrentSchedule(classroom.id, now);
       if (currentSchedule) {
         groupId = currentSchedule.groupId;
       }
@@ -399,6 +400,12 @@ export async function getWhitelistUrlForMachine(
     classroomId: classroom.id,
     classroomName: classroom.name,
   };
+}
+
+export async function getWhitelistUrlForMachine(
+  hostname: string
+): Promise<WhitelistUrlResult | null> {
+  return resolveMachineGroupContext(hostname);
 }
 
 export async function getStats(): Promise<ClassroomStats> {
