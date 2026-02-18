@@ -20,14 +20,23 @@ case "$1" in
         source /usr/local/lib/openpath/lib/browser.sh
         source /usr/local/lib/openpath/lib/services.sh
         
-        # Get configuration from debconf
-        db_get openpath-dnsmasq/whitelist-url
+        # Get configuration from debconf (prefer canonical keys, fallback legacy)
+        db_get openpath-dnsmasq/whitelist-url || true
+        if [ -z "${RET:-}" ]; then
+            db_get whitelist-dnsmasq/whitelist-url || true
+        fi
         WHITELIST_URL="${RET:-https://raw.githubusercontent.com/LasEncinasIT/Whitelist-por-aula/main/Informatica%203.txt}"
-        
-        db_get openpath-dnsmasq/health-api-url
+
+        db_get openpath-dnsmasq/health-api-url || true
+        if [ -z "${RET:-}" ]; then
+            db_get whitelist-dnsmasq/health-api-url || true
+        fi
         HEALTH_API_URL="${RET:-}"
-        
-        db_get openpath-dnsmasq/health-api-secret
+
+        db_get openpath-dnsmasq/health-api-secret || true
+        if [ -z "${RET:-}" ]; then
+            db_get whitelist-dnsmasq/health-api-secret || true
+        fi
         HEALTH_API_SECRET="${RET:-}"
         
         # Create directories (Debian FHS compliant)

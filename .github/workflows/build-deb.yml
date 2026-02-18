@@ -214,7 +214,9 @@ jobs:
       - name: Copy setup script
         run: |
           cp linux/scripts/build/apt-setup.sh gh-pages/apt/apt-setup.sh
+          cp linux/scripts/build/apt-bootstrap.sh gh-pages/apt/apt-bootstrap.sh
           chmod +x gh-pages/apt/apt-setup.sh
+          chmod +x gh-pages/apt/apt-bootstrap.sh
 
       - name: Create index.html for apt directory
         run: |
@@ -225,10 +227,14 @@ jobs:
           <body>
           <h1>OpenPath System APT Repository</h1>
           <h2>Quick Install</h2>
+          <pre>curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash</pre>
+          <p>Manual install (advanced):</p>
           <pre>curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh | sudo bash
-          sudo apt install openpath-dnsmasq</pre>
+          sudo apt install openpath-dnsmasq
+          sudo openpath setup</pre>
           <h2>Files</h2>
           <ul>
+            <li><a href="apt-bootstrap.sh">apt-bootstrap.sh</a> - One-liner install + classroom setup</li>
             <li><a href="apt-setup.sh">apt-setup.sh</a> - Setup script</li>
             <li><a href="pubkey.gpg">pubkey.gpg</a> - GPG public key</li>
             <li><a href="dists/">dists/</a> - Distribution metadata</li>

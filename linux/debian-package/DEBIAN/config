@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -e
+
+. /usr/share/debconf/confmodule
+
+case "$1" in
+    configure|reconfigure|"")
+        db_input high openpath-dnsmasq/whitelist-url || true
+        db_input medium openpath-dnsmasq/health-api-url || true
+        db_input medium openpath-dnsmasq/health-api-secret || true
+        db_go || true
+        ;;
+esac
+
+exit 0

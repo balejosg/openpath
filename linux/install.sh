@@ -385,7 +385,7 @@ ALL ALL=(root) NOPASSWD: /usr/local/bin/openpath-update.sh
 ALL ALL=(root) NOPASSWD: /usr/local/bin/dnsmasq-watchdog.sh
 
 # NOTA: Los siguientes comandos REQUIEREN contraseña de root:
-# openpath update, enable, disable, force, restart, rotate-token, enroll
+# openpath update, enable, disable, force, restart, rotate-token, enroll, setup
 EOF
 
     chmod 440 /etc/sudoers.d/openpath

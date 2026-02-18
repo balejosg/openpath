@@ -66,33 +66,31 @@ Navigate to `http://your-server-ip:3000/` in your browser. On first run, the set
 
 ### Client PC Installation
 
-#### Linux (Standalone Mode)
+#### Linux (Classroom Mode - Recommended)
 
-One-line installation via APT. Sets up `dnsmasq`, `iptables` rules, and the update watchdog.
+One-liner installation via APT + guided classroom linking. This is the simplest path for non-technical users.
 
 ```bash
-# Setup repository and install
+curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash
+```
+
+The installer asks for:
+
+1. API URL (central server)
+2. Classroom name
+3. Registration token
+
+After setup, the PC is registered in the central server and can be managed remotely.
+
+#### Linux (Advanced / Manual)
+
+If you prefer manual steps:
+
+```bash
 curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh | sudo bash
 sudo apt install openpath-dnsmasq
+sudo openpath setup
 ```
-
-#### Linux (Classroom Mode)
-
-Install with classroom registration:
-
-```bash
-# Download install script
-curl -O https://raw.githubusercontent.com/balejosg/openpath/main/linux/install.sh
-chmod +x install.sh
-
-# Install with registration token
-sudo ./install.sh \
-  --classroom "Aula-1" \
-  --api-url "http://your-server-ip:3000" \
-  --registration-token "your-64-character-token-here"
-```
-
-The PC will be registered in the central server and can be managed remotely.
 
 ### Windows
 

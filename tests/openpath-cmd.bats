@@ -90,3 +90,34 @@ teardown() {
     
     [ "$count" -eq 2 ]
 }
+
+@test "incluye comando setup para modo aula" {
+    run grep -n "setup           Asistente de configuración" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "status muestra seccion de enrollment" {
+    run grep -n "Enrolled:" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "enroll soporta token por archivo o stdin" {
+    run grep -n -- "--token-file" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n -- "--token-stdin" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "setup soporta enrollment token por classroom id" {
+    run grep -n -- "--classroom-id" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n -- "--enrollment-token" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "setup puede pedir datos por /dev/tty cuando stdin no es interactivo" {
+    run grep -n "/dev/tty" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    [ "$status" -eq 0 ]
+}

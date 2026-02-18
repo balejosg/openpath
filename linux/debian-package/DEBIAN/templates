@@ -1,18 +1,18 @@
-Template: whitelist-dnsmasq/whitelist-url
+Template: openpath-dnsmasq/whitelist-url
 Type: string
 Default: https://raw.githubusercontent.com/LasEncinasIT/Whitelist-por-aula/main/Informatica%203.txt
 Description: URL of the whitelist file:
  Enter the URL where the whitelist will be downloaded from.
  This URL should point to a plain text file with allowed domains.
 
-Template: whitelist-dnsmasq/health-api-url
+Template: openpath-dnsmasq/health-api-url
 Type: string
 Default:
 Description: Health API URL (optional):
  Enter the URL of your health monitoring API, if you have one.
  Leave empty if you don't use centralized monitoring.
 
-Template: whitelist-dnsmasq/health-api-secret
+Template: openpath-dnsmasq/health-api-secret
 Type: password
 Default:
 Description: Health API secret (optional):

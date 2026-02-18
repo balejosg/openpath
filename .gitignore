@@ -7,6 +7,9 @@ dist/
 */dist/
 build/
 */build/
+!linux/scripts/build/
+!linux/scripts/build/apt-setup.sh
+!linux/scripts/build/apt-bootstrap.sh
 coverage/
 */coverage/
 *.tsbuildinfo

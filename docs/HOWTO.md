@@ -5,15 +5,22 @@
 ### Install on a Single PC
 
 ```bash
-curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh | sudo bash
-sudo apt install openpath-dnsmasq
+curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash
 ```
 
-The system will be active immediately.
+The bootstrap installs OpenPath and launches `openpath setup` (classroom wizard).
 
 ---
 
 ## Configure After Installation
+
+### Classroom Setup (Recommended)
+
+```bash
+sudo openpath setup
+```
+
+The wizard asks for API URL, classroom name, and registration token.
 
 ### Change Whitelist URL
 
@@ -35,7 +42,7 @@ sudo dpkg-reconfigure openpath-dnsmasq
 ### Option 1: One-liner via SSH
 
 ```bash
-ssh user@pc-01 "curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh | sudo bash && sudo apt install -y openpath-dnsmasq"
+ssh user@pc-01 "curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash"
 ```
 
 ### Option 2: Ansible Playbook

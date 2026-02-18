@@ -147,7 +147,8 @@ void describe('Enrollment API (secure tickets)', { timeout: 30000 }, async () =>
 
     const body = await res.text();
     assert.match(body, /#!\/bin\/bash/);
-    assert.match(body, /openpath enroll --classroom-id/);
+    assert.match(body, /apt-bootstrap\.sh/);
+    assert.match(body, /--enrollment-token/);
     assert.doesNotMatch(body, /\?token=/);
   });
 

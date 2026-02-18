@@ -672,7 +672,7 @@ API_URL=${bashSingleQuote(publicUrl)}
 CLASSROOM_ID=${bashSingleQuote(classroomId)}
 CLASSROOM_NAME=${bashSingleQuote(classroom.name)}
 ENROLLMENT_TOKEN=${bashSingleQuote(enrollmentToken)}
-APT_REPO_SETUP_URL=${bashSingleQuote(`${aptRepoUrl}/apt-setup.sh`)}
+APT_BOOTSTRAP_URL=${bashSingleQuote(`${aptRepoUrl}/apt-bootstrap.sh`)}
 
  echo ''
 echo '==============================================='
@@ -686,27 +686,15 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# Step 1: Set up APT repository
-echo "[1/3] Configurando repositorio APT..."
-if ! command -v openpath &>/dev/null; then
-    tmpfile="$(mktemp)"
-    trap 'rm -f "$tmpfile"' EXIT
-    curl -fsSL --proto '=https' --tlsv1.2 "$APT_REPO_SETUP_URL" -o "$tmpfile"
-    bash "$tmpfile"
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get install -y openpath-dnsmasq
-    echo "  OK: Paquete instalado"
-else
-    echo "  OK: Ya instalado, actualizando..."
-    apt-get update -qq && apt-get install -y openpath-dnsmasq
-fi
+# Step 1: Install + setup in classroom mode
+echo "[1/2] Instalando y registrando en aula..."
+tmpfile="$(mktemp)"
+trap 'rm -f "$tmpfile"' EXIT
+curl -fsSL --proto '=https' --tlsv1.2 "$APT_BOOTSTRAP_URL" -o "$tmpfile"
+bash "$tmpfile" --api-url "$API_URL" --classroom "$CLASSROOM_NAME" --classroom-id "$CLASSROOM_ID" --enrollment-token "$ENROLLMENT_TOKEN"
 
-# Step 2: Enroll in classroom
-echo "[2/3] Registrando en aula..."
-openpath enroll --classroom-id "$CLASSROOM_ID" --api-url "$API_URL" --enrollment-token "$ENROLLMENT_TOKEN"
-
-# Step 3: Verify
-echo "[3/3] Verificando..."
+# Step 2: Verify
+echo "[2/2] Verificando..."
 openpath health || true
 
 echo ""

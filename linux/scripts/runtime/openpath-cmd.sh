@@ -42,7 +42,7 @@ NC='\033[0m'
 # Comandos que requieren root (estos pedirán contraseña si no es root)
 # Los comandos de solo lectura (status, test, check, domains, log, logs, help)
 # se permiten sin contraseña via sudoers
-ROOT_COMMANDS="update health force enable disable restart rotate-token enroll self-update"
+ROOT_COMMANDS="update health force enable disable restart rotate-token enroll setup self-update"
 
 # Auto-elevar a root si el comando lo requiere
 auto_elevate() {
@@ -54,6 +54,63 @@ auto_elevate() {
 
 # Llamar auto-elevación con los argumentos originales
 auto_elevate "$@"
+
+read_single_line_file() {
+    local file="$1"
+
+    if [ -r "$file" ]; then
+        tr -d '\r\n' < "$file"
+        return 0
+    fi
+
+    if [ "$EUID" -ne 0 ] && command -v sudo >/dev/null 2>&1 && sudo -n test -r "$file" 2>/dev/null; then
+        sudo -n cat "$file" 2>/dev/null | tr -d '\r\n'
+        return 0
+    fi
+
+    return 1
+}
+
+is_tokenized_whitelist_url() {
+    local url="$1"
+    [[ "$url" =~ /w/[^/]+/whitelist\.txt($|[?#].*) ]]
+}
+
+read_prompt_value() {
+    local __result_var="$1"
+    local prompt="$2"
+    local input=""
+
+    if [ -t 0 ]; then
+        read -r -p "$prompt" input || return 1
+    elif [ -r /dev/tty ]; then
+        read -r -p "$prompt" input < /dev/tty || return 1
+    else
+        return 1
+    fi
+
+    printf -v "$__result_var" '%s' "$input"
+    return 0
+}
+
+read_prompt_secret() {
+    local __result_var="$1"
+    local prompt="$2"
+    local input=""
+
+    if [ -t 0 ]; then
+        read -r -s -p "$prompt" input || return 1
+        echo ""
+    elif [ -r /dev/tty ]; then
+        read -r -s -p "$prompt" input < /dev/tty || return 1
+        echo ""
+    else
+        return 1
+    fi
+
+    printf -v "$__result_var" '%s' "$input"
+    return 0
+}
 
 # Mostrar estado
 cmd_status() {
@@ -92,6 +149,62 @@ cmd_status() {
         domains=$(grep -cv "^#\|^$" "$WHITELIST_FILE" 2>/dev/null || echo "0")
         echo "  Dominios: $domains"
     fi
+
+    local api_url=""
+    local classroom=""
+    local classroom_id=""
+    local whitelist_url=""
+    api_url=$(read_single_line_file "$ETC_CONFIG_DIR/api-url.conf" || true)
+    classroom=$(read_single_line_file "$ETC_CONFIG_DIR/classroom.conf" || true)
+    classroom_id=$(read_single_line_file "$ETC_CONFIG_DIR/classroom-id.conf" || true)
+    whitelist_url=$(read_single_line_file "$WHITELIST_URL_CONF" || true)
+
+    echo ""
+    echo -e "${YELLOW}Aula:${NC}"
+
+    local enrolled="NO"
+    if [ -n "$api_url" ] && [ -n "$whitelist_url" ] && is_tokenized_whitelist_url "$whitelist_url"; then
+        if [ -n "$classroom" ] || [ -n "$classroom_id" ]; then
+            enrolled="YES"
+        fi
+    fi
+
+    if [ "$enrolled" = "YES" ]; then
+        echo -e "  Enrolled: ${GREEN}✓ YES${NC}"
+    else
+        echo -e "  Enrolled: ${RED}✗ NO${NC}"
+    fi
+
+    if [ -n "$classroom" ]; then
+        echo "  Aula: $classroom"
+    elif [ -n "$classroom_id" ]; then
+        echo "  Aula ID: $classroom_id"
+    else
+        echo "  Aula: no configurada"
+    fi
+
+    if [ -n "$api_url" ]; then
+        echo "  API URL: $api_url"
+    else
+        echo "  API URL: no configurada"
+    fi
+
+    if [ -n "$whitelist_url" ]; then
+        if is_tokenized_whitelist_url "$whitelist_url"; then
+            echo "  Whitelist URL: tokenizada"
+        else
+            echo "  Whitelist URL: no tokenizada"
+        fi
+    else
+        echo "  Whitelist URL: no configurada"
+    fi
+
+    if systemctl is-active --quiet openpath-sse-listener.service 2>/dev/null; then
+        echo -e "  SSE listener: ${GREEN}● activo${NC}"
+    else
+        echo -e "  SSE listener: ${YELLOW}● inactivo${NC}"
+    fi
+
     echo ""
 }
 
@@ -279,6 +392,8 @@ cmd_health() {
 # Registrar maquina en un aula
 cmd_enroll() {
     local classroom="" classroom_id="" api_url="" token="" enrollment_token=""
+    local token_file=""
+    local token_from_stdin=false
     
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -287,6 +402,8 @@ cmd_enroll() {
             --classroom-id) classroom_id="$2"; shift 2 ;;
             --api-url)    api_url="$2"; shift 2 ;;
             --token)      token="$2"; shift 2 ;;
+            --token-file) token_file="$2"; shift 2 ;;
+            --token-stdin) token_from_stdin=true; shift ;;
             --enrollment-token) enrollment_token="$2"; shift 2 ;;
             *)            echo -e "${RED}Opcion desconocida: $1${NC}"; exit 1 ;;
         esac
@@ -296,11 +413,46 @@ cmd_enroll() {
     [[ -z "$api_url" ]]   && { echo -e "${RED}Error: --api-url requerido${NC}"; exit 1; }
     api_url="${api_url%/}"
 
+    local token_source_count=0
+    [ -n "$token" ] && token_source_count=$((token_source_count + 1))
+    [ -n "$token_file" ] && token_source_count=$((token_source_count + 1))
+    [ "$token_from_stdin" = true ] && token_source_count=$((token_source_count + 1))
+
     if [[ -n "$enrollment_token" ]]; then
+        if [ "$token_source_count" -gt 0 ]; then
+            echo -e "${RED}Error: --enrollment-token no se puede combinar con opciones de token de registro${NC}"
+            exit 1
+        fi
         [[ -z "$classroom_id" ]] && { echo -e "${RED}Error: --classroom-id requerido con --enrollment-token${NC}"; exit 1; }
     else
         [[ -z "$classroom" ]] && { echo -e "${RED}Error: --classroom requerido${NC}"; exit 1; }
-        [[ -z "$token" ]]     && { echo -e "${RED}Error: --token requerido${NC}"; exit 1; }
+        if [ "$token_source_count" -eq 0 ]; then
+            echo -e "${RED}Error: requiere --token, --token-file o --token-stdin${NC}"
+            exit 1
+        fi
+        if [ "$token_source_count" -gt 1 ]; then
+            echo -e "${RED}Error: usa solo una opcion de token (--token, --token-file o --token-stdin)${NC}"
+            exit 1
+        fi
+
+        if [ -n "$token_file" ]; then
+            if [ ! -r "$token_file" ]; then
+                echo -e "${RED}Error: no se puede leer el archivo de token: $token_file${NC}"
+                exit 1
+            fi
+            token=$(tr -d '\r\n' < "$token_file")
+        fi
+
+        if [ "$token_from_stdin" = true ]; then
+            if [ -t 0 ]; then
+                echo -e "${RED}Error: --token-stdin requiere token por entrada estandar${NC}"
+                exit 1
+            fi
+            IFS= read -r token || true
+            token="${token%$'\r'}"
+        fi
+
+        [[ -z "$token" ]] && { echo -e "${RED}Error: token vacio${NC}"; exit 1; }
     fi
     
     echo -e "${BLUE}Registrando en aula...${NC}"
@@ -334,23 +486,25 @@ except Exception:
     
     # Step 2: Save config
     mkdir -p "$ETC_CONFIG_DIR"
+    chown root:root "$ETC_CONFIG_DIR" 2>/dev/null || true
+    chmod 750 "$ETC_CONFIG_DIR" 2>/dev/null || true
+
     echo "$api_url"   > "$ETC_CONFIG_DIR/api-url.conf"
+    chown root:root "$ETC_CONFIG_DIR/api-url.conf" 2>/dev/null || true
+    chmod 640 "$ETC_CONFIG_DIR/api-url.conf"
+
     if [[ -n "$classroom" ]]; then
         echo "$classroom" > "$ETC_CONFIG_DIR/classroom.conf"
+        chown root:root "$ETC_CONFIG_DIR/classroom.conf" 2>/dev/null || true
+        chmod 640 "$ETC_CONFIG_DIR/classroom.conf"
     fi
     if [[ -n "$classroom_id" ]]; then
         echo "$classroom_id" > "$ETC_CONFIG_DIR/classroom-id.conf"
+        chown root:root "$ETC_CONFIG_DIR/classroom-id.conf" 2>/dev/null || true
+        chmod 640 "$ETC_CONFIG_DIR/classroom-id.conf"
     fi
-    
-    # Step 3: Generate API secret if missing
-    if [[ ! -f "$ETC_CONFIG_DIR/api-secret.conf" ]] || [[ ! -s "$ETC_CONFIG_DIR/api-secret.conf" ]]; then
-        local secret
-        secret=$(head -c 32 /dev/urandom | base64 | tr -d '/+=' | head -c 32)
-        echo "$secret" > "$ETC_CONFIG_DIR/api-secret.conf"
-        chmod 600 "$ETC_CONFIG_DIR/api-secret.conf"
-    fi
-    
-    # Step 4: Register with API
+
+    # Step 3: Register with API
     local hostname version response
     hostname=$(hostname)
     version=$(dpkg -s openpath-dnsmasq 2>/dev/null | grep "^Version:" | awk '{print $2}' || echo "unknown")
@@ -377,18 +531,52 @@ print(json.dumps({"hostname": os.environ.get("HN",""), "classroomName": os.envir
             "$api_url/api/machines/register" 2>/dev/null)
     fi
 
-    local tokenized_url
-    tokenized_url=$(echo "$response" | python3 -c 'import json,sys
+    local parsed_response
+    parsed_response=$(echo "$response" | python3 -c 'import json,sys
 try:
   d=json.load(sys.stdin)
-  if d.get("success") is True and isinstance(d.get("whitelistUrl"), str) and d.get("whitelistUrl"):
-    print(d.get("whitelistUrl"))
 except Exception:
-  pass
+  print("")
+  print("")
+  print("")
+  sys.exit(0)
+
+if d.get("success") is True and isinstance(d.get("whitelistUrl"), str) and d.get("whitelistUrl"):
+  print(d.get("whitelistUrl"))
+  name=d.get("classroomName")
+  cid=d.get("classroomId")
+  print(name if isinstance(name, str) else "")
+  print(cid if isinstance(cid, str) else "")
+else:
+  print("")
+  print("")
+  print("")
 ')
+
+    local parsed_lines=()
+    mapfile -t parsed_lines <<< "$parsed_response"
+    local tokenized_url="${parsed_lines[0]:-}"
+    local server_classroom="${parsed_lines[1]:-}"
+    local server_classroom_id="${parsed_lines[2]:-}"
 
     if [[ -n "$tokenized_url" ]]; then
         echo "$tokenized_url" > "$WHITELIST_URL_CONF"
+        chown root:root "$WHITELIST_URL_CONF" 2>/dev/null || true
+        chmod 640 "$WHITELIST_URL_CONF"
+
+        if [[ -n "$server_classroom" ]]; then
+            classroom="$server_classroom"
+            echo "$server_classroom" > "$ETC_CONFIG_DIR/classroom.conf"
+            chown root:root "$ETC_CONFIG_DIR/classroom.conf" 2>/dev/null || true
+            chmod 640 "$ETC_CONFIG_DIR/classroom.conf"
+        fi
+        if [[ -n "$server_classroom_id" ]]; then
+            classroom_id="$server_classroom_id"
+            echo "$server_classroom_id" > "$ETC_CONFIG_DIR/classroom-id.conf"
+            chown root:root "$ETC_CONFIG_DIR/classroom-id.conf" 2>/dev/null || true
+            chmod 640 "$ETC_CONFIG_DIR/classroom-id.conf"
+        fi
+
         echo -e "  Registro: ${GREEN}exitoso${NC}"
         echo "  URL: $tokenized_url"
     else
@@ -396,16 +584,123 @@ except Exception:
         echo "  Respuesta: $response"
         exit 1
     fi
-    
-    # Step 5: Apply immediately
+
+    # Step 4: Apply immediately
     echo -e "  Aplicando configuracion..."
+    systemctl restart openpath-sse-listener.service 2>/dev/null || true
     /usr/local/bin/openpath-update.sh || echo -e "${YELLOW}Primera actualizacion fallo (el timer lo reintentara)${NC}"
-    
+
     if [[ -n "$classroom" ]]; then
         echo -e "${GREEN}✓ Registrado en aula: $classroom${NC}"
+    elif [[ -n "$classroom_id" ]]; then
+        echo -e "${GREEN}✓ Registrado en aula ID: $classroom_id${NC}"
     else
         echo -e "${GREEN}✓ Registrado en aula${NC}"
     fi
+}
+
+# Asistente de configuración (modo Aula)
+cmd_setup() {
+    local api_url=""
+    local classroom=""
+    local classroom_id=""
+    local token_file=""
+    local token_from_stdin=false
+    local token_prompt=""
+    local enrollment_token=""
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --api-url)      api_url="$2"; shift 2 ;;
+            --classroom)    classroom="$2"; shift 2 ;;
+            --classroom-id) classroom_id="$2"; shift 2 ;;
+            --token-file)   token_file="$2"; shift 2 ;;
+            --token-stdin)  token_from_stdin=true; shift ;;
+            --enrollment-token) enrollment_token="$2"; shift 2 ;;
+            --help)
+                echo "Uso: openpath setup [--api-url URL] [--classroom AULA] [--token-file ARCHIVO|--token-stdin]"
+                echo "   o: openpath setup --api-url URL --classroom-id ID --enrollment-token TOKEN"
+                echo "Si no pasas argumentos, se inicia modo interactivo."
+                return 0
+                ;;
+            *)
+                echo -e "${RED}Opcion desconocida: $1${NC}"
+                return 1
+                ;;
+        esac
+    done
+
+    if [[ -z "$api_url" ]]; then
+        if ! read_prompt_value api_url "API URL (ej: https://openpath.centro.edu): "; then
+            echo -e "${RED}Error: no hay entrada interactiva para solicitar API URL${NC}"
+            echo "  Usa --api-url o ejecuta en una terminal interactiva"
+            return 1
+        fi
+    fi
+    api_url="${api_url%/}"
+    [[ -z "$api_url" ]] && { echo -e "${RED}Error: API URL vacia${NC}"; return 1; }
+
+    if [[ -z "$classroom" ]] && [[ -z "$enrollment_token" ]]; then
+        if ! read_prompt_value classroom "Nombre del aula (ej: Aula-101): "; then
+            echo -e "${RED}Error: no hay entrada interactiva para solicitar el aula${NC}"
+            echo "  Usa --classroom o ejecuta en una terminal interactiva"
+            return 1
+        fi
+    fi
+
+    if [[ -n "$enrollment_token" ]]; then
+        if [[ -z "$classroom_id" ]]; then
+            echo -e "${RED}Error: --classroom-id requerido con --enrollment-token${NC}"
+            return 1
+        fi
+        if [ -n "$token_file" ] || [ "$token_from_stdin" = true ]; then
+            echo -e "${RED}Error: --enrollment-token no se puede combinar con --token-file/--token-stdin${NC}"
+            return 1
+        fi
+
+        "$0" enroll --api-url "$api_url" --classroom-id "$classroom_id" --enrollment-token "$enrollment_token"
+        return $?
+    fi
+
+    [[ -z "$classroom" ]] && { echo -e "${RED}Error: aula vacia${NC}"; return 1; }
+
+    local token_source_count=0
+    [ -n "$token_file" ] && token_source_count=$((token_source_count + 1))
+    [ "$token_from_stdin" = true ] && token_source_count=$((token_source_count + 1))
+
+    if [ "$token_source_count" -gt 1 ]; then
+        echo -e "${RED}Error: usa solo una opcion de token (--token-file o --token-stdin)${NC}"
+        return 1
+    fi
+
+    if [ "$token_source_count" -eq 0 ]; then
+        if ! read_prompt_secret token_prompt "Token de registro: "; then
+            echo -e "${RED}Error: sin terminal interactiva; usa --token-file o --token-stdin${NC}"
+            return 1
+        fi
+
+        if [[ -z "$token_prompt" ]]; then
+            echo -e "${RED}Error: token vacio${NC}"
+            return 1
+        fi
+
+        local token_tmp
+        token_tmp=$(mktemp)
+        chmod 600 "$token_tmp"
+        printf '%s' "$token_prompt" > "$token_tmp"
+
+        "$0" enroll --classroom "$classroom" --api-url "$api_url" --token-file "$token_tmp"
+        local enroll_status=$?
+        rm -f "$token_tmp"
+        return $enroll_status
+    fi
+
+    if [ -n "$token_file" ]; then
+        "$0" enroll --classroom "$classroom" --api-url "$api_url" --token-file "$token_file"
+        return $?
+    fi
+
+    "$0" enroll --classroom "$classroom" --api-url "$api_url" --token-stdin
 }
 
 # Forzar aplicación
@@ -500,6 +795,7 @@ cmd_rotate_token() {
     if [ -z "$secret" ]; then
         echo -e "${RED}Error: No se encontró el secreto de API${NC}"
         echo "  Archivo esperado: $ETC_CONFIG_DIR/api-secret.conf"
+        echo "  Debe contener el SHARED_SECRET del servidor para rotar token"
         exit 1
     fi
     
@@ -548,6 +844,7 @@ cmd_help() {
     echo "  enable          Habilitar sistema"
     echo "  disable         Deshabilitar sistema"
     echo "  restart         Reiniciar servicios"
+    echo "  setup           Asistente de configuración (solo modo Aula)"
     echo "  rotate-token    Rotar token de descarga (modo Aula)"
     echo "  enroll          Registrar maquina en un aula"
     echo "  self-update     Actualizar agente a la última versión"
@@ -569,6 +866,7 @@ case "${1:-status}" in
     enable)     cmd_enable ;;
     disable)    cmd_disable ;;
     restart)    cmd_restart ;;
+    setup)      shift; cmd_setup "$@" ;;
     rotate-token) cmd_rotate_token ;;
     enroll)     shift; cmd_enroll "$@" ;;
     self-update) shift; /usr/local/bin/openpath-self-update.sh "$@" ;;
