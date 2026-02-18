@@ -154,6 +154,19 @@ Describe "Common Module" {
         }
     }
 
+    Context "Self-update helpers" {
+        It "Extracts machine token from whitelist URL" {
+            $token = Get-OpenPathMachineTokenFromWhitelistUrl -WhitelistUrl "https://api.example.com/w/abc123token/whitelist.txt"
+            $token | Should -Be 'abc123token'
+        }
+
+        It "Compares versions correctly" {
+            (Compare-OpenPathVersion -CurrentVersion '4.1.0' -TargetVersion '4.2.0') | Should -BeLessThan 0
+            (Compare-OpenPathVersion -CurrentVersion '4.2.0' -TargetVersion '4.2.0') | Should -Be 0
+            (Compare-OpenPathVersion -CurrentVersion '4.3.0' -TargetVersion '4.2.0') | Should -BeGreaterThan 0
+        }
+    }
+
     Context "Get-ValidWhitelistDomainsFromFile" {
         It "Returns valid domains and ignores invalid entries" {
             $tempFile = Join-Path $env:TEMP ("openpath-domains-" + [Guid]::NewGuid().ToString() + ".txt")
@@ -852,12 +865,24 @@ Describe "Services Module" {
             # Just verify the function signature works
             { Register-OpenPathTask -UpdateIntervalMinutes 15 -WatchdogIntervalMinutes 2 -WhatIf } | Should -Not -Throw
         }
+
+        It "Includes daily silent agent update task" {
+            $servicesPath = Join-Path $PSScriptRoot ".." "lib" "Services.psm1"
+            $content = Get-Content $servicesPath -Raw
+
+            $content.Contains('OpenPath-AgentUpdate') | Should -BeTrue
+            $content.Contains('self-update --silent') | Should -BeTrue
+        }
     }
 
     Context "Start-OpenPathTask" {
         It "Accepts SSE as a valid task type" -Skip:(-not (Test-FunctionExists 'Start-OpenPathTask')) {
             # Verify the SSE task type is accepted in the ValidateSet
             { Start-OpenPathTask -TaskType SSE -WhatIf } | Should -Not -Throw
+        }
+
+        It "Accepts AgentUpdate as a valid task type" -Skip:(-not (Test-FunctionExists 'Start-OpenPathTask')) {
+            { Start-OpenPathTask -TaskType AgentUpdate -WhatIf } | Should -Not -Throw
         }
     }
 }
@@ -903,10 +928,12 @@ Describe "Operational Command Script" {
             $content.Contains("'status'") | Should -BeTrue
             $content.Contains("'update'") | Should -BeTrue
             $content.Contains("'health'") | Should -BeTrue
+            $content.Contains("'self-update'") | Should -BeTrue
             $content.Contains("'enroll'") | Should -BeTrue
             $content.Contains("'rotate-token'") | Should -BeTrue
             $content.Contains("'restart'") | Should -BeTrue
             $content.Contains('Show-OpenPathStatus') | Should -BeTrue
+            $content.Contains('Invoke-OpenPathAgentSelfUpdate') | Should -BeTrue
             $content.Contains('Enroll-Machine.ps1') | Should -BeTrue
         }
     }

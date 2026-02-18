@@ -11,6 +11,7 @@ Internet access control system using a DNS sinkhole for Windows, powered by Acry
 ✅ **Browser Policies** - Supports Firefox, Chrome, and Edge.  
 ✅ **Real-Time SSE Updates** - Instant rule changes via Server-Sent Events.  
 ✅ **Auto-Update Fallback** - Syncs every 15 minutes via Task Scheduler.  
+✅ **Silent Agent Self-Update** - Daily software updates from the same OpenPath server version.  
 ✅ **Stale Whitelist Fail-Safe** - Enters safe restrictive mode when cache expires offline.  
 ✅ **Integrity Baseline** - Detects script/module tampering and attempts bounded restore.  
 ✅ **Checkpoint Rollback** - Stores rolling whitelist checkpoints for watchdog recovery.  
@@ -41,6 +42,7 @@ The installer executes `tests\Pre-Install-Validation.ps1` by default before maki
 .\OpenPath.ps1 status
 .\OpenPath.ps1 update
 .\OpenPath.ps1 health
+.\OpenPath.ps1 self-update --check
 
 # Classroom operations
 .\OpenPath.ps1 enroll -Classroom "Lab-01" -ApiUrl "https://api.example.com" -RegistrationToken "<token>"
@@ -95,6 +97,7 @@ Edit `C:\OpenPath\data\config.json`:
 ```json
 {
   "whitelistUrl": "http://server:3000/w/<token>/whitelist.txt",
+  "version": "4.1.0",
   "updateIntervalMinutes": 15,
   "primaryDNS": "8.8.8.8",
   "enableFirewall": true,

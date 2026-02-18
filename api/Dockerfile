@@ -19,6 +19,8 @@ RUN npm ci
 COPY api ./api
 COPY shared ./shared
 COPY react-spa ./react-spa
+COPY windows ./windows
+COPY VERSION ./VERSION
 
 # Build shared package first
 RUN npm run build --workspace=@openpath/shared
@@ -55,6 +57,8 @@ COPY --from=builder /app/api/dist ./api/dist
 COPY --from=builder /app/shared/dist ./shared/dist
 COPY --from=builder /app/react-spa/dist ./react-spa/dist
 COPY --from=builder /app/api/data ./api/data
+COPY --from=builder /app/windows ./windows
+COPY --from=builder /app/VERSION ./VERSION
 
 # Copy database schema (needed for migration)
 # We place it in a location where migrate.js expects it: ../src/db/schema.sql relative to dist/scripts/

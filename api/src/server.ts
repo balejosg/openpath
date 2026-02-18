@@ -98,6 +98,127 @@ const app = express();
 const PORT = config.port;
 const HOST = config.host;
 
+const WINDOWS_AGENT_ROOT = path.resolve(process.cwd(), '../windows');
+const WINDOWS_AGENT_VERSION_FILE = path.resolve(process.cwd(), '../VERSION');
+const WINDOWS_AGENT_DIRECTORIES = ['lib', 'scripts'] as const;
+const WINDOWS_AGENT_ROOT_FILES = ['Rotate-Token.ps1'] as const;
+
+interface WindowsAgentFileEntry {
+  relativePath: string;
+  absolutePath: string;
+  sha256: string;
+  size: number;
+}
+
+type MachineByToken = Awaited<ReturnType<typeof classroomStorage.getMachineByDownloadTokenHash>>;
+type AuthenticatedMachine = NonNullable<MachineByToken>;
+
+function listFilesRecursively(directoryPath: string): string[] {
+  if (!fs.existsSync(directoryPath)) {
+    return [];
+  }
+
+  const files: string[] = [];
+  const entries = fs.readdirSync(directoryPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(directoryPath, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...listFilesRecursively(fullPath));
+      continue;
+    }
+
+    if (entry.isFile()) {
+      files.push(fullPath);
+    }
+  }
+
+  return files;
+}
+
+function readServerVersion(): string {
+  const envVersion = process.env.OPENPATH_VERSION?.trim();
+  if (envVersion) {
+    return envVersion;
+  }
+
+  try {
+    const fileVersion = fs.readFileSync(WINDOWS_AGENT_VERSION_FILE, 'utf8').trim();
+    if (fileVersion) {
+      return fileVersion;
+    }
+  } catch {
+    // Best-effort fallback; missing version file should not break runtime.
+  }
+
+  return '0.0.0';
+}
+
+function buildWindowsAgentFileManifest(): WindowsAgentFileEntry[] {
+  const absoluteFiles = new Set<string>();
+
+  for (const fileName of WINDOWS_AGENT_ROOT_FILES) {
+    const absolutePath = path.join(WINDOWS_AGENT_ROOT, fileName);
+    if (fs.existsSync(absolutePath)) {
+      absoluteFiles.add(path.resolve(absolutePath));
+    }
+  }
+
+  for (const relativeDirectory of WINDOWS_AGENT_DIRECTORIES) {
+    const absoluteDirectory = path.join(WINDOWS_AGENT_ROOT, relativeDirectory);
+    for (const absolutePath of listFilesRecursively(absoluteDirectory)) {
+      if (!/\.(ps1|psm1)$/i.exec(absolutePath)) {
+        continue;
+      }
+      absoluteFiles.add(path.resolve(absolutePath));
+    }
+  }
+
+  return Array.from(absoluteFiles)
+    .map((absolutePath) => {
+      const relativePath = path.relative(WINDOWS_AGENT_ROOT, absolutePath).replaceAll('\\', '/');
+
+      if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+        return null;
+      }
+
+      const fileBuffer = fs.readFileSync(absolutePath);
+      return {
+        relativePath,
+        absolutePath,
+        sha256: createHash('sha256').update(fileBuffer).digest('hex'),
+        size: fileBuffer.length,
+      };
+    })
+    .filter((entry): entry is WindowsAgentFileEntry => entry !== null)
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+}
+
+async function authenticateMachineToken(
+  req: Request,
+  res: Response
+): Promise<AuthenticatedMachine | null> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ success: false, error: 'Authorization header required' });
+    return null;
+  }
+
+  const machineToken = authHeader.slice(7);
+  if (!machineToken) {
+    res.status(401).json({ success: false, error: 'Machine token required' });
+    return null;
+  }
+
+  const tokenHash = hashMachineToken(machineToken);
+  const machine = await classroomStorage.getMachineByDownloadTokenHash(tokenHash);
+  if (!machine) {
+    res.status(403).json({ success: false, error: 'Invalid machine token' });
+    return null;
+  }
+
+  return machine;
+}
+
 interface AutoRequestPayload {
   domain?: unknown;
   origin_page?: unknown;
@@ -757,6 +878,91 @@ app.post('/api/machines/:hostname/rotate-download-token', (req: Request, res: Re
 
     res.json({ success: true, whitelistUrl });
   })();
+});
+
+// =============================================================================
+// Windows Agent Silent Update Endpoints
+// =============================================================================
+
+app.get('/api/agent/windows/latest.json', (req: Request, res: Response): void => {
+  void (async (): Promise<void> => {
+    try {
+      const machine = await authenticateMachineToken(req, res);
+      if (!machine) {
+        return;
+      }
+
+      const files = buildWindowsAgentFileManifest();
+      if (files.length === 0) {
+        logger.warn('Windows agent manifest requested but no files found', {
+          root: WINDOWS_AGENT_ROOT,
+        });
+        res.status(503).json({ success: false, error: 'Windows agent package unavailable' });
+        return;
+      }
+
+      await classroomStorage.updateMachineLastSeen(machine.hostname);
+
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.json({
+        success: true,
+        version: readServerVersion(),
+        generatedAt: new Date().toISOString(),
+        files: files.map((file) => ({
+          path: file.relativePath,
+          sha256: file.sha256,
+          size: file.size,
+        })),
+      });
+    } catch (error) {
+      logger.error('Error serving Windows agent manifest', { error: getErrorMessage(error) });
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Internal error' });
+      }
+    }
+  })();
+});
+
+app.get('/api/agent/windows/file', (req: Request, res: Response): void => {
+  void (async (): Promise<void> => {
+    try {
+      const machine = await authenticateMachineToken(req, res);
+      if (!machine) {
+        return;
+      }
+
+      const requestedPath = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+      if (!requestedPath) {
+        res.status(400).json({ success: false, error: 'path query parameter required' });
+        return;
+      }
+
+      const files = buildWindowsAgentFileManifest();
+      const file = files.find((entry) => entry.relativePath === requestedPath);
+      if (!file) {
+        res.status(404).json({ success: false, error: 'File not found in agent package' });
+        return;
+      }
+
+      const fileContents = fs.readFileSync(file.absolutePath);
+
+      await classroomStorage.updateMachineLastSeen(machine.hostname);
+
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.type('text/plain').send(fileContents);
+    } catch (error) {
+      logger.error('Error serving Windows agent file', { error: getErrorMessage(error) });
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Internal error' });
+      }
+    }
+  })();
+});
+
+app.get('/w/whitelist.txt', (_req: Request, res: Response): void => {
+  res.type('text/plain').send(FAIL_OPEN_RESPONSE);
 });
 
 app.get('/w/:machineToken/whitelist.txt', (req: Request, res: Response): void => {

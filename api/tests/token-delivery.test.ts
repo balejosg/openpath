@@ -50,6 +50,14 @@ async function createTestClassroom(name: string, groupId: string): Promise<strin
   return id;
 }
 
+function extractMachineToken(whitelistUrl: string): string {
+  const match = /\/w\/([^/]+)\//.exec(whitelistUrl);
+  assert.ok(match, `Expected tokenized whitelist URL, got: ${whitelistUrl}`);
+  const token = match[1];
+  assert.ok(token, `Expected machine token in URL: ${whitelistUrl}`);
+  return token;
+}
+
 void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
   before(async () => {
     await resetDb();
@@ -305,6 +313,85 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
     });
   });
 
+  await describe('GET /api/agent/windows/*', async () => {
+    let machineToken: string;
+
+    before(async () => {
+      await createTestClassroom('WindowsAgentClassroom', 'windows-agent-group');
+
+      const registerResponse = await fetch(`${API_URL}/api/machines/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${registrationToken}`,
+        },
+        body: JSON.stringify({
+          hostname: 'windows-agent-test-pc',
+          classroomName: 'WindowsAgentClassroom',
+          version: '4.0.0',
+        }),
+      });
+
+      assert.strictEqual(registerResponse.status, 200);
+      const registerData = (await registerResponse.json()) as { whitelistUrl: string };
+      machineToken = extractMachineToken(registerData.whitelistUrl);
+    });
+
+    await test('should require machine bearer token for manifest', async () => {
+      const response = await fetch(`${API_URL}/api/agent/windows/latest.json`);
+      assert.strictEqual(response.status, 401);
+    });
+
+    await test('should return manifest using server version and file hashes', async () => {
+      const response = await fetch(`${API_URL}/api/agent/windows/latest.json`, {
+        headers: {
+          Authorization: `Bearer ${machineToken}`,
+        },
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = (await response.json()) as {
+        success: boolean;
+        version: string;
+        files: { path: string; sha256: string; size: number }[];
+      };
+
+      assert.strictEqual(data.success, true);
+      assert.ok(data.version.length > 0);
+      assert.ok(data.files.length > 0);
+      assert.ok(data.files.some((file) => file.path === 'scripts/Update-OpenPath.ps1'));
+      assert.ok(data.files.every((file) => file.sha256.length === 64));
+    });
+
+    await test('should download manifest file by relative path', async () => {
+      const manifestResponse = await fetch(`${API_URL}/api/agent/windows/latest.json`, {
+        headers: {
+          Authorization: `Bearer ${machineToken}`,
+        },
+      });
+      assert.strictEqual(manifestResponse.status, 200);
+
+      const manifest = (await manifestResponse.json()) as {
+        files: { path: string }[];
+      };
+      const filePath = manifest.files[0]?.path;
+      assert.ok(filePath);
+
+      const response = await fetch(
+        `${API_URL}/api/agent/windows/file?path=${encodeURIComponent(filePath)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${machineToken}`,
+          },
+        }
+      );
+
+      assert.strictEqual(response.status, 200);
+      const fileContent = await response.text();
+      assert.ok(fileContent.length > 0);
+    });
+  });
+
   await describe('GET /w/:machineToken/whitelist.txt', async () => {
     await test('should return fail-open for invalid token', async () => {
       const response = await fetch(`${API_URL}/w/invalid-token-here/whitelist.txt`);
@@ -315,7 +402,7 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
     });
 
     await test('should return fail-open for missing token', async () => {
-      const response = await fetch(`${API_URL}/w//whitelist.txt`);
+      const response = await fetch(`${API_URL}/w/whitelist.txt`);
       const text = await response.text();
       assert.ok(text.includes('#DESACTIVADO') || response.status !== 200);
     });

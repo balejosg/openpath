@@ -57,6 +57,7 @@ function Show-OpenPathHelp {
     Write-Host '  status        Show runtime status summary'
     Write-Host '  update        Trigger immediate whitelist update'
     Write-Host '  health        Run watchdog health check now'
+    Write-Host '  self-update   Update Windows agent software from server'
     Write-Host '  enroll        Register machine in classroom mode'
     Write-Host '  rotate-token  Rotate tokenized whitelist URL'
     Write-Host '  restart       Restart Acrylic + trigger update'
@@ -65,6 +66,7 @@ function Show-OpenPathHelp {
     Write-Host 'Examples:'
     Write-Host '  .\OpenPath.ps1 status'
     Write-Host '  .\OpenPath.ps1 update'
+    Write-Host '  .\OpenPath.ps1 self-update --check'
     Write-Host '  .\OpenPath.ps1 enroll -Classroom Aula1 -ApiUrl https://api.example.com -RegistrationToken <token>'
     Write-Host '  .\OpenPath.ps1 rotate-token -Secret <shared-secret>'
 }
@@ -178,6 +180,10 @@ function Show-OpenPathStatus {
     Write-Host "Watchdog fail count: $watchdogFails"
 
     if ($config) {
+        Write-Host "Agent version: $($config.version)"
+        if ($config.PSObject.Properties['lastAgentUpdateAt'] -and $config.lastAgentUpdateAt) {
+            Write-Host "Last agent update: $($config.lastAgentUpdateAt)"
+        }
         Write-Host "Classroom: $($config.classroom)"
         Write-Host "API URL: $($config.apiUrl)"
         Write-Host "Whitelist URL: $($config.whitelistUrl)"
@@ -212,6 +218,14 @@ try {
         }
         'health' {
             Invoke-OpenPathScript -ScriptPath "$scriptsPath\Test-DNSHealth.ps1" -ScriptArguments $Arguments
+        }
+        'self-update' {
+            $checkOnly = $Arguments -contains '--check' -or $Arguments -contains '-check'
+            $silent = $Arguments -contains '--silent' -or $Arguments -contains '-silent'
+            $result = Invoke-OpenPathAgentSelfUpdate -CheckOnly:$checkOnly -Silent:$silent
+            if (-not $result.Success) {
+                throw $result.Message
+            }
         }
         'enroll' {
             Invoke-OpenPathScript -ScriptPath "$scriptsPath\Enroll-Machine.ps1" -ScriptArguments $Arguments

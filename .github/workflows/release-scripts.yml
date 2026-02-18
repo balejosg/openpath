@@ -109,7 +109,7 @@ jobs:
 
           # Create ZIP with all Windows files
           echo "  → Creating ZIP archive..."
-          zip -r -q "$PACKAGE_NAME" windows/
+          zip -r -q "$PACKAGE_NAME" windows/ VERSION
 
           # Verify
           if [ -f "$PACKAGE_NAME" ]; then

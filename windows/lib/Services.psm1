@@ -101,9 +101,32 @@ function Register-OpenPathTask {
         -Principal $updatePrincipal `
         -Settings $sseSettings `
         -Force | Out-Null
-    
+
     Write-OpenPathLog "Registered: $script:TaskPrefix-SSE (persistent SSE listener)"
-    
+
+    # Task 5: Agent software self-update (daily, silent)
+    $agentUpdateAction = New-ScheduledTaskAction -Execute "PowerShell.exe" `
+        -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$openPathRoot\OpenPath.ps1`" self-update --silent"
+
+    $agentUpdateTrigger = New-ScheduledTaskTrigger -Daily -At 3am -RandomDelay (New-TimeSpan -Minutes 45)
+
+    $agentUpdateSettings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable `
+        -RestartCount 3 `
+        -RestartInterval (New-TimeSpan -Minutes 10) `
+        -ExecutionTimeLimit (New-TimeSpan -Hours 2)
+
+    Register-ScheduledTask -TaskName "$script:TaskPrefix-AgentUpdate" `
+        -Action $agentUpdateAction `
+        -Trigger $agentUpdateTrigger `
+        -Principal $updatePrincipal `
+        -Settings $agentUpdateSettings `
+        -Force | Out-Null
+
+    Write-OpenPathLog "Registered: $script:TaskPrefix-AgentUpdate (daily silent software update)"
+
     return $true
 }
 
@@ -165,7 +188,7 @@ function Start-OpenPathTask {
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
-        [ValidateSet("Update", "Watchdog", "Startup", "SSE")]
+        [ValidateSet("Update", "Watchdog", "Startup", "SSE", "AgentUpdate")]
         [string]$TaskType = "Update"
     )
 

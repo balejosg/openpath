@@ -221,8 +221,28 @@ if (-not $primaryDNS) {
     $primaryDNS = "8.8.8.8"
 }
 
+$agentVersion = "0.0.0"
+if ($env:OPENPATH_VERSION) {
+    $agentVersion = [string]$env:OPENPATH_VERSION
+}
+else {
+    $versionFilePath = Join-Path (Split-Path $scriptDir -Parent) "VERSION"
+    if (Test-Path $versionFilePath) {
+        try {
+            $versionFromFile = (Get-Content $versionFilePath -Raw).Trim()
+            if ($versionFromFile) {
+                $agentVersion = $versionFromFile
+            }
+        }
+        catch {
+            # Keep default when version file cannot be read
+        }
+    }
+}
+
 $config = @{
     whitelistUrl = $WhitelistUrl
+    version = $agentVersion
     updateIntervalMinutes = 15
     watchdogIntervalMinutes = 1
     primaryDNS = $primaryDNS
@@ -417,6 +437,7 @@ if ($Classroom -and $ApiUrl) {
     Write-Host "  - Registration: $machineRegistered"
 }
 Write-Host "  - Whitelist: $WhitelistUrl"
+Write-Host "  - Agent version: $agentVersion"
 Write-Host "  - DNS upstream: $primaryDNS"
 Write-Host "  - Actualización: SSE real-time + cada 15 min (fallback)"
 Write-Host ""
@@ -424,6 +445,7 @@ Write-Host "Comandos útiles:"
 Write-Host "  .\OpenPath.ps1 status          # Estado del agente"
 Write-Host "  .\OpenPath.ps1 update          # Forzar actualización"
 Write-Host "  .\OpenPath.ps1 health          # Ejecutar watchdog"
+Write-Host "  .\OpenPath.ps1 self-update --check  # Comprobar actualización de agente"
 Write-Host "  nslookup google.com 127.0.0.1  # Probar DNS"
 Write-Host "  Get-ScheduledTask OpenPath-*  # Ver tareas"
 if ($Classroom -and $ApiUrl) {

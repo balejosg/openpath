@@ -1,5 +1,6 @@
 {
   "whitelistUrl": "",
+  "version": "0.0.0",
   "updateIntervalMinutes": 15,
   "watchdogIntervalMinutes": 1,
   "primaryDNS": "8.8.8.8",
