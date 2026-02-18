@@ -870,7 +870,7 @@ Describe "Services Module" {
             $servicesPath = Join-Path $PSScriptRoot ".." "lib" "Services.psm1"
             $content = Get-Content $servicesPath -Raw
 
-            $content.Contains('OpenPath-AgentUpdate') | Should -BeTrue
+            $content.Contains('$script:TaskPrefix-AgentUpdate') | Should -BeTrue
             $content.Contains('self-update --silent') | Should -BeTrue
         }
     }
