@@ -35,15 +35,14 @@ interface VerifyResponse {
   error?: string;
 }
 
-interface TRPCMutationResponse<T> {
-  result?: { data: T };
-  error?: { message?: string };
-}
-
-interface CreateRequestResult {
+interface SubmitRequestResult {
+  success: boolean;
   id: string;
   domain: string;
   status: 'pending' | 'approved' | 'rejected';
+  groupId: string;
+  source: string;
+  error?: string;
 }
 
 interface BlockedDomainsResponse {
@@ -198,6 +197,13 @@ async function fetchWithFallback(
   }
 
   throw lastError ?? new Error('No hay endpoint API disponible');
+}
+
+async function generateProofToken(hostname: string, secret: string): Promise<string> {
+  const data = new TextEncoder().encode(hostname + secret);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = new Uint8Array(hashBuffer);
+  return btoa(String.fromCharCode(...hashArray));
 }
 
 function statusMeta(status?: DomainStatus): {
@@ -573,7 +579,6 @@ async function submitDomainRequest(): Promise<void> {
   const reason = requestReasonEl.value.trim();
   const selectedInfo = blockedDomainsData[domain];
   const extensionVersion = browser.runtime.getManifest().version;
-  const groupId = CONFIG.defaultGroup;
 
   if (!domain || reason.length < 3) {
     showRequestStatus('❌ Selecciona un dominio y escribe un motivo', 'error');
@@ -602,28 +607,35 @@ async function submitDomainRequest(): Promise<void> {
       machineHostname = undefined;
     }
 
+    if (!machineHostname) {
+      showRequestStatus('❌ No se pudo obtener el hostname del equipo', 'error');
+      showToast('❌ Hostname no disponible');
+      return;
+    }
+
+    const token = await generateProofToken(machineHostname, CONFIG.sharedSecret.trim());
+
     const apiResponse = await fetchWithFallback(
-      '/trpc/requests.create',
+      '/api/requests/submit',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           domain,
           reason,
-          groupId,
-          source: 'firefox-extension',
-          machineHostname,
-          originHost: selectedInfo?.origin ?? undefined,
-          clientVersion: extensionVersion,
-          errorType: selectedInfo?.errors?.[0],
+          token,
+          hostname: machineHostname,
+          origin_host: selectedInfo?.origin ?? undefined,
+          client_version: extensionVersion,
+          error_type: selectedInfo?.errors?.[0],
         }),
       },
       CONFIG.requestTimeout
     );
 
-    const payload = (await apiResponse.json()) as TRPCMutationResponse<CreateRequestResult>;
+    const payload = (await apiResponse.json()) as Partial<SubmitRequestResult>;
 
-    if (apiResponse.ok && payload.result?.data.id) {
+    if (apiResponse.ok && payload.success === true && payload.id) {
       showRequestStatus(
         `✅ Solicitud enviada para ${domain}. Queda pendiente de aprobación.`,
         'success'
@@ -636,7 +648,7 @@ async function submitDomainRequest(): Promise<void> {
       await loadDomainStatuses();
       renderDomainsList();
     } else {
-      const errorMsg = payload.error?.message ?? 'Error desconocido';
+      const errorMsg = payload.error ?? 'Error desconocido';
       showRequestStatus(`❌ ${errorMsg}`, 'error');
       showToast(`❌ ${errorMsg}`);
     }

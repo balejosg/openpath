@@ -248,6 +248,160 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
     });
   });
 
+  await describe('Submit Request Endpoint', async () => {
+    await test('should create pending request in active classroom group', async () => {
+      const suffix = `${Date.now().toString()}-submit-active`;
+      const activeGroupId = `grp-active-${suffix}`;
+      const defaultGroupId = `grp-default-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const domain = `manual-${suffix}.example.com`;
+      const sharedSecret = process.env.SHARED_SECRET;
+
+      assert.ok(sharedSecret, 'SHARED_SECRET must be defined in test environment');
+
+      await db.execute(
+        sql.raw(
+          `INSERT INTO whitelist_groups (id, name, display_name, enabled) VALUES ('${activeGroupId}', '${activeGroupId}', '${activeGroupId}', 1)`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO whitelist_groups (id, name, display_name, enabled) VALUES ('${defaultGroupId}', '${defaultGroupId}', '${defaultGroupId}', 1)`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO classrooms (id, name, display_name, default_group_id, active_group_id) VALUES ('${classroomId}', '${classroomId}', '${classroomId}', '${defaultGroupId}', '${activeGroupId}')`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO machines (id, hostname, classroom_id, version) VALUES ('${machineId}', '${hostname}', '${classroomId}', 'test')`
+        )
+      );
+
+      const token = buildMachineProofToken(hostname, sharedSecret);
+
+      const response = await fetch(`${API_URL}/api/requests/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          reason: 'Manual submit from extension',
+          token,
+          hostname,
+          origin_host: `${classroomId}.school.local`,
+          client_version: '2.0.0-test',
+        }),
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = (await response.json()) as {
+        success: boolean;
+        id: string;
+        status: string;
+        groupId: string;
+        source: string;
+      };
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.status, 'pending');
+      assert.strictEqual(data.groupId, activeGroupId);
+      assert.strictEqual(data.source, 'firefox-extension');
+
+      const requestRow = await db.execute(
+        sql.raw(
+          `SELECT status, group_id, source, machine_hostname, origin_host FROM requests WHERE id='${data.id}' LIMIT 1`
+        )
+      );
+      const rows = requestRow.rows as {
+        status: string;
+        group_id: string;
+        source: string;
+        machine_hostname: string;
+        origin_host: string;
+      }[];
+
+      assert.strictEqual(rows.length, 1);
+      const firstRow = rows[0] as {
+        status: string;
+        group_id: string;
+        source: string;
+        machine_hostname: string;
+        origin_host: string;
+      };
+      assert.strictEqual(firstRow.status, 'pending');
+      assert.strictEqual(firstRow.group_id, activeGroupId);
+      assert.strictEqual(firstRow.source, 'firefox-extension');
+      assert.strictEqual(firstRow.machine_hostname, hostname);
+      assert.strictEqual(firstRow.origin_host, `${classroomId}.school.local`);
+    });
+
+    await test('should fallback to default group when no active group is set', async () => {
+      const suffix = `${Date.now().toString()}-submit-default`;
+      const defaultGroupId = `grp-default-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const domain = `manual-default-${suffix}.example.com`;
+      const sharedSecret = process.env.SHARED_SECRET;
+
+      assert.ok(sharedSecret, 'SHARED_SECRET must be defined in test environment');
+
+      await db.execute(
+        sql.raw(
+          `INSERT INTO whitelist_groups (id, name, display_name, enabled) VALUES ('${defaultGroupId}', '${defaultGroupId}', '${defaultGroupId}', 1)`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO classrooms (id, name, display_name, default_group_id, active_group_id) VALUES ('${classroomId}', '${classroomId}', '${classroomId}', '${defaultGroupId}', NULL)`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO machines (id, hostname, classroom_id, version) VALUES ('${machineId}', '${hostname}', '${classroomId}', 'test')`
+        )
+      );
+
+      const token = buildMachineProofToken(hostname, sharedSecret);
+
+      const response = await fetch(`${API_URL}/api/requests/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          reason: 'Manual submit fallback default',
+          token,
+          hostname,
+        }),
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = (await response.json()) as {
+        success: boolean;
+        id: string;
+        status: string;
+        groupId: string;
+      };
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.status, 'pending');
+      assert.strictEqual(data.groupId, defaultGroupId);
+
+      const requestRow = await db.execute(
+        sql.raw(`SELECT group_id FROM requests WHERE id='${data.id}' LIMIT 1`)
+      );
+      const rows = requestRow.rows as { group_id: string }[];
+
+      assert.strictEqual(rows.length, 1);
+      const firstRow = rows[0] as { group_id: string };
+      assert.strictEqual(firstRow.group_id, defaultGroupId);
+    });
+  });
+
   await describe('tRPC requests.create - Submit Domain Request', async () => {
     await test('should accept valid domain request', async () => {
       const input = {
