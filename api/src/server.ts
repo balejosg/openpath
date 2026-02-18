@@ -897,13 +897,7 @@ echo ""
 app.get('/api/enroll/:classroomId/windows.ps1', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {
     try {
-      const { classroomId } = req.params;
       const authHeader = req.headers.authorization;
-
-      if (!classroomId) {
-        res.status(400).send('Missing classroomId');
-        return;
-      }
 
       if (!authHeader?.startsWith('Bearer ')) {
         res.status(401).send('Authorization header required');
@@ -917,11 +911,18 @@ app.get('/api/enroll/:classroomId/windows.ps1', (req: Request, res: Response): v
         return;
       }
 
-      if (payload.classroomId !== classroomId) {
+      const requestedClassroomId = req.params.classroomId;
+      if (!requestedClassroomId) {
+        res.status(400).send('Missing classroomId');
+        return;
+      }
+
+      if (payload.classroomId !== requestedClassroomId) {
         res.status(403).send('Enrollment token does not match classroom');
         return;
       }
 
+      const classroomId = payload.classroomId;
       const classroom = await classroomStorage.getClassroomById(classroomId);
       if (!classroom) {
         res.status(404).send('Classroom not found');
