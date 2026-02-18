@@ -43,6 +43,7 @@ const Classrooms = () => {
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [enrollToken, setEnrollToken] = useState<string | null>(null);
   const [enrollCopied, setEnrollCopied] = useState(false);
+  const [enrollPlatform, setEnrollPlatform] = useState<'linux' | 'windows'>('linux');
   const [loadingToken, setLoadingToken] = useState(false);
 
   // New classroom form state
@@ -247,6 +248,7 @@ const Classrooms = () => {
       }
 
       setEnrollToken(data.enrollmentToken);
+      setEnrollPlatform('linux');
       setShowEnrollModal(true);
     } catch (err: unknown) {
       console.error('Failed to get enrollment ticket:', err);
@@ -257,10 +259,23 @@ const Classrooms = () => {
   };
 
   const apiUrl = window.location.origin;
-  const enrollCommand =
+  const linuxEnrollCommand =
     selectedClassroom && enrollToken
       ? `curl -fsSL -H 'Authorization: Bearer ${enrollToken}' '${apiUrl}/api/enroll/${encodeURIComponent(selectedClassroom.id)}' | sudo bash`
       : '';
+  const windowsEnrollScriptUrl =
+    selectedClassroom && enrollToken
+      ? `${apiUrl}/api/enroll/${encodeURIComponent(selectedClassroom.id)}/windows.ps1`
+      : '';
+  const windowsEnrollCommand =
+    selectedClassroom && enrollToken
+      ? [
+          'powershell -NoProfile -ExecutionPolicy Bypass -Command',
+          `"$t='${enrollToken}'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;`,
+          `irm -Headers @{Authorization=('Bearer '+$t)} '${windowsEnrollScriptUrl}' | iex"`,
+        ].join(' ')
+      : '';
+  const enrollCommand = enrollPlatform === 'windows' ? windowsEnrollCommand : linuxEnrollCommand;
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-6">
@@ -762,9 +777,31 @@ const Classrooms = () => {
               </button>
             </div>
             <p className="text-sm text-slate-600 mb-3">
-              Ejecuta este comando en cada PC del aula{' '}
+              Selecciona plataforma y ejecuta el comando en cada equipo del aula{' '}
               <strong>{selectedClassroom.displayName}</strong> para instalar y registrar el agente:
             </p>
+            <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+              <button
+                onClick={() => setEnrollPlatform('linux')}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+                  enrollPlatform === 'linux'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                Linux (MAX)
+              </button>
+              <button
+                onClick={() => setEnrollPlatform('windows')}
+                className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+                  enrollPlatform === 'windows'
+                    ? 'bg-white text-slate-900 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                Windows
+              </button>
+            </div>
             <div className="bg-slate-900 text-green-400 rounded-lg p-4 font-mono text-xs overflow-x-auto relative">
               <button
                 onClick={() => {
@@ -779,10 +816,17 @@ const Classrooms = () => {
               </button>
               <pre className="whitespace-pre-wrap pr-8">{enrollCommand}</pre>
             </div>
-            <p className="text-xs text-slate-500 mt-3">
-              El agente se auto-actualizará automáticamente vía APT. Asegúrate de tener conexión a
-              internet en el equipo durante la instalación.
-            </p>
+            {enrollPlatform === 'linux' ? (
+              <p className="text-xs text-slate-500 mt-3">
+                El agente se auto-actualizará automáticamente vía APT. Asegúrate de tener conexión a
+                internet en el equipo durante la instalación.
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500 mt-3">
+                Ejecuta PowerShell como Administrador. El instalador registra el equipo con token de
+                aula y configura actualizaciones silenciosas diarias del agente.
+              </p>
+            )}
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => setShowEnrollModal(false)}

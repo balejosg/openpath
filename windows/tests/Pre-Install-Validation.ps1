@@ -103,7 +103,7 @@ Test-Requirement "Acrylic DNS Proxy installed" {
 
 Test-Requirement "Chocolatey package manager" {
     Get-Command choco -ErrorAction SilentlyContinue
-} -FailMessage "Chocolatey not found - manual Acrylic install required" -Warning
+} -FailMessage "Chocolatey not found - installer will use direct Acrylic download" -Warning
 
 Write-Host ""
 Write-Host "Disk Space:" -ForegroundColor White

@@ -101,7 +101,13 @@ const HOST = config.host;
 const WINDOWS_AGENT_ROOT = path.resolve(process.cwd(), '../windows');
 const WINDOWS_AGENT_VERSION_FILE = path.resolve(process.cwd(), '../VERSION');
 const WINDOWS_AGENT_DIRECTORIES = ['lib', 'scripts'] as const;
-const WINDOWS_AGENT_ROOT_FILES = ['Rotate-Token.ps1'] as const;
+const WINDOWS_AGENT_RUNTIME_ROOT_FILES = ['OpenPath.ps1', 'Rotate-Token.ps1'] as const;
+const WINDOWS_AGENT_BOOTSTRAP_ROOT_FILES = [
+  'Install-OpenPath.ps1',
+  'Uninstall-OpenPath.ps1',
+  'OpenPath.ps1',
+  'Rotate-Token.ps1',
+] as const;
 
 interface WindowsAgentFileEntry {
   relativePath: string;
@@ -153,10 +159,15 @@ function readServerVersion(): string {
   return '0.0.0';
 }
 
-function buildWindowsAgentFileManifest(): WindowsAgentFileEntry[] {
+function buildWindowsAgentFileManifest(options?: {
+  includeBootstrapFiles?: boolean;
+}): WindowsAgentFileEntry[] {
+  const rootFiles = options?.includeBootstrapFiles
+    ? WINDOWS_AGENT_BOOTSTRAP_ROOT_FILES
+    : WINDOWS_AGENT_RUNTIME_ROOT_FILES;
   const absoluteFiles = new Set<string>();
 
-  for (const fileName of WINDOWS_AGENT_ROOT_FILES) {
+  for (const fileName of rootFiles) {
     const absolutePath = path.join(WINDOWS_AGENT_ROOT, fileName);
     if (fs.existsSync(absolutePath)) {
       absoluteFiles.add(path.resolve(absolutePath));
@@ -217,6 +228,51 @@ async function authenticateMachineToken(
   }
 
   return machine;
+}
+
+interface AuthenticatedEnrollment {
+  classroomId: string;
+  classroomName: string;
+  enrollmentToken: string;
+}
+
+async function authenticateEnrollmentToken(
+  req: Request,
+  res: Response
+): Promise<AuthenticatedEnrollment | null> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ success: false, error: 'Authorization header required' });
+    return null;
+  }
+
+  const enrollmentToken = authHeader.slice(7);
+  if (!enrollmentToken) {
+    res.status(401).json({ success: false, error: 'Enrollment token required' });
+    return null;
+  }
+
+  const payload = verifyEnrollmentToken(enrollmentToken);
+  if (!payload) {
+    res.status(403).json({ success: false, error: 'Invalid enrollment token' });
+    return null;
+  }
+
+  const classroom = await classroomStorage.getClassroomById(payload.classroomId);
+  if (!classroom) {
+    res.status(404).json({ success: false, error: 'Classroom not found' });
+    return null;
+  }
+
+  return {
+    classroomId: classroom.id,
+    classroomName: classroom.name,
+    enrollmentToken,
+  };
+}
+
+function quotePowerShellSingle(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
 }
 
 interface AutoRequestPayload {
@@ -838,6 +894,131 @@ echo ""
   })();
 });
 
+app.get('/api/enroll/:classroomId/windows.ps1', (req: Request, res: Response): void => {
+  void (async (): Promise<void> => {
+    try {
+      const authHeader = req.headers.authorization;
+
+      if (!authHeader?.startsWith('Bearer ')) {
+        res.status(401).send('Authorization header required');
+        return;
+      }
+
+      const enrollmentToken = authHeader.slice(7);
+      const payload = verifyEnrollmentToken(enrollmentToken);
+      if (!payload) {
+        res.status(403).send('Invalid enrollment token');
+        return;
+      }
+
+      const requestedClassroomId = req.params.classroomId;
+      if (!requestedClassroomId) {
+        res.status(400).send('Missing classroomId');
+        return;
+      }
+
+      if (payload.classroomId !== requestedClassroomId) {
+        res.status(403).send('Enrollment token does not match classroom');
+        return;
+      }
+
+      const classroomId = payload.classroomId;
+      const classroom = await classroomStorage.getClassroomById(classroomId);
+      if (!classroom) {
+        res.status(404).send('Classroom not found');
+        return;
+      }
+
+      const publicUrl = config.publicUrl ?? `http://${config.host}:${String(config.port)}`;
+      const psApiUrl = quotePowerShellSingle(publicUrl);
+      const psClassroomId = quotePowerShellSingle(classroom.id);
+      const psEnrollmentToken = quotePowerShellSingle(enrollmentToken);
+
+      const script = `$ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+$ApiUrl = ${psApiUrl}
+$ClassroomId = ${psClassroomId}
+$EnrollmentToken = ${psEnrollmentToken}
+$Headers = @{ Authorization = "Bearer $EnrollmentToken" }
+
+$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw 'Run PowerShell as Administrator'
+}
+
+$TempRoot = Join-Path $env:TEMP ("openpath-bootstrap-" + [Guid]::NewGuid().ToString('N'))
+$WindowsRoot = Join-Path $TempRoot 'windows'
+$null = New-Item -ItemType Directory -Path (Join-Path $WindowsRoot 'lib') -Force
+$null = New-Item -ItemType Directory -Path (Join-Path $WindowsRoot 'scripts') -Force
+
+Write-Host ''
+Write-Host '==============================================='
+Write-Host ' OpenPath Enrollment (Windows)'
+Write-Host '==============================================='
+Write-Host ''
+
+$manifest = Invoke-RestMethod -Uri "$ApiUrl/api/agent/windows/bootstrap/latest.json" -Headers $Headers -Method Get
+if (-not $manifest.success -or -not $manifest.files) {
+    throw 'Bootstrap manifest unavailable'
+}
+
+if ($manifest.version) {
+    $env:OPENPATH_VERSION = [string]$manifest.version
+}
+
+foreach ($file in $manifest.files) {
+    $relativePath = [string]$file.path
+    if (-not $relativePath) {
+        continue
+    }
+
+    $destinationPath = Join-Path $WindowsRoot $relativePath
+    $destinationDir = Split-Path $destinationPath -Parent
+    if (-not (Test-Path $destinationDir)) {
+        $null = New-Item -ItemType Directory -Path $destinationDir -Force
+    }
+
+    $encodedPath = [uri]::EscapeDataString($relativePath)
+    $fileUrl = "$ApiUrl/api/agent/windows/bootstrap/file?path=$encodedPath"
+    Invoke-WebRequest -Uri $fileUrl -Headers $Headers -OutFile $destinationPath -UseBasicParsing
+
+    if ($file.sha256) {
+        $expectedHash = ([string]$file.sha256).ToLowerInvariant()
+        $actualHash = (Get-FileHash -Path $destinationPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actualHash -ne $expectedHash) {
+            throw "Checksum mismatch for $relativePath"
+        }
+    }
+}
+
+Push-Location $WindowsRoot
+try {
+    & (Join-Path $WindowsRoot 'Install-OpenPath.ps1') -ApiUrl $ApiUrl -ClassroomId $ClassroomId -EnrollmentToken $EnrollmentToken -Unattended
+}
+finally {
+    Pop-Location
+    Remove-Item $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Write-Host ''
+Write-Host 'Installation completed. Current status:'
+& 'C:\\OpenPath\\OpenPath.ps1' status
+`;
+
+      res.setHeader('Content-Type', 'text/x-powershell');
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Disposition', 'inline; filename="enroll.ps1"');
+      res.send(script);
+    } catch (error) {
+      logger.error('Windows enrollment script error', { error: getErrorMessage(error) });
+      res.status(500).send('Internal error');
+    }
+  })();
+});
+
 app.post('/api/machines/:hostname/rotate-download-token', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {
     const authHeader = req.headers.authorization;
@@ -883,6 +1064,81 @@ app.post('/api/machines/:hostname/rotate-download-token', (req: Request, res: Re
 // =============================================================================
 // Windows Agent Silent Update Endpoints
 // =============================================================================
+
+app.get('/api/agent/windows/bootstrap/latest.json', (req: Request, res: Response): void => {
+  void (async (): Promise<void> => {
+    try {
+      const enrollment = await authenticateEnrollmentToken(req, res);
+      if (!enrollment) {
+        return;
+      }
+
+      const files = buildWindowsAgentFileManifest({ includeBootstrapFiles: true });
+      if (files.length === 0) {
+        logger.warn('Windows bootstrap manifest requested but no files found', {
+          root: WINDOWS_AGENT_ROOT,
+          classroomId: enrollment.classroomId,
+        });
+        res.status(503).json({ success: false, error: 'Windows bootstrap package unavailable' });
+        return;
+      }
+
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.json({
+        success: true,
+        classroomId: enrollment.classroomId,
+        version: readServerVersion(),
+        generatedAt: new Date().toISOString(),
+        files: files.map((file) => ({
+          path: file.relativePath,
+          sha256: file.sha256,
+          size: file.size,
+        })),
+      });
+    } catch (error) {
+      logger.error('Error serving Windows bootstrap manifest', { error: getErrorMessage(error) });
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Internal error' });
+      }
+    }
+  })();
+});
+
+app.get('/api/agent/windows/bootstrap/file', (req: Request, res: Response): void => {
+  void (async (): Promise<void> => {
+    try {
+      const enrollment = await authenticateEnrollmentToken(req, res);
+      if (!enrollment) {
+        return;
+      }
+
+      const requestedPath = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+      if (!requestedPath) {
+        res.status(400).json({ success: false, error: 'path query parameter required' });
+        return;
+      }
+
+      const files = buildWindowsAgentFileManifest({ includeBootstrapFiles: true });
+      const file = files.find((entry) => entry.relativePath === requestedPath);
+      if (!file) {
+        res.status(404).json({ success: false, error: 'File not found in bootstrap package' });
+        return;
+      }
+
+      const fileContents = fs.readFileSync(file.absolutePath);
+
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.type('text/plain').send(fileContents);
+    } catch (error) {
+      logger.error('Error serving Windows bootstrap file', { error: getErrorMessage(error) });
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Internal error' });
+      }
+    }
+  })();
+});
 
 app.get('/api/agent/windows/latest.json', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {

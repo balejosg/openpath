@@ -31,6 +31,12 @@
     URL to download the whitelist from
 .PARAMETER SkipAcrylic
     Skip Acrylic DNS installation (if already installed)
+.PARAMETER EnrollmentToken
+    Short-lived classroom enrollment token for non-interactive setup
+.PARAMETER ClassroomId
+    Classroom ID used with EnrollmentToken mode
+.PARAMETER Unattended
+    Fail fast if required parameters are missing (no prompts)
 .EXAMPLE
     .\Install-Whitelist.ps1 -WhitelistUrl "http://server:3000/export/grupo.txt"
 #>
@@ -42,12 +48,16 @@ param(
     [string]$Classroom = "",
     [string]$ApiUrl = "",
     [string]$RegistrationToken = "",
+    [string]$EnrollmentToken = "",
+    [string]$ClassroomId = "",
+    [switch]$Unattended,
     [string]$HealthApiSecret = ""
 )
 
 $ErrorActionPreference = "Stop"
 $OpenPathRoot = "C:\OpenPath"
 $scriptDir = $PSScriptRoot
+$apiBaseUrl = if ($ApiUrl) { $ApiUrl.TrimEnd('/') } else { '' }
 
 # Verify that modules exist at the expected location
 if (-not (Test-Path "$scriptDir\lib\*.psm1")) {
@@ -63,52 +73,110 @@ if (-not (Test-Path "$scriptDir\lib\*.psm1")) {
     }
 }
 
-# Validate classroom mode parameters
-if ($Classroom -and $ApiUrl) {
-    # Resolve token: command-line param → env var → interactive prompt
-    if (-not $RegistrationToken) {
-        if ($env:OPENPATH_TOKEN) {
-            $RegistrationToken = $env:OPENPATH_TOKEN
-        } else {
+# Validate enrollment parameters
+if ($RegistrationToken -and $EnrollmentToken) {
+    Write-Host "ERROR: -RegistrationToken and -EnrollmentToken cannot be used together" -ForegroundColor Red
+    exit 1
+}
+
+if ($ClassroomId -and -not $EnrollmentToken) {
+    Write-Host "ERROR: -ClassroomId requires -EnrollmentToken" -ForegroundColor Red
+    exit 1
+}
+
+if ((($Classroom -or $ClassroomId -or $RegistrationToken -or $EnrollmentToken) -and -not $apiBaseUrl)) {
+    Write-Host "ERROR: -ApiUrl is required for classroom enrollment parameters" -ForegroundColor Red
+    exit 1
+}
+
+$classroomModeRequested = [bool]$apiBaseUrl -and (
+    [bool]$Classroom -or
+    [bool]$ClassroomId -or
+    [bool]$RegistrationToken -or
+    [bool]$EnrollmentToken -or
+    [bool]$env:OPENPATH_TOKEN -or
+    [bool]$env:OPENPATH_ENROLLMENT_TOKEN
+)
+
+if ($classroomModeRequested) {
+    if (-not $EnrollmentToken -and -not $RegistrationToken -and $env:OPENPATH_ENROLLMENT_TOKEN) {
+        $EnrollmentToken = $env:OPENPATH_ENROLLMENT_TOKEN
+    }
+
+    if (-not $EnrollmentToken -and -not $RegistrationToken -and $env:OPENPATH_TOKEN) {
+        $RegistrationToken = $env:OPENPATH_TOKEN
+    }
+
+    if (-not $EnrollmentToken -and -not $RegistrationToken) {
+        if ($Unattended) {
+            Write-Host "ERROR: Classroom mode requires -EnrollmentToken or -RegistrationToken in unattended mode" -ForegroundColor Red
+            exit 1
+        }
+
+        if ($ClassroomId) {
+            $EnrollmentToken = Read-Host "Enter enrollment token"
+        }
+        else {
             $RegistrationToken = Read-Host "Enter registration token"
         }
     }
 
-    if (-not $RegistrationToken) {
-        Write-Host "ERROR: Registration token is required in classroom mode" -ForegroundColor Red
-        Write-Host "  Provide via -RegistrationToken, `$env:OPENPATH_TOKEN, or interactive prompt" -ForegroundColor Yellow
+    if ($RegistrationToken -and -not $Classroom) {
+        Write-Host "ERROR: -Classroom is required when using -RegistrationToken" -ForegroundColor Red
         exit 1
     }
-    
-    Write-Host "Validating registration token..." -ForegroundColor Yellow
-    try {
-        $validateBody = @{ token = $RegistrationToken } | ConvertTo-Json
-        $validateResponse = Invoke-RestMethod -Uri "$ApiUrl/api/setup/validate-token" `
-            -Method Post -Body $validateBody -ContentType "application/json" -ErrorAction Stop
-        
-        if (-not $validateResponse.valid) {
-            Write-Host "ERROR: Invalid registration token" -ForegroundColor Red
+
+    if ($RegistrationToken) {
+        Write-Host "Validating registration token..." -ForegroundColor Yellow
+        try {
+            $validateBody = @{ token = $RegistrationToken } | ConvertTo-Json
+            $validateResponse = Invoke-RestMethod -Uri "$apiBaseUrl/api/setup/validate-token" `
+                -Method Post -Body $validateBody -ContentType "application/json" -ErrorAction Stop
+
+            if (-not $validateResponse.valid) {
+                Write-Host "ERROR: Invalid registration token" -ForegroundColor Red
+                exit 1
+            }
+            Write-Host "  Registration token validated" -ForegroundColor Green
+        }
+        catch {
+            Write-Host "ERROR: Failed to validate registration token: $_" -ForegroundColor Red
             exit 1
         }
-        Write-Host "  Registration token validated" -ForegroundColor Green
     }
-    catch {
-        Write-Host "ERROR: Failed to validate registration token: $_" -ForegroundColor Red
-        exit 1
-    }
+}
+
+if ($RegistrationToken -and $EnrollmentToken) {
+    Write-Host "ERROR: Enrollment token and registration token cannot be combined" -ForegroundColor Red
+    exit 1
 }
 
 if (-not $HealthApiSecret -and $env:OPENPATH_HEALTH_API_SECRET) {
     $HealthApiSecret = $env:OPENPATH_HEALTH_API_SECRET
 }
 
+$usesEnrollmentToken = [bool]$EnrollmentToken
+$usesRegistrationToken = [bool]$RegistrationToken
+
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "  OpenPath DNS para Windows - Instalador" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
-if ($Classroom -and $ApiUrl) {
-    Write-Host "Classroom Mode: $Classroom"
-    Write-Host "API URL: $ApiUrl"
+if ($classroomModeRequested) {
+    Write-Host "Classroom mode: enabled"
+    if ($Classroom) {
+        Write-Host "Classroom: $Classroom"
+    }
+    if ($ClassroomId) {
+        Write-Host "Classroom ID: $ClassroomId"
+    }
+    Write-Host "API URL: $apiBaseUrl"
+    if ($usesEnrollmentToken) {
+        Write-Host "Enrollment auth: enrollment token"
+    }
+    elseif ($usesRegistrationToken) {
+        Write-Host "Enrollment auth: registration token"
+    }
     if ($HealthApiSecret) {
         Write-Host "Health API secret: configured"
     }
@@ -264,9 +332,14 @@ $config = @{
     installedAt = (Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 }
 
-if ($Classroom -and $ApiUrl) {
+if ($apiBaseUrl) {
+    $config.apiUrl = $apiBaseUrl
+}
+if ($Classroom) {
     $config.classroom = $Classroom
-    $config.apiUrl = $ApiUrl
+}
+if ($ClassroomId) {
+    $config.classroomId = $ClassroomId
 }
 if ($HealthApiSecret) {
     $config.healthApiSecret = $HealthApiSecret
@@ -314,32 +387,9 @@ Write-Host "[6/7] Registrando tareas programadas..." -ForegroundColor Yellow
 Register-OpenPathTask -UpdateIntervalMinutes 15 -WatchdogIntervalMinutes 1
 Write-Host "  Tareas registradas" -ForegroundColor Green
 
-# Step 7: First update
-Write-Host "[7/7] Ejecutando primera actualización..." -ForegroundColor Yellow
-
-try {
-    & "$OpenPathRoot\scripts\Update-OpenPath.ps1"
-    Write-Host "  Primera actualización completada" -ForegroundColor Green
-}
-catch {
-    Write-Host "  ADVERTENCIA: Primera actualización fallida (se reintentará)" -ForegroundColor Yellow
-}
-
-# Create integrity backup and baseline (best effort)
-try {
-    if (Save-OpenPathIntegrityBackup) {
-        if (New-OpenPathIntegrityBaseline) {
-            Write-Host "  Baseline de integridad generada" -ForegroundColor Green
-        }
-    }
-}
-catch {
-    Write-Host "  ADVERTENCIA: No se pudo inicializar baseline de integridad" -ForegroundColor Yellow
-}
-
 # Register machine in classroom mode
-$machineRegistered = ""
-if ($Classroom -and $ApiUrl) {
+$machineRegistered = "NOT_REQUESTED"
+if ($classroomModeRequested) {
     Write-Host ""
     Write-Host "Registering machine in classroom..." -ForegroundColor Yellow
 
@@ -350,12 +400,28 @@ if ($Classroom -and $ApiUrl) {
     }
     else {
         try {
-            $enrollResult = & $enrollScript `
-                -Classroom $Classroom `
-                -ApiUrl $ApiUrl `
-                -RegistrationToken $RegistrationToken `
-                -OpenPathRoot $OpenPathRoot `
-                -SkipTokenValidation
+            $enrollArgs = @(
+                '-ApiUrl', $apiBaseUrl,
+                '-OpenPathRoot', $OpenPathRoot
+            )
+            if ($Classroom) {
+                $enrollArgs += @('-Classroom', $Classroom)
+            }
+            if ($ClassroomId) {
+                $enrollArgs += @('-ClassroomId', $ClassroomId)
+            }
+            if ($EnrollmentToken) {
+                $enrollArgs += @('-EnrollmentToken', $EnrollmentToken)
+            }
+            if ($RegistrationToken) {
+                $enrollArgs += @('-RegistrationToken', $RegistrationToken)
+                $enrollArgs += '-SkipTokenValidation'
+            }
+            if ($Unattended) {
+                $enrollArgs += '-Unattended'
+            }
+
+            $enrollResult = & $enrollScript @enrollArgs
 
             if ($enrollResult -and $enrollResult.Success) {
                 $machineRegistered = "REGISTERED"
@@ -374,6 +440,37 @@ if ($Classroom -and $ApiUrl) {
             Write-Host "  Error registering machine: $_" -ForegroundColor Yellow
         }
     }
+}
+
+# Step 7: First update
+Write-Host "[7/7] Ejecutando primera actualización..." -ForegroundColor Yellow
+
+$shouldRunFirstUpdate = $true
+if ($classroomModeRequested -and $machineRegistered -ne "REGISTERED") {
+    Write-Host "  ADVERTENCIA: Registro no completado; se omite primera actualización" -ForegroundColor Yellow
+    $shouldRunFirstUpdate = $false
+}
+
+if ($shouldRunFirstUpdate) {
+    try {
+        & "$OpenPathRoot\scripts\Update-OpenPath.ps1"
+        Write-Host "  Primera actualización completada" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "  ADVERTENCIA: Primera actualización fallida (se reintentará)" -ForegroundColor Yellow
+    }
+}
+
+# Create integrity backup and baseline (best effort)
+try {
+    if (Save-OpenPathIntegrityBackup) {
+        if (New-OpenPathIntegrityBaseline) {
+            Write-Host "  Baseline de integridad generada" -ForegroundColor Green
+        }
+    }
+}
+catch {
+    Write-Host "  ADVERTENCIA: No se pudo inicializar baseline de integridad" -ForegroundColor Yellow
 }
 
 # Verify installation
@@ -432,9 +529,14 @@ Write-Host "  INSTALACIÓN COMPLETADA" -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Configuración:"
-if ($Classroom -and $ApiUrl) {
-    Write-Host "  - Classroom: $Classroom"
-    Write-Host "  - Registration: $machineRegistered"
+if ($classroomModeRequested) {
+    if ($Classroom) {
+        Write-Host "  - Classroom: $Classroom"
+    }
+    if ($ClassroomId) {
+        Write-Host "  - Classroom ID: $ClassroomId"
+    }
+    Write-Host "  - Enrollment: $machineRegistered"
 }
 Write-Host "  - Whitelist: $WhitelistUrl"
 Write-Host "  - Agent version: $agentVersion"
@@ -448,9 +550,10 @@ Write-Host "  .\OpenPath.ps1 health          # Ejecutar watchdog"
 Write-Host "  .\OpenPath.ps1 self-update --check  # Comprobar actualización de agente"
 Write-Host "  nslookup google.com 127.0.0.1  # Probar DNS"
 Write-Host "  Get-ScheduledTask OpenPath-*  # Ver tareas"
-if ($Classroom -and $ApiUrl) {
+if ($classroomModeRequested) {
     Write-Host "  .\OpenPath.ps1 rotate-token -Secret <secret>  # Rotar token"
     Write-Host "  .\OpenPath.ps1 enroll -Classroom <aula> -ApiUrl <url> -RegistrationToken <token>"
+    Write-Host "  .\OpenPath.ps1 enroll -ApiUrl <url> -ClassroomId <id> -EnrollmentToken <token> -Unattended"
 }
 Write-Host ""
 Write-Host "Desinstalar: .\Uninstall-OpenPath.ps1"
