@@ -283,6 +283,21 @@ interface AutoRequestPayload {
   reason?: unknown;
 }
 
+interface SubmitRequestPayload {
+  domain?: unknown;
+  token?: unknown;
+  hostname?: unknown;
+  reason?: unknown;
+  origin_host?: unknown;
+  originHost?: unknown;
+  origin_page?: unknown;
+  originPage?: unknown;
+  client_version?: unknown;
+  clientVersion?: unknown;
+  error_type?: unknown;
+  errorType?: unknown;
+}
+
 function normalizeHostInput(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -406,6 +421,7 @@ app.use('/trpc/auth.register', authLimiter);
 
 // Apply public request limiter to domain request creation
 app.use('/trpc/requests.create', publicRequestLimiter);
+app.use('/api/requests/submit', publicRequestLimiter);
 
 // JSON body parser
 app.use(express.json({ limit: '10kb' }));
@@ -526,6 +542,123 @@ app.post('/api/requests/auto', (req: Request, res: Response): void => {
   })();
 });
 
+app.post('/api/requests/submit', (req: Request, res: Response): void => {
+  void (async (): Promise<void> => {
+    const body = req.body as SubmitRequestPayload;
+
+    const domainRaw = typeof body.domain === 'string' ? body.domain : '';
+    const hostnameRaw = typeof body.hostname === 'string' ? body.hostname : '';
+    const token = typeof body.token === 'string' ? body.token : '';
+    const reasonRaw = typeof body.reason === 'string' ? body.reason.trim() : '';
+    const originHostRaw =
+      typeof body.origin_host === 'string'
+        ? body.origin_host
+        : typeof body.originHost === 'string'
+          ? body.originHost
+          : '';
+    const originPageRaw =
+      typeof body.origin_page === 'string'
+        ? body.origin_page
+        : typeof body.originPage === 'string'
+          ? body.originPage
+          : '';
+    const clientVersionRaw =
+      typeof body.client_version === 'string'
+        ? body.client_version
+        : typeof body.clientVersion === 'string'
+          ? body.clientVersion
+          : '';
+    const errorTypeRaw =
+      typeof body.error_type === 'string'
+        ? body.error_type
+        : typeof body.errorType === 'string'
+          ? body.errorType
+          : '';
+
+    if (!domainRaw || !hostnameRaw || !token) {
+      res.status(400).json({
+        success: false,
+        error: 'domain, hostname and token are required',
+      });
+      return;
+    }
+
+    const sharedSecret = process.env.SHARED_SECRET;
+    if (!sharedSecret) {
+      res.status(500).json({ success: false, error: 'SHARED_SECRET not configured' });
+      return;
+    }
+
+    const hostname = normalizeHostInput(hostnameRaw);
+    const expectedToken = computeMachineProofToken(hostname, sharedSecret);
+    if (token !== expectedToken) {
+      logger.warn('Request submit rejected: invalid proof token', { hostname });
+      res.status(403).json({ success: false, error: 'Invalid token proof' });
+      return;
+    }
+
+    const normalizedDomain = cleanRuleValue(domainRaw, false);
+    if (!normalizedDomain) {
+      res.status(400).json({ success: false, error: 'Domain is required' });
+      return;
+    }
+
+    const validation = validateRuleValue(normalizedDomain, 'whitelist');
+    if (!validation.valid) {
+      res.status(400).json({
+        success: false,
+        error: validation.error ?? 'Invalid domain format',
+      });
+      return;
+    }
+
+    const groupContext = await classroomStorage.getWhitelistUrlForMachine(hostname);
+    if (!groupContext) {
+      res.status(404).json({
+        success: false,
+        error: 'No active group found for machine hostname',
+      });
+      return;
+    }
+
+    const created = await RequestService.createRequest({
+      domain: normalizedDomain,
+      reason: reasonRaw.slice(0, 200) || 'Submitted via Firefox extension',
+      groupId: groupContext.groupId,
+      source: 'firefox-extension',
+      machineHostname: hostname,
+      originHost: originHostRaw.slice(0, 255) || undefined,
+      originPage: originPageRaw.slice(0, 2048) || undefined,
+      clientVersion: clientVersionRaw.slice(0, 50) || undefined,
+      errorType: errorTypeRaw.slice(0, 100) || undefined,
+    });
+
+    if (!created.ok) {
+      const statusMap: Record<string, number> = {
+        CONFLICT: 409,
+        NOT_FOUND: 404,
+        FORBIDDEN: 403,
+        BAD_REQUEST: 400,
+      };
+      const statusCode = statusMap[created.error.code] ?? 400;
+      res.status(statusCode).json({
+        success: false,
+        error: created.error.message,
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      id: created.data.id,
+      status: created.data.status,
+      groupId: groupContext.groupId,
+      domain: normalizedDomain,
+      source: 'firefox-extension',
+    });
+  })();
+});
+
 // Public endpoint for dnsmasq clients to fetch whitelist files
 // This endpoint is unauthenticated to allow machines to fetch their whitelist
 app.get('/export/:name.txt', (req: Request, res: Response): void => {
@@ -562,7 +695,7 @@ app.get('/export/:name.txt', (req: Request, res: Response): void => {
 // Setup REST Endpoints (for SPA compatibility)
 // =============================================================================
 
-import { SetupService } from './services/index.js';
+import { SetupService, RequestService } from './services/index.js';
 
 // Get setup status
 app.get('/api/setup/status', (_req: Request, res: Response): void => {
