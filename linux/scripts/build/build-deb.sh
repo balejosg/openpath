@@ -71,10 +71,12 @@ cp -r "$ROOT_DIR/firefox-extension/icons" "$BUILD_DIR/usr/share/openpath/firefox
 # Set correct permissions
 echo "[7/8] Setting permissions..."
 find "$BUILD_DIR" -type d -exec chmod 755 {} \;
+find "$BUILD_DIR" -type d -exec chmod g-s,u-s {} \;
 find "$BUILD_DIR/DEBIAN" -type f -exec chmod 644 {} \;
 chmod 755 "$BUILD_DIR/DEBIAN/postinst"
 chmod 755 "$BUILD_DIR/DEBIAN/prerm"
 chmod 755 "$BUILD_DIR/DEBIAN/postrm"
+chmod 755 "$BUILD_DIR/DEBIAN/config"
 chmod 440 "$BUILD_DIR/etc/sudoers.d/openpath"
 
 # Build package
