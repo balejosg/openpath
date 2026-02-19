@@ -21,7 +21,7 @@
   "dependencies": {
     "@openpath/api": "file:../api",
     "@openpath/shared": "file:../shared",
-    "@trpc/client": "^11.8.1",
+    "@trpc/client": "^11.10.0",
     "cookie-parser": "^1.4.7",
     "express": "^4.21.2",
     "winston": "^3.17.0"
