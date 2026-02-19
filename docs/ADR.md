@@ -324,8 +324,7 @@ La extensión detecta dominios bloqueados y permite al usuario solicitar su incl
 | Firefox Extension            | `firefox-extension/`           | Diagnóstico de bloqueos          |
 | Web App                      | `dashboard/`                   | Administración centralizada      |
 | Request API                  | `api/`                         | API para solicitudes de dominios |
-| Static SPA                   | `spa/`                         | SPA en GitHub Pages              |
-| OAuth Worker                 | `auth-worker/`                 | Backend OAuth para SPA           |
+| React SPA                    | `react-spa/`                   | UI web (Vite + React)            |
 
 ### Servicios systemd
 

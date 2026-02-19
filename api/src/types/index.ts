@@ -20,6 +20,8 @@ export {
   DomainRequest as DomainRequestSchema,
   User as UserSchema,
   SafeUser as SafeUserSchema,
+  SafeUserWithRoles as SafeUserWithRolesSchema,
+  AuthUser as AuthUserSchema,
   Role as RoleSchema,
   RoleInfo as RoleInfoSchema,
   Classroom as ClassroomSchema,
@@ -48,6 +50,8 @@ export type {
   DomainRequest,
   User,
   SafeUser,
+  SafeUserWithRoles,
+  AuthUser,
   Role,
   RoleInfo,
   Classroom,
@@ -103,7 +107,7 @@ export interface DecodedToken extends JWTPayload {
 // API-specific Response Types
 // =============================================================================
 
-import type { SafeUser } from '@openpath/shared';
+import type { AuthUser } from '@openpath/shared';
 
 /**
  * Statistics response
@@ -122,7 +126,7 @@ export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
   expiresIn: number;
-  user: SafeUser;
+  user: AuthUser;
 }
 
 // =============================================================================

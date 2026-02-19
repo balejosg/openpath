@@ -105,7 +105,7 @@ export const healthcheckRouter = router({
    */
   systemInfo: publicProcedure.query(async () => {
     // Check database connection
-    let dbConnected = false;
+    let dbConnected: boolean;
     try {
       dbConnected = await testConnection();
     } catch {

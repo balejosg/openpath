@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       test-type:
-        description: 'Type of test to run (api, web, spa, integration, bash, shared, auth-worker, extension)'
+        description: 'Type of test to run (api, web, spa, integration, bash, shared, extension)'
         required: true
         type: string
       node-version:
@@ -127,11 +127,6 @@ jobs:
         if: inputs.test-type == 'shared'
         run: npm run test:coverage --workspace=@openpath/shared
 
-      # Auth Worker Tests
-      - name: Run Auth Worker tests
-        if: inputs.test-type == 'auth-worker'
-        run: npm run test:coverage --workspace=@openpath/auth-worker
-
       # Extension Tests
       - name: Run Extension tests
         if: inputs.test-type == 'extension'
@@ -153,9 +148,8 @@ jobs:
           files: |
             api/coverage/lcov.info
             dashboard/coverage/lcov.info
-            spa/coverage/lcov.info
+            react-spa/coverage/lcov.info
             shared/coverage/lcov.info
-            auth-worker/coverage/lcov.info
             firefox-extension/coverage/lcov.info
           flags: ${{ inputs.test-type }}
           name: ${{ inputs.test-type }}-coverage
@@ -170,8 +164,7 @@ jobs:
           path: |
             api/coverage/
             dashboard/coverage/
-            spa/coverage/
+            react-spa/coverage/
             shared/coverage/
-            auth-worker/coverage/
             firefox-extension/coverage/
           retention-days: 7

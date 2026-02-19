@@ -152,7 +152,7 @@ Get-NetFirewallRule -DisplayName "OpenPath-*" | Disable-NetFirewallRule
 Este sistema es el equivalente Windows del [sistema Linux](../README.md) basado en dnsmasq. Ambos sistemas:
 
 - Usan el mismo formato de whitelist
-- Son compatibles con la [SPA](../spa/) para gestión centralizada
+- Son compatibles con la [interfaz web](../react-spa/) para gestión centralizada
 - Implementan la misma lógica de sinkhole DNS
 
 ## Licencia

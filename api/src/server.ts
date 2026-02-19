@@ -63,7 +63,7 @@ import * as userStorage from './lib/user-storage.js';
 import * as groupsStorage from './lib/groups-storage.js';
 import * as classroomStorage from './lib/classroom-storage.js';
 import * as setupStorage from './lib/setup-storage.js';
-import { cleanupBlacklist, verifyAccessToken } from './lib/auth.js';
+import { cleanupBlacklist, verifyAccessToken, createLegacyAdminPayload } from './lib/auth.js';
 import { verifyEnrollmentToken } from './lib/enrollment-token.js';
 import { generateEnrollmentToken } from './lib/enrollment-token.js';
 import {
@@ -110,6 +110,49 @@ const WINDOWS_AGENT_BOOTSTRAP_ROOT_FILES = [
   'OpenPath.ps1',
   'Rotate-Token.ps1',
 ] as const;
+
+function parseCookieValue(cookieHeader: string | undefined, name: string): string | null {
+  if (!cookieHeader) return null;
+
+  const parts = cookieHeader.split(';');
+  for (const part of parts) {
+    const [rawKey, ...rawValue] = part.trim().split('=');
+    if (rawKey === name) {
+      const value = rawValue.join('=');
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return value;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function verifyAccessTokenFromRequest(
+  req: Pick<Request, 'headers'>
+): Promise<Awaited<ReturnType<typeof verifyAccessToken>>> {
+  const authHeader = req.headers.authorization;
+  const bearerToken = authHeader?.startsWith('Bearer ') === true ? authHeader.slice(7) : null;
+
+  const cookieName = process.env.OPENPATH_ACCESS_TOKEN_COOKIE_NAME;
+  const cookieToken = cookieName ? parseCookieValue(req.headers.cookie, cookieName) : null;
+
+  const candidates = [bearerToken, cookieToken].filter((t): t is string => typeof t === 'string');
+
+  for (const token of candidates) {
+    const decoded = await verifyAccessToken(token);
+    if (decoded) return decoded;
+
+    const adminToken = process.env.ADMIN_TOKEN;
+    if (adminToken && adminToken === token) {
+      return createLegacyAdminPayload() as unknown as Awaited<ReturnType<typeof verifyAccessToken>>;
+    }
+  }
+
+  return null;
+}
 
 interface WindowsAgentFileEntry {
   relativePath: string;
@@ -506,7 +549,18 @@ app.post('/api/setup/first-admin', (req: Request, res: Response): void => {
 // Get registration token (admin only)
 app.get('/api/setup/registration-token', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {
-    // TODO: Add JWT auth check here when migrating to full REST auth
+    const decoded = await verifyAccessTokenFromRequest(req);
+    if (!decoded) {
+      res.status(401).json({ success: false, error: 'Authorization required' });
+      return;
+    }
+
+    const roles = decoded.roles.map((r) => r.role);
+    if (!roles.includes('admin')) {
+      res.status(403).json({ success: false, error: 'Admin access required' });
+      return;
+    }
+
     const result = await SetupService.getRegistrationToken();
 
     if (!result.ok) {
@@ -524,7 +578,18 @@ app.get('/api/setup/registration-token', (req: Request, res: Response): void => 
 // Regenerate registration token (admin only)
 app.post('/api/setup/regenerate-token', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {
-    // TODO: Add JWT auth check here when migrating to full REST auth
+    const decoded = await verifyAccessTokenFromRequest(req);
+    if (!decoded) {
+      res.status(401).json({ success: false, error: 'Authorization required' });
+      return;
+    }
+
+    const roles = decoded.roles.map((r) => r.role);
+    if (!roles.includes('admin')) {
+      res.status(403).json({ success: false, error: 'Admin access required' });
+      return;
+    }
+
     const result = await SetupService.regenerateToken();
 
     if (!result.ok) {
@@ -580,39 +645,50 @@ app.post('/api/machines/register', (req: Request, res: Response): void => {
       return;
     }
 
-    let classroom: { id: string; name: string } | null = null;
+    const classroomLookup = await (async (): Promise<
+      | { ok: true; classroom: { id: string; name: string } }
+      | { ok: false; status: number; error: string }
+    > => {
+      if (enrollmentPayload) {
+        if (classroomId && classroomId !== enrollmentPayload.classroomId) {
+          return {
+            ok: false,
+            status: 403,
+            error: 'Enrollment token does not match classroom',
+          };
+        }
 
-    if (enrollmentPayload) {
-      if (classroomId && classroomId !== enrollmentPayload.classroomId) {
-        res
-          .status(403)
-          .json({ success: false, error: 'Enrollment token does not match classroom' });
-        return;
+        const classroom = await classroomStorage.getClassroomById(enrollmentPayload.classroomId);
+        if (!classroom) {
+          return { ok: false, status: 404, error: 'Classroom not found' };
+        }
+
+        return { ok: true, classroom };
       }
-      classroom = await classroomStorage.getClassroomById(enrollmentPayload.classroomId);
-      if (!classroom) {
-        res.status(404).json({ success: false, error: 'Classroom not found' });
-        return;
-      }
-    } else {
+
       const isValid = await setupStorage.validateRegistrationToken(providedToken);
       if (!isValid) {
-        res.status(403).json({ success: false, error: 'Invalid registration token' });
-        return;
+        return { ok: false, status: 403, error: 'Invalid registration token' };
       }
 
       if (!classroomName) {
-        res.status(400).json({ success: false, error: 'classroomName is required' });
-        return;
+        return { ok: false, status: 400, error: 'classroomName is required' };
       }
 
-      const found = await classroomStorage.getClassroomByName(classroomName);
-      if (!found) {
-        res.status(404).json({ success: false, error: `Classroom "${classroomName}" not found` });
-        return;
+      const classroom = await classroomStorage.getClassroomByName(classroomName);
+      if (!classroom) {
+        return { ok: false, status: 404, error: `Classroom "${classroomName}" not found` };
       }
-      classroom = found;
+
+      return { ok: true, classroom };
+    })();
+
+    if (!classroomLookup.ok) {
+      res.status(classroomLookup.status).json({ success: false, error: classroomLookup.error });
+      return;
     }
+
+    const { classroom } = classroomLookup;
 
     const machine = await classroomStorage.registerMachine({
       hostname,
@@ -640,16 +716,9 @@ app.post('/api/machines/register', (req: Request, res: Response): void => {
 app.post('/api/enroll/:classroomId/ticket', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith('Bearer ')) {
-        res.status(401).json({ success: false, error: 'Authorization header required' });
-        return;
-      }
-
-      const accessToken = authHeader.slice(7);
-      const decoded = await verifyAccessToken(accessToken);
+      const decoded = await verifyAccessTokenFromRequest(req);
       if (!decoded) {
-        res.status(401).json({ success: false, error: 'Invalid access token' });
+        res.status(401).json({ success: false, error: 'Authorization required' });
         return;
       }
 

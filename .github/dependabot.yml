@@ -37,19 +37,6 @@ updates:
       - 'api'
     versioning-strategy: increase
 
-  # auth-worker (Node.js)
-  - package-ecosystem: 'npm'
-    directory: '/auth-worker'
-    schedule:
-      interval: 'weekly'
-      day: 'monday'
-    open-pull-requests-limit: 5
-    labels:
-      - 'dependencies'
-      - 'npm'
-      - 'auth-worker'
-    versioning-strategy: increase
-
   # Root (Node.js)
   - package-ecosystem: 'npm'
     directory: '/'
@@ -63,9 +50,9 @@ updates:
       - 'root'
     versioning-strategy: increase
 
-  # spa (Node.js)
+  # react-spa (Node.js)
   - package-ecosystem: 'npm'
-    directory: '/spa'
+    directory: '/react-spa'
     schedule:
       interval: 'weekly'
       day: 'monday'
@@ -73,7 +60,7 @@ updates:
     labels:
       - 'dependencies'
       - 'npm'
-      - 'spa'
+      - 'react-spa'
     versioning-strategy: increase
 
   # shared (Node.js)

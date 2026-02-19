@@ -21,13 +21,10 @@ flags:
       - dashboard/src
   spa:
     paths:
-      - spa/src
+      - react-spa/src
   shared:
     paths:
       - shared/src
-  auth-worker:
-    paths:
-      - auth-worker/src
   firefox-extension:
     paths:
       - firefox-extension/src

@@ -11,7 +11,7 @@ inputs:
     required: false
     default: 'true'
   build-spa:
-    description: 'Build openpath-spa package'
+    description: 'Build @openpath/react-spa package'
     required: false
     default: 'false'
   build-dashboard:
@@ -35,11 +35,6 @@ runs:
       if: inputs.build-api == 'true'
       shell: bash
       run: npm run build --workspace=@openpath/api
-
-    - name: Build SPA
-      if: inputs.build-spa == 'true'
-      shell: bash
-      run: npm run build --workspace=@openpath/spa
 
     - name: Build React SPA
       if: inputs.build-spa == 'true'

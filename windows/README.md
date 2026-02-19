@@ -172,7 +172,7 @@ Get-Content C:\OpenPath\data\logs\openpath.log -Tail 50 | Select-String "SSE"
 This system is the Windows equivalent of the [Linux system](../README.md) based on dnsmasq. Both systems:
 
 - Use the same whitelist format.
-- Are compatible with the [SPA](../spa/) for centralized management.
+- Are compatible with the [web UI](../react-spa/) for centralized management.
 - Implement the same DNS sinkhole logic.
 
 ## License

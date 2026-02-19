@@ -17,16 +17,6 @@ interface UseCurrentUserResult {
   refetch: () => Promise<void>;
 }
 
-// API response type (the actual shape returned by auth.me)
-interface AuthMeResponse {
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    roles?: { role: string }[];
-  };
-}
-
 /**
  * Hook to fetch and cache the current authenticated user's profile.
  * Uses trpc.auth.me to get user data.
@@ -40,12 +30,11 @@ export function useCurrentUser(): UseCurrentUserResult {
     try {
       setLoading(true);
       setError(null);
-      // Cast to expected shape since tRPC types may not include dynamically added roles
-      const response = (await trpc.auth.me.query()) as unknown as AuthMeResponse;
+      const response = await trpc.auth.me.query();
       const profile = response.user;
 
       // Extract roles from the roles array
-      const roles = profile.roles?.map((r) => r.role) ?? [];
+      const roles = profile.roles.map((r) => r.role);
 
       // Get initials from name (first letter of first two words)
       const nameParts = profile.name.split(' ').filter(Boolean);
@@ -56,7 +45,7 @@ export function useCurrentUser(): UseCurrentUserResult {
         .toUpperCase();
 
       // Determine primary role for display
-      const roleHierarchy = ['admin', 'teacher', 'user'];
+      const roleHierarchy = ['admin', 'teacher', 'student'] as const;
       const foundRole = roleHierarchy.find((r) => roles.includes(r));
       const primaryRole = foundRole ?? (roles.length > 0 ? roles[0] : 'user');
 

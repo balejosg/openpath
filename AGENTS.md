@@ -68,7 +68,7 @@ Un agente hizo commit con `--no-verify`, causando:
 - `windows/`: PowerShell endpoint agent (Acrylic DNS Proxy + Windows Firewall)
 - `api/`: Express + tRPC API, PostgreSQL/Drizzle, Winston logging
 - `dashboard/`: Node/TS dashboard service (Express)
-- `spa/`: static TS SPA + Playwright E2E tests
+- `react-spa/`: React SPA + Playwright E2E tests
 - `shared/`: shared Zod schemas/types for other packages
 - `firefox-extension/`: browser extension
 
@@ -94,7 +94,6 @@ From repo root:
 Per workspace examples:
 
 - API: `npm run build --workspace=@openpath/api`
-- SPA: `npm run build --workspace=@openpath/spa`
 - React SPA: `npm run build --workspace=@openpath/react-spa`
 - Shared: `npm run build --workspace=@openpath/shared`
 - Extension: `npm run build --workspace=@openpath/firefox-extension`
@@ -122,7 +121,7 @@ Windows scripts (in CI):
 From repo root:
 
 - All tests: `npm test`
-  - Includes `test:shell`, `test:api`, `test:dashboard`, `test:spa`
+  - Includes `test:shell`, `test:api`, `test:dashboard`, `test:react-spa`
 
 ### Run a Single Test (Cookbook)
 
@@ -154,24 +153,24 @@ Prefer the existing scripts where possible (ports are pre-chosen):
 - Single file:
   - `cd dashboard && node --import tsx --test --test-force-exit --test-concurrency=1 tests/api.test.ts`
 
-#### SPA (`spa/`)
+#### React SPA (`react-spa/`)
 
 Unit tests:
 
-- All: `npm test --workspace=@openpath/spa`
+- All: `npm test --workspace=@openpath/react-spa`
 - Single file:
-  - `cd spa && npx tsx --test tests/config.test.ts`
+  - `cd react-spa && npx vitest run src/views/__tests__/Settings.test.tsx`
 
 Playwright E2E (split into smoke/comprehensive):
 
 - Smoke only (14 tests, fast CI):
-  - `cd spa && npx playwright test --grep @smoke --project=chromium`
+  - `cd react-spa && npx playwright test --grep @smoke --project=chromium`
 - All tests (279+ tests):
-  - `cd spa && npm run test:e2e`
+  - `cd react-spa && npm run test:e2e`
 - Single test by name:
-  - `cd spa && npx playwright test --grep "blocked-domain"`
+  - `cd react-spa && npx playwright test --grep "blocked-domain"`
 - Single spec:
-  - `cd spa && npx playwright test e2e/blocked-domain.spec.ts`
+  - `cd react-spa && npx playwright test e2e/blocked-domain.spec.ts`
 
 CI runs `@smoke` tests on every PR. Full suite runs on main/nightly/`e2e` label.
 
@@ -401,7 +400,6 @@ Rules:
 ### Types / Safety
 
 - `any` is forbidden by ESLint in most packages.
-  - Exception: `spa/src/**/*.ts` relaxes some unsafe rules; still prefer strict types.
 - No non-null assertions (`!`)—handle null/undefined explicitly.
 - Prefer `unknown` over `any`, then narrow with Zod/type guards.
 - Use `_` prefix for intentionally unused parameters (allowed by ESLint).
@@ -419,7 +417,7 @@ Rules:
   - Prefer `TRPCError` in tRPC routers for client-facing errors.
   - Prefer structured errors (`APIError` and subclasses) for Express middleware paths.
   - Use Winston logger (`api/src/lib/logger.ts`), not `console.*`, in production code.
-- Browser/extension (`spa/`, `firefox-extension/`):
+- Browser/extension (`react-spa/`, `firefox-extension/`):
   - Prefer local logger wrappers over raw `console.*` when available.
 
 ### Validation
@@ -443,11 +441,11 @@ Rules:
 
 These directories are **stable API surfaces** consumed by downstream distributions:
 
-| Directory | Contract                         | Breaking Change Policy                     |
-| --------- | -------------------------------- | ------------------------------------------ |
-| `api/`    | Dockerfile builds from this path | Coordinate with downstream before renaming |
-| `spa/`    | Static files served by nginx     | Coordinate with downstream before renaming |
-| `shared/` | Shared types/schemas             | Coordinate with downstream before renaming |
+| Directory    | Contract                         | Breaking Change Policy                     |
+| ------------ | -------------------------------- | ------------------------------------------ |
+| `api/`       | Dockerfile builds from this path | Coordinate with downstream before renaming |
+| `react-spa/` | Web UI assets (Vite build)       | Coordinate with downstream before renaming |
+| `shared/`    | Shared types/schemas             | Coordinate with downstream before renaming |
 
 Renaming these directories requires updating downstream Dockerfiles and compose files.
 

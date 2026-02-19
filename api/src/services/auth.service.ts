@@ -9,7 +9,7 @@ import * as auth from '../lib/auth.js';
 import * as resetTokenStorage from '../lib/reset-token-storage.js';
 import { logger } from '../lib/logger.js';
 import { config } from '../config.js';
-import type { SafeUser, LoginResponse, UserRole } from '../types/index.js';
+import type { AuthUser, LoginResponse, UserRole } from '../types/index.js';
 import type { CreateUserData } from '../types/storage.js';
 import { getErrorMessage } from '@openpath/shared';
 
@@ -42,7 +42,7 @@ export interface TokenPair {
 /**
  * Register a new user
  */
-export async function register(input: CreateUserData): Promise<AuthResult<{ user: SafeUser }>> {
+export async function register(input: CreateUserData): Promise<AuthResult<{ user: AuthUser }>> {
   try {
     if (await userStorage.emailExists(input.email)) {
       return {
@@ -70,10 +70,20 @@ export async function register(input: CreateUserData): Promise<AuthResult<{ user
       });
     }
 
-    return {
-      ok: true,
-      data: { user: { id: user.id, email: user.email, name: user.name } as SafeUser },
+    const roles = await roleStorage.getUserRoles(user.id);
+    const roleInfo = roles.map((r) => ({
+      role: r.role as UserRole,
+      groupIds: r.groupIds ?? [],
+    }));
+
+    const authUser: AuthUser = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      roles: roleInfo,
     };
+
+    return { ok: true, data: { user: authUser } };
   } catch (error) {
     logger.error('auth.register error', { error: getErrorMessage(error) });
     return {
@@ -97,13 +107,12 @@ export async function login(email: string, password: string): Promise<AuthResult
     }
 
     const roles = await roleStorage.getUserRoles(user.id);
-    const tokens = auth.generateTokens(
-      user,
-      roles.map((r) => ({
-        role: r.role as 'admin' | 'teacher' | 'student',
-        groupIds: r.groupIds ?? [],
-      }))
-    );
+    const roleInfo = roles.map((r) => ({
+      role: r.role as UserRole,
+      groupIds: r.groupIds ?? [],
+    }));
+
+    const tokens = auth.generateTokens(user, roleInfo);
 
     return {
       ok: true,
@@ -114,17 +123,8 @@ export async function login(email: string, password: string): Promise<AuthResult
           id: user.id,
           email: user.email,
           name: user.name,
-          roles: roles.map((r) => ({
-            id: r.id,
-            userId: r.userId,
-            role: r.role as UserRole,
-            groupIds: r.groupIds ?? [],
-            createdAt: r.createdAt?.toISOString() ?? new Date().toISOString(),
-            updatedAt: r.updatedAt?.toISOString() ?? new Date().toISOString(),
-            createdBy: r.createdBy,
-            revokedAt: null,
-          })),
-        } as unknown as SafeUser,
+          roles: roleInfo,
+        },
       },
     };
   } catch (error) {
@@ -178,33 +178,26 @@ export async function logout(
 /**
  * Get user profile
  */
-export async function getProfile(userId: string): Promise<AuthResult<{ user: SafeUser }>> {
+export async function getProfile(userId: string): Promise<AuthResult<{ user: AuthUser }>> {
   const user = await userStorage.getUserById(userId);
   if (!user) {
     return { ok: false, error: { code: 'NOT_FOUND', message: 'User not found' } };
   }
 
   const roles = await roleStorage.getUserRoles(user.id);
-  return {
-    ok: true,
-    data: {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        roles: roles.map((r) => ({
-          id: r.id,
-          userId: r.userId,
-          role: r.role as UserRole,
-          groupIds: r.groupIds ?? [],
-          createdAt: r.createdAt?.toISOString() ?? new Date().toISOString(),
-          updatedAt: r.updatedAt?.toISOString() ?? new Date().toISOString(),
-          createdBy: r.createdBy,
-          revokedAt: null,
-        })),
-      } as unknown as SafeUser,
-    },
+  const roleInfo = roles.map((r) => ({
+    role: r.role as UserRole,
+    groupIds: r.groupIds ?? [],
+  }));
+
+  const authUser: AuthUser = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    roles: roleInfo,
   };
+
+  return { ok: true, data: { user: authUser } };
 }
 
 /**
@@ -419,34 +412,26 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult<Login
     }
 
     const roles = await roleStorage.getUserRoles(user.id);
-    const tokens = auth.generateTokens(
-      user,
-      roles.map((r) => ({
-        role: r.role as 'admin' | 'teacher' | 'student',
-        groupIds: r.groupIds ?? [],
-      }))
-    );
+    const roleInfo = roles.map((r) => ({
+      role: r.role as UserRole,
+      groupIds: r.groupIds ?? [],
+    }));
+
+    const tokens = auth.generateTokens(user, roleInfo);
+
+    const authUser: AuthUser = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      roles: roleInfo,
+    };
 
     return {
       ok: true,
       data: {
         ...tokens,
         expiresIn: parseInt(tokens.expiresIn) || 86400,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          roles: roles.map((r) => ({
-            id: r.id,
-            userId: r.userId,
-            role: r.role as UserRole,
-            groupIds: r.groupIds ?? [],
-            createdAt: r.createdAt?.toISOString() ?? new Date().toISOString(),
-            updatedAt: r.updatedAt?.toISOString() ?? new Date().toISOString(),
-            createdBy: r.createdBy,
-            revokedAt: null,
-          })),
-        } as unknown as SafeUser,
+        user: authUser,
       },
     };
   } catch (error) {

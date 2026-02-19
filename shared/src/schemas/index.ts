@@ -61,6 +61,18 @@ export const RoleInfo = z.object({
   groupIds: z.array(z.string()),
 });
 
+export const SafeUserWithRoles = SafeUser.extend({
+  roles: z.array(RoleInfo),
+});
+
+export const AuthUser = SafeUser.pick({
+  id: true,
+  email: true,
+  name: true,
+}).extend({
+  roles: z.array(RoleInfo),
+});
+
 export const Role = z.object({
   id: z.string(),
   userId: z.string(),
@@ -145,6 +157,8 @@ export type DomainRequest = z.infer<typeof DomainRequest>;
 export type User = z.infer<typeof User>;
 export type SafeUser = z.infer<typeof SafeUser>;
 export type RoleInfo = z.infer<typeof RoleInfo>;
+export type SafeUserWithRoles = z.infer<typeof SafeUserWithRoles>;
+export type AuthUser = z.infer<typeof AuthUser>;
 export type Role = z.infer<typeof Role>;
 export type Classroom = z.infer<typeof Classroom>;
 export type Machine = z.infer<typeof Machine>;

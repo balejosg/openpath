@@ -90,11 +90,7 @@ export async function login(email: string, password: string): Promise<User> {
   localStorage.setItem(REFRESH_TOKEN_KEY, result.refreshToken);
   localStorage.setItem(USER_KEY, JSON.stringify(result.user));
 
-  // Note: API's LoginResponse.user is typed as SafeUser (without roles),
-  // but AuthService.login actually returns user with roles at runtime.
-  // See: api/src/services/auth.service.ts:110-130
-  // TODO: Fix API types to match runtime behavior
-  return result.user as unknown as User;
+  return result.user;
 }
 
 /**
@@ -108,7 +104,7 @@ export async function loginWithGoogle(idToken: string): Promise<User> {
   localStorage.setItem(REFRESH_TOKEN_KEY, result.refreshToken);
   localStorage.setItem(USER_KEY, JSON.stringify(result.user));
 
-  return result.user as unknown as User;
+  return result.user;
 }
 
 /**

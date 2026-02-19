@@ -117,6 +117,32 @@ void describe('Enrollment API (secure tickets)', { timeout: 30000 }, async () =>
     assert.strictEqual(res.status, 401);
   });
 
+  await test('POST /api/enroll/:classroomId/ticket accepts cookie auth when configured', async () => {
+    const prev = process.env.OPENPATH_ACCESS_TOKEN_COOKIE_NAME;
+    const cookieName = 'test_access_cookie';
+    process.env.OPENPATH_ACCESS_TOKEN_COOKIE_NAME = cookieName;
+
+    try {
+      const res = await fetch(`${API_URL}/api/enroll/${classroomId}/ticket`, {
+        method: 'POST',
+        headers: {
+          Cookie: `${cookieName}=${teacherAccessToken}`,
+        },
+      });
+
+      assert.strictEqual(res.status, 200);
+      const data = (await res.json()) as { success: boolean; enrollmentToken?: string };
+      assert.strictEqual(data.success, true);
+      assert.ok(data.enrollmentToken);
+    } finally {
+      if (prev === undefined) {
+        delete process.env.OPENPATH_ACCESS_TOKEN_COOKIE_NAME;
+      } else {
+        process.env.OPENPATH_ACCESS_TOKEN_COOKIE_NAME = prev;
+      }
+    }
+  });
+
   await test('POST /api/enroll/:classroomId/ticket returns enrollment token for teacher', async () => {
     const res = await fetch(`${API_URL}/api/enroll/${classroomId}/ticket`, {
       method: 'POST',

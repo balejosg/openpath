@@ -45,20 +45,19 @@
   "devDependencies": {
     "@commitlint/cli": "^20.4.0",
     "@commitlint/config-conventional": "^20.4.0",
-    "@eslint/js": "^9.17.0",
+    "@eslint/js": "^10.0.1",
     "@secretlint/secretlint-rule-preset-recommend": "^11.3.1",
     "@size-limit/preset-app": "^12.0.0",
     "concurrently": "^9.2.1",
-    "eslint": "^9.17.0",
+    "eslint": "^10.0.0",
     "eslint-plugin-no-only-tests": "^3.3.0",
-    "eslint-plugin-vitest": "^0.5.4",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.10",
     "prettier": "^3.8.1",
     "secretlint": "^11.3.1",
     "size-limit": "^12.0.0",
     "turbo": "^2.8.3",
-    "typescript-eslint": "^8.20.0"
+    "typescript-eslint": "^8.56.0"
   },
   "lint-staged": {
     "*.{js,ts,tsx,mjs,cjs}": [
@@ -98,6 +97,10 @@
   ],
   "overrides": {
     "esbuild": "^0.25.0",
-    "qs": "^6.14.2"
+    "qs": "^6.14.2",
+    "minimatch": "^10.2.1",
+    "swagger-jsdoc": {
+      "glob": "^11.0.0"
+    }
   }
 }
