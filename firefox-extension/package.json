@@ -18,7 +18,7 @@
     "test:coverage": "c8 npx tsx --test tests/*.test.ts"
   },
   "devDependencies": {
-    "@types/node": "^22.19.3",
+    "@types/node": "^25.3.0",
     "@types/webextension-polyfill": "^0.12.1",
     "c8": "^10.1.3",
     "eslint": "^10.0.0",
