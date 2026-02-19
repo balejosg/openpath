@@ -64,9 +64,11 @@ mkdir -p "$BUILD_DIR/usr/share/openpath/firefox-extension"
 cp "$ROOT_DIR/firefox-extension/manifest.json" "$BUILD_DIR/usr/share/openpath/firefox-extension/"
 mkdir -p "$BUILD_DIR/usr/share/openpath/firefox-extension/dist"
 cp "$ROOT_DIR/firefox-extension/dist/background.js" "$BUILD_DIR/usr/share/openpath/firefox-extension/dist/"
-cp "$ROOT_DIR/firefox-extension/dist/config.js" "$BUILD_DIR/usr/share/openpath/firefox-extension/dist/"
+cp "$ROOT_DIR/firefox-extension/dist/popup.js" "$BUILD_DIR/usr/share/openpath/firefox-extension/dist/"
+cp -r "$ROOT_DIR/firefox-extension/dist/lib" "$BUILD_DIR/usr/share/openpath/firefox-extension/dist/"
 cp -r "$ROOT_DIR/firefox-extension/popup" "$BUILD_DIR/usr/share/openpath/firefox-extension/"
 cp -r "$ROOT_DIR/firefox-extension/icons" "$BUILD_DIR/usr/share/openpath/firefox-extension/"
+cp -r "$ROOT_DIR/firefox-extension/blocked" "$BUILD_DIR/usr/share/openpath/firefox-extension/"
 
 # Set correct permissions
 echo "[7/8] Setting permissions..."

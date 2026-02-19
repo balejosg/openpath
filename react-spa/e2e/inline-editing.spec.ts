@@ -213,22 +213,10 @@ test.describe('Inline Editing - Save Operations', () => {
   });
 
   test.afterEach(async ({ page }) => {
-    // Clean up: delete test rules
-    const rulesManager = new RulesManagerPage(page);
-
-    // Try to delete the original test domain if it still exists
-    if (await rulesManager.ruleExists(testDomain)) {
-      await rulesManager.deleteRule(testDomain);
-    }
-
-    // Also try to clean up any edited versions
-    const editedRows = page.locator('tbody tr').filter({ hasText: /edited-.*\.example\.com/ });
-    const count = await editedRows.count();
-    for (let i = 0; i < count; i++) {
-      const row = editedRows.first();
-      await row.hover();
-      await row.getByTitle('Eliminar').click();
-      await page.waitForTimeout(300);
+    // Best-effort cleanup: delete the original test domain if it still exists.
+    const manager = new RulesManagerPage(page);
+    if (await manager.ruleExists(testDomain)) {
+      await manager.deleteRule(testDomain);
     }
   });
 });
@@ -286,6 +274,7 @@ test.describe('Inline Editing - Edge Cases', () => {
     const specialDomain = `special-chars-${Date.now()}.example.com`;
     await rulesManager.addRule(specialDomain);
 
+    await rulesManager.search(specialDomain);
     await rulesManager.clickEditButton(specialDomain);
 
     const valueInput = rulesManager.getEditValueInput();
@@ -294,13 +283,13 @@ test.describe('Inline Editing - Edge Cases', () => {
     await valueInput.fill(newValue);
     await rulesManager.saveEdit();
 
-    await page.waitForTimeout(1000);
-
     // New value should be visible
-    await expect(rulesManager.getRuleRow(newValue)).toBeVisible();
+    await rulesManager.search(newValue);
+    await expect(rulesManager.getRuleRow(newValue)).toBeVisible({ timeout: 15000 });
 
     // Clean up
     await rulesManager.deleteRule(newValue);
+    await rulesManager.clearSearch();
   });
 
   test('should disable selection checkbox while editing', async ({ page }) => {

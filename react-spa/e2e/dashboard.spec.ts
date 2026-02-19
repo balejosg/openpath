@@ -73,19 +73,10 @@ test.describe('Dashboard Display', () => {
     // If all agents are online, test passes
   });
 
-  test('should display audit feed with recent activity @dashboard', async ({ page }) => {
-    // Look for audit/activity section
-    await expect(page.getByText(/Auditoría Reciente|Recent Activity|Actividad/i)).toBeVisible();
-
-    // Should have at least one activity entry
-    const activityItems = page.locator('[data-testid="audit-item"], [data-testid="activity-item"]');
-
-    // Wait for items to load
-    await page.waitForTimeout(1000);
-
-    const count = await activityItems.count();
-    // Activity feed may be empty, but section should exist
-    expect(count).toBeGreaterThanOrEqual(0);
+  test('should display dashboard stats @dashboard', async ({ page }) => {
+    await expect(page.getByText(/Estado del Sistema/i)).toBeVisible();
+    await expect(page.getByText(/Grupos Activos/i)).toBeVisible();
+    await expect(page.getByText(/Solicitudes Pendientes/i)).toBeVisible();
   });
 
   test('should show traffic chart @dashboard', async ({ page }) => {

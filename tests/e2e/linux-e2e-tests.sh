@@ -244,12 +244,6 @@ test_firefox_extension_installed() {
         test_fail "Extension dist/popup.js missing"
     fi
 
-    if [ -f "$ext_dir/dist/config.js" ]; then
-        test_pass "Extension dist/config.js exists"
-    else
-        test_fail "Extension dist/config.js missing"
-    fi
-
     if [ -f "$ext_dir/dist/lib/logger.js" ]; then
         test_pass "Extension dist/lib/logger.js exists"
     else

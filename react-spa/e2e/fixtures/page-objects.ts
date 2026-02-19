@@ -262,7 +262,8 @@ export class BulkImportPage {
     this.dropZone = page.locator('[data-testid="drop-zone"]');
     this.formatIndicator = page.getByText(/Formato CSV detectado/i);
     this.warningBox = page.locator('.bg-amber-50');
-    this.countDisplay = page.getByText(/dominios? detectados?/i);
+    // BulkImportModal shows counts like: "(3 detectados)" / "(1 detectado)"
+    this.countDisplay = page.getByText(/\(\s*\d+\s+detectad[oa]s?\s*\)/i);
     // Submit button in modal shows "Importar (N)" when there are domains
     this.submitButton = page.getByRole('dialog').getByRole('button', { name: /^Importar/ });
     this.cancelButton = page.getByRole('button', { name: /Cancelar/i });
@@ -351,9 +352,10 @@ export class BulkImportPage {
    * Get the number of detected domains
    */
   async getDetectedCount(): Promise<number> {
+    await this.countDisplay.waitFor({ state: 'visible', timeout: 5000 });
     const countText = await this.countDisplay.textContent();
     if (!countText) return 0;
-    const match = countText.match(/(\d+)/);
+    const match = countText.match(/(\d+)\s+detectad/i);
     return match ? parseInt(match[1], 10) : 0;
   }
 
@@ -455,6 +457,16 @@ export class RulesManagerPage {
     this.addRuleButton = page.getByRole('button', { name: 'Añadir' });
   }
 
+  async search(value: string): Promise<void> {
+    await this.searchInput.fill(value);
+    await this.page.waitForTimeout(200);
+  }
+
+  async clearSearch(): Promise<void> {
+    await this.searchInput.fill('');
+    await this.page.waitForTimeout(200);
+  }
+
   /**
    * Navigate to RulesManager for the first group
    */
@@ -491,14 +503,17 @@ export class RulesManagerPage {
   async addRule(value: string): Promise<void> {
     await this.addRuleInput.fill(value);
     await this.addRuleButton.click();
-    await this.page.waitForTimeout(500);
+    // Rows may be paginated/sorted; use search to make the new row visible reliably.
+    await this.search(value);
+    await expect(this.getRuleRow(value)).toBeVisible({ timeout: 10000 });
+    await this.clearSearch();
   }
 
   /**
    * Get a rule row by value
    */
   getRuleRow(value: string): Locator {
-    return this.page.locator('tr').filter({ hasText: value });
+    return this.page.locator('tbody tr').filter({ hasText: value });
   }
 
   /**
@@ -506,6 +521,7 @@ export class RulesManagerPage {
    */
   async clickEditButton(value: string): Promise<void> {
     const row = this.getRuleRow(value);
+    await expect(row).toBeVisible({ timeout: 10000 });
     await row.hover();
     await row.getByTestId('edit-button').click();
   }
@@ -555,8 +571,9 @@ export class RulesManagerPage {
    * Save the current edit
    */
   async saveEdit(): Promise<void> {
-    await this.page.getByTestId('save-edit-button').click();
-    await this.page.waitForTimeout(500);
+    const saveButton = this.page.getByTestId('save-edit-button');
+    await saveButton.click();
+    await expect(saveButton).toBeHidden({ timeout: 10000 });
   }
 
   /**

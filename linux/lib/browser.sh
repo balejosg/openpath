@@ -489,11 +489,6 @@ install_firefox_extension() {
         return 1
     fi
 
-    if [[ ! -f "$ext_source/dist/config.js" ]]; then
-        log "⚠ Missing extension build artifact: $ext_source/dist/config.js"
-        return 1
-    fi
-
     if [[ ! -d "$ext_source/dist/lib" ]]; then
         log "⚠ Missing extension build artifact directory: $ext_source/dist/lib"
         return 1
@@ -518,7 +513,6 @@ install_firefox_extension() {
     mkdir -p "$ext_dir/$ext_id/dist"
     cp "$ext_source/dist/background.js" "$ext_dir/$ext_id/dist/"
     cp "$ext_source/dist/popup.js" "$ext_dir/$ext_id/dist/"
-    cp "$ext_source/dist/config.js" "$ext_dir/$ext_id/dist/"
     cp -r "$ext_source/dist/lib" "$ext_dir/$ext_id/dist/"
     cp -r "$ext_source/popup" "$ext_dir/$ext_id/"
     cp -r "$ext_source/icons" "$ext_dir/$ext_id/"

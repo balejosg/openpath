@@ -151,7 +151,6 @@ test_required_files() {
         # Firefox extension
         "firefox-extension/manifest.json"
         "firefox-extension/dist/background.js"
-        "firefox-extension/dist/config.js"
         "firefox-extension/dist/lib/logger.js"
         "firefox-extension/popup/popup.html"
         "firefox-extension/dist/popup.js"
@@ -278,10 +277,10 @@ test_installer_extension_paths() {
         test_fail "installer does not copy dist/popup.js"
     fi
 
-    if grep -Fq 'cp "$ext_source/dist/config.js" "$ext_dir/$ext_id/dist/"' "$browser_sh"; then
-        test_pass "installer copies dist/config.js"
+    if grep -Fq 'dist/config.js' "$browser_sh"; then
+        test_fail "installer still references dist/config.js"
     else
-        test_fail "installer does not copy dist/config.js"
+        test_pass "installer no longer requires dist/config.js"
     fi
 
     if grep -Fq 'cp -r "$ext_source/dist/lib" "$ext_dir/$ext_id/dist/"' "$browser_sh"; then

@@ -113,28 +113,14 @@ test.describe('Domain Request Management', () => {
     const requestsPage = new DomainRequestsPage(page);
     await requestsPage.goto();
 
-    // Check if filter exists
-    const filterButton = page
-      .getByRole('combobox')
-      .or(page.getByRole('button', { name: /Filtrar|Estado/i }));
-
-    const hasFilter = await filterButton.isVisible().catch(() => false);
-    if (!hasFilter) {
-      test.skip(true, 'No filter functionality available on this page');
+    const statusFilter = page.getByRole('combobox', { name: /Filtrar por estado/i });
+    if (!(await statusFilter.isVisible().catch(() => false))) {
+      test.skip(true, 'Status filter not available on this page');
       return;
     }
 
-    // Open filter dropdown
-    await filterButton.click();
-
     // Select "Approved" filter
-    await page
-      .getByRole('option', { name: /Aprobad|Approved/i })
-      .click()
-      .catch(async () => {
-        // Alternative: click on text directly
-        await page.getByText(/Aprobad|Approved/i).click();
-      });
+    await statusFilter.selectOption('approved');
 
     await waitForNetworkIdle(page);
 

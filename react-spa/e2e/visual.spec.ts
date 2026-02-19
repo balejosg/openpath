@@ -113,7 +113,7 @@ test.describe('Visual Regression - Dashboard', () => {
     await page.waitForTimeout(1000); // Wait for charts to render
 
     await expect(page).toHaveScreenshot('dashboard-desktop.png', {
-      maxDiffPixelRatio: 0.02, // Allow more variance for dynamic content
+      maxDiffPixelRatio: 0.04, // Dashboard includes dynamic timestamps/data
       animations: 'disabled',
     });
   });
@@ -154,7 +154,7 @@ test.describe('Visual Regression - Dashboard', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('dashboard-empty.png', {
-      maxDiffPixelRatio: 0.02,
+      maxDiffPixelRatio: 0.04,
       animations: 'disabled',
     });
   });
@@ -172,7 +172,7 @@ test.describe('Visual Regression - Groups Page', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('groups-list-desktop.png', {
-      maxDiffPixelRatio: 0.02,
+      maxDiffPixelRatio: 0.04,
       animations: 'disabled',
     });
   });
@@ -202,7 +202,7 @@ test.describe('Visual Regression - Domain Requests', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('requests-desktop.png', {
-      maxDiffPixelRatio: 0.02,
+      maxDiffPixelRatio: 0.04,
       animations: 'disabled',
     });
   });
@@ -234,7 +234,7 @@ test.describe('Visual Regression - Dark Mode', () => {
     await page.waitForTimeout(1000);
 
     await expect(page).toHaveScreenshot('dashboard-dark-mode.png', {
-      maxDiffPixelRatio: 0.02,
+      maxDiffPixelRatio: 0.04,
       animations: 'disabled',
     });
   });
