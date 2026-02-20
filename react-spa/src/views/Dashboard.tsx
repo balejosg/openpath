@@ -5,6 +5,7 @@ import {
   Ban,
   Server,
   Shield,
+  AlertCircle,
   Loader2,
   ShieldCheck,
   ShieldOff,
@@ -21,7 +22,9 @@ interface StatsData {
 }
 
 interface SystemStatus {
-  enabled: boolean;
+  totalGroups: number;
+  activeGroups: number;
+  pausedGroups: number;
   lastChecked: Date;
 }
 
@@ -59,6 +62,7 @@ interface ClassroomFromAPI {
   defaultGroupId: string | null;
   activeGroupId: string | null;
   currentGroupId: string | null;
+  currentGroupSource: 'manual' | 'schedule' | 'default' | 'none' | null;
 }
 
 interface DashboardProps {
@@ -125,7 +129,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
         pendingRequests: requestStats.pending,
       });
       setSystemStatus({
-        enabled: sysStatus.enabled,
+        totalGroups: sysStatus.totalGroups,
+        activeGroups: sysStatus.activeGroups,
+        pausedGroups: sysStatus.pausedGroups,
         lastChecked: new Date(),
       });
       setError(null);
@@ -149,6 +155,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
           defaultGroupId: c.defaultGroupId ?? null,
           activeGroupId: c.activeGroupId ?? null,
           currentGroupId: c.currentGroupId ?? null,
+          currentGroupSource: c.currentGroupSource ?? null,
         }))
       );
       setClassroomsError(null);
@@ -244,31 +251,31 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
         const classroomName = c.displayName || c.name;
         const groupName = group ? group.displayName || group.name : groupId;
 
-        const isScheduleAssigned =
-          !c.activeGroupId &&
-          (c.defaultGroupId === null ||
-            (c.currentGroupId !== null && c.currentGroupId !== c.defaultGroupId));
-        const isDefaultGroup =
-          !c.activeGroupId &&
-          c.currentGroupId !== null &&
-          c.defaultGroupId !== null &&
-          c.currentGroupId === c.defaultGroupId;
+        const inferredSource = (() => {
+          if (c.currentGroupSource) return c.currentGroupSource;
+          if (c.activeGroupId) return 'manual';
+          if (!c.currentGroupId) return 'none';
+          if (c.defaultGroupId && c.currentGroupId === c.defaultGroupId) return 'default';
+          return 'schedule';
+        })();
 
-        let badgeVariant = c.activeGroupId
-          ? 'bg-blue-50 text-blue-700 border-blue-200'
-          : isScheduleAssigned
-            ? 'bg-amber-50 text-amber-700 border-amber-200'
-            : isDefaultGroup
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              : 'bg-slate-100 text-slate-500 border-slate-200';
+        let badgeVariant =
+          inferredSource === 'manual'
+            ? 'bg-blue-50 text-blue-700 border-blue-200'
+            : inferredSource === 'schedule'
+              ? 'bg-amber-50 text-amber-700 border-amber-200'
+              : inferredSource === 'default'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-slate-100 text-slate-500 border-slate-200';
 
-        const sourceLabel = c.activeGroupId
-          ? 'manual'
-          : isScheduleAssigned
-            ? 'horario'
-            : isDefaultGroup
-              ? 'defecto'
-              : '';
+        const sourceLabel =
+          inferredSource === 'manual'
+            ? 'manual'
+            : inferredSource === 'schedule'
+              ? 'horario'
+              : inferredSource === 'default'
+                ? 'defecto'
+                : '';
 
         const isGroupEnabled = group ? group.enabled : true;
         if (!isGroupEnabled) {
@@ -305,13 +312,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
       {/* Welcome Banner */}
       <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
+          <h2
+            className="text-xl font-semibold text-slate-800 flex items-center gap-2"
+            data-testid="dashboard-system-status"
+          >
             {loading ? (
               <>
                 <Loader2 size={20} className="animate-spin text-slate-400" />
                 Verificando estado...
               </>
-            ) : systemStatus?.enabled ? (
+            ) : !systemStatus ? (
+              <>
+                <AlertCircle size={20} className="text-slate-500" />
+                Estado del Sistema: No disponible
+              </>
+            ) : systemStatus.activeGroups > 0 ? (
               <>
                 <ShieldCheck size={20} className="text-green-600" />
                 Estado del Sistema: Seguro
@@ -319,16 +334,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
             ) : (
               <>
                 <ShieldOff size={20} className="text-amber-600" />
-                Estado del Sistema: Sin grupos activos
+                Estado del Sistema: Sin grupos habilitados
               </>
             )}
           </h2>
           <p className="text-slate-500 text-sm mt-1">
             {loading
               ? 'Cargando información del sistema...'
-              : systemStatus?.enabled
-                ? 'Hay al menos un grupo activo aplicando reglas.'
-                : 'No hay grupos activos; activa uno para aplicar reglas.'}
+              : !systemStatus
+                ? 'No se pudo obtener el estado del sistema.'
+                : systemStatus.activeGroups > 0
+                  ? `Hay ${String(systemStatus.activeGroups)} grupo(s) habilitado(s) aplicando reglas.`
+                  : 'No hay grupos habilitados; habilita uno para aplicar reglas.'}
             {systemStatus?.lastChecked && !loading && (
               <span className="ml-1">
                 Última verificación: {systemStatus.lastChecked.toLocaleTimeString()}

@@ -69,6 +69,25 @@ export interface MachineRegistrationResult {
   lastSeen: string;
 }
 
+export type CurrentGroupSource = 'manual' | 'schedule' | 'default' | 'none';
+
+function resolveCurrentGroup(params: {
+  activeGroupId: string | null;
+  scheduleGroupId: string | null;
+  defaultGroupId: string | null;
+}): { id: string | null; source: CurrentGroupSource } {
+  if (params.activeGroupId) {
+    return { id: params.activeGroupId, source: 'manual' };
+  }
+  if (params.scheduleGroupId) {
+    return { id: params.scheduleGroupId, source: 'schedule' };
+  }
+  if (params.defaultGroupId) {
+    return { id: params.defaultGroupId, source: 'default' };
+  }
+  return { id: null, source: 'none' };
+}
+
 export interface ClassroomWithMachines {
   id: string;
   name: string;
@@ -78,6 +97,7 @@ export interface ClassroomWithMachines {
   createdAt: string;
   updatedAt: string;
   currentGroupId: string | null;
+  currentGroupSource: CurrentGroupSource;
   machines: MachineInfo[];
   machineCount: number;
   status: ClassroomStatus;
@@ -122,7 +142,11 @@ export async function listClassrooms(): Promise<ClassroomWithMachines[]> {
 
       // Use schedule service for current group
       const currentSchedule = await scheduleStorage.getCurrentSchedule(c.id);
-      const currentGroupId = c.activeGroupId ?? currentSchedule?.groupId ?? c.defaultGroupId;
+      const currentGroup = resolveCurrentGroup({
+        activeGroupId: c.activeGroupId,
+        scheduleGroupId: currentSchedule?.groupId ?? null,
+        defaultGroupId: c.defaultGroupId,
+      });
 
       // Calculate classroom status based on machine health
       const status = calculateClassroomStatus(machines);
@@ -136,7 +160,8 @@ export async function listClassrooms(): Promise<ClassroomWithMachines[]> {
         activeGroupId: c.activeGroupId,
         createdAt: c.createdAt.toISOString(),
         updatedAt: c.updatedAt.toISOString(),
-        currentGroupId,
+        currentGroupId: currentGroup.id,
+        currentGroupSource: currentGroup.source,
         machines,
         machineCount: machines.length,
         status,
@@ -162,8 +187,11 @@ export async function getClassroom(id: string): Promise<ClassroomResult<Classroo
   }));
 
   const currentSchedule = await scheduleStorage.getCurrentSchedule(id);
-  const currentGroupId =
-    classroom.activeGroupId ?? currentSchedule?.groupId ?? classroom.defaultGroupId;
+  const currentGroup = resolveCurrentGroup({
+    activeGroupId: classroom.activeGroupId,
+    scheduleGroupId: currentSchedule?.groupId ?? null,
+    defaultGroupId: classroom.defaultGroupId,
+  });
 
   // Calculate classroom status based on machine health
   const status = calculateClassroomStatus(machines);
@@ -179,7 +207,8 @@ export async function getClassroom(id: string): Promise<ClassroomResult<Classroo
       activeGroupId: classroom.activeGroupId,
       createdAt: (classroom.createdAt ?? new Date()).toISOString(),
       updatedAt: (classroom.updatedAt ?? new Date()).toISOString(),
-      currentGroupId,
+      currentGroupId: currentGroup.id,
+      currentGroupSource: currentGroup.source,
       machines,
       machineCount: machines.length,
       status,

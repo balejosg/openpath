@@ -74,6 +74,9 @@ describe('Dashboard', () => {
 
   const mockSystemStatus = {
     enabled: true,
+    totalGroups: 3,
+    activeGroups: 2,
+    pausedGroups: 1,
   };
 
   const mockClassrooms = [
@@ -84,6 +87,7 @@ describe('Dashboard', () => {
       defaultGroupId: 'group-1',
       activeGroupId: null,
       currentGroupId: 'group-1',
+      currentGroupSource: 'default',
     },
     {
       id: 'classroom-2',
@@ -92,6 +96,7 @@ describe('Dashboard', () => {
       defaultGroupId: null,
       activeGroupId: null,
       currentGroupId: null,
+      currentGroupSource: 'none',
     },
   ];
 
@@ -124,12 +129,17 @@ describe('Dashboard', () => {
   });
 
   it('shows disabled system status when not enabled', async () => {
-    mockSystemStatusQuery.mockResolvedValue({ enabled: false });
+    mockSystemStatusQuery.mockResolvedValue({
+      enabled: false,
+      totalGroups: 3,
+      activeGroups: 0,
+      pausedGroups: 3,
+    });
 
     render(<Dashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText('Estado del Sistema: Sin grupos activos')).toBeInTheDocument();
+      expect(screen.getByText('Estado del Sistema: Sin grupos habilitados')).toBeInTheDocument();
     });
   });
 

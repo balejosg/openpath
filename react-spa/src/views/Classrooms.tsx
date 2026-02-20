@@ -74,6 +74,7 @@ const Classrooms = () => {
         computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
         currentGroupId: c.currentGroupId ?? null,
+        currentGroupSource: c.currentGroupSource ?? undefined,
         status: c.status,
         onlineMachineCount: c.onlineMachineCount,
       })) as Classroom[];
@@ -110,6 +111,7 @@ const Classrooms = () => {
         computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
         currentGroupId: c.currentGroupId ?? null,
+        currentGroupSource: c.currentGroupSource ?? undefined,
         status: c.status,
         onlineMachineCount: c.onlineMachineCount,
       })) as Classroom[];
@@ -286,6 +288,7 @@ const Classrooms = () => {
           <button
             onClick={openNewModal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium"
+            data-testid="classrooms-new-button"
           >
             <Plus size={16} /> Nueva Aula
           </button>
@@ -323,33 +326,36 @@ const Classrooms = () => {
             <div className="text-center py-8 text-slate-500 text-sm">No se encontraron aulas</div>
           ) : (
             filteredClassrooms.map((room) => {
-              const displayGroupId = room.activeGroup ?? room.currentGroupId;
+              const displayGroupId = room.currentGroupId;
               const displayGroupName = displayGroupId
                 ? (groups.find((g) => g.id === displayGroupId)?.displayName ?? displayGroupId)
                 : 'Sin grupo';
-              const isScheduleAssigned =
-                !room.activeGroup &&
-                !!room.currentGroupId &&
-                (room.defaultGroupId === null || room.currentGroupId !== room.defaultGroupId);
-              const isDefaultGroup =
-                !room.activeGroup &&
-                !!room.currentGroupId &&
-                room.defaultGroupId !== null &&
-                room.currentGroupId === room.defaultGroupId;
-              const badgeVariant = room.activeGroup
-                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                : isScheduleAssigned
-                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                  : displayGroupId
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-slate-100 text-slate-500 border-slate-200';
-              const sourceLabel = room.activeGroup
-                ? 'manual'
-                : isScheduleAssigned
-                  ? 'horario'
-                  : isDefaultGroup
-                    ? 'defecto'
-                    : '';
+              const inferredSource = (() => {
+                if (room.currentGroupSource) return room.currentGroupSource;
+                if (room.activeGroup) return 'manual';
+                if (!room.currentGroupId) return 'none';
+                if (room.defaultGroupId && room.currentGroupId === room.defaultGroupId)
+                  return 'default';
+                return 'schedule';
+              })();
+
+              const badgeVariant =
+                inferredSource === 'manual'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  : inferredSource === 'schedule'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : inferredSource === 'default'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-slate-100 text-slate-500 border-slate-200';
+
+              const sourceLabel =
+                inferredSource === 'manual'
+                  ? 'manual'
+                  : inferredSource === 'schedule'
+                    ? 'horario'
+                    : inferredSource === 'default'
+                      ? 'defecto'
+                      : '';
 
               return (
                 <div
@@ -451,10 +457,18 @@ const Classrooms = () => {
                         {groups.find((g) => g.id === selectedClassroom.currentGroupId)
                           ?.displayName ?? selectedClassroom.currentGroupId}
                       </span>{' '}
-                      {selectedClassroom.defaultGroupId !== null &&
-                      selectedClassroom.currentGroupId === selectedClassroom.defaultGroupId
-                        ? 'por defecto'
-                        : 'por horario'}
+                      {(() => {
+                        const source =
+                          selectedClassroom.currentGroupSource ??
+                          (selectedClassroom.defaultGroupId !== null &&
+                          selectedClassroom.currentGroupId === selectedClassroom.defaultGroupId
+                            ? 'default'
+                            : 'schedule');
+
+                        if (source === 'default') return 'por defecto';
+                        if (source === 'schedule') return 'por horario';
+                        return '';
+                      })()}
                     </p>
                   )}
                 </div>
