@@ -21,6 +21,11 @@ vi.mock('../../components/ui/Toast', () => ({
   }),
 }));
 
+vi.mock('../../lib/auth', () => ({
+  isAdmin: () => true,
+  getTeacherGroups: () => ['group-1'],
+}));
+
 describe('Groups view', () => {
   beforeEach(() => {
     vi.clearAllMocks();

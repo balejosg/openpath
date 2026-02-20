@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Group } from '../types';
 import { trpc } from '../lib/trpc';
+import { isAdmin, getTeacherGroups } from '../lib/auth';
 import { useToast } from '../components/ui/Toast';
 import { useMutationFeedback } from '../hooks/useMutationFeedback';
 
@@ -24,6 +25,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
   const [showNewModal, setShowNewModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const admin = isAdmin();
 
   // Toast hook
   const { ToastContainer } = useToast();
@@ -56,8 +58,12 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
       setLoading(true);
       setError(null);
       const apiGroups = await trpc.groups.list.query();
+      const teacherGroupIds = getTeacherGroups();
+      const filteredGroups = admin
+        ? apiGroups
+        : apiGroups.filter((g) => teacherGroupIds.includes(g.id));
       setGroups(
-        apiGroups.map((g) => ({
+        filteredGroups.map((g) => ({
           id: g.id,
           name: g.name,
           description: g.displayName || g.name,
@@ -142,15 +148,19 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Grupos de Seguridad</h2>
+          <h2 className="text-xl font-bold text-slate-900">
+            {admin ? 'Grupos de Seguridad' : 'Mis Políticas'}
+          </h2>
           <p className="text-slate-500 text-sm">Gestiona políticas de acceso y restricciones.</p>
         </div>
-        <button
-          onClick={openNewModal}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
-        >
-          + Nuevo Grupo
-        </button>
+        {admin && (
+          <button
+            onClick={openNewModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+          >
+            + Nuevo Grupo
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

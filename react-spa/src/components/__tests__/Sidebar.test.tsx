@@ -5,6 +5,7 @@ import { logout } from '../../lib/auth';
 
 vi.mock('../../lib/auth', () => ({
   logout: vi.fn(),
+  isAdmin: () => true,
 }));
 
 describe('Sidebar', () => {

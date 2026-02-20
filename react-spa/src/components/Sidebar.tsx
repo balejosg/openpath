@@ -10,7 +10,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { NavItem } from '../types';
-import { logout } from '../lib/auth';
+import { logout, isAdmin } from '../lib/auth';
 
 interface SidebarProps {
   activeTab: string;
@@ -20,13 +20,26 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isOpen }) => {
   const normalizedActiveTab = activeTab === 'rules' ? 'groups' : activeTab;
+  const admin = isAdmin();
 
   const navItems: NavItem[] = [
-    { id: 'dashboard', label: 'Panel de Control', icon: <LayoutDashboard size={20} /> },
-    { id: 'classrooms', label: 'Aulas Seguras', icon: <MonitorPlay size={20} /> },
-    { id: 'groups', label: 'Políticas de Grupo', icon: <FolderTree size={20} /> },
-    { id: 'users', label: 'Usuarios y Roles', icon: <Users size={20} /> },
-    { id: 'domains', label: 'Control de Dominios', icon: <ShieldAlert size={20} /> },
+    {
+      id: 'dashboard',
+      label: admin ? 'Panel de Control' : 'Mi Panel',
+      icon: <LayoutDashboard size={20} />,
+    },
+    { id: 'classrooms', label: admin ? 'Aulas Seguras' : 'Aulas', icon: <MonitorPlay size={20} /> },
+    {
+      id: 'groups',
+      label: admin ? 'Políticas de Grupo' : 'Mis Políticas',
+      icon: <FolderTree size={20} />,
+    },
+    ...(admin
+      ? [
+          { id: 'users', label: 'Usuarios y Roles', icon: <Users size={20} /> },
+          { id: 'domains', label: 'Control de Dominios', icon: <ShieldAlert size={20} /> },
+        ]
+      : []),
   ];
 
   return (

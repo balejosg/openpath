@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, adminProcedure } from '../trpc.js';
+import { router, adminProcedure, teacherProcedure } from '../trpc.js';
 import { GroupsService } from '../../services/groups.service.js';
 import type { RuleType } from '../../lib/groups-storage.js';
 import { validateRuleValue } from '@openpath/shared';
@@ -107,7 +107,7 @@ export const groupsRouter = router({
    * List all groups with rule counts.
    * @returns Array of groups with whitelistCount, blockedSubdomainCount, blockedPathCount
    */
-  list: adminProcedure.query(async () => {
+  list: teacherProcedure.query(async () => {
     return GroupsService.listGroups();
   }),
 
@@ -117,7 +117,7 @@ export const groupsRouter = router({
    * @returns Group with rule counts
    * @throws NOT_FOUND if group doesn't exist
    */
-  getById: adminProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
+  getById: teacherProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
     const result = await GroupsService.getGroupById(input.id);
     if (!result.ok) {
       throw new TRPCError({ code: result.error.code, message: result.error.message });
@@ -131,7 +131,7 @@ export const groupsRouter = router({
    * @returns Group with rule counts
    * @throws NOT_FOUND if group doesn't exist
    */
-  getByName: adminProcedure
+  getByName: teacherProcedure
     .input(z.object({ name: z.string().min(1) }))
     .query(async ({ input }) => {
       const result = await GroupsService.getGroupByName(input.name);
@@ -164,7 +164,7 @@ export const groupsRouter = router({
    * @returns Updated group
    * @throws NOT_FOUND if group doesn't exist
    */
-  update: adminProcedure.input(UpdateGroupSchema).mutation(async ({ input }) => {
+  update: teacherProcedure.input(UpdateGroupSchema).mutation(async ({ input }) => {
     const result = await GroupsService.updateGroup(input);
     if (!result.ok) {
       throw new TRPCError({ code: result.error.code, message: result.error.message });
@@ -193,7 +193,7 @@ export const groupsRouter = router({
    * @returns Array of rules sorted by value
    * @throws NOT_FOUND if group doesn't exist
    */
-  listRules: adminProcedure.input(ListRulesSchema).query(async ({ input }) => {
+  listRules: teacherProcedure.input(ListRulesSchema).query(async ({ input }) => {
     const result = await GroupsService.listRules(input.groupId, input.type);
     if (!result.ok) {
       throw new TRPCError({ code: result.error.code, message: result.error.message });
@@ -211,7 +211,7 @@ export const groupsRouter = router({
    * @returns { rules, total, hasMore }
    * @throws NOT_FOUND if group doesn't exist
    */
-  listRulesPaginated: adminProcedure.input(ListRulesPaginatedSchema).query(async ({ input }) => {
+  listRulesPaginated: teacherProcedure.input(ListRulesPaginatedSchema).query(async ({ input }) => {
     const result = await GroupsService.listRulesPaginated({
       groupId: input.groupId,
       type: input.type,
@@ -236,7 +236,7 @@ export const groupsRouter = router({
    * @returns { groups, totalGroups, totalRules, hasMore }
    * @throws NOT_FOUND if group doesn't exist
    */
-  listRulesGrouped: adminProcedure.input(ListRulesGroupedSchema).query(async ({ input }) => {
+  listRulesGrouped: teacherProcedure.input(ListRulesGroupedSchema).query(async ({ input }) => {
     const result = await GroupsService.listRulesGrouped({
       groupId: input.groupId,
       type: input.type,
@@ -260,7 +260,7 @@ export const groupsRouter = router({
    * @throws NOT_FOUND if group doesn't exist
    * @throws CONFLICT if rule already exists
    */
-  createRule: adminProcedure.input(CreateRuleSchema).mutation(async ({ input }) => {
+  createRule: teacherProcedure.input(CreateRuleSchema).mutation(async ({ input }) => {
     const result = await GroupsService.createRule({
       groupId: input.groupId,
       type: input.type as RuleType,
@@ -279,7 +279,7 @@ export const groupsRouter = router({
    * @param groupId - Optional Group ID for compatibility
    * @returns { deleted: boolean }
    */
-  deleteRule: adminProcedure
+  deleteRule: teacherProcedure
     .input(z.object({ id: z.string().min(1), groupId: z.string().optional() }))
     .mutation(async ({ input }) => {
       const result = await GroupsService.deleteRule(input.id);
@@ -299,7 +299,7 @@ export const groupsRouter = router({
    * @throws NOT_FOUND if rule or group doesn't exist
    * @throws CONFLICT if new value already exists
    */
-  updateRule: adminProcedure.input(UpdateRuleSchema).mutation(async ({ input }) => {
+  updateRule: teacherProcedure.input(UpdateRuleSchema).mutation(async ({ input }) => {
     const result = await GroupsService.updateRule({
       id: input.id,
       groupId: input.groupId,
@@ -320,7 +320,7 @@ export const groupsRouter = router({
    * @returns { count: number } - Number of rules successfully created
    * @throws NOT_FOUND if group doesn't exist
    */
-  bulkCreateRules: adminProcedure.input(BulkCreateRulesSchema).mutation(async ({ input }) => {
+  bulkCreateRules: teacherProcedure.input(BulkCreateRulesSchema).mutation(async ({ input }) => {
     const result = await GroupsService.bulkCreateRules({
       groupId: input.groupId,
       type: input.type as RuleType,
@@ -337,7 +337,7 @@ export const groupsRouter = router({
    * @param ids - Array of rule IDs to delete (max 100)
    * @returns { deleted: number, rules: Rule[] } - Count and deleted rules for undo
    */
-  bulkDeleteRules: adminProcedure.input(BulkDeleteRulesSchema).mutation(async ({ input }) => {
+  bulkDeleteRules: teacherProcedure.input(BulkDeleteRulesSchema).mutation(async ({ input }) => {
     const result = await GroupsService.bulkDeleteRules(input.ids);
     if (!result.ok) {
       throw new TRPCError({ code: result.error.code, message: result.error.message });
@@ -349,7 +349,7 @@ export const groupsRouter = router({
    * Get aggregate statistics for all groups.
    * @returns { groupCount, whitelistCount, blockedCount }
    */
-  stats: adminProcedure.query(async () => {
+  stats: teacherProcedure.query(async () => {
     return GroupsService.getStats();
   }),
 
@@ -357,7 +357,7 @@ export const groupsRouter = router({
    * Get system status (enabled/disabled groups).
    * @returns { enabled, totalGroups, activeGroups, pausedGroups }
    */
-  systemStatus: adminProcedure.query(async () => {
+  systemStatus: teacherProcedure.query(async () => {
     return GroupsService.getSystemStatus();
   }),
 
@@ -366,7 +366,7 @@ export const groupsRouter = router({
    * @param enable - Whether to enable or disable all groups
    * @returns Updated system status
    */
-  toggleSystem: adminProcedure
+  toggleSystem: teacherProcedure
     .input(z.object({ enable: z.boolean() }))
     .mutation(async ({ input }) => {
       return GroupsService.toggleSystemStatus(input.enable);
@@ -378,7 +378,7 @@ export const groupsRouter = router({
    * @returns { name, content } - Group name and file content
    * @throws NOT_FOUND if group doesn't exist
    */
-  export: adminProcedure
+  export: teacherProcedure
     .input(z.object({ groupId: z.string().min(1) }))
     .query(async ({ input }) => {
       const result = await GroupsService.exportGroup(input.groupId);
@@ -392,7 +392,7 @@ export const groupsRouter = router({
    * Export all groups to file content.
    * @returns Array of { name, content } for each group
    */
-  exportAll: adminProcedure.query(async () => {
+  exportAll: teacherProcedure.query(async () => {
     return GroupsService.exportAllGroups();
   }),
 });

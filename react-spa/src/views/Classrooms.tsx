@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { Classroom } from '../types';
 import { trpc } from '../lib/trpc';
+import { isAdmin, getTeacherGroups } from '../lib/auth';
 import { useClassroomConfigActions } from '../hooks/useClassroomConfigActions';
 import { useClassroomSchedules } from '../hooks/useClassroomSchedules';
 import { useListDetailSelection } from '../hooks/useListDetailSelection';
@@ -38,6 +39,7 @@ const Classrooms = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const normalizedSearchQuery = useNormalizedSearch(searchQuery);
+  const admin = isAdmin();
 
   // Enrollment state
   const [showEnrollModal, setShowEnrollModal] = useState(false);
@@ -285,13 +287,15 @@ const Classrooms = () => {
       <div className="w-full md:w-1/3 flex flex-col gap-4">
         <div className="flex justify-between items-center px-1">
           <h2 className="text-lg font-bold text-slate-800">Aulas</h2>
-          <button
-            onClick={openNewModal}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium"
-            data-testid="classrooms-new-button"
-          >
-            <Plus size={16} /> Nueva Aula
-          </button>
+          {admin && (
+            <button
+              onClick={openNewModal}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium"
+              data-testid="classrooms-new-button"
+            >
+              <Plus size={16} /> Nueva Aula
+            </button>
+          )}
         </div>
 
         <div className="relative">
@@ -398,14 +402,18 @@ const Classrooms = () => {
           <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
             <h2 className="text-2xl font-bold text-slate-900 mb-1">Sin aulas</h2>
             <p className="text-slate-500 text-sm">
-              Crea una nueva aula para ver su configuración y estado.
+              {admin
+                ? 'Crea una nueva aula para ver su configuración y estado.'
+                : 'Selecciona un aula para ver su configuración y estado.'}
             </p>
-            <button
-              onClick={openNewModal}
-              className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2 transition-colors shadow-sm font-medium"
-            >
-              <Plus size={16} /> Crear aula
-            </button>
+            {admin && (
+              <button
+                onClick={openNewModal}
+                className="mt-6 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2 transition-colors shadow-sm font-medium"
+              >
+                <Plus size={16} /> Crear aula
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -419,13 +427,15 @@ const Classrooms = () => {
                   <p className="text-slate-500 text-sm">Configuración y estado del aula</p>
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
-                    title="Eliminar Aula"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  {admin && (
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                      title="Eliminar Aula"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -444,11 +454,13 @@ const Classrooms = () => {
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
                   >
                     <option value="">Sin grupo activo</option>
-                    {groups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.displayName}
-                      </option>
-                    ))}
+                    {groups
+                      .filter((g) => admin || getTeacherGroups().includes(g.id))
+                      .map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.displayName}
+                        </option>
+                      ))}
                   </select>
                   {!selectedClassroom.activeGroup && selectedClassroom.currentGroupId && (
                     <p className="mt-2 text-xs text-slate-500 italic">
@@ -483,7 +495,8 @@ const Classrooms = () => {
                     id="classroom-default-group"
                     value={selectedClassroom.defaultGroupId ?? ''}
                     onChange={(e) => void handleDefaultGroupChange(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
+                    disabled={!admin}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm disabled:bg-slate-50 disabled:text-slate-500"
                   >
                     <option value="">Sin grupo por defecto</option>
                     {groups.map((g) => (
@@ -541,18 +554,20 @@ const Classrooms = () => {
                   Máquinas Registradas
                 </h3>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => void openEnrollModal()}
-                    disabled={loadingToken}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium disabled:opacity-50"
-                  >
-                    {loadingToken ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <Download size={16} />
-                    )}
-                    Instalar equipos
-                  </button>
+                  {admin && (
+                    <button
+                      onClick={() => void openEnrollModal()}
+                      disabled={loadingToken}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium disabled:opacity-50"
+                    >
+                      {loadingToken ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Download size={16} />
+                      )}
+                      Instalar equipos
+                    </button>
+                  )}
                   <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-600 border border-slate-200 font-medium">
                     Total: {selectedClassroom.computerCount}
                   </span>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './views/Dashboard';
+import TeacherDashboard from './views/TeacherDashboard';
 import Classrooms from './views/Classrooms';
 import Groups from './views/Groups';
 import UsersView from './views/Users';
@@ -12,7 +13,7 @@ import ResetPassword from './views/ResetPassword';
 import Settings from './views/Settings';
 import DomainRequests from './views/DomainRequests';
 import RulesManager from './views/RulesManager';
-import { isAuthenticated, onAuthChange } from './lib/auth';
+import { isAuthenticated, onAuthChange, isAdmin } from './lib/auth';
 
 type AuthView = 'login' | 'register' | 'forgot-password' | 'reset-password';
 
@@ -52,10 +53,16 @@ const App: React.FC = () => {
     setActiveTab('groups');
   };
 
+  const admin = isAdmin();
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard onNavigateToRules={handleNavigateToRules} />;
+        return admin ? (
+          <Dashboard onNavigateToRules={handleNavigateToRules} />
+        ) : (
+          <TeacherDashboard onNavigateToRules={handleNavigateToRules} />
+        );
       case 'classrooms':
         return <Classrooms />;
       case 'groups':
@@ -71,30 +78,42 @@ const App: React.FC = () => {
           <Groups onNavigateToRules={handleNavigateToRules} />
         );
       case 'users':
-        return <UsersView />;
+        return admin ? (
+          <UsersView />
+        ) : (
+          <TeacherDashboard onNavigateToRules={handleNavigateToRules} />
+        );
       case 'settings':
         return <Settings />;
       case 'domains':
-        return <DomainRequests />;
+        return admin ? (
+          <DomainRequests />
+        ) : (
+          <TeacherDashboard onNavigateToRules={handleNavigateToRules} />
+        );
       default:
-        return <Dashboard />;
+        return admin ? (
+          <Dashboard onNavigateToRules={handleNavigateToRules} />
+        ) : (
+          <TeacherDashboard onNavigateToRules={handleNavigateToRules} />
+        );
     }
   };
 
   const getTitle = () => {
     switch (activeTab) {
       case 'dashboard':
-        return 'Vista General';
+        return admin ? 'Vista General' : 'Mi Panel';
       case 'classrooms':
-        return 'Gestión de Aulas';
+        return admin ? 'Gestión de Aulas' : 'Aulas';
       case 'groups':
-        return 'Grupos y Políticas';
+        return admin ? 'Grupos y Políticas' : 'Mis Políticas';
       case 'rules':
         return selectedGroup ? `Reglas: ${selectedGroup.name}` : 'Gestión de Reglas';
       case 'users':
-        return 'Administración de Usuarios';
+        return admin ? 'Administración de Usuarios' : 'Mi Panel';
       case 'domains':
-        return 'Solicitudes de Acceso';
+        return admin ? 'Solicitudes de Acceso' : 'Mi Panel';
       case 'settings':
         return 'Configuración';
       default:
