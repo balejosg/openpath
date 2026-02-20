@@ -1,32 +1,18 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, CheckCircle, XCircle, Trash2, Clock, AlertTriangle, Filter } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { DomainRequest, RequestStatus } from '@openpath/api';
 import { trpc } from '../lib/trpc';
 import { normalizeSearchTerm, useNormalizedSearch } from '../hooks/useNormalizedSearch';
+import {
+  PRIORITY_COLORS,
+  PRIORITY_LABELS,
+  PRIORITY_WEIGHT,
+  STATUS_COLORS,
+  STATUS_LABELS,
+} from './domain-requests.constants';
 
-type RequestStatus = 'pending' | 'approved' | 'rejected';
-type RequestPriority = 'low' | 'normal' | 'high' | 'urgent';
 type SortOption = 'pending' | 'newest' | 'oldest' | 'priority';
-
-interface DomainRequest {
-  id: string;
-  domain: string;
-  reason: string;
-  requesterEmail: string;
-  groupId: string;
-  source?: string;
-  machineHostname?: string | null;
-  originHost?: string | null;
-  originPage?: string | null;
-  clientVersion?: string | null;
-  errorType?: string | null;
-  priority: RequestPriority;
-  status: RequestStatus;
-  createdAt: string;
-  updatedAt: string;
-  resolvedAt: string | null;
-  resolvedBy: string | null;
-  resolutionNote?: string;
-}
 
 interface Group {
   id: string;
@@ -34,37 +20,82 @@ interface Group {
   path: string;
 }
 
-const priorityColors: Record<RequestPriority, string> = {
-  urgent: 'bg-red-100 text-red-700 border-red-200',
-  high: 'bg-amber-100 text-amber-700 border-amber-200',
-  normal: 'bg-blue-100 text-blue-700 border-blue-200',
-  low: 'bg-slate-100 text-slate-600 border-slate-200',
-};
+const EMPTY_REQUESTS: DomainRequest[] = [];
+const EMPTY_GROUPS: Group[] = [];
 
-const priorityLabels: Record<RequestPriority, string> = {
-  urgent: 'Urgente',
-  high: 'Alta',
-  normal: 'Normal',
-  low: 'Baja',
-};
+function useDomainRequestsData(statusFilter: RequestStatus | 'all') {
+  const queryClient = useQueryClient();
 
-const statusColors: Record<RequestStatus, string> = {
-  pending: 'bg-amber-100 text-amber-700 border-amber-200',
-  approved: 'bg-green-100 text-green-700 border-green-200',
-  rejected: 'bg-red-100 text-red-700 border-red-200',
-};
+  // Avoid keeping Node test processes alive via refetch intervals.
+  const shouldPoll = import.meta.env.MODE !== 'test';
 
-const statusLabels: Record<RequestStatus, string> = {
-  pending: 'Pendiente',
-  approved: 'Aprobado',
-  rejected: 'Rechazado',
-};
+  const requestsQuery = useQuery({
+    queryKey: ['domain-requests', 'requests', statusFilter],
+    queryFn: () => trpc.requests.list.query(statusFilter === 'all' ? {} : { status: statusFilter }),
+    refetchInterval: shouldPoll ? 10000 : false,
+    refetchOnWindowFocus: 'always',
+  });
+
+  const groupsQuery = useQuery({
+    queryKey: ['domain-requests', 'groups'],
+    queryFn: () => trpc.requests.listGroups.query(),
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: 'always',
+  });
+
+  const invalidateRequests = () =>
+    queryClient.invalidateQueries({ queryKey: ['domain-requests', 'requests'] });
+
+  const approveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await trpc.requests.approve.mutate({ id });
+    },
+    onSuccess: () => {
+      void invalidateRequests();
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: async (input: { id: string; reason?: string }) => {
+      return await trpc.requests.reject.mutate(input);
+    },
+    onSuccess: () => {
+      void invalidateRequests();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return await trpc.requests.delete.mutate({ id });
+    },
+    onSuccess: () => {
+      void invalidateRequests();
+    },
+  });
+
+  const loading = requestsQuery.status === 'pending' || groupsQuery.status === 'pending';
+  const fetching =
+    requestsQuery.fetchStatus === 'fetching' || groupsQuery.fetchStatus === 'fetching';
+  const hasError = requestsQuery.status === 'error' || groupsQuery.status === 'error';
+
+  return {
+    requests: requestsQuery.data ?? EMPTY_REQUESTS,
+    groups: groupsQuery.data ?? EMPTY_GROUPS,
+    loading,
+    fetching,
+    error: hasError ? 'Error al cargar las solicitudes' : null,
+    invalidateRequests,
+    approveRequest: approveMutation.mutateAsync,
+    rejectRequest: rejectMutation.mutateAsync,
+    deleteRequest: deleteMutation.mutateAsync,
+    actionsLoading:
+      approveMutation.status === 'pending' ||
+      rejectMutation.status === 'pending' ||
+      deleteMutation.status === 'pending',
+  };
+}
 
 export default function DomainRequests() {
-  const [requests, setRequests] = useState<DomainRequest[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const normalizedSearchTerm = useNormalizedSearch(searchTerm);
   const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('all');
@@ -83,8 +114,22 @@ export default function DomainRequests() {
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [bulkFailedIds, setBulkFailedIds] = useState<string[]>([]);
   const [bulkFailedMode, setBulkFailedMode] = useState<'approve' | 'reject' | null>(null);
-  const [refreshTick, setRefreshTick] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    requests,
+    groups,
+    loading: baseLoading,
+    fetching,
+    error,
+    invalidateRequests,
+    approveRequest,
+    rejectRequest,
+    deleteRequest,
+    actionsLoading,
+  } = useDomainRequestsData(statusFilter);
+
+  const loading = baseLoading || fetching;
 
   // Modal states
   const [approveModal, setApproveModal] = useState<{
@@ -104,47 +149,6 @@ export default function DomainRequests() {
   });
 
   const [rejectionReason, setRejectionReason] = useState('');
-  const [actionLoading, setActionLoading] = useState(false);
-
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [requestsData, groupsData] = await Promise.all([
-        trpc.requests.list.query(statusFilter === 'all' ? {} : { status: statusFilter }),
-        trpc.requests.listGroups.query(),
-      ]);
-      setRequests(requestsData as DomainRequest[]);
-      setGroups(groupsData as Group[]);
-      setError(null);
-    } catch (err) {
-      setError('Error al cargar las solicitudes');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter]);
-
-  // Fetch requests and groups
-  useEffect(() => {
-    void fetchData();
-  }, [fetchData, refreshTick]);
-
-  // Keep list updated without requiring filter changes.
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setRefreshTick((tick) => tick + 1);
-    }, 10000);
-
-    const onFocus = () => {
-      setRefreshTick((tick) => tick + 1);
-    };
-
-    window.addEventListener('focus', onFocus);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, []);
 
   useEffect(() => {
     if (!bulkMessage) return;
@@ -170,13 +174,6 @@ export default function DomainRequests() {
   );
 
   const sortedRequests = useMemo(() => {
-    const priorityWeight: Record<RequestPriority, number> = {
-      urgent: 4,
-      high: 3,
-      normal: 2,
-      low: 1,
-    };
-
     const sorted = [...filteredRequests];
 
     sorted.sort((a, b) => {
@@ -186,7 +183,7 @@ export default function DomainRequests() {
         case 'oldest':
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         case 'priority': {
-          const priorityDiff = priorityWeight[b.priority] - priorityWeight[a.priority];
+          const priorityDiff = PRIORITY_WEIGHT[b.priority] - PRIORITY_WEIGHT[a.priority];
           if (priorityDiff !== 0) return priorityDiff;
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         }
@@ -232,7 +229,13 @@ export default function DomainRequests() {
   }, [searchTerm, statusFilter, sourceFilter, sortBy, pageSize]);
 
   useEffect(() => {
-    setSelectedRequestIds((prev) => prev.filter((id) => sortedRequests.some((r) => r.id === id)));
+    setSelectedRequestIds((prev) => {
+      const next = prev.filter((id) => sortedRequests.some((r) => r.id === id));
+      if (next.length === prev.length && next.every((id, idx) => id === prev[idx])) {
+        return prev;
+      }
+      return next;
+    });
   }, [sortedRequests]);
 
   const selectedPendingRequests = useMemo(
@@ -240,11 +243,16 @@ export default function DomainRequests() {
     [requests, selectedRequestIds]
   );
 
+  const groupNameByPath = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const group of groups) {
+      map.set(group.path, group.name);
+    }
+    return map;
+  }, [groups]);
+
   // Get group name by path
-  const getGroupName = (groupId: string) => {
-    const group = groups.find((g) => g.path === groupId);
-    return group?.name ?? groupId;
-  };
+  const getGroupName = (groupId: string) => groupNameByPath.get(groupId) ?? groupId;
 
   // Format date
   const formatDate = (dateStr: string) => {
@@ -267,59 +275,37 @@ export default function DomainRequests() {
   // Handle approve
   const handleApprove = async () => {
     if (!approveModal.request) return;
-    setActionLoading(true);
     try {
-      await trpc.requests.approve.mutate({
-        id: approveModal.request.id,
-      });
-      setRequests((prev) =>
-        prev.map((r) =>
-          r.id === approveModal.request?.id ? { ...r, status: 'approved' as RequestStatus } : r
-        )
-      );
+      await approveRequest(approveModal.request.id);
       setApproveModal({ open: false, request: null });
     } catch (err) {
       console.error('Error approving request:', err);
-    } finally {
-      setActionLoading(false);
     }
   };
 
   // Handle reject
   const handleReject = async () => {
     if (!rejectModal.request) return;
-    setActionLoading(true);
     try {
-      await trpc.requests.reject.mutate({
+      await rejectRequest({
         id: rejectModal.request.id,
         reason: rejectionReason || undefined,
       });
-      setRequests((prev) =>
-        prev.map((r) =>
-          r.id === rejectModal.request?.id ? { ...r, status: 'rejected' as RequestStatus } : r
-        )
-      );
       setRejectModal({ open: false, request: null });
       setRejectionReason('');
     } catch (err) {
       console.error('Error rejecting request:', err);
-    } finally {
-      setActionLoading(false);
     }
   };
 
   // Handle delete
   const handleDelete = async () => {
     if (!deleteModal.request) return;
-    setActionLoading(true);
     try {
-      await trpc.requests.delete.mutate({ id: deleteModal.request.id });
-      setRequests((prev) => prev.filter((r) => r.id !== deleteModal.request?.id));
+      await deleteRequest(deleteModal.request.id);
       setDeleteModal({ open: false, request: null });
     } catch (err) {
       console.error('Error deleting request:', err);
-    } finally {
-      setActionLoading(false);
     }
   };
 
@@ -374,20 +360,8 @@ export default function DomainRequests() {
     }
 
     if (successCount > 0) {
-      const nowIso = new Date().toISOString();
-      setRequests((prev) =>
-        prev.map((r) =>
-          selectedRequestIds.includes(r.id) && r.status === 'pending'
-            ? {
-                ...r,
-                status: 'approved',
-                updatedAt: nowIso,
-                resolvedAt: nowIso,
-              }
-            : r
-        )
-      );
       setSelectedRequestIds([]);
+      void invalidateRequests();
     }
 
     setBulkMessage(
@@ -433,22 +407,9 @@ export default function DomainRequests() {
     }
 
     if (successCount > 0) {
-      const nowIso = new Date().toISOString();
-      setRequests((prev) =>
-        prev.map((r) =>
-          selectedRequestIds.includes(r.id) && r.status === 'pending'
-            ? {
-                ...r,
-                status: 'rejected',
-                updatedAt: nowIso,
-                resolvedAt: nowIso,
-                resolutionNote: bulkRejectReason || r.resolutionNote,
-              }
-            : r
-        )
-      );
       setSelectedRequestIds([]);
       setBulkRejectReason('');
+      void invalidateRequests();
     }
 
     setBulkMessage(
@@ -799,16 +760,16 @@ export default function DomainRequests() {
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`text-xs px-2 py-0.5 rounded-full border font-medium ${priorityColors[request.priority]}`}
+                        className={`text-xs px-2 py-0.5 rounded-full border font-medium ${PRIORITY_COLORS[request.priority]}`}
                       >
-                        {priorityLabels[request.priority]}
+                        {PRIORITY_LABELS[request.priority]}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusColors[request.status]}`}
+                        className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLORS[request.status]}`}
                       >
-                        {statusLabels[request.status]}
+                        {STATUS_LABELS[request.status]}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-500">
@@ -945,10 +906,10 @@ export default function DomainRequests() {
                 onClick={() => {
                   void handleApprove();
                 }}
-                disabled={actionLoading}
+                disabled={actionsLoading}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {actionLoading ? 'Aprobando...' : 'Aprobar'}
+                {actionsLoading ? 'Aprobando...' : 'Aprobar'}
               </button>
             </div>
           </div>
@@ -998,10 +959,10 @@ export default function DomainRequests() {
                 onClick={() => {
                   void handleReject();
                 }}
-                disabled={actionLoading}
+                disabled={actionsLoading}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >
-                {actionLoading ? 'Rechazando...' : 'Rechazar'}
+                {actionsLoading ? 'Rechazando...' : 'Rechazar'}
               </button>
             </div>
           </div>
@@ -1038,10 +999,10 @@ export default function DomainRequests() {
                 onClick={() => {
                   void handleDelete();
                 }}
-                disabled={actionLoading}
+                disabled={actionsLoading}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
               >
-                {actionLoading ? 'Eliminando...' : 'Eliminar'}
+                {actionsLoading ? 'Eliminando...' : 'Eliminar'}
               </button>
             </div>
           </div>

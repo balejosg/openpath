@@ -16,6 +16,7 @@ import {
 import type { Classroom } from '../types';
 import { trpc } from '../lib/trpc';
 import { isAdmin, getTeacherGroups } from '../lib/auth';
+import { getAuthTokenForHeader } from '../lib/auth-storage';
 import { useClassroomConfigActions } from '../hooks/useClassroomConfigActions';
 import { useClassroomSchedules } from '../hooks/useClassroomSchedules';
 import { useListDetailSelection } from '../hooks/useListDetailSelection';
@@ -226,14 +227,14 @@ const Classrooms = () => {
         return;
       }
 
-      const accessToken = localStorage.getItem('openpath_access_token');
+      const authToken = getAuthTokenForHeader();
       const response = await fetch(
         `/api/enroll/${encodeURIComponent(selectedClassroom.id)}/ticket`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
         }
       );

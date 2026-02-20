@@ -1,9 +1,12 @@
 import { trpc } from './trpc';
-
-// Claves de localStorage (compatibilidad con SPA vanilla)
-const ACCESS_TOKEN_KEY = 'openpath_access_token';
-const REFRESH_TOKEN_KEY = 'openpath_refresh_token';
-const USER_KEY = 'openpath_user';
+import {
+  ACCESS_TOKEN_KEY,
+  USER_KEY,
+  clearAuthStorage,
+  getAccessToken,
+  getUserJson,
+  setAuthSession,
+} from './auth-storage';
 
 export interface User {
   id: string;
@@ -19,7 +22,7 @@ export interface User {
  * Obtiene el usuario actual desde localStorage.
  */
 export function getCurrentUser(): User | null {
-  const userJson = localStorage.getItem(USER_KEY);
+  const userJson = getUserJson();
   if (!userJson) return null;
   try {
     return JSON.parse(userJson) as User;
@@ -32,7 +35,7 @@ export function getCurrentUser(): User | null {
  * Verifica si el usuario está autenticado.
  */
 export function isAuthenticated(): boolean {
-  return !!localStorage.getItem(ACCESS_TOKEN_KEY);
+  return !!getAccessToken();
 }
 
 /**
@@ -86,9 +89,7 @@ export async function login(email: string, password: string): Promise<User> {
   const result = await trpc.auth.login.mutate({ email, password });
 
   // Guardar tokens
-  localStorage.setItem(ACCESS_TOKEN_KEY, result.accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, result.refreshToken);
-  localStorage.setItem(USER_KEY, JSON.stringify(result.user));
+  setAuthSession(result.accessToken, result.refreshToken, result.user);
 
   return result.user;
 }
@@ -100,9 +101,7 @@ export async function loginWithGoogle(idToken: string): Promise<User> {
   const result = await trpc.auth.googleLogin.mutate({ idToken });
 
   // Guardar tokens
-  localStorage.setItem(ACCESS_TOKEN_KEY, result.accessToken);
-  localStorage.setItem(REFRESH_TOKEN_KEY, result.refreshToken);
-  localStorage.setItem(USER_KEY, JSON.stringify(result.user));
+  setAuthSession(result.accessToken, result.refreshToken, result.user);
 
   return result.user;
 }
@@ -117,9 +116,7 @@ export function logout(): void {
       // Ignore network/auth errors during logout cleanup.
     })
     .finally(() => {
-      localStorage.removeItem(ACCESS_TOKEN_KEY);
-      localStorage.removeItem(REFRESH_TOKEN_KEY);
-      localStorage.removeItem(USER_KEY);
+      clearAuthStorage();
 
       // Recargar para limpiar estado
       window.location.reload();

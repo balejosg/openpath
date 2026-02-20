@@ -1,11 +1,7 @@
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import type { TRPCLink } from '@trpc/client';
 import type { AppRouter } from '@openpath/api';
-
-// Claves de localStorage (deben coincidir entre clientes)
-const ACCESS_TOKEN_KEY = 'openpath_access_token';
-const LEGACY_TOKEN_KEY = 'requests_api_token';
-const COOKIE_SESSION_MARKER = 'cookie-session';
+import { clearAuthAndReload, getAuthTokenForHeader } from './auth-storage';
 
 /**
  * Obtiene la URL base de la API.
@@ -53,41 +49,6 @@ function resolveApiBase(apiBase: string): string {
   return apiBase;
 }
 
-/**
- * Obtiene el token de autenticación desde localStorage.
- */
-function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const token = localStorage.getItem(ACCESS_TOKEN_KEY);
-    if (token && token !== COOKIE_SESSION_MARKER) {
-      return token;
-    }
-    return localStorage.getItem(LEGACY_TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Limpia el estado de autenticación y recarga la página.
- */
-function clearAuthAndReload(): void {
-  try {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem('openpath_refresh_token');
-    localStorage.removeItem('openpath_user');
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
-  } catch {
-    // localStorage may not be available
-  }
-  try {
-    window.location.reload();
-  } catch {
-    // location.reload may not be available in test environments
-  }
-}
-
 function createDynamicHttpBatchLink(): TRPCLink<AppRouter> {
   const linkCache = new Map<string, ReturnType<typeof httpBatchLink>>();
 
@@ -102,7 +63,7 @@ function createDynamicHttpBatchLink(): TRPCLink<AppRouter> {
         link = httpBatchLink({
           url,
           headers: () => {
-            const token = getAuthToken();
+            const token = getAuthTokenForHeader();
             return token ? { Authorization: `Bearer ${token}` } : {};
           },
           // Interceptar respuestas 401 (UNAUTHORIZED) para limpiar auth y redirigir

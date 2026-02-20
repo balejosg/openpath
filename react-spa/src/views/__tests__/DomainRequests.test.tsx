@@ -1,6 +1,51 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import DomainRequests from '../DomainRequests';
+
+focusManager.setEventListener((handleFocus) => {
+  const onVisibilityChange = () => {
+    handleFocus(document.visibilityState === 'visible');
+  };
+  const onFocus = () => {
+    handleFocus(true);
+  };
+
+  window.addEventListener('visibilitychange', onVisibilityChange, false);
+  window.addEventListener('focus', onFocus, false);
+  return () => {
+    window.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('focus', onFocus);
+  };
+});
+
+let queryClient: QueryClient | null = null;
+
+function renderDomainRequests() {
+  queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+      mutations: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <DomainRequests />
+    </QueryClientProvider>
+  );
+}
+
+afterEach(() => {
+  queryClient?.clear();
+  queryClient = null;
+});
 
 const { mockListRequests, mockListGroups, mockApprove, mockReject } = vi.hoisted(() => ({
   mockListRequests: vi.fn(),
@@ -55,7 +100,7 @@ describe('DomainRequests - Original group approval', () => {
   });
 
   it('approves using request id only and shows original group', async () => {
-    render(<DomainRequests />);
+    renderDomainRequests();
 
     await screen.findByText('example.com');
     fireEvent.click(screen.getByTitle('Aprobar'));
@@ -76,7 +121,7 @@ describe('DomainRequests - Original group approval', () => {
   });
 
   it('refreshes list when the window regains focus', async () => {
-    render(<DomainRequests />);
+    renderDomainRequests();
 
     await waitFor(() => {
       expect(mockListRequests).toHaveBeenCalledTimes(1);
@@ -90,7 +135,7 @@ describe('DomainRequests - Original group approval', () => {
   });
 
   it('clears bulk reject reason when clearing selection', async () => {
-    render(<DomainRequests />);
+    renderDomainRequests();
 
     await screen.findByText('example.com');
     fireEvent.click(screen.getByLabelText('Seleccionar example.com'));
@@ -107,7 +152,7 @@ describe('DomainRequests - Original group approval', () => {
   it('asks confirmation before bulk approve', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
 
-    render(<DomainRequests />);
+    renderDomainRequests();
 
     await screen.findByText('example.com');
     fireEvent.click(screen.getByLabelText('Seleccionar example.com'));
@@ -122,7 +167,7 @@ describe('DomainRequests - Original group approval', () => {
   it('asks confirmation before bulk reject', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
 
-    render(<DomainRequests />);
+    renderDomainRequests();
 
     await screen.findByText('example.com');
     fireEvent.click(screen.getByLabelText('Seleccionar example.com'));
@@ -135,7 +180,7 @@ describe('DomainRequests - Original group approval', () => {
   });
 
   it('clears search and restores the table when using clear button', async () => {
-    render(<DomainRequests />);
+    renderDomainRequests();
 
     await screen.findByText('example.com');
 
@@ -153,7 +198,7 @@ describe('DomainRequests - Original group approval', () => {
   });
 
   it('matches search even with extra spaces and uppercase text', async () => {
-    render(<DomainRequests />);
+    renderDomainRequests();
 
     await screen.findByText('example.com');
 
@@ -167,7 +212,7 @@ describe('DomainRequests - Original group approval', () => {
   });
 
   it('keeps filters visible and allows clearing when source filter has no matches', async () => {
-    render(<DomainRequests />);
+    renderDomainRequests();
 
     await screen.findByText('example.com');
 
@@ -222,7 +267,7 @@ describe('DomainRequests - Original group approval', () => {
       return Promise.resolve([pendingRequest, approvedRequest]);
     });
 
-    render(<DomainRequests />);
+    renderDomainRequests();
 
     await screen.findByText('pending.example.com');
 

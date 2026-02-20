@@ -7,6 +7,12 @@
 import { test, expect } from '@playwright/test';
 import { LoginPage } from './fixtures/page-objects';
 import {
+  ACCESS_TOKEN_KEY,
+  LEGACY_TOKEN_KEY,
+  REFRESH_TOKEN_KEY,
+  USER_KEY,
+} from '../src/lib/auth-storage';
+import {
   createTestUser,
   loginAsAdmin,
   logout,
@@ -88,13 +94,21 @@ test.describe('Authentication Flows', () => {
 
     // Clear auth tokens to simulate session expiry.
     // Avoid calling page.reload() directly since the app may auto-reload on 401.
-    await page.evaluate(() => {
-      localStorage.removeItem('openpath_access_token');
-      localStorage.removeItem('openpath_refresh_token');
-      localStorage.removeItem('openpath_user');
-      localStorage.removeItem('requests_api_token');
-      setTimeout(() => window.location.reload(), 0);
-    });
+    await page.evaluate(
+      ({ accessTokenKey, refreshTokenKey, userKey, legacyTokenKey }) => {
+        localStorage.removeItem(accessTokenKey);
+        localStorage.removeItem(refreshTokenKey);
+        localStorage.removeItem(userKey);
+        localStorage.removeItem(legacyTokenKey);
+        setTimeout(() => window.location.reload(), 0);
+      },
+      {
+        accessTokenKey: ACCESS_TOKEN_KEY,
+        refreshTokenKey: REFRESH_TOKEN_KEY,
+        userKey: USER_KEY,
+        legacyTokenKey: LEGACY_TOKEN_KEY,
+      }
+    );
 
     // Should show login form
     await waitForLoginPage(page);
