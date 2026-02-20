@@ -5,7 +5,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { LoginPage, Header } from './fixtures/page-objects';
+import { LoginPage } from './fixtures/page-objects';
 import {
   createTestUser,
   loginAsAdmin,
@@ -81,17 +81,20 @@ test.describe('Authentication Flows', () => {
     await expect(page.getByRole('heading', { name: /Vista General/i })).toBeVisible();
   });
 
-  test('should redirect to login when session expires @auth', async ({ page, context }) => {
+  test('should redirect to login when session expires @auth', async ({ page }) => {
     // Login first
     await loginAsAdmin(page);
     await waitForNetworkIdle(page);
 
-    // Clear localStorage to simulate session expiry
-    await page.evaluate(() => localStorage.clear());
-
-    // Refresh page
-    await page.reload();
-    await waitForNetworkIdle(page);
+    // Clear auth tokens to simulate session expiry.
+    // Avoid calling page.reload() directly since the app may auto-reload on 401.
+    await page.evaluate(() => {
+      localStorage.removeItem('openpath_access_token');
+      localStorage.removeItem('openpath_refresh_token');
+      localStorage.removeItem('openpath_user');
+      localStorage.removeItem('requests_api_token');
+      setTimeout(() => window.location.reload(), 0);
+    });
 
     // Should show login form
     await waitForLoginPage(page);

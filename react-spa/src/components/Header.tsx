@@ -15,6 +15,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick, title }) => {
       <div className="flex items-center gap-4">
         <button
           onClick={onMenuClick}
+          aria-label="Abrir menú"
           className="md:hidden p-2 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-100"
         >
           <Menu size={24} />

@@ -11,7 +11,7 @@ import { eq } from 'drizzle-orm';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
-import { users, roles, whitelistGroups } from '../src/db/schema.js';
+import { users, roles, whitelistGroups, whitelistRules } from '../src/db/schema.js';
 
 const { Pool } = pg;
 
@@ -66,6 +66,20 @@ async function seed(): Promise<void> {
         id: TEST_GROUP.id,
         name: TEST_GROUP.name,
         displayName: TEST_GROUP.displayName,
+      })
+      .onConflictDoNothing();
+
+    // Create at least one rule so Rules Manager renders a table on a clean DB
+    console.log('Creating baseline whitelist rule...');
+    await db
+      .insert(whitelistRules)
+      .values({
+        id: 'test-e2e-rule-1',
+        groupId: TEST_GROUP.id,
+        type: 'whitelist',
+        value: 'seeded-inline-edit.example.com',
+        source: 'manual',
+        comment: 'E2E seed: baseline rule for UI table rendering',
       })
       .onConflictDoNothing();
 

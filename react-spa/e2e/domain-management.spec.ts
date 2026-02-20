@@ -122,16 +122,13 @@ test.describe('Domain Request Management', () => {
     // Select "Approved" filter
     await statusFilter.selectOption('approved');
 
-    await waitForNetworkIdle(page);
+    // Wait for the list to settle after refetch.
+    await expect(page.locator('.animate-spin')).toBeHidden();
 
-    // All visible requests should be approved
-    const rows = page.locator('[data-testid="request-row"]');
-    const count = await rows.count();
-
-    for (let i = 0; i < count; i++) {
-      const status = await rows.nth(i).getAttribute('data-status');
-      expect(status).toBe('approved');
-    }
+    // All visible requests should be approved (or no rows exist).
+    await expect(
+      page.locator('[data-testid="request-row"]:not([data-status="approved"])')
+    ).toHaveCount(0);
   });
 
   test('should show domain details on click @domains', async ({ page }) => {

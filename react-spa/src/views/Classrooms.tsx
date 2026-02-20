@@ -76,7 +76,7 @@ const Classrooms = () => {
         computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
         currentGroupId: c.currentGroupId ?? null,
-        currentGroupSource: c.currentGroupSource ?? undefined,
+        currentGroupSource: c.currentGroupSource,
         status: c.status,
         onlineMachineCount: c.onlineMachineCount,
       })) as Classroom[];
@@ -113,7 +113,7 @@ const Classrooms = () => {
         computerCount: c.machineCount,
         activeGroup: c.activeGroupId ?? null,
         currentGroupId: c.currentGroupId ?? null,
-        currentGroupSource: c.currentGroupSource ?? undefined,
+        currentGroupSource: c.currentGroupSource,
         status: c.status,
         onlineMachineCount: c.onlineMachineCount,
       })) as Classroom[];

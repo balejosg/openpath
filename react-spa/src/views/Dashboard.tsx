@@ -155,7 +155,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
           defaultGroupId: c.defaultGroupId ?? null,
           activeGroupId: c.activeGroupId ?? null,
           currentGroupId: c.currentGroupId ?? null,
-          currentGroupSource: c.currentGroupSource ?? null,
+          currentGroupSource: c.currentGroupSource,
         }))
       );
       setClassroomsError(null);

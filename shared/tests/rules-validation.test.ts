@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { validateRuleValue, cleanRuleValue } from '../src/rules-validation.js';

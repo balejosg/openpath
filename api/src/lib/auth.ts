@@ -90,6 +90,9 @@ export function generateAccessToken(user: User, roles: RoleInfo[] = []): string 
   return jwt.sign(payload, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
     issuer: 'openpath-api',
+    // Prevent identical token strings when multiple logins happen in the same second.
+    // This avoids cross-test invalidation when tokens are blacklisted on logout.
+    jwtid: crypto.randomUUID(),
   } as SignOptions);
 }
 
@@ -105,6 +108,7 @@ export function generateRefreshToken(user: User): string {
   return jwt.sign(payload, JWT_SECRET, {
     expiresIn: JWT_REFRESH_EXPIRES_IN,
     issuer: 'openpath-api',
+    jwtid: crypto.randomUUID(),
   } as SignOptions);
 }
 

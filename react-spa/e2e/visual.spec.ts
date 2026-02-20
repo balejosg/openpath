@@ -6,6 +6,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { DashboardPage, GroupsPage, DomainRequestsPage } from './fixtures/page-objects';
 import { loginAsAdmin, waitForNetworkIdle } from './fixtures/test-utils';
 
 test.describe('Visual Regression - Login Page', () => {
@@ -108,7 +109,7 @@ test.describe('Visual Regression - Dashboard', () => {
 
   test('dashboard desktop @visual', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('./dashboard');
+    await new DashboardPage(page).goto();
     await waitForNetworkIdle(page);
     await page.waitForTimeout(1000); // Wait for charts to render
 
@@ -120,7 +121,7 @@ test.describe('Visual Regression - Dashboard', () => {
 
   test('dashboard mobile @visual', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('./dashboard');
+    await new DashboardPage(page).goto();
     await waitForNetworkIdle(page);
     await page.waitForTimeout(1000);
 
@@ -131,26 +132,69 @@ test.describe('Visual Regression - Dashboard', () => {
   });
 
   test('dashboard empty state @visual', async ({ page }) => {
-    // Mock empty data
-    await page.route('**/api/**', (route) => {
-      if (route.request().url().includes('stats')) {
-        route.fulfill({
-          status: 200,
-          body: JSON.stringify({
-            groups: 0,
-            domains: 0,
-            blocked: 0,
-            pending: 0,
-          }),
-        });
-      } else {
-        route.continue();
+    // Mock empty data for the dashboard by patching tRPC responses.
+    await page.route('**/trpc/**', async (route) => {
+      const url = new URL(route.request().url());
+      const pathname = url.pathname;
+      const marker = '/trpc/';
+      const markerIndex = pathname.indexOf(marker);
+      if (markerIndex < 0) {
+        await route.continue();
+        return;
       }
+
+      const proceduresPart = pathname.slice(markerIndex + marker.length);
+      const procedures = proceduresPart.split(',').filter(Boolean);
+
+      const response = await route.fetch();
+      const contentType = response.headers()['content-type'] || '';
+      if (!contentType.includes('application/json')) {
+        await route.fulfill({ response });
+        return;
+      }
+
+      const originalBody: unknown = await response.json();
+
+      const setJson = (entry: unknown, value: unknown): unknown => {
+        if (!entry || typeof entry !== 'object') return entry;
+        const e = entry as { result?: { data?: Record<string, unknown> } };
+        if (!e.result || typeof e.result !== 'object') return entry;
+        const result = e.result as { data?: Record<string, unknown> };
+        if (!result.data || typeof result.data !== 'object') {
+          result.data = {};
+        }
+        (result.data as Record<string, unknown>).json = value;
+        return entry;
+      };
+
+      const patchOne = (entry: unknown, procedure: string): unknown => {
+        switch (procedure) {
+          case 'groups.stats':
+            return setJson(entry, { groupCount: 0, whitelistCount: 0, blockedCount: 0 });
+          case 'requests.stats':
+            return setJson(entry, { pending: 0, approved: 0, rejected: 0 });
+          case 'groups.systemStatus':
+            return setJson(entry, { totalGroups: 0, activeGroups: 0, pausedGroups: 0 });
+          case 'groups.list':
+            return setJson(entry, []);
+          case 'classrooms.list':
+            return setJson(entry, []);
+          default:
+            return entry;
+        }
+      };
+
+      const patchedBody = Array.isArray(originalBody)
+        ? originalBody.map((entry, i) => patchOne(entry, procedures[i] ?? proceduresPart))
+        : patchOne(originalBody, proceduresPart);
+
+      await route.fulfill({ response, json: patchedBody });
     });
 
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('./dashboard');
-    await waitForNetworkIdle(page);
+    await page.reload();
+    await new DashboardPage(page).goto();
+    await waitForNetworkIdle(page).catch(() => {});
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('dashboard-empty.png', {
@@ -167,7 +211,7 @@ test.describe('Visual Regression - Groups Page', () => {
 
   test('groups list desktop @visual', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('./groups');
+    await new GroupsPage(page).goto();
     await waitForNetworkIdle(page);
     await page.waitForTimeout(500);
 
@@ -179,7 +223,7 @@ test.describe('Visual Regression - Groups Page', () => {
 
   test('groups list mobile @visual', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('./groups');
+    await new GroupsPage(page).goto();
     await waitForNetworkIdle(page);
     await page.waitForTimeout(500);
 
@@ -197,7 +241,7 @@ test.describe('Visual Regression - Domain Requests', () => {
 
   test('requests page desktop @visual', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('./requests');
+    await new DomainRequestsPage(page).goto();
     await waitForNetworkIdle(page);
     await page.waitForTimeout(500);
 
@@ -229,7 +273,7 @@ test.describe('Visual Regression - Dark Mode', () => {
 
     await loginAsAdmin(page);
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('./dashboard');
+    await new DashboardPage(page).goto();
     await waitForNetworkIdle(page);
     await page.waitForTimeout(1000);
 

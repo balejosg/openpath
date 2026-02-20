@@ -5,7 +5,7 @@ import { normalizeSearchTerm, useNormalizedSearch } from '../hooks/useNormalized
 
 type RequestStatus = 'pending' | 'approved' | 'rejected';
 type RequestPriority = 'low' | 'normal' | 'high' | 'urgent';
-type SortOption = 'sla' | 'newest' | 'oldest' | 'priority';
+type SortOption = 'pending' | 'newest' | 'oldest' | 'priority';
 
 interface DomainRequest {
   id: string;
@@ -69,7 +69,7 @@ export default function DomainRequests() {
   const normalizedSearchTerm = useNormalizedSearch(searchTerm);
   const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | 'firefox-extension' | 'manual'>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('sla');
+  const [sortBy, setSortBy] = useState<SortOption>('pending');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
@@ -190,7 +190,7 @@ export default function DomainRequests() {
           if (priorityDiff !== 0) return priorityDiff;
           return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         }
-        case 'sla':
+        case 'pending':
         default: {
           if (a.status === 'pending' && b.status !== 'pending') return -1;
           if (a.status !== 'pending' && b.status === 'pending') return 1;
@@ -257,54 +257,12 @@ export default function DomainRequests() {
     });
   };
 
-  const getPendingAgeHours = (createdAt: string): number => {
-    const createdMs = new Date(createdAt).getTime();
-    const nowMs = Date.now();
-    return Math.max(0, (nowMs - createdMs) / (1000 * 60 * 60));
-  };
-
-  const getSlaStatus = (request: DomainRequest): { label: string; className: string } | null => {
-    if (request.status !== 'pending') return null;
-
-    const hours = getPendingAgeHours(request.createdAt);
-    if (hours >= 24) {
-      return {
-        label: 'SLA Crítico',
-        className: 'bg-red-100 text-red-700 border-red-200',
-      };
-    }
-    if (hours >= 8) {
-      return {
-        label: 'SLA Alerta',
-        className: 'bg-amber-100 text-amber-700 border-amber-200',
-      };
-    }
-    return {
-      label: 'SLA OK',
-      className: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    };
-  };
-
-  const pendingSlaSummary = useMemo(() => {
-    const pendingRequests = sortedRequests.filter((r) => r.status === 'pending');
-    let alert = 0;
-    let critical = 0;
-
-    for (const request of pendingRequests) {
-      const hours = getPendingAgeHours(request.createdAt);
-      if (hours >= 24) {
-        critical++;
-      } else if (hours >= 8) {
-        alert++;
-      }
-    }
-
-    return {
-      total: pendingRequests.length,
-      alert,
-      critical,
-    };
-  }, [sortedRequests]);
+  const pendingCount = useMemo(() => {
+    return filteredRequests.reduce(
+      (count, request) => (request.status === 'pending' ? count + 1 : count),
+      0
+    );
+  }, [filteredRequests]);
 
   // Handle approve
   const handleApprove = async () => {
@@ -541,35 +499,6 @@ export default function DomainRequests() {
     clearSearch();
   };
 
-  // Empty state
-  if (
-    !loading &&
-    filteredRequests.length === 0 &&
-    statusFilter === 'all' &&
-    sourceFilter === 'all' &&
-    !normalizedSearchTerm
-  ) {
-    return (
-      <div className="space-y-6">
-        {/* Description */}
-        <p className="text-slate-500 text-sm">
-          Gestiona las solicitudes de acceso a dominios bloqueados
-        </p>
-
-        {/* Empty state card */}
-        <div className="flex flex-col items-center justify-center h-[50vh] bg-white rounded-lg border border-slate-200 shadow-sm text-slate-500">
-          <div className="bg-green-50 p-4 rounded-full mb-4">
-            <CheckCircle size={48} className="text-green-500" />
-          </div>
-          <h2 className="text-xl font-semibold text-slate-800">Todo en orden</h2>
-          <p className="mt-2 text-slate-500 text-sm">
-            No hay solicitudes de dominio pendientes de revisión.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Description */}
@@ -628,7 +557,7 @@ export default function DomainRequests() {
               aria-label="Ordenar solicitudes"
               className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="sla">SLA (pendientes primero)</option>
+              <option value="pending">Pendientes primero</option>
               <option value="newest">Mas nuevas</option>
               <option value="oldest">Mas antiguas</option>
               <option value="priority">Prioridad</option>
@@ -659,18 +588,10 @@ export default function DomainRequests() {
         </div>
       </div>
 
-      {!loading && pendingSlaSummary.total > 0 && (
+      {!loading && pendingCount > 0 && (
         <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <span className="font-medium text-slate-700">
-              Pendientes: {pendingSlaSummary.total}
-            </span>
-            <span className="text-amber-600 font-medium">
-              SLA Alerta: {pendingSlaSummary.alert}
-            </span>
-            <span className="text-red-600 font-bold">
-              SLA Crítico: {pendingSlaSummary.critical}
-            </span>
+            <span className="font-medium text-slate-700">Pendientes: {pendingCount}</span>
           </div>
         </div>
       )}
@@ -895,17 +816,6 @@ export default function DomainRequests() {
                         <Clock size={14} />
                         {formatDate(request.createdAt)}
                       </div>
-                      {(() => {
-                        const sla = getSlaStatus(request);
-                        if (!sla) return null;
-                        return (
-                          <span
-                            className={`inline-flex mt-1 text-[11px] px-2 py-0.5 rounded-full border font-medium ${sla.className}`}
-                          >
-                            {sla.label}
-                          </span>
-                        );
-                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
@@ -941,6 +851,19 @@ export default function DomainRequests() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && filteredRequests.length === 0 && !hasActiveFilters && (
+        <div className="flex flex-col items-center justify-center h-[50vh] bg-white rounded-lg border border-slate-200 shadow-sm text-slate-500">
+          <div className="bg-green-50 p-4 rounded-full mb-4">
+            <CheckCircle size={48} className="text-green-500" />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-800">Todo en orden</h2>
+          <p className="mt-2 text-slate-500 text-sm">
+            No hay solicitudes de dominio pendientes de revisión.
+          </p>
         </div>
       )}
 

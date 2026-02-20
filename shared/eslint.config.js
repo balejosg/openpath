@@ -9,7 +9,10 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ['tests/*.ts'],
+          defaultProject: 'tsconfig.json',
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -31,9 +34,13 @@ export default tseslint.config(
     },
     rules: {
       'no-only-tests/no-only-tests': 'error',
+      // Tests use node:test's describe/it which are typed as promises.
+      // Avoid enforcing strict async/predicate rules on test scaffolding.
+      '@typescript-eslint/no-floating-promises': 'off',
+      '@typescript-eslint/strict-boolean-expressions': 'off',
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', 'eslint.config.js'],
+    ignores: ['coverage/**', 'dist/', 'node_modules/', 'eslint.config.js'],
   }
 );

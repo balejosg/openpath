@@ -72,7 +72,7 @@ export function createTestDomain(overrides: Partial<TestDomain> = {}): TestDomai
  */
 function isStaging(): boolean {
   const baseUrl = process.env.BASE_URL || '';
-  return baseUrl.includes('staging') || baseUrl.includes('classroompath-staging');
+  return baseUrl.includes('staging');
 }
 
 /**

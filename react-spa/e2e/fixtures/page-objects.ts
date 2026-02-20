@@ -6,6 +6,27 @@
 
 import { Page, Locator, expect } from '@playwright/test';
 
+async function clickSidebarNav(page: Page, navButton: Locator): Promise<void> {
+  // On mobile, the sidebar is off-canvas until the hamburger is clicked.
+  const menuButton = page.getByRole('button', { name: /Abrir menú/i });
+  const menuVisible = await menuButton.isVisible({ timeout: 500 }).catch(() => false);
+
+  if (menuVisible) {
+    const isNavClickable = await navButton
+      .click({ trial: true, timeout: 750 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!isNavClickable) {
+      await menuButton.click();
+      // Wait for slide-in transition.
+      await page.waitForTimeout(350);
+    }
+  }
+
+  await navButton.click();
+}
+
 export class LoginPage {
   readonly page: Page;
   readonly emailInput: Locator;
@@ -113,9 +134,7 @@ export class DashboardPage {
     // SPA uses state-based navigation, click sidebar if already logged in
     // Otherwise just ensure we're on the page
     const sidebarDashboard = this.page.getByRole('button', { name: /Panel de Control/i });
-    if (await sidebarDashboard.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await sidebarDashboard.click();
-    }
+    await clickSidebarNav(this.page, sidebarDashboard);
     await this.page.waitForLoadState('networkidle');
   }
 
@@ -152,9 +171,7 @@ export class GroupsPage {
   async goto() {
     // SPA uses state-based navigation, click sidebar
     const sidebarGroups = this.page.getByRole('button', { name: /Políticas de Grupo/i });
-    if (await sidebarGroups.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await sidebarGroups.click();
-    }
+    await clickSidebarNav(this.page, sidebarGroups);
     await this.page.waitForLoadState('networkidle');
   }
 
@@ -192,9 +209,7 @@ export class DomainRequestsPage {
   async goto() {
     // SPA uses state-based navigation, click sidebar
     const domainsButton = this.page.getByRole('button', { name: /Control de Dominios/i });
-    if (await domainsButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await domainsButton.click();
-    }
+    await clickSidebarNav(this.page, domainsButton);
     await this.page.waitForLoadState('networkidle');
   }
 
@@ -228,7 +243,8 @@ export class UsersPage {
   }
 
   async goto() {
-    await this.page.goto('./users');
+    const usersButton = this.page.getByRole('button', { name: /Usuarios y Roles/i });
+    await clickSidebarNav(this.page, usersButton);
     await this.page.waitForLoadState('networkidle');
   }
 
@@ -275,10 +291,8 @@ export class BulkImportPage {
   async open(): Promise<void> {
     // Navigate to Políticas de Grupo via sidebar
     const groupsButton = this.page.getByRole('button', { name: /Políticas de Grupo/i });
-    if (await groupsButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await groupsButton.click();
-      await this.page.waitForLoadState('networkidle');
-    }
+    await clickSidebarNav(this.page, groupsButton);
+    await this.page.waitForLoadState('networkidle');
 
     // Wait for groups page to load
     await this.page.waitForTimeout(500);
@@ -473,10 +487,8 @@ export class RulesManagerPage {
   async open(): Promise<void> {
     // Navigate to Políticas de Grupo via sidebar
     const groupsButton = this.page.getByRole('button', { name: /Políticas de Grupo/i });
-    if (await groupsButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await groupsButton.click();
-      await this.page.waitForLoadState('networkidle');
-    }
+    await clickSidebarNav(this.page, groupsButton);
+    await this.page.waitForLoadState('networkidle');
 
     await this.page.waitForTimeout(500);
 

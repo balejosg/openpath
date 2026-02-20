@@ -108,7 +108,8 @@ test.describe('Inline Editing @smoke', () => {
 
 test.describe('Inline Editing - Save Operations', () => {
   let rulesManager: RulesManagerPage;
-  const testDomain = `test-edit-${Date.now()}.example.com`;
+  let testDomain: string;
+  let cleanupDomains = new Set<string>();
 
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page);
@@ -117,6 +118,10 @@ test.describe('Inline Editing - Save Operations', () => {
     rulesManager = new RulesManagerPage(page);
     await rulesManager.open();
 
+    // Unique domain per test (prevents cross-test collisions with fullyParallel)
+    testDomain = `test-edit-${Date.now()}-${Math.random().toString(16).slice(2)}.example.com`;
+    cleanupDomains = new Set([testDomain]);
+
     // Add a test rule to edit
     await rulesManager.addRule(testDomain);
     await expect(rulesManager.getRuleRow(testDomain)).toBeVisible();
@@ -124,6 +129,7 @@ test.describe('Inline Editing - Save Operations', () => {
 
   test('should save edited value with Enter key', async ({ page }) => {
     const newDomain = `edited-${Date.now()}.example.com`;
+    cleanupDomains.add(newDomain);
 
     await rulesManager.clickEditButton(testDomain);
 
@@ -142,6 +148,7 @@ test.describe('Inline Editing - Save Operations', () => {
 
   test('should save edited value with save button', async ({ page }) => {
     const newDomain = `btn-edited-${Date.now()}.example.com`;
+    cleanupDomains.add(newDomain);
 
     await rulesManager.clickEditButton(testDomain);
 
@@ -176,6 +183,7 @@ test.describe('Inline Editing - Save Operations', () => {
 
   test('should show success toast after saving', async ({ page }) => {
     const newDomain = `toast-test-${Date.now()}.example.com`;
+    cleanupDomains.add(newDomain);
 
     await rulesManager.clickEditButton(testDomain);
 
@@ -213,11 +221,19 @@ test.describe('Inline Editing - Save Operations', () => {
   });
 
   test.afterEach(async ({ page }) => {
-    // Best-effort cleanup: delete the original test domain if it still exists.
+    // Best-effort cleanup: delete any domains this test created/edited.
     const manager = new RulesManagerPage(page);
-    if (await manager.ruleExists(testDomain)) {
-      await manager.deleteRule(testDomain);
+    for (const domain of cleanupDomains) {
+      try {
+        await manager.search(domain);
+        if (await manager.ruleExists(domain)) {
+          await manager.deleteRule(domain);
+        }
+      } catch {
+        // Ignore cleanup failures (test assertions should still be authoritative)
+      }
     }
+    await manager.clearSearch().catch(() => {});
   });
 });
 
