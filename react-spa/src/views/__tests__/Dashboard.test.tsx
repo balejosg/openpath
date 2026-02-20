@@ -7,6 +7,7 @@ const mockStatsQuery = vi.fn();
 const mockRequestsStatsQuery = vi.fn();
 const mockSystemStatusQuery = vi.fn();
 const mockGroupsListQuery = vi.fn();
+const mockClassroomsListQuery = vi.fn();
 
 vi.mock('../../lib/trpc', () => ({
   trpc: {
@@ -14,6 +15,9 @@ vi.mock('../../lib/trpc', () => ({
       stats: { query: (): unknown => mockStatsQuery() },
       list: { query: (): unknown => mockGroupsListQuery() },
       systemStatus: { query: (): unknown => mockSystemStatusQuery() },
+    },
+    classrooms: {
+      list: { query: (): unknown => mockClassroomsListQuery() },
     },
     requests: {
       stats: { query: (): unknown => mockRequestsStatsQuery() },
@@ -72,12 +76,32 @@ describe('Dashboard', () => {
     enabled: true,
   };
 
+  const mockClassrooms = [
+    {
+      id: 'classroom-1',
+      name: 'Laboratorio A',
+      displayName: 'Laboratorio A',
+      defaultGroupId: 'group-1',
+      activeGroupId: null,
+      currentGroupId: 'group-1',
+    },
+    {
+      id: 'classroom-2',
+      name: 'Aula 2',
+      displayName: 'Aula 2',
+      defaultGroupId: null,
+      activeGroupId: null,
+      currentGroupId: null,
+    },
+  ];
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockStatsQuery.mockResolvedValue(mockStats);
     mockRequestsStatsQuery.mockResolvedValue(mockRequestStats);
     mockSystemStatusQuery.mockResolvedValue(mockSystemStatus);
     mockGroupsListQuery.mockResolvedValue(mockGroups);
+    mockClassroomsListQuery.mockResolvedValue(mockClassrooms);
   });
 
   it('renders stats cards', async () => {
@@ -105,7 +129,17 @@ describe('Dashboard', () => {
     render(<Dashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText('Estado del Sistema: Deshabilitado')).toBeInTheDocument();
+      expect(screen.getByText('Estado del Sistema: Sin grupos activos')).toBeInTheDocument();
+    });
+  });
+
+  it('renders active groups by classroom in the banner', async () => {
+    render(<Dashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Grupo vigente por aula')).toBeInTheDocument();
+      expect(screen.getByText('Laboratorio A')).toBeInTheDocument();
+      expect(screen.getByText(/Grupo Primaria/)).toBeInTheDocument();
     });
   });
 

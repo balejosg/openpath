@@ -52,6 +52,15 @@ interface GroupFromAPI {
   updatedAt?: string | null;
 }
 
+interface ClassroomFromAPI {
+  id: string;
+  name: string;
+  displayName: string;
+  defaultGroupId: string | null;
+  activeGroupId: string | null;
+  currentGroupId: string | null;
+}
+
 interface DashboardProps {
   onNavigateToRules?: (group: { id: string; name: string }) => void;
 }
@@ -89,6 +98,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Classrooms state (used for "active groups by classroom" banner)
+  const [classrooms, setClassrooms] = useState<ClassroomFromAPI[]>([]);
+  const [classroomsLoading, setClassroomsLoading] = useState(true);
+  const [classroomsError, setClassroomsError] = useState<string | null>(null);
+
   // Groups state
   const [groups, setGroups] = useState<GroupFromAPI[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
@@ -123,23 +137,53 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
     }
   }, []);
 
+  const fetchClassrooms = useCallback(async () => {
+    try {
+      setClassroomsLoading(true);
+      const apiClassrooms = await trpc.classrooms.list.query();
+      setClassrooms(
+        apiClassrooms.map((c) => ({
+          id: c.id,
+          name: c.name,
+          displayName: c.displayName,
+          defaultGroupId: c.defaultGroupId ?? null,
+          activeGroupId: c.activeGroupId ?? null,
+          currentGroupId: c.currentGroupId ?? null,
+        }))
+      );
+      setClassroomsError(null);
+    } catch (err) {
+      console.error('Failed to fetch classrooms:', err);
+      setClassroomsError('Error al cargar aulas');
+    } finally {
+      setClassroomsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void fetchStats();
+    void fetchClassrooms();
 
-    const interval = window.setInterval(() => {
+    const statsInterval = window.setInterval(() => {
       void fetchStats();
     }, 10000);
 
+    const classroomsInterval = window.setInterval(() => {
+      void fetchClassrooms();
+    }, 30000);
+
     const onFocus = () => {
       void fetchStats();
+      void fetchClassrooms();
     };
 
     window.addEventListener('focus', onFocus);
     return () => {
-      window.clearInterval(interval);
+      window.clearInterval(statsInterval);
+      window.clearInterval(classroomsInterval);
       window.removeEventListener('focus', onFocus);
     };
-  }, [fetchStats]);
+  }, [fetchStats, fetchClassrooms]);
 
   // Fetch groups for quick access
   useEffect(() => {
@@ -185,6 +229,68 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
 
   const hasMoreGroups = groups.length > MAX_QUICK_ACCESS_GROUPS;
 
+  const groupById = useMemo(() => {
+    return new Map(groups.map((g) => [g.id, g] as const));
+  }, [groups]);
+
+  const activeGroupsByClassroom = useMemo(() => {
+    return classrooms
+      .map((c) => {
+        const groupId = c.currentGroupId;
+        if (!groupId) return null;
+
+        const group = groupById.get(groupId);
+
+        const classroomName = c.displayName || c.name;
+        const groupName = group ? group.displayName || group.name : groupId;
+
+        const isScheduleAssigned =
+          !c.activeGroupId &&
+          (c.defaultGroupId === null ||
+            (c.currentGroupId !== null && c.currentGroupId !== c.defaultGroupId));
+        const isDefaultGroup =
+          !c.activeGroupId &&
+          c.currentGroupId !== null &&
+          c.defaultGroupId !== null &&
+          c.currentGroupId === c.defaultGroupId;
+
+        let badgeVariant = c.activeGroupId
+          ? 'bg-blue-50 text-blue-700 border-blue-200'
+          : isScheduleAssigned
+            ? 'bg-amber-50 text-amber-700 border-amber-200'
+            : isDefaultGroup
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-slate-100 text-slate-500 border-slate-200';
+
+        const sourceLabel = c.activeGroupId
+          ? 'manual'
+          : isScheduleAssigned
+            ? 'horario'
+            : isDefaultGroup
+              ? 'defecto'
+              : '';
+
+        const isGroupEnabled = group ? group.enabled : true;
+        if (!isGroupEnabled) {
+          badgeVariant = 'bg-slate-100 text-slate-600 border-slate-200';
+        }
+
+        const badgeParts = [groupName];
+        if (sourceLabel) badgeParts.push(sourceLabel);
+        if (!isGroupEnabled) badgeParts.push('inactivo');
+
+        return {
+          classroomId: c.id,
+          classroomName,
+          badgeText: badgeParts.join(' · '),
+          badgeVariant,
+          sourceLabel,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+      .sort((a, b) => a.classroomName.localeCompare(b.classroomName));
+  }, [classrooms, groupById]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = () => setShowSortDropdown(false);
@@ -197,8 +303,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
   return (
     <div className="space-y-6">
       {/* Welcome Banner */}
-      <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex items-center justify-between">
-        <div>
+      <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="min-w-0">
           <h2 className="text-xl font-semibold text-slate-800 flex items-center gap-2">
             {loading ? (
               <>
@@ -213,7 +319,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
             ) : (
               <>
                 <ShieldOff size={20} className="text-amber-600" />
-                Estado del Sistema: Deshabilitado
+                Estado del Sistema: Sin grupos activos
               </>
             )}
           </h2>
@@ -221,8 +327,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
             {loading
               ? 'Cargando información del sistema...'
               : systemStatus?.enabled
-                ? 'Todos los servicios operan con normalidad.'
-                : 'El sistema de filtrado está desactivado.'}
+                ? 'Hay al menos un grupo activo aplicando reglas.'
+                : 'No hay grupos activos; activa uno para aplicar reglas.'}
             {systemStatus?.lastChecked && !loading && (
               <span className="ml-1">
                 Última verificación: {systemStatus.lastChecked.toLocaleTimeString()}
@@ -230,8 +336,43 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
             )}
           </p>
         </div>
-        <div className="hidden sm:block">
-          <Shield className="text-blue-500 w-12 h-12 opacity-20" />
+
+        <div className="w-full sm:w-[340px] bg-slate-50 border border-slate-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider">
+              Grupo vigente por aula
+            </p>
+            <Shield className="text-slate-400 w-4 h-4" />
+          </div>
+
+          {classroomsLoading ? (
+            <div className="flex items-center gap-2 mt-3 text-sm text-slate-500">
+              <Loader2 size={14} className="animate-spin text-slate-400" />
+              Cargando aulas...
+            </div>
+          ) : classroomsError ? (
+            <p className="mt-3 text-sm text-red-600">{classroomsError}</p>
+          ) : activeGroupsByClassroom.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500">
+              {classrooms.length === 0
+                ? 'No hay aulas configuradas.'
+                : 'No hay aulas con grupo asignado.'}
+            </p>
+          ) : (
+            <ul className="mt-3 space-y-2 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
+              {activeGroupsByClassroom.map((row) => (
+                <li key={row.classroomId} className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-slate-700 truncate">{row.classroomName}</span>
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${row.badgeVariant}`}
+                    title={row.sourceLabel ? `Asignado por ${row.sourceLabel}` : undefined}
+                  >
+                    {row.badgeText}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
