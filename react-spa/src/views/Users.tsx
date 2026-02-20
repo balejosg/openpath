@@ -26,12 +26,18 @@ const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
     [UserRole.STUDENT]: 'bg-slate-100 text-slate-600 border-slate-200',
     [UserRole.NO_ROLES]: 'bg-red-50 text-red-600 border-red-200',
   };
+  const roleNames = {
+    [UserRole.ADMIN]: 'Administrador',
+    [UserRole.TEACHER]: 'Profesor',
+    [UserRole.STUDENT]: 'Estudiante',
+    [UserRole.NO_ROLES]: 'Sin Rol',
+  };
   const roleStyle = styles[role];
   return (
     <span
       className={`px-2 py-0.5 rounded text-[11px] font-semibold border uppercase tracking-wide ${roleStyle}`}
     >
-      {role}
+      {roleNames[role]}
     </span>
   );
 };
@@ -508,9 +514,9 @@ const UsersView = () => {
                   }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 >
-                  <option value="student">student</option>
-                  <option value="teacher">teacher</option>
-                  <option value="admin">admin</option>
+                  <option value="student">Estudiante</option>
+                  <option value="teacher">Profesor</option>
+                  <option value="admin">Administrador</option>
                 </select>
               </div>
               {createError && (

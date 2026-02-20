@@ -269,18 +269,18 @@ export default function DomainRequests() {
     const hours = getPendingAgeHours(request.createdAt);
     if (hours >= 24) {
       return {
-        label: 'SLA critico',
+        label: 'SLA Crítico',
         className: 'bg-red-100 text-red-700 border-red-200',
       };
     }
     if (hours >= 8) {
       return {
-        label: 'SLA alerta',
+        label: 'SLA Alerta',
         className: 'bg-amber-100 text-amber-700 border-amber-200',
       };
     }
     return {
-      label: 'SLA ok',
+      label: 'SLA OK',
       className: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     };
   };
@@ -665,11 +665,11 @@ export default function DomainRequests() {
             <span className="font-medium text-slate-700">
               Pendientes: {pendingSlaSummary.total}
             </span>
-            <span className="px-2 py-1 rounded border bg-amber-100 text-amber-700 border-amber-200">
-              SLA alerta: {pendingSlaSummary.alert}
+            <span className="text-amber-600 font-medium">
+              SLA Alerta: {pendingSlaSummary.alert}
             </span>
-            <span className="px-2 py-1 rounded border bg-red-100 text-red-700 border-red-200">
-              SLA critico: {pendingSlaSummary.critical}
+            <span className="text-red-600 font-bold">
+              SLA Crítico: {pendingSlaSummary.critical}
             </span>
           </div>
         </div>

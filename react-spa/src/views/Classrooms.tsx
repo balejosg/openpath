@@ -287,7 +287,7 @@ const Classrooms = () => {
             onClick={openNewModal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium"
           >
-            <Plus size={16} /> Nueva
+            <Plus size={16} /> Nueva Aula
           </button>
         </div>
 
@@ -392,7 +392,7 @@ const Classrooms = () => {
           <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
             <h2 className="text-2xl font-bold text-slate-900 mb-1">Sin aulas</h2>
             <p className="text-slate-500 text-sm">
-              Crea una nueva aula para ver su configuracion y estado.
+              Crea una nueva aula para ver su configuración y estado.
             </p>
             <button
               onClick={openNewModal}

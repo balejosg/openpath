@@ -150,8 +150,8 @@ describe('RulesManager View', () => {
     render(<RulesManager {...defaultProps} />);
 
     expect(screen.getByRole('tab', { name: /todos/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /permitidos/i })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /bloqueados/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /permitidas/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /bloqueadas/i })).toBeInTheDocument();
   });
 
   it('renders rules table with data', () => {
