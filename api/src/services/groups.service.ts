@@ -224,6 +224,25 @@ export async function listRulesGrouped(
 }
 
 /**
+ * Get a rule by ID.
+ *
+ * Router helper for RBAC checks (keeps routers storage-agnostic).
+ */
+export async function getRuleById(id: string): Promise<Rule | null> {
+  return groupsStorage.getRuleById(id);
+}
+
+/**
+ * Get rules by IDs.
+ *
+ * Router helper for RBAC checks (keeps routers storage-agnostic).
+ */
+export async function getRulesByIds(ids: string[]): Promise<Rule[]> {
+  if (ids.length === 0) return [];
+  return groupsStorage.getRulesByIds(ids);
+}
+
+/**
  * Create a rule.
  */
 export async function createRule(input: CreateRuleInput): Promise<GroupsResult<{ id: string }>> {
@@ -470,6 +489,8 @@ export const GroupsService = {
   listRules,
   listRulesPaginated,
   listRulesGrouped,
+  getRuleById,
+  getRulesByIds,
   createRule,
   updateRule,
   deleteRule,

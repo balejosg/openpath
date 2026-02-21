@@ -454,6 +454,16 @@ await describe('Groups Router (tRPC)', { timeout: 30000 }, async () => {
       assert.strictEqual(forbiddenList.status, 403);
     });
 
+    await test('should return NOT_FOUND for non-existent group-scoped operations', async () => {
+      const response = await trpcQuery(
+        API_URL,
+        'groups.listRules',
+        { groupId: '00000000-0000-0000-0000-000000000000' },
+        bearerAuth(teacherToken)
+      );
+      assert.strictEqual(response.status, 404);
+    });
+
     await test('should forbid teacher from deleting rules outside their groups', async () => {
       const response = await trpcMutate(
         API_URL,

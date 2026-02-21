@@ -10,9 +10,7 @@ import { TRPCError } from '@trpc/server';
 import { router, adminProcedure, teacherProcedure } from '../trpc.js';
 import { GroupsService } from '../../services/groups.service.js';
 import * as auth from '../../lib/auth.js';
-import * as groupsStorage from '../../lib/groups-storage.js';
 import type { JWTPayload } from '../../lib/auth.js';
-import type { RuleType } from '../../lib/groups-storage.js';
 import { validateRuleValue } from '@openpath/shared';
 
 function canAccessGroup(user: JWTPayload, group: { id: string; name: string }): boolean {
@@ -25,14 +23,48 @@ async function assertCanAccessGroupId(user: JWTPayload, groupId: string): Promis
   if (auth.canApproveGroup(user, groupId)) return;
 
   // Slow path: role stores group names
-  const group = await groupsStorage.getGroupById(groupId);
-  if (!group) {
-    throw new TRPCError({ code: 'NOT_FOUND', message: 'Group not found' });
+  const groupResult = await GroupsService.getGroupById(groupId);
+  if (!groupResult.ok) {
+    throw new TRPCError({ code: groupResult.error.code, message: groupResult.error.message });
   }
+
+  const group = groupResult.data;
 
   if (auth.canApproveGroup(user, group.name)) return;
   throw new TRPCError({ code: 'FORBIDDEN', message: 'You do not have access to this group' });
 }
+
+function getInputStringField(input: unknown, key: string): string | null {
+  if (typeof input !== 'object' || input === null) return null;
+  const value = (input as Record<string, unknown>)[key];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+const teacherGroupIdProcedure = <TSchema extends z.ZodTypeAny>(
+  schema: TSchema
+): ReturnType<typeof teacherProcedure.input<TSchema>> => {
+  return teacherProcedure.input(schema).use(async ({ ctx, input, next }) => {
+    const groupId = getInputStringField(input, 'groupId');
+    if (!groupId) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'groupId is required' });
+    }
+    await assertCanAccessGroupId(ctx.user, groupId);
+    return next({ ctx });
+  });
+};
+
+const teacherGroupByIdProcedure = <TSchema extends z.ZodTypeAny>(
+  schema: TSchema
+): ReturnType<typeof teacherProcedure.input<TSchema>> => {
+  return teacherProcedure.input(schema).use(async ({ ctx, input, next }) => {
+    const groupId = getInputStringField(input, 'id');
+    if (!groupId) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'id is required' });
+    }
+    await assertCanAccessGroupId(ctx.user, groupId);
+    return next({ ctx });
+  });
+};
 
 // =============================================================================
 // Input Schemas
@@ -197,8 +229,7 @@ export const groupsRouter = router({
    * @returns Updated group
    * @throws NOT_FOUND if group doesn't exist
    */
-  update: teacherProcedure.input(UpdateGroupSchema).mutation(async ({ input, ctx }) => {
-    await assertCanAccessGroupId(ctx.user, input.id);
+  update: teacherGroupByIdProcedure(UpdateGroupSchema).mutation(async ({ input }) => {
     const result = await GroupsService.updateGroup(input);
     if (!result.ok) {
       throw new TRPCError({ code: result.error.code, message: result.error.message });
@@ -227,8 +258,7 @@ export const groupsRouter = router({
    * @returns Array of rules sorted by value
    * @throws NOT_FOUND if group doesn't exist
    */
-  listRules: teacherProcedure.input(ListRulesSchema).query(async ({ input, ctx }) => {
-    await assertCanAccessGroupId(ctx.user, input.groupId);
+  listRules: teacherGroupIdProcedure(ListRulesSchema).query(async ({ input }) => {
     const result = await GroupsService.listRules(input.groupId, input.type);
     if (!result.ok) {
       throw new TRPCError({ code: result.error.code, message: result.error.message });
@@ -246,23 +276,19 @@ export const groupsRouter = router({
    * @returns { rules, total, hasMore }
    * @throws NOT_FOUND if group doesn't exist
    */
-  listRulesPaginated: teacherProcedure
-    .input(ListRulesPaginatedSchema)
-    .query(async ({ input, ctx }) => {
-      await assertCanAccessGroupId(ctx.user, input.groupId);
-
-      const result = await GroupsService.listRulesPaginated({
-        groupId: input.groupId,
-        type: input.type,
-        limit: input.limit,
-        offset: input.offset,
-        search: input.search,
-      });
-      if (!result.ok) {
-        throw new TRPCError({ code: result.error.code, message: result.error.message });
-      }
-      return result.data;
-    }),
+  listRulesPaginated: teacherGroupIdProcedure(ListRulesPaginatedSchema).query(async ({ input }) => {
+    const result = await GroupsService.listRulesPaginated({
+      groupId: input.groupId,
+      type: input.type,
+      limit: input.limit,
+      offset: input.offset,
+      search: input.search,
+    });
+    if (!result.ok) {
+      throw new TRPCError({ code: result.error.code, message: result.error.message });
+    }
+    return result.data;
+  }),
 
   /**
    * List rules for a group, grouped by root domain, with pagination on groups.
@@ -275,8 +301,7 @@ export const groupsRouter = router({
    * @returns { groups, totalGroups, totalRules, hasMore }
    * @throws NOT_FOUND if group doesn't exist
    */
-  listRulesGrouped: teacherProcedure.input(ListRulesGroupedSchema).query(async ({ input, ctx }) => {
-    await assertCanAccessGroupId(ctx.user, input.groupId);
+  listRulesGrouped: teacherGroupIdProcedure(ListRulesGroupedSchema).query(async ({ input }) => {
     const result = await GroupsService.listRulesGrouped({
       groupId: input.groupId,
       type: input.type,
@@ -300,11 +325,10 @@ export const groupsRouter = router({
    * @throws NOT_FOUND if group doesn't exist
    * @throws CONFLICT if rule already exists
    */
-  createRule: teacherProcedure.input(CreateRuleSchema).mutation(async ({ input, ctx }) => {
-    await assertCanAccessGroupId(ctx.user, input.groupId);
+  createRule: teacherGroupIdProcedure(CreateRuleSchema).mutation(async ({ input }) => {
     const result = await GroupsService.createRule({
       groupId: input.groupId,
-      type: input.type as RuleType,
+      type: input.type,
       value: input.value,
       comment: input.comment,
     });
@@ -328,7 +352,7 @@ export const groupsRouter = router({
       // Enforce group access for teachers (admins can delete without group resolution)
       if (!auth.isAdminToken(ctx.user)) {
         // Never trust client-supplied groupId for authorization. Resolve from the rule itself.
-        const rule = await groupsStorage.getRuleById(input.id);
+        const rule = await GroupsService.getRuleById(input.id);
         resolvedGroupId = rule?.groupId;
 
         if (resolvedGroupId) {
@@ -353,8 +377,7 @@ export const groupsRouter = router({
    * @throws NOT_FOUND if rule or group doesn't exist
    * @throws CONFLICT if new value already exists
    */
-  updateRule: teacherProcedure.input(UpdateRuleSchema).mutation(async ({ input, ctx }) => {
-    await assertCanAccessGroupId(ctx.user, input.groupId);
+  updateRule: teacherGroupIdProcedure(UpdateRuleSchema).mutation(async ({ input }) => {
     const result = await GroupsService.updateRule({
       id: input.id,
       groupId: input.groupId,
@@ -375,20 +398,17 @@ export const groupsRouter = router({
    * @returns { count: number } - Number of rules successfully created
    * @throws NOT_FOUND if group doesn't exist
    */
-  bulkCreateRules: teacherProcedure
-    .input(BulkCreateRulesSchema)
-    .mutation(async ({ input, ctx }) => {
-      await assertCanAccessGroupId(ctx.user, input.groupId);
-      const result = await GroupsService.bulkCreateRules({
-        groupId: input.groupId,
-        type: input.type as RuleType,
-        values: input.values,
-      });
-      if (!result.ok) {
-        throw new TRPCError({ code: result.error.code, message: result.error.message });
-      }
-      return result.data;
-    }),
+  bulkCreateRules: teacherGroupIdProcedure(BulkCreateRulesSchema).mutation(async ({ input }) => {
+    const result = await GroupsService.bulkCreateRules({
+      groupId: input.groupId,
+      type: input.type,
+      values: input.values,
+    });
+    if (!result.ok) {
+      throw new TRPCError({ code: result.error.code, message: result.error.message });
+    }
+    return result.data;
+  }),
 
   /**
    * Bulk delete rules.
@@ -399,7 +419,7 @@ export const groupsRouter = router({
     .input(BulkDeleteRulesSchema)
     .mutation(async ({ input, ctx }) => {
       if (!auth.isAdminToken(ctx.user)) {
-        const rules = await groupsStorage.getRulesByIds(input.ids);
+        const rules = await GroupsService.getRulesByIds(input.ids);
         const groupIds = new Set(rules.map((r) => r.groupId));
         for (const gid of groupIds) {
           await assertCanAccessGroupId(ctx.user, gid);
@@ -446,16 +466,15 @@ export const groupsRouter = router({
    * @returns { name, content } - Group name and file content
    * @throws NOT_FOUND if group doesn't exist
    */
-  export: teacherProcedure
-    .input(z.object({ groupId: z.string().min(1) }))
-    .query(async ({ input, ctx }) => {
-      await assertCanAccessGroupId(ctx.user, input.groupId);
+  export: teacherGroupIdProcedure(z.object({ groupId: z.string().min(1) })).query(
+    async ({ input }) => {
       const result = await GroupsService.exportGroup(input.groupId);
       if (!result.ok) {
         throw new TRPCError({ code: result.error.code, message: result.error.message });
       }
       return result.data;
-    }),
+    }
+  ),
 
   /**
    * Export all groups to file content.
