@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { eq, sql, count } from 'drizzle-orm';
 import { db, classrooms, machines } from '../db/index.js';
 import { logger } from './logger.js';
+import { getCurrentSchedule } from './schedule-storage.js';
 import type { Classroom, MachineStatus } from '../types/index.js';
 import type {
   IClassroomStorage,
@@ -49,6 +50,22 @@ export interface ClassroomStats {
 // =============================================================================
 // Helper Functions
 // =============================================================================
+
+async function resolveEffectiveGroupIdForClassroom(
+  classroom: Pick<DBClassroom, 'id' | 'activeGroupId' | 'defaultGroupId'>,
+  now: Date
+): Promise<string | null> {
+  if (classroom.activeGroupId !== null) {
+    return classroom.activeGroupId;
+  }
+
+  const currentSchedule = await getCurrentSchedule(classroom.id, now);
+  if (currentSchedule) {
+    return currentSchedule.groupId;
+  }
+
+  return classroom.defaultGroupId;
+}
 
 function toClassroomType(classroom: DBClassroom, machineList: DBMachine[] = []): Classroom {
   return {
@@ -377,22 +394,7 @@ export async function resolveMachineGroupContext(
   const classroom = await getClassroomById(classroomId);
   if (!classroom) return null;
 
-  let groupId = classroom.activeGroupId;
-  if (groupId === null) {
-    // Try to get from schedule
-    try {
-      const { getCurrentSchedule } = await import('./schedule-storage.js');
-      const currentSchedule = await getCurrentSchedule(classroom.id, now);
-      if (currentSchedule) {
-        groupId = currentSchedule.groupId;
-      }
-    } catch {
-      // Schedule storage not available
-    }
-  }
-
-  groupId ??= classroom.defaultGroupId;
-
+  const groupId = await resolveEffectiveGroupIdForClassroom(classroom, now);
   if (groupId === null) return null;
 
   return {
@@ -412,24 +414,11 @@ export async function resolveMachineGroupContext(
 export async function resolveClassroomGroupContext(
   classroomId: string,
   now: Date = new Date()
-): Promise<{ groupId: string; classroomId: string; classroomName: string } | null> {
+): Promise<WhitelistUrlResult | null> {
   const classroom = await getClassroomById(classroomId);
   if (!classroom) return null;
 
-  let groupId = classroom.activeGroupId;
-  if (groupId === null) {
-    try {
-      const { getCurrentSchedule } = await import('./schedule-storage.js');
-      const currentSchedule = await getCurrentSchedule(classroom.id, now);
-      if (currentSchedule) {
-        groupId = currentSchedule.groupId;
-      }
-    } catch {
-      // Schedule storage not available
-    }
-  }
-
-  groupId ??= classroom.defaultGroupId;
+  const groupId = await resolveEffectiveGroupIdForClassroom(classroom, now);
   if (groupId === null) return null;
 
   return {
