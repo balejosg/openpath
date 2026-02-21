@@ -463,6 +463,15 @@ await describe('Groups Router (tRPC)', { timeout: 30000 }, async () => {
       );
       assert.strictEqual(response.status, 403);
 
+      // Regression: teacher must not be able to spoof groupId to bypass RBAC.
+      const spoofedGroupIdResp = await trpcMutate(
+        API_URL,
+        'groups.deleteRule',
+        { id: otherRuleId, groupId: teacherGroupId },
+        bearerAuth(teacherToken)
+      );
+      assert.strictEqual(spoofedGroupIdResp.status, 403);
+
       const bulkResp = await trpcMutate(
         API_URL,
         'groups.bulkDeleteRules',

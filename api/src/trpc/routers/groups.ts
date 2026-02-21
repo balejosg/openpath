@@ -327,10 +327,9 @@ export const groupsRouter = router({
 
       // Enforce group access for teachers (admins can delete without group resolution)
       if (!auth.isAdminToken(ctx.user)) {
-        if (!resolvedGroupId) {
-          const rule = await groupsStorage.getRuleById(input.id);
-          resolvedGroupId = rule?.groupId;
-        }
+        // Never trust client-supplied groupId for authorization. Resolve from the rule itself.
+        const rule = await groupsStorage.getRuleById(input.id);
+        resolvedGroupId = rule?.groupId;
 
         if (resolvedGroupId) {
           await assertCanAccessGroupId(ctx.user, resolvedGroupId);
