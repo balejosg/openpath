@@ -6,7 +6,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { normalize, getRootDomain } from '@openpath/shared';
 import { db, whitelistGroups, whitelistRules } from '../db/index.js';
 import { logger } from './logger.js';
@@ -452,12 +452,24 @@ export async function getRuleById(id: string): Promise<Rule | null> {
 export async function getRulesByIds(ids: string[]): Promise<Rule[]> {
   if (ids.length === 0) return [];
 
-  const rules: Rule[] = [];
-  for (const id of ids) {
-    const rule = await getRuleById(id);
-    if (rule) rules.push(rule);
+  const uniqueIds = Array.from(new Set(ids));
+  const rows = await db.select().from(whitelistRules).where(inArray(whitelistRules.id, uniqueIds));
+
+  if (rows.length === 0) return [];
+
+  const rulesById = new Map<string, Rule>();
+  for (const row of rows) {
+    rulesById.set(row.id, dbRuleToApi(row));
   }
-  return rules;
+
+  // Preserve input ordering (and duplicates) while omitting missing IDs.
+  const ordered: Rule[] = [];
+  for (const id of ids) {
+    const rule = rulesById.get(id);
+    if (rule) ordered.push(rule);
+  }
+
+  return ordered;
 }
 
 /**
@@ -569,14 +581,10 @@ export async function deleteRule(id: string): Promise<boolean> {
 export async function bulkDeleteRules(ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
 
-  let deletedCount = 0;
-  for (const id of ids) {
-    const result = await db.delete(whitelistRules).where(eq(whitelistRules.id, id));
-    if ((result.rowCount ?? 0) > 0) {
-      deletedCount++;
-    }
-  }
+  const uniqueIds = Array.from(new Set(ids));
+  const result = await db.delete(whitelistRules).where(inArray(whitelistRules.id, uniqueIds));
 
+  const deletedCount = result.rowCount ?? 0;
   logger.debug('Bulk deleted rules', { count: deletedCount, requested: ids.length });
   return deletedCount;
 }

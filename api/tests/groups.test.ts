@@ -742,6 +742,75 @@ await describe('Groups Router (tRPC)', { timeout: 30000 }, async () => {
       const { data } = (await parseTRPC(response)) as { data?: { count: number } };
       assert.strictEqual(data?.count, 1); // Only newdomain.com should be added
     });
+
+    await test('should bulk delete rules (admin) and return ordered rules payload', async () => {
+      const valueA = `bulk-delete-a-${TEST_RUN_ID}-${Math.random().toString(36).slice(2, 6)}.com`;
+      const valueB = `bulk-delete-b-${TEST_RUN_ID}-${Math.random().toString(36).slice(2, 6)}.com`;
+
+      const createAResp = await trpcMutate(
+        API_URL,
+        'groups.createRule',
+        {
+          groupId: bulkGroupId,
+          type: 'whitelist',
+          value: valueA,
+        },
+        bearerAuth(ADMIN_TOKEN)
+      );
+      assertStatus(createAResp, 200);
+      const { data: createdA } = (await parseTRPC(createAResp)) as { data?: { id: string } };
+      const idA = createdA?.id ?? '';
+      assert.ok(idA);
+
+      const createBResp = await trpcMutate(
+        API_URL,
+        'groups.createRule',
+        {
+          groupId: bulkGroupId,
+          type: 'whitelist',
+          value: valueB,
+        },
+        bearerAuth(ADMIN_TOKEN)
+      );
+      assertStatus(createBResp, 200);
+      const { data: createdB } = (await parseTRPC(createBResp)) as { data?: { id: string } };
+      const idB = createdB?.id ?? '';
+      assert.ok(idB);
+
+      const missingId = '00000000-0000-0000-0000-000000000000';
+      const ids = [idB, missingId, idA];
+
+      const bulkResp = await trpcMutate(
+        API_URL,
+        'groups.bulkDeleteRules',
+        { ids },
+        bearerAuth(ADMIN_TOKEN)
+      );
+      assertStatus(bulkResp, 200);
+
+      const { data } = (await parseTRPC(bulkResp)) as {
+        data?: { deleted: number; rules: Rule[] };
+      };
+      assert.ok(data);
+      assert.strictEqual(data.deleted, 2);
+      assert.ok(Array.isArray(data.rules));
+      assert.strictEqual(data.rules.length, 2);
+      assert.strictEqual(data.rules[0]?.id, idB);
+      assert.strictEqual(data.rules[1]?.id, idA);
+
+      // Ensure the deleted rules are no longer present.
+      const listResp = await trpcQuery(
+        API_URL,
+        'groups.listRules',
+        { groupId: bulkGroupId },
+        bearerAuth(ADMIN_TOKEN)
+      );
+      assertStatus(listResp, 200);
+      const { data: remainingRules } = (await parseTRPC(listResp)) as { data?: Rule[] };
+      assert.ok(Array.isArray(remainingRules));
+      assert.ok(!remainingRules.some((r) => r.id === idA));
+      assert.ok(!remainingRules.some((r) => r.id === idB));
+    });
   });
 
   // =========================================================================

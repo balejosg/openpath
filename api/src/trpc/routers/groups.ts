@@ -418,15 +418,20 @@ export const groupsRouter = router({
   bulkDeleteRules: teacherProcedure
     .input(BulkDeleteRulesSchema)
     .mutation(async ({ input, ctx }) => {
+      let preloadedRules: Awaited<ReturnType<typeof GroupsService.getRulesByIds>> | undefined;
+
       if (!auth.isAdminToken(ctx.user)) {
-        const rules = await GroupsService.getRulesByIds(input.ids);
-        const groupIds = new Set(rules.map((r) => r.groupId));
+        preloadedRules = await GroupsService.getRulesByIds(input.ids);
+        const groupIds = new Set(preloadedRules.map((r) => r.groupId));
         for (const gid of groupIds) {
           await assertCanAccessGroupId(ctx.user, gid);
         }
       }
 
-      const result = await GroupsService.bulkDeleteRules(input.ids);
+      const result = await GroupsService.bulkDeleteRules(
+        input.ids,
+        preloadedRules ? { rules: preloadedRules } : undefined
+      );
       if (!result.ok) {
         throw new TRPCError({ code: result.error.code, message: result.error.message });
       }

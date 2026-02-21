@@ -321,14 +321,15 @@ export async function deleteRule(
  * Bulk delete rules.
  */
 export async function bulkDeleteRules(
-  ids: string[]
+  ids: string[],
+  options?: { rules?: Rule[] }
 ): Promise<GroupsResult<{ deleted: number; rules: Rule[] }>> {
   if (ids.length === 0) {
     return { ok: true, data: { deleted: 0, rules: [] } };
   }
 
   // Get the rules before deleting (for undo functionality + SSE notification)
-  const rules = await groupsStorage.getRulesByIds(ids);
+  const rules = options?.rules ?? (await groupsStorage.getRulesByIds(ids));
 
   const deleted = await groupsStorage.bulkDeleteRules(ids);
 
