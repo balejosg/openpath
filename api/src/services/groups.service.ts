@@ -18,7 +18,11 @@ import type {
   ListRulesGroupedOptions,
 } from '../lib/groups-storage.js';
 import { validateRuleValue, cleanRuleValue } from '@openpath/shared';
-import { emitWhitelistChanged, emitAllWhitelistsChanged } from '../lib/rule-events.js';
+import {
+  emitWhitelistChanged,
+  emitAllWhitelistsChanged,
+  touchGroupAndEmitWhitelistChanged,
+} from '../lib/rule-events.js';
 
 // =============================================================================
 // Types
@@ -290,8 +294,7 @@ export async function createRule(input: CreateRuleInput): Promise<GroupsResult<{
     };
   }
 
-  await groupsStorage.touchGroupUpdatedAt(input.groupId);
-  emitWhitelistChanged(input.groupId);
+  await touchGroupAndEmitWhitelistChanged(input.groupId);
   return { ok: true, data: { id: result.id } };
 }
 
@@ -312,8 +315,7 @@ export async function deleteRule(
   const deleted = await groupsStorage.deleteRule(id);
 
   if (deleted && ruleGroupId) {
-    await groupsStorage.touchGroupUpdatedAt(ruleGroupId);
-    emitWhitelistChanged(ruleGroupId);
+    await touchGroupAndEmitWhitelistChanged(ruleGroupId);
   }
 
   return { ok: true, data: { deleted } };
@@ -339,8 +341,7 @@ export async function bulkDeleteRules(
   if (deleted > 0) {
     const affectedGroups = new Set(rules.map((r) => r.groupId));
     for (const gid of affectedGroups) {
-      await groupsStorage.touchGroupUpdatedAt(gid);
-      emitWhitelistChanged(gid);
+      await touchGroupAndEmitWhitelistChanged(gid);
     }
   }
 
@@ -404,8 +405,7 @@ export async function updateRule(input: UpdateRuleInput): Promise<GroupsResult<R
   }
 
   if (didChangeExport) {
-    await groupsStorage.touchGroupUpdatedAt(input.groupId);
-    emitWhitelistChanged(input.groupId);
+    await touchGroupAndEmitWhitelistChanged(input.groupId);
   }
   return { ok: true, data: updated };
 }
@@ -429,8 +429,7 @@ export async function bulkCreateRules(
   const count = await groupsStorage.bulkCreateRules(input.groupId, input.type, cleanedValues);
 
   if (count > 0) {
-    await groupsStorage.touchGroupUpdatedAt(input.groupId);
-    emitWhitelistChanged(input.groupId);
+    await touchGroupAndEmitWhitelistChanged(input.groupId);
   }
 
   return { ok: true, data: { count } };

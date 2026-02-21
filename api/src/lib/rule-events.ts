@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createDbEventBridge, type DbEventPayload } from './db-event-bridge.js';
 import { resolveClassroomGroupContext } from './classroom-storage.js';
+import { touchGroupUpdatedAt } from './groups-storage.js';
 import { logger } from './logger.js';
 import { createScheduleBoundaryTicker } from './schedule-boundary-ticker.js';
 import { createSseHub, type SseStream } from './sse-hub.js';
@@ -79,6 +80,11 @@ export function emitWhitelistChanged(groupId: string): void {
   logger.debug('Emitting whitelist-changed event', { groupId });
   sseHub.publishGroupChangedLocal(groupId);
   void dbBridge.notify({ type: 'group', groupId, origin: INSTANCE_ID });
+}
+
+export async function touchGroupAndEmitWhitelistChanged(groupId: string): Promise<void> {
+  await touchGroupUpdatedAt(groupId);
+  emitWhitelistChanged(groupId);
 }
 
 /**

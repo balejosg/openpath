@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from 'express';
 
 import { logger } from '../lib/logger.js';
-import { emitWhitelistChanged } from '../lib/rule-events.js';
+import { touchGroupAndEmitWhitelistChanged } from '../lib/rule-events.js';
 import * as classroomStorage from '../lib/classroom-storage.js';
 import * as groupsStorage from '../lib/groups-storage.js';
 import { RequestService } from '../services/index.js';
@@ -105,8 +105,7 @@ export function registerPublicRequestRoutes(app: Express): void {
       });
 
       if (created.error !== 'Rule already exists') {
-        await groupsStorage.touchGroupUpdatedAt(targetGroupId);
-        emitWhitelistChanged(targetGroupId);
+        await touchGroupAndEmitWhitelistChanged(targetGroupId);
       }
     })();
   });
