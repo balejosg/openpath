@@ -14,10 +14,6 @@ vi.mock('../../lib/trpc', () => ({
   },
 }));
 
-vi.mock('../../lib/auth', () => ({
-  getTeacherGroups: () => ['group-1'],
-}));
-
 describe('TeacherDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();

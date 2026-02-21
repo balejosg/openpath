@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { Group } from '../types';
 import { trpc } from '../lib/trpc';
-import { isAdmin, getTeacherGroups } from '../lib/auth';
+import { isAdmin } from '../lib/auth';
 import { useToast } from '../components/ui/Toast';
 import { useMutationFeedback } from '../hooks/useMutationFeedback';
 
@@ -58,12 +58,8 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
       setLoading(true);
       setError(null);
       const apiGroups = await trpc.groups.list.query();
-      const teacherGroupIds = getTeacherGroups();
-      const filteredGroups = admin
-        ? apiGroups
-        : apiGroups.filter((g) => teacherGroupIds.includes(g.id));
       setGroups(
-        filteredGroups.map((g) => ({
+        apiGroups.map((g) => ({
           id: g.id,
           name: g.name,
           description: g.displayName || g.name,
@@ -182,7 +178,9 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
           </div>
         ) : groups.length === 0 ? (
           <div className="col-span-full text-center py-12 text-slate-500">
-            No hay grupos configurados. Crea uno nuevo para empezar.
+            {admin
+              ? 'No hay grupos configurados. Crea uno nuevo para empezar.'
+              : 'Todavía no tienes políticas asignadas. Pide a un administrador que te asigne una.'}
           </div>
         ) : (
           groups.map((group) => (

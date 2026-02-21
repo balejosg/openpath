@@ -160,7 +160,7 @@ test.describe('Teacher Domain Approval Workflow', () => {
 
     // Teacher should see request list or dashboard - use heading
     await expect(
-      page.getByRole('heading', { name: /Solicitudes de Acceso|Vista General/i })
+      page.getByRole('heading', { name: /Solicitudes de Acceso|Mi Panel|Vista General/i })
     ).toBeVisible();
   });
 

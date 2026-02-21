@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Folder, Loader2, ShieldCheck, ShieldOff, MonitorPlay, Calendar } from 'lucide-react';
 import { trpc } from '../lib/trpc';
-import { getTeacherGroups } from '../lib/auth';
 
 interface GroupFromAPI {
   id: string;
@@ -54,7 +53,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
           defaultGroupId: c.defaultGroupId ?? null,
           activeGroupId: c.activeGroupId ?? null,
           currentGroupId: c.currentGroupId ?? null,
-          currentGroupSource: c.currentGroupSource ?? null,
+          currentGroupSource: c.currentGroupSource,
         }))
       );
       setClassroomsError(null);
@@ -72,12 +71,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
         setGroupsLoading(true);
         try {
           const apiGroups = await trpc.groups.list.query();
-          const teacherGroupIds = getTeacherGroups();
-          const filtered =
-            teacherGroupIds.length > 0
-              ? apiGroups.filter((g) => teacherGroupIds.includes(g.id))
-              : apiGroups;
-          setGroups(filtered);
+          setGroups(apiGroups);
           setGroupsError(null);
         } catch (e) {
           console.error(e);
@@ -127,7 +121,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
           return 'schedule';
         })();
 
-        let badgeVariant =
+        const badgeVariant =
           inferredSource === 'manual'
             ? 'bg-blue-50 text-blue-700 border-blue-200'
             : inferredSource === 'schedule'
@@ -162,11 +156,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
       .sort((a, b) => a.classroomName.localeCompare(b.classroomName));
   }, [classrooms, groupById]);
 
-  // Locally determine "recent" or "today" classrooms for the teacher
-  const teacherGroupIds = getTeacherGroups();
-  const myActiveClasses = activeGroupsByClassroom.filter(
-    (c) => teacherGroupIds.includes(c.groupId) || groups.some((g) => g.id === c.groupId)
-  );
+  const myActiveClasses = useMemo(() => {
+    if (groups.length === 0) return [];
+    const allowedGroupIds = new Set(groups.map((g) => g.id));
+    return activeGroupsByClassroom.filter((c) => allowedGroupIds.has(c.groupId));
+  }, [activeGroupsByClassroom, groups]);
 
   const handleTakeControl = async () => {
     if (!selectedClassroomForControl) return;
@@ -230,6 +224,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
               </span>
             </div>
           )}
+
+          {classroomsError && !classroomsLoading && (
+            <div className="mt-3 text-sm text-red-600">
+              {classroomsError}{' '}
+              <button
+                type="button"
+                onClick={() => void fetchClassrooms()}
+                className="underline hover:text-red-800"
+              >
+                Reintentar
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -268,7 +275,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none"
                 value={selectedGroupForControl}
                 onChange={(e) => setSelectedGroupForControl(e.target.value)}
-                disabled={groupsLoading || !!groupsError}
+                disabled={groupsLoading || !!groupsError || groups.length === 0}
               >
                 <option value="">Restaurar por defecto (Sin Grupo)</option>
                 {groups.map((g) => (
@@ -277,6 +284,31 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
                   </option>
                 ))}
               </select>
+
+              {groupsError && <p className="mt-2 text-xs text-red-600">{groupsError}</p>}
+
+              {!groupsLoading && !groupsError && groups.length === 0 && (
+                <p className="mt-2 text-xs text-slate-500 italic">
+                  No tienes políticas asignadas. Pide a un administrador que te asigne una.
+                </p>
+              )}
+
+              {(() => {
+                if (!onNavigateToRules) return null;
+                if (!selectedGroupForControl) return null;
+                const selected = groupById.get(selectedGroupForControl);
+                if (!selected) return null;
+
+                return (
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToRules({ id: selected.id, name: selected.name })}
+                    className="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium underline"
+                  >
+                    Gestionar reglas de esta política
+                  </button>
+                );
+              })()}
             </div>
 
             <button

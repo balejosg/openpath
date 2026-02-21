@@ -3,6 +3,24 @@ import tseslint from 'typescript-eslint';
 import noOnlyTests from 'eslint-plugin-no-only-tests';
 
 export default tseslint.config(
+  {
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/coverage/**',
+      'api/tests/load/**',
+      'eslint.config.js',
+      '**/*.config.js',
+      '**/*.config.ts',
+      '**/*.config.mjs',
+      'shared/tests/**',
+      'react-spa/e2e/**',
+      'firefox-extension/blocked/**',
+      'tests/selenium/**',
+      'scripts/**',
+    ],
+  },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
@@ -34,23 +52,5 @@ export default tseslint.config(
       // Prevent .only() which would skip other tests
       'no-only-tests/no-only-tests': 'error',
     },
-  },
-  {
-    ignores: [
-      '**/node_modules/**',
-      '**/dist/**',
-      '**/build/**',
-      '**/coverage/**',
-      'api/tests/load/**',
-      'eslint.config.js',
-      '**/*.config.js',
-      '**/*.config.ts',
-      '**/*.config.mjs',
-      'shared/tests/**',
-      'react-spa/e2e/**',
-      'firefox-extension/blocked/**',
-      'tests/selenium/**',
-      'scripts/**',
-    ],
   }
 );

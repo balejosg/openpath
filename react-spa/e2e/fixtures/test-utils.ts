@@ -129,11 +129,8 @@ export async function loginAsTeacher(page: Page): Promise<void> {
   await page.locator('input[type="email"]').fill(TEACHER_CREDENTIALS.email);
   await page.locator('input[type="password"]').fill(TEACHER_CREDENTIALS.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  // Wait for dashboard content to appear (state-based navigation)
-  await page
-    .getByText(/Estado del Sistema|Grupos Activos|Dominios Permitidos/i)
-    .first()
-    .waitFor({ timeout: 15000 });
+  // Wait for authenticated layout (teachers don't see the admin dashboard stats).
+  await page.getByRole('button', { name: /Cerrar Ses/i }).waitFor({ timeout: 15000 });
 }
 
 /**

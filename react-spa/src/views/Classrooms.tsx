@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import type { Classroom } from '../types';
 import { trpc } from '../lib/trpc';
-import { isAdmin, getTeacherGroups } from '../lib/auth';
+import { isAdmin } from '../lib/auth';
 import { getAuthTokenForHeader } from '../lib/auth-storage';
 import { useClassroomConfigActions } from '../hooks/useClassroomConfigActions';
 import { useClassroomSchedules } from '../hooks/useClassroomSchedules';
@@ -455,13 +455,11 @@ const Classrooms = () => {
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
                   >
                     <option value="">Sin grupo activo</option>
-                    {groups
-                      .filter((g) => admin || getTeacherGroups().includes(g.id))
-                      .map((g) => (
-                        <option key={g.id} value={g.id}>
-                          {g.displayName}
-                        </option>
-                      ))}
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.displayName}
+                      </option>
+                    ))}
                   </select>
                   {!selectedClassroom.activeGroup && selectedClassroom.currentGroupId && (
                     <p className="mt-2 text-xs text-slate-500 italic">

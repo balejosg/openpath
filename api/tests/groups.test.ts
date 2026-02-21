@@ -320,6 +320,194 @@ await describe('Groups Router (tRPC)', { timeout: 30000 }, async () => {
   });
 
   // =========================================================================
+  // Teacher Access Control Tests
+  // =========================================================================
+  await describe('Teacher Access Control', async () => {
+    let teacherToken: string;
+    let teacherGroupId: string;
+    let otherGroupId: string;
+    let otherRuleId: string;
+
+    before(async () => {
+      // Create one group the teacher can manage, and one they can't.
+      const teacherGroupName = uniqueGroupName('teacher-allowed');
+      const otherGroupName = uniqueGroupName('teacher-denied');
+
+      const allowedGroupResp = await trpcMutate(
+        API_URL,
+        'groups.create',
+        {
+          name: teacherGroupName,
+          displayName: 'Teacher Allowed Group',
+        },
+        bearerAuth(ADMIN_TOKEN)
+      );
+      assertStatus(allowedGroupResp, 200);
+      const { data: allowedGroup } = (await parseTRPC(allowedGroupResp)) as {
+        data?: CreateGroupResult;
+      };
+      teacherGroupId = allowedGroup?.id ?? '';
+      assert.ok(teacherGroupId);
+
+      const deniedGroupResp = await trpcMutate(
+        API_URL,
+        'groups.create',
+        {
+          name: otherGroupName,
+          displayName: 'Teacher Denied Group',
+        },
+        bearerAuth(ADMIN_TOKEN)
+      );
+      assertStatus(deniedGroupResp, 200);
+      const { data: deniedGroup } = (await parseTRPC(deniedGroupResp)) as {
+        data?: CreateGroupResult;
+      };
+      otherGroupId = deniedGroup?.id ?? '';
+      assert.ok(otherGroupId);
+
+      // Seed one rule in the denied group to validate delete/bulk-delete checks.
+      const deniedRuleResp = await trpcMutate(
+        API_URL,
+        'groups.createRule',
+        {
+          groupId: otherGroupId,
+          type: 'whitelist',
+          value: `denied-${TEST_RUN_ID}-${Math.random().toString(36).slice(2, 6)}.com`,
+        },
+        bearerAuth(ADMIN_TOKEN)
+      );
+      assertStatus(deniedRuleResp, 200);
+      const { data: deniedRule } = (await parseTRPC(deniedRuleResp)) as { data?: { id: string } };
+      otherRuleId = deniedRule?.id ?? '';
+      assert.ok(otherRuleId);
+
+      // Create teacher user scoped to the allowed group.
+      const teacherEmail = `teacher-${TEST_RUN_ID}-${Math.random().toString(36).slice(2, 6)}@test.local`;
+      const teacherPassword = 'TeacherPassword123!';
+      const createTeacherResp = await trpcMutate(
+        API_URL,
+        'users.create',
+        {
+          email: teacherEmail,
+          password: teacherPassword,
+          name: 'Teacher User',
+          role: 'teacher',
+          groupIds: [teacherGroupId],
+        },
+        bearerAuth(ADMIN_TOKEN)
+      );
+      assertStatus(createTeacherResp, 200);
+
+      const loginResp = await trpcMutate(API_URL, 'auth.login', {
+        email: teacherEmail,
+        password: teacherPassword,
+      });
+      assertStatus(loginResp, 200);
+
+      const login = (await parseTRPC(loginResp)) as { data?: { accessToken?: string } };
+      teacherToken = login.data?.accessToken ?? '';
+      assert.ok(teacherToken);
+    });
+
+    await test('should allow teacher to list only assigned groups', async () => {
+      const response = await trpcQuery(API_URL, 'groups.list', undefined, bearerAuth(teacherToken));
+      assertStatus(response, 200);
+
+      const { data } = (await parseTRPC(response)) as { data?: GroupWithCounts[] };
+      assert.ok(Array.isArray(data));
+      assert.ok(data.some((g) => g.id === teacherGroupId));
+      assert.ok(!data.some((g) => g.id === otherGroupId));
+    });
+
+    await test('should allow teacher to manage rules only in assigned group', async () => {
+      const value = `teacher-${TEST_RUN_ID}-${Math.random().toString(36).slice(2, 6)}.com`;
+
+      const createResp = await trpcMutate(
+        API_URL,
+        'groups.createRule',
+        {
+          groupId: teacherGroupId,
+          type: 'whitelist',
+          value,
+        },
+        bearerAuth(teacherToken)
+      );
+      assertStatus(createResp, 200);
+
+      const listResp = await trpcQuery(
+        API_URL,
+        'groups.listRules',
+        { groupId: teacherGroupId },
+        bearerAuth(teacherToken)
+      );
+      assertStatus(listResp, 200);
+      const { data } = (await parseTRPC(listResp)) as { data?: Rule[] };
+      assert.ok(Array.isArray(data));
+      assert.ok(data.some((r) => r.value === value));
+
+      const forbiddenList = await trpcQuery(
+        API_URL,
+        'groups.listRules',
+        { groupId: otherGroupId },
+        bearerAuth(teacherToken)
+      );
+      assert.strictEqual(forbiddenList.status, 403);
+    });
+
+    await test('should forbid teacher from deleting rules outside their groups', async () => {
+      const response = await trpcMutate(
+        API_URL,
+        'groups.deleteRule',
+        { id: otherRuleId },
+        bearerAuth(teacherToken)
+      );
+      assert.strictEqual(response.status, 403);
+
+      const bulkResp = await trpcMutate(
+        API_URL,
+        'groups.bulkDeleteRules',
+        { ids: [otherRuleId] },
+        bearerAuth(teacherToken)
+      );
+      assert.strictEqual(bulkResp.status, 403);
+    });
+
+    await test('should forbid teacher from system-level group operations', async () => {
+      const statsResp = await trpcQuery(
+        API_URL,
+        'groups.stats',
+        undefined,
+        bearerAuth(teacherToken)
+      );
+      assert.strictEqual(statsResp.status, 403);
+
+      const systemStatusResp = await trpcQuery(
+        API_URL,
+        'groups.systemStatus',
+        undefined,
+        bearerAuth(teacherToken)
+      );
+      assert.strictEqual(systemStatusResp.status, 403);
+
+      const toggleResp = await trpcMutate(
+        API_URL,
+        'groups.toggleSystem',
+        { enable: false },
+        bearerAuth(teacherToken)
+      );
+      assert.strictEqual(toggleResp.status, 403);
+
+      const exportAllResp = await trpcQuery(
+        API_URL,
+        'groups.exportAll',
+        undefined,
+        bearerAuth(teacherToken)
+      );
+      assert.strictEqual(exportAllResp.status, 403);
+    });
+  });
+
+  // =========================================================================
   // Rule CRUD Tests
   // =========================================================================
   await describe('Rule CRUD Operations', async () => {
@@ -399,7 +587,7 @@ await describe('Groups Router (tRPC)', { timeout: 30000 }, async () => {
         {
           groupId: ruleGroupId,
           type: 'blocked_path',
-          value: '/api/tracking',
+          value: '*/api/tracking',
         },
         bearerAuth(ADMIN_TOKEN)
       );
