@@ -7,6 +7,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
+import { firstSseDataPayload } from './sse-test-utils.js';
 import {
   registerSseClient,
   emitWhitelistChanged,
@@ -50,13 +51,7 @@ await describe('Rule Events Lib', async () => {
     assert.ok(writesA.length > 0);
     assert.strictEqual(writesB.length, 0);
 
-    const dataLine =
-      writesA
-        .join('')
-        .split('\n')
-        .find((l) => l.startsWith('data: '))
-        ?.slice(6) ?? '';
-    const parsed = JSON.parse(dataLine) as { event?: string; groupId?: string };
+    const parsed = JSON.parse(firstSseDataPayload(writesA)) as { event?: string; groupId?: string };
     assert.strictEqual(parsed.event, 'whitelist-changed');
     assert.strictEqual(parsed.groupId, 'group_a');
 
