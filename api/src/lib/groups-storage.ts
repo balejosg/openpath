@@ -13,6 +13,25 @@ import { logger } from './logger.js';
 import type { WhitelistGroup, WhitelistRule } from '../db/schema.js';
 
 // =============================================================================
+// Export Cache
+// =============================================================================
+
+interface ExportCacheEntry {
+  version: string;
+  content: string;
+}
+
+const EXPORT_CACHE_MAX = ((): number => {
+  const raw = process.env.OPENPATH_EXPORT_CACHE_MAX;
+  if (!raw) return 5000;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 5000;
+})();
+
+// Keyed by groupId (LRU by Map insertion order)
+const exportCache = new Map<string, ExportCacheEntry>();
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -33,6 +52,15 @@ export interface GroupWithCounts {
   whitelistCount: number;
   blockedSubdomainCount: number;
   blockedPathCount: number;
+}
+
+/** Minimal group metadata for exports/caching */
+export interface GroupMeta {
+  id: string;
+  name: string;
+  displayName: string;
+  enabled: boolean;
+  updatedAt: Date;
 }
 
 /** Rule in API format */
@@ -168,6 +196,16 @@ function dbGroupToApi(
   };
 }
 
+function dbGroupToMeta(g: WhitelistGroup): GroupMeta {
+  return {
+    id: g.id,
+    name: g.name,
+    displayName: g.displayName,
+    enabled: g.enabled === 1,
+    updatedAt: g.updatedAt ?? new Date(),
+  };
+}
+
 function dbRuleToApi(r: WhitelistRule): Rule {
   return {
     id: r.id,
@@ -216,6 +254,39 @@ export async function getGroupById(id: string): Promise<GroupWithCounts | null> 
     blockedSubdomainCount: rules.filter((r) => r.type === 'blocked_subdomain').length,
     blockedPathCount: rules.filter((r) => r.type === 'blocked_path').length,
   };
+}
+
+/**
+ * Get minimal group metadata by ID (fast path for agent downloads).
+ */
+export async function getGroupMetaById(id: string): Promise<GroupMeta | null> {
+  const [group] = await db
+    .select()
+    .from(whitelistGroups)
+    .where(eq(whitelistGroups.id, id))
+    .limit(1);
+  if (!group) return null;
+  return dbGroupToMeta(group);
+}
+
+/**
+ * Get minimal group metadata by name.
+ */
+export async function getGroupMetaByName(name: string): Promise<GroupMeta | null> {
+  const [group] = await db
+    .select()
+    .from(whitelistGroups)
+    .where(eq(whitelistGroups.name, name))
+    .limit(1);
+  if (!group) return null;
+  return dbGroupToMeta(group);
+}
+
+/**
+ * Touch a group's updatedAt to reflect export-relevant changes.
+ */
+export async function touchGroupUpdatedAt(id: string): Promise<void> {
+  await db.update(whitelistGroups).set({ updatedAt: new Date() }).where(eq(whitelistGroups.id, id));
 }
 
 /**
@@ -667,8 +738,18 @@ export async function toggleSystemStatus(enable: boolean): Promise<SystemStatus>
  * @returns File content as string, or null if group not found
  */
 export async function exportGroup(groupId: string): Promise<string | null> {
-  const group = await getGroupById(groupId);
+  const group = await getGroupMetaById(groupId);
   if (!group) return null;
+
+  const version = `${group.updatedAt.toISOString()}:${group.enabled ? '1' : '0'}`;
+  const cached = exportCache.get(groupId);
+  const hit = cached?.version === version ? cached : null;
+  if (hit) {
+    // LRU: refresh order
+    exportCache.delete(groupId);
+    exportCache.set(groupId, hit);
+    return hit.content;
+  }
 
   const rules = await getRulesByGroup(groupId);
   let content = '';
@@ -698,7 +779,18 @@ export async function exportGroup(groupId: string): Promise<string | null> {
     content += '\n';
   }
 
-  return content.trim() + '\n';
+  const finalContent = content.trim() + '\n';
+  exportCache.delete(groupId);
+  exportCache.set(groupId, { version, content: finalContent });
+
+  // Evict least-recently used entries
+  while (exportCache.size > EXPORT_CACHE_MAX) {
+    const oldestKey = exportCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    exportCache.delete(oldestKey);
+  }
+
+  return finalContent;
 }
 
 /**

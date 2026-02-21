@@ -8,67 +8,97 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
 import {
-  onWhitelistChanged,
+  registerSseClient,
   emitWhitelistChanged,
   emitAllWhitelistsChanged,
   getListenerCount,
 } from '../src/lib/rule-events.js';
 
 await describe('Rule Events Lib', async () => {
-  await test('should register and trigger group-specific listeners', () => {
-    let triggered = false;
+  await test('should publish group changes only to matching clients', () => {
+    const writesA: string[] = [];
+    const writesB: string[] = [];
 
-    const unsubscribe = onWhitelistChanged('test-group-1', () => {
-      triggered = true;
+    const unsubA = registerSseClient({
+      hostname: 'test-host-a',
+      classroomId: 'room_a',
+      groupId: 'group_a',
+      stream: {
+        write: (chunk: string) => {
+          writesA.push(chunk);
+          return true;
+        },
+      },
     });
 
-    assert.strictEqual(getListenerCount(), 1);
+    const unsubB = registerSseClient({
+      hostname: 'test-host-b',
+      classroomId: 'room_b',
+      groupId: 'group_b',
+      stream: {
+        write: (chunk: string) => {
+          writesB.push(chunk);
+          return true;
+        },
+      },
+    });
 
-    emitWhitelistChanged('test-group-1');
-    assert.strictEqual(triggered, true);
+    assert.strictEqual(getListenerCount(), 2);
 
-    unsubscribe();
+    emitWhitelistChanged('group_a');
+
+    assert.ok(writesA.length > 0);
+    assert.strictEqual(writesB.length, 0);
+
+    const dataLine =
+      writesA
+        .join('')
+        .split('\n')
+        .find((l) => l.startsWith('data: '))
+        ?.slice(6) ?? '';
+    const parsed = JSON.parse(dataLine) as { event?: string; groupId?: string };
+    assert.strictEqual(parsed.event, 'whitelist-changed');
+    assert.strictEqual(parsed.groupId, 'group_a');
+
+    unsubA();
+    unsubB();
     assert.strictEqual(getListenerCount(), 0);
-
-    // Should not trigger after unsubscribe
-    triggered = false;
-    emitWhitelistChanged('test-group-1');
-    assert.strictEqual(triggered, false);
   });
 
-  await test('should trigger listeners for wildcard emissions', () => {
-    let triggered = false;
-    const unsubscribe = onWhitelistChanged('test-group-2', () => {
-      triggered = true;
+  await test('should broadcast to all clients on emitAllWhitelistsChanged', () => {
+    const writesA: string[] = [];
+    const writesB: string[] = [];
+
+    const unsubA = registerSseClient({
+      hostname: 'test-host-a2',
+      classroomId: 'room_a2',
+      groupId: 'group_a2',
+      stream: {
+        write: (chunk: string) => {
+          writesA.push(chunk);
+          return true;
+        },
+      },
+    });
+
+    const unsubB = registerSseClient({
+      hostname: 'test-host-b2',
+      classroomId: 'room_b2',
+      groupId: 'group_b2',
+      stream: {
+        write: (chunk: string) => {
+          writesB.push(chunk);
+          return true;
+        },
+      },
     });
 
     emitAllWhitelistsChanged();
-    assert.strictEqual(triggered, true);
 
-    unsubscribe();
-  });
+    assert.ok(writesA.join('').includes('"whitelist-changed"'));
+    assert.ok(writesB.join('').includes('"whitelist-changed"'));
 
-  await test('should not trigger listeners for different groups', () => {
-    let triggered = false;
-    const unsubscribe = onWhitelistChanged('test-group-3', () => {
-      triggered = true;
-    });
-
-    emitWhitelistChanged('other-group');
-    assert.strictEqual(triggered, false);
-
-    unsubscribe();
-  });
-
-  await test('should support multiple listeners on same group', () => {
-    let count = 0;
-    const unsub1 = onWhitelistChanged('multi-group', () => count++);
-    const unsub2 = onWhitelistChanged('multi-group', () => count++);
-
-    emitWhitelistChanged('multi-group');
-    assert.strictEqual(count, 2);
-
-    unsub1();
-    unsub2();
+    unsubA();
+    unsubB();
   });
 });

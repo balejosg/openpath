@@ -290,6 +290,7 @@ export async function createRule(input: CreateRuleInput): Promise<GroupsResult<{
     };
   }
 
+  await groupsStorage.touchGroupUpdatedAt(input.groupId);
   emitWhitelistChanged(input.groupId);
   return { ok: true, data: { id: result.id } };
 }
@@ -311,6 +312,7 @@ export async function deleteRule(
   const deleted = await groupsStorage.deleteRule(id);
 
   if (deleted && ruleGroupId) {
+    await groupsStorage.touchGroupUpdatedAt(ruleGroupId);
     emitWhitelistChanged(ruleGroupId);
   }
 
@@ -337,6 +339,7 @@ export async function bulkDeleteRules(
   if (deleted > 0) {
     const affectedGroups = new Set(rules.map((r) => r.groupId));
     for (const gid of affectedGroups) {
+      await groupsStorage.touchGroupUpdatedAt(gid);
       emitWhitelistChanged(gid);
     }
   }
@@ -370,6 +373,9 @@ export async function updateRule(input: UpdateRuleInput): Promise<GroupsResult<R
 
   // Clean and validate the new value if provided
   let cleanedValue = input.value;
+  const didChangeExport =
+    cleanedValue !== undefined &&
+    cleanRuleValue(cleanedValue, existingRule.type === 'blocked_path') !== existingRule.value;
   if (cleanedValue !== undefined) {
     cleanedValue = cleanRuleValue(cleanedValue, existingRule.type === 'blocked_path');
     if (!cleanedValue) {
@@ -397,7 +403,10 @@ export async function updateRule(input: UpdateRuleInput): Promise<GroupsResult<R
     };
   }
 
-  emitWhitelistChanged(input.groupId);
+  if (didChangeExport) {
+    await groupsStorage.touchGroupUpdatedAt(input.groupId);
+    emitWhitelistChanged(input.groupId);
+  }
   return { ok: true, data: updated };
 }
 
@@ -420,6 +429,7 @@ export async function bulkCreateRules(
   const count = await groupsStorage.bulkCreateRules(input.groupId, input.type, cleanedValues);
 
   if (count > 0) {
+    await groupsStorage.touchGroupUpdatedAt(input.groupId);
     emitWhitelistChanged(input.groupId);
   }
 

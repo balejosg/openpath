@@ -41,6 +41,7 @@ import express from 'express';
 import type { Request, Response, ErrorRequestHandler } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import path from 'node:path';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -71,7 +72,12 @@ import {
   hashMachineToken,
   buildWhitelistUrl,
 } from './lib/machine-download-token.js';
-import { onWhitelistChanged, getListenerCount } from './lib/rule-events.js';
+import {
+  ensureDbEventBridgeStarted,
+  ensureScheduleBoundaryTickerStarted,
+  getSseClientCount,
+  registerSseClient,
+} from './lib/rule-events.js';
 
 import { registerPublicRequestRoutes } from './routes/public-requests.js';
 
@@ -320,6 +326,33 @@ function quotePowerShellSingle(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
+function buildWhitelistEtag(params: {
+  groupId: string;
+  updatedAt: Date;
+  enabled: boolean;
+}): string {
+  const version = `${params.groupId}:${params.updatedAt.toISOString()}:${params.enabled ? '1' : '0'}`;
+  const hash = createHash('sha256').update(version).digest('base64url');
+  return `"${hash}"`;
+}
+
+function matchesIfNoneMatch(req: Request, etag: string): boolean {
+  const header = req.headers['if-none-match'];
+  if (typeof header !== 'string') return false;
+  const trimmed = header.trim();
+  if (trimmed === '*') return true;
+
+  const values = trimmed
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  for (const v of values) {
+    if (v === etag) return true;
+    if (v.startsWith('W/') && v.slice(2).trim() === etag) return true;
+  }
+  return false;
+}
+
 // =============================================================================
 // Security Middleware
 // =============================================================================
@@ -444,6 +477,16 @@ app.use(requestIdMiddleware);
 // Request logging with Winston
 app.use(logger.requestMiddleware);
 
+// Response compression (skip SSE streaming)
+app.use(
+  compression({
+    filter: (req, res) => {
+      if (req.path === '/api/machines/events') return false;
+      return compression.filter(req, res);
+    },
+  })
+);
+
 // =============================================================================
 // Routes
 // =============================================================================
@@ -473,9 +516,21 @@ app.get('/export/:name.txt', (req: Request, res: Response): void => {
   }
 
   void (async (): Promise<void> => {
-    const group = await groupsStorage.getGroupByName(name);
+    const group = await groupsStorage.getGroupMetaByName(name);
     if (!group) {
       res.status(404).type('text/plain').send('Group not found');
+      return;
+    }
+
+    const etag = buildWhitelistEtag({
+      groupId: group.id,
+      updatedAt: group.updatedAt,
+      enabled: group.enabled,
+    });
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'no-cache');
+    if (matchesIfNoneMatch(req, etag)) {
+      res.status(304).end();
       return;
     }
 
@@ -1181,6 +1236,8 @@ app.get('/api/agent/windows/file', (req: Request, res: Response): void => {
 });
 
 app.get('/w/whitelist.txt', (_req: Request, res: Response): void => {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
   res.type('text/plain').send(FAIL_OPEN_RESPONSE);
 });
 
@@ -1189,6 +1246,8 @@ app.get('/w/:machineToken/whitelist.txt', (req: Request, res: Response): void =>
     try {
       const { machineToken } = req.params;
       if (!machineToken) {
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
         res.type('text/plain').send(FAIL_OPEN_RESPONSE);
         return;
       }
@@ -1196,18 +1255,45 @@ app.get('/w/:machineToken/whitelist.txt', (req: Request, res: Response): void =>
       const tokenHash = hashMachineToken(machineToken);
       const machine = await classroomStorage.getMachineByDownloadTokenHash(tokenHash);
       if (!machine) {
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
         res.type('text/plain').send(FAIL_OPEN_RESPONSE);
         return;
       }
 
       const whitelistInfo = await classroomStorage.getWhitelistUrlForMachine(machine.hostname);
       if (!whitelistInfo) {
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
         res.type('text/plain').send(FAIL_OPEN_RESPONSE);
+        return;
+      }
+
+      const group = await groupsStorage.getGroupMetaById(whitelistInfo.groupId);
+      if (!group) {
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
+        res.type('text/plain').send(FAIL_OPEN_RESPONSE);
+        return;
+      }
+
+      const etag = buildWhitelistEtag({
+        groupId: group.id,
+        updatedAt: group.updatedAt,
+        enabled: group.enabled,
+      });
+      res.setHeader('ETag', etag);
+      res.setHeader('Cache-Control', 'private, no-cache');
+      if (matchesIfNoneMatch(req, etag)) {
+        await classroomStorage.updateMachineLastSeen(machine.hostname);
+        res.status(304).end();
         return;
       }
 
       const content = await groupsStorage.exportGroup(whitelistInfo.groupId);
       if (!content) {
+        res.setHeader('Cache-Control', 'no-store, max-age=0');
+        res.setHeader('Pragma', 'no-cache');
         res.type('text/plain').send(FAIL_OPEN_RESPONSE);
         return;
       }
@@ -1216,6 +1302,8 @@ app.get('/w/:machineToken/whitelist.txt', (req: Request, res: Response): void =>
       res.type('text/plain').send(content);
     } catch (error) {
       logger.error('Error serving tokenized whitelist', { error: getErrorMessage(error) });
+      res.setHeader('Cache-Control', 'no-store, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
       res.type('text/plain').send(FAIL_OPEN_RESPONSE);
     }
   })();
@@ -1258,7 +1346,11 @@ app.get('/api/machines/events', (req: Request, res: Response): void => {
         return;
       }
 
-      const groupId = whitelistInfo.groupId;
+      // Ensure DB->SSE bridge is active (supports multi-process writers via LISTEN/NOTIFY)
+      await ensureDbEventBridgeStarted();
+
+      // Start schedule boundary notifier (leader-elected) when agents are connected.
+      void ensureScheduleBoundaryTickerStarted();
 
       // Set SSE headers
       res.writeHead(200, {
@@ -1270,44 +1362,38 @@ app.get('/api/machines/events', (req: Request, res: Response): void => {
 
       // Send initial connection event
       res.write(
-        `data: ${JSON.stringify({ event: 'connected', groupId, hostname: machine.hostname })}\n\n`
+        `data: ${JSON.stringify({
+          event: 'connected',
+          groupId: whitelistInfo.groupId,
+          hostname: machine.hostname,
+        })}\n\n`
       );
+
+      const unsubscribe = registerSseClient({
+        hostname: machine.hostname,
+        classroomId: whitelistInfo.classroomId,
+        groupId: whitelistInfo.groupId,
+        stream: res,
+      });
 
       logger.info('SSE client connected', {
         hostname: machine.hostname,
-        groupId,
-        listeners: getListenerCount() + 1,
+        classroomId: whitelistInfo.classroomId,
+        groupId: whitelistInfo.groupId,
+        clients: getSseClientCount(),
       });
 
       // Update machine last-seen on SSE connection
       await classroomStorage.updateMachineLastSeen(machine.hostname);
 
-      // Subscribe to whitelist changes for this group
-      const unsubscribe = onWhitelistChanged(groupId, () => {
-        try {
-          res.write(`data: ${JSON.stringify({ event: 'whitelist-changed', groupId })}\n\n`);
-        } catch {
-          // Client disconnected — let cleanup handle it
-        }
-      });
-
-      // Keep-alive ping every 30 seconds
-      const keepAliveInterval = setInterval(() => {
-        try {
-          res.write(': keep-alive\n\n');
-        } catch {
-          clearInterval(keepAliveInterval);
-        }
-      }, 30_000);
-
       // Cleanup on client disconnect
       req.on('close', () => {
         unsubscribe();
-        clearInterval(keepAliveInterval);
         logger.info('SSE client disconnected', {
           hostname: machine.hostname,
-          groupId,
-          listeners: getListenerCount(),
+          classroomId: whitelistInfo.classroomId,
+          groupId: whitelistInfo.groupId,
+          clients: getSseClientCount(),
         });
       });
     } catch (error) {

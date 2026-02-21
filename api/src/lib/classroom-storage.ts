@@ -402,6 +402,43 @@ export async function resolveMachineGroupContext(
   };
 }
 
+/**
+ * Resolve the correct whitelist group for a classroom based on its current state.
+ * Priority:
+ * 1. Active override group (if set by teacher)
+ * 2. Scheduled class group (if current time matches a schedule)
+ * 3. Default classroom group
+ */
+export async function resolveClassroomGroupContext(
+  classroomId: string,
+  now: Date = new Date()
+): Promise<{ groupId: string; classroomId: string; classroomName: string } | null> {
+  const classroom = await getClassroomById(classroomId);
+  if (!classroom) return null;
+
+  let groupId = classroom.activeGroupId;
+  if (groupId === null) {
+    try {
+      const { getCurrentSchedule } = await import('./schedule-storage.js');
+      const currentSchedule = await getCurrentSchedule(classroom.id, now);
+      if (currentSchedule) {
+        groupId = currentSchedule.groupId;
+      }
+    } catch {
+      // Schedule storage not available
+    }
+  }
+
+  groupId ??= classroom.defaultGroupId;
+  if (groupId === null) return null;
+
+  return {
+    groupId,
+    classroomId: classroom.id,
+    classroomName: classroom.name,
+  };
+}
+
 export async function getWhitelistUrlForMachine(
   hostname: string
 ): Promise<WhitelistUrlResult | null> {

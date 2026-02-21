@@ -122,23 +122,67 @@ download_whitelist() {
     log "Downloading whitelist from: $WHITELIST_URL"
     
     local temp_file="${WHITELIST_FILE}.tmp"
+    local headers_file="${WHITELIST_FILE}.headers.tmp"
+    local etag_file="${WHITELIST_FILE}.etag"
+    local current_etag=""
+
+    if [ -f "$etag_file" ]; then
+        current_etag=$(tr -d '\r\n' < "$etag_file" 2>/dev/null || true)
+    fi
     
-    if timeout 30 curl -L -f -s "$WHITELIST_URL" -o "$temp_file" 2>/dev/null; then
+    # Build curl args (gzip + conditional ETag)
+    local curl_args=(
+        -L -f -sS --compressed
+        --connect-timeout 15
+        -D "$headers_file"
+        -o "$temp_file"
+    )
+
+    if [ -n "$current_etag" ]; then
+        curl_args+=( -H "If-None-Match: $current_etag" )
+    fi
+
+    if timeout 30 curl "${curl_args[@]}" "$WHITELIST_URL" 2>/dev/null; then
+        local status=""
+        local new_etag=""
+
+        # Parse final HTTP status + last ETag (handles redirects)
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^HTTP/[^[:space:]]+[[:space:]]+([0-9]{3}) ]]; then
+                status="${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ ^[Ee][Tt][Aa][Gg]: ]]; then
+                new_etag="${line#*:}"
+                new_etag="${new_etag//$'\r'/}"
+                new_etag="${new_etag#"${new_etag%%[![:space:]]*}"}"
+                new_etag="${new_etag%"${new_etag##*[![:space:]]}"}"
+            fi
+        done < "$headers_file"
+
+        if [ "$status" = "304" ]; then
+            rm -f "$temp_file" "$headers_file"
+            log "✓ Whitelist unchanged (ETag match)"
+            return 0
+        fi
+
         if [ -s "$temp_file" ]; then
             # Validate content format before accepting
             if validate_whitelist_content "$temp_file"; then
                 mv "$temp_file" "$WHITELIST_FILE"
+                rm -f "$headers_file"
+                if [ -n "$new_etag" ]; then
+                    printf '%s\n' "$new_etag" > "$etag_file" 2>/dev/null || true
+                fi
                 log "✓ Whitelist downloaded successfully"
                 return 0
             else
                 log_warn "Whitelist content validation failed - rejecting download"
-                rm -f "$temp_file"
+                rm -f "$temp_file" "$headers_file"
                 return 1
             fi
         fi
     fi
     
-    rm -f "$temp_file"
+    rm -f "$temp_file" "$headers_file"
     log "⚠ Error downloading whitelist"
     return 1
 }

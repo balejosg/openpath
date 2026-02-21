@@ -702,6 +702,85 @@ function Get-PrimaryDNS {
     return "8.8.8.8"
 }
 
+function Invoke-OpenPathHttpGetText {
+    <#
+    .SYNOPSIS
+        Performs a GET request and returns status, content, and ETag.
+    .PARAMETER RequestUrl
+        Full URL to request.
+    .PARAMETER IfNoneMatch
+        Optional ETag value to send as If-None-Match.
+    .PARAMETER TimeoutSec
+        Request timeout in seconds.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RequestUrl,
+
+        [string]$IfNoneMatch,
+
+        [int]$TimeoutSec = 30
+    )
+
+    $client = $null
+    $response = $null
+
+    try {
+        $handler = [System.Net.Http.HttpClientHandler]::new()
+        if ($handler.PSObject.Properties['AutomaticDecompression']) {
+            $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
+        }
+
+        $client = [System.Net.Http.HttpClient]::new($handler)
+        $client.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)
+
+        $request = [System.Net.Http.HttpRequestMessage]::new(
+            [System.Net.Http.HttpMethod]::Get,
+            $RequestUrl
+        )
+
+        if ($IfNoneMatch) {
+            try {
+                $request.Headers.IfNoneMatch.Add([System.Net.Http.Headers.EntityTagHeaderValue]::Parse($IfNoneMatch))
+            }
+            catch {
+                # Ignore invalid cached ETag
+            }
+        }
+
+        $response = $client.SendAsync($request).GetAwaiter().GetResult()
+
+        $statusCode = [int]$response.StatusCode
+        $etag = $null
+        if ($response.Headers.ETag) {
+            $etag = $response.Headers.ETag.ToString()
+        }
+
+        if ($statusCode -eq 304) {
+            return [PSCustomObject]@{
+                StatusCode = $statusCode
+                Content    = ''
+                ETag       = $etag
+            }
+        }
+
+        if (-not $response.IsSuccessStatusCode) {
+            throw "HTTP $statusCode"
+        }
+
+        $content = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        return [PSCustomObject]@{
+            StatusCode = $statusCode
+            Content    = $content
+            ETag       = $etag
+        }
+    }
+    finally {
+        if ($response) { $response.Dispose() }
+        if ($client) { $client.Dispose() }
+    }
+}
+
 function Get-OpenPathFromUrl {
     <#
     .SYNOPSIS
@@ -715,24 +794,45 @@ function Get-OpenPathFromUrl {
         [Parameter(Mandatory = $true)]
         [string]$Url
     )
-    
+
     Write-OpenPathLog "Downloading whitelist from $Url"
-    
+
+    $etagPath = Join-Path $script:OpenPathRoot 'data\whitelist.etag'
+    $cachedEtag = $null
+    if (Test-Path $etagPath) {
+        try {
+            $cachedEtag = (Get-Content $etagPath -Raw -ErrorAction Stop).Trim()
+        }
+        catch {
+            $cachedEtag = $null
+        }
+    }
+
+    $httpResult = $null
     try {
-        $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 30
-        $content = $response.Content
+        $httpResult = Invoke-OpenPathHttpGetText -RequestUrl $Url -IfNoneMatch $cachedEtag -TimeoutSec 30
     }
     catch {
         Write-OpenPathLog "Failed to download whitelist: $_" -Level ERROR
         throw
     }
-    
+
     $result = @{
         Whitelist = @()
         BlockedSubdomains = @()
         BlockedPaths = @()
         IsDisabled = $false
+        NotModified = $false
     }
+
+    if ($httpResult -and $httpResult.StatusCode -eq 304) {
+        $result.NotModified = $true
+        Write-OpenPathLog "Whitelist unchanged (ETag match)"
+        return $result
+    }
+
+    $content = if ($httpResult) { [string]$httpResult.Content } else { '' }
+    $newEtag = if ($httpResult) { [string]$httpResult.ETag } else { $null }
     
     $currentSection = "WHITELIST"
     
@@ -768,6 +868,18 @@ function Get-OpenPathFromUrl {
 
     if ($result.IsDisabled) {
         Write-OpenPathLog "Remote disable marker detected - skipping minimum-domain validation" -Level WARN
+        if ($newEtag) {
+            try {
+                $dir = Split-Path $etagPath -Parent
+                if (-not (Test-Path $dir)) {
+                    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+                }
+                $newEtag | Set-Content -Path $etagPath -Encoding ASCII
+            }
+            catch {
+                # Non-fatal
+            }
+        }
         return $result
     }
 
@@ -777,6 +889,19 @@ function Get-OpenPathFromUrl {
     if ($validDomains.Count -lt $minRequiredDomains) {
         Write-OpenPathLog "Downloaded whitelist appears invalid ($($validDomains.Count) valid domains, minimum $minRequiredDomains required)" -Level ERROR
         throw "Invalid whitelist content: insufficient valid domains ($($validDomains.Count)/$minRequiredDomains)"
+    }
+
+    if ($newEtag) {
+        try {
+            $dir = Split-Path $etagPath -Parent
+            if (-not (Test-Path $dir)) {
+                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+            }
+            $newEtag | Set-Content -Path $etagPath -Encoding ASCII
+        }
+        catch {
+            # Non-fatal
+        }
     }
     
     return $result

@@ -6,7 +6,7 @@
  */
 
 import crypto from 'node:crypto';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, or, sql } from 'drizzle-orm';
 import { db, schedules } from '../db/index.js';
 import { logger } from './logger.js';
 
@@ -282,6 +282,32 @@ export async function getCurrentSchedule(
   return result[0] ?? null;
 }
 
+/**
+ * Get classroom IDs whose schedule starts or ends exactly at the given time.
+ * Used to push near-real-time updates on schedule boundaries.
+ */
+export async function getClassroomIdsWithBoundaryAt(date: Date = new Date()): Promise<string[]> {
+  const dayOfWeek = date.getDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) return [];
+
+  const currentTime = date.toTimeString().slice(0, 5);
+
+  const rows = await db
+    .select({ classroomId: schedules.classroomId })
+    .from(schedules)
+    .where(
+      and(
+        eq(schedules.dayOfWeek, dayOfWeek),
+        or(
+          sql`${schedules.startTime} = ${currentTime}::time`,
+          sql`${schedules.endTime} = ${currentTime}::time`
+        )
+      )
+    );
+
+  return [...new Set(rows.map((r) => r.classroomId))];
+}
+
 export async function deleteSchedulesByClassroom(classroomId: string): Promise<number> {
   const result = await db.delete(schedules).where(eq(schedules.classroomId, classroomId));
 
@@ -297,6 +323,7 @@ export default {
   updateSchedule,
   deleteSchedule,
   getCurrentSchedule,
+  getClassroomIdsWithBoundaryAt,
   deleteSchedulesByClassroom,
   timeToMinutes,
   timesOverlap,

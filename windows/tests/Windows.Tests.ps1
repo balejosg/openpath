@@ -265,8 +265,12 @@ Describe "Common Module - Mocked Tests" {
 
     Context "Get-OpenPathFromUrl parsing" {
         It "Parses whitelist sections correctly" {
-            Mock Invoke-WebRequest {
-                @{ Content = "domain1.com`ndomain2.com`ndomain3.com`n## BLOCKED-SUBDOMAINS`nbad.domain.com`n## BLOCKED-PATHS`n/blocked/path" }
+            Mock Invoke-OpenPathHttpGetText {
+                [PSCustomObject]@{
+                    StatusCode = 200
+                    Content    = "domain1.com`ndomain2.com`ndomain3.com`n## BLOCKED-SUBDOMAINS`nbad.domain.com`n## BLOCKED-PATHS`n/blocked/path"
+                    ETag       = $null
+                }
             } -ModuleName Common
 
             $result = Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt"
@@ -278,8 +282,8 @@ Describe "Common Module - Mocked Tests" {
         }
 
         It "Detects #DESACTIVADO marker" {
-            Mock Invoke-WebRequest {
-                @{ Content = "#DESACTIVADO`ndomain1.com`ndomain2.com`ndomain3.com" }
+            Mock Invoke-OpenPathHttpGetText {
+                [PSCustomObject]@{ StatusCode = 200; Content = "#DESACTIVADO`ndomain1.com`ndomain2.com`ndomain3.com"; ETag = $null }
             } -ModuleName Common
 
             $result = Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt"
@@ -287,8 +291,8 @@ Describe "Common Module - Mocked Tests" {
         }
 
         It "Accepts disabled whitelist even without minimum domains" {
-            Mock Invoke-WebRequest {
-                @{ Content = "#DESACTIVADO" }
+            Mock Invoke-OpenPathHttpGetText {
+                [PSCustomObject]@{ StatusCode = 200; Content = "#DESACTIVADO"; ETag = $null }
             } -ModuleName Common
 
             $result = Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt"
@@ -297,8 +301,12 @@ Describe "Common Module - Mocked Tests" {
         }
 
         It "Skips comment lines and empty lines" {
-            Mock Invoke-WebRequest {
-                @{ Content = "# comment`n`ndomain1.com`ndomain2.com`ndomain3.com`n# another comment" }
+            Mock Invoke-OpenPathHttpGetText {
+                [PSCustomObject]@{
+                    StatusCode = 200
+                    Content    = "# comment`n`ndomain1.com`ndomain2.com`ndomain3.com`n# another comment"
+                    ETag       = $null
+                }
             } -ModuleName Common
 
             $result = Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt"
@@ -306,16 +314,16 @@ Describe "Common Module - Mocked Tests" {
         }
 
         It "Rejects whitelist with insufficient valid domains" {
-            Mock Invoke-WebRequest {
-                @{ Content = "not-a-domain" }
+            Mock Invoke-OpenPathHttpGetText {
+                [PSCustomObject]@{ StatusCode = 200; Content = "not-a-domain"; ETag = $null }
             } -ModuleName Common
 
             { Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt" } | Should -Throw "*Invalid whitelist*"
         }
 
         It "Handles empty response content" {
-            Mock Invoke-WebRequest {
-                @{ Content = "" }
+            Mock Invoke-OpenPathHttpGetText {
+                [PSCustomObject]@{ StatusCode = 200; Content = ""; ETag = $null }
             } -ModuleName Common
 
             { Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt" } | Should -Throw "*Invalid whitelist*"

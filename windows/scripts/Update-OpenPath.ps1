@@ -231,8 +231,25 @@ try {
             }
         }
         else {
+            if ($whitelist.PSObject.Properties['NotModified'] -and $whitelist.NotModified) {
+                Write-OpenPathLog "Whitelist not modified (ETag) - skipping apply"
+
+                try {
+                    $runtimeHealth = Get-OpenPathRuntimeHealth
+                    Send-OpenPathHealthReport -Status 'HEALTHY' `
+                        -DnsServiceRunning $runtimeHealth.DnsServiceRunning `
+                        -DnsResolving $runtimeHealth.DnsResolving `
+                        -FailCount 0 `
+                        -Actions 'not_modified' | Out-Null
+                }
+                catch {
+                    # Ignore health reporting errors
+                }
+
+                Write-OpenPathLog "=== OpenPath update completed (no changes) ==="
+            }
             # Check for deactivation flag
-            if ($whitelist.IsDisabled) {
+            elseif ($whitelist.IsDisabled) {
                 Write-OpenPathLog "DEACTIVATION FLAG detected - entering fail-open mode" -Level WARN
 
                 # Restore normal DNS

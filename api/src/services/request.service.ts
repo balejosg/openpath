@@ -7,6 +7,7 @@ import * as groupsStorage from '../lib/groups-storage.js';
 import * as push from '../lib/push.js';
 import * as auth from '../lib/auth.js';
 import { logger } from '../lib/logger.js';
+import { emitWhitelistChanged } from '../lib/rule-events.js';
 import type { JWTPayload } from '../lib/auth.js';
 import type { CreateRequestData } from '../types/storage.js';
 import type { DomainRequest, RequestStatus } from '../types/index.js';
@@ -154,6 +155,9 @@ export async function approveRequest(
       } else {
         throw new Error(ruleResult.error ?? 'Failed to add domain to whitelist');
       }
+    } else {
+      await groupsStorage.touchGroupUpdatedAt(resolvedTarget.id);
+      emitWhitelistChanged(resolvedTarget.id);
     }
     const updated = await storage.updateRequestStatus(
       request.id,

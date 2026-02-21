@@ -5,6 +5,7 @@
 import * as scheduleStorage from '../lib/schedule-storage.js';
 import * as classroomStorage from '../lib/classroom-storage.js';
 import * as auth from '../lib/auth.js';
+import { emitClassroomChanged } from '../lib/rule-events.js';
 import type { Schedule, JWTPayload } from '../types/index.js';
 import { getErrorMessage } from '@openpath/shared';
 
@@ -151,6 +152,8 @@ export async function createSchedule(
       startTime: input.startTime,
       endTime: input.endTime,
     });
+
+    emitClassroomChanged(input.classroomId);
     return { ok: true, data: mapToSchedule(schedule) };
   } catch (error: unknown) {
     const message = getErrorMessage(error);
@@ -214,6 +217,8 @@ export async function updateSchedule(
         error: { code: 'NOT_FOUND', message: 'Schedule not found after update' },
       };
     }
+
+    emitClassroomChanged(schedule.classroomId);
     return { ok: true, data: mapToSchedule(updated) };
   } catch (error: unknown) {
     const message = getErrorMessage(error);
@@ -250,6 +255,8 @@ export async function deleteSchedule(
   }
 
   await scheduleStorage.deleteSchedule(id);
+
+  emitClassroomChanged(schedule.classroomId);
   return { ok: true, data: { success: true } };
 }
 

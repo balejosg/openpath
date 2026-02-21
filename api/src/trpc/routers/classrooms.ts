@@ -13,6 +13,7 @@ import {
   buildWhitelistUrl,
 } from '../../lib/machine-download-token.js';
 import { config } from '../../config.js';
+import { emitClassroomChanged } from '../../lib/rule-events.js';
 
 export const classroomsRouter = router({
   list: teacherProcedure.query(async () => {
@@ -67,6 +68,11 @@ export const classroomsRouter = router({
       });
       const updated = await classroomStorage.updateClassroom(input.id, updateData);
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Classroom not found' });
+
+      if (input.defaultGroupId !== undefined) {
+        emitClassroomChanged(updated.id);
+      }
+
       return updated;
     }),
 
@@ -80,6 +86,8 @@ export const classroomsRouter = router({
     .mutation(async ({ input }) => {
       const updated = await classroomStorage.setActiveGroup(input.id, input.groupId);
       if (!updated) throw new TRPCError({ code: 'NOT_FOUND', message: 'Classroom not found' });
+
+      emitClassroomChanged(updated.id);
 
       const result = await ClassroomService.getClassroom(input.id);
       if (!result.ok)

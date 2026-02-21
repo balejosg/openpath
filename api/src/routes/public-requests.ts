@@ -105,6 +105,7 @@ export function registerPublicRequestRoutes(app: Express): void {
       });
 
       if (created.error !== 'Rule already exists') {
+        await groupsStorage.touchGroupUpdatedAt(targetGroupId);
         emitWhitelistChanged(targetGroupId);
       }
     })();

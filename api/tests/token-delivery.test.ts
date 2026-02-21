@@ -506,6 +506,46 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
   });
 
   await describe('GET /w/:machineToken/whitelist.txt', async () => {
+    let machineToken: string;
+
+    before(async () => {
+      await createTestClassroom('WhitelistETagClassroom', 'etag-group');
+
+      const registerResponse = await fetch(`${API_URL}/api/machines/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${registrationToken}`,
+        },
+        body: JSON.stringify({
+          hostname: 'etag-test-pc-001',
+          classroomName: 'WhitelistETagClassroom',
+          version: '1.0.0',
+        }),
+      });
+      assert.strictEqual(registerResponse.status, 200);
+      const registerData = (await registerResponse.json()) as { whitelistUrl: string };
+      machineToken = extractMachineToken(registerData.whitelistUrl);
+    });
+
+    await test('should return ETag and support 304 for valid token', async () => {
+      const response = await fetch(`${API_URL}/w/${machineToken}/whitelist.txt`);
+      assert.strictEqual(response.status, 200);
+
+      const etag = response.headers.get('etag');
+      assert.ok(etag, 'Expected ETag header');
+
+      const notModified = await fetch(`${API_URL}/w/${machineToken}/whitelist.txt`, {
+        headers: {
+          'If-None-Match': etag,
+        },
+      });
+      assert.strictEqual(notModified.status, 304);
+
+      const body = await notModified.text();
+      assert.strictEqual(body, '');
+    });
+
     await test('should return fail-open for invalid token', async () => {
       const response = await fetch(`${API_URL}/w/invalid-token-here/whitelist.txt`);
 
@@ -518,6 +558,30 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       const response = await fetch(`${API_URL}/w/whitelist.txt`);
       const text = await response.text();
       assert.ok(text.includes('#DESACTIVADO') || response.status !== 200);
+    });
+  });
+
+  await describe('GET /export/:name.txt', async () => {
+    before(async () => {
+      await createTestClassroom('ExportETagClassroom', 'etag-export-group');
+    });
+
+    await test('should return ETag and support 304', async () => {
+      const response = await fetch(`${API_URL}/export/etag-export-group.txt`);
+      assert.strictEqual(response.status, 200);
+
+      const etag = response.headers.get('etag');
+      assert.ok(etag, 'Expected ETag header');
+
+      const notModified = await fetch(`${API_URL}/export/etag-export-group.txt`, {
+        headers: {
+          'If-None-Match': etag,
+        },
+      });
+      assert.strictEqual(notModified.status, 304);
+
+      const body = await notModified.text();
+      assert.strictEqual(body, '');
     });
   });
 });
