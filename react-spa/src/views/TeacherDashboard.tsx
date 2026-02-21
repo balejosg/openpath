@@ -1,18 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Folder, Loader2, ShieldCheck, ShieldOff, MonitorPlay, Calendar } from 'lucide-react';
 import { trpc } from '../lib/trpc';
-
-interface GroupFromAPI {
-  id: string;
-  name: string;
-  displayName: string;
-  enabled: boolean;
-  whitelistCount: number;
-  blockedSubdomainCount: number;
-  blockedPathCount: number;
-  createdAt?: string;
-  updatedAt?: string | null;
-}
+import { useAllowedGroups } from '../hooks/useAllowedGroups';
 
 interface ClassroomFromAPI {
   id: string;
@@ -33,9 +22,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
   const [classroomsLoading, setClassroomsLoading] = useState(true);
   const [classroomsError, setClassroomsError] = useState<string | null>(null);
 
-  const [groups, setGroups] = useState<GroupFromAPI[]>([]);
-  const [groupsLoading, setGroupsLoading] = useState(true);
-  const [groupsError, setGroupsError] = useState<string | null>(null);
+  const {
+    groups,
+    groupById,
+    options: groupOptions,
+    isLoading: groupsLoading,
+    error: groupsQueryError,
+  } = useAllowedGroups();
+
+  const groupsError = groupsQueryError ? 'No se pudieron cargar tus grupos' : null;
 
   const [selectedClassroomForControl, setSelectedClassroomForControl] = useState<string>('');
   const [selectedGroupForControl, setSelectedGroupForControl] = useState<string>('');
@@ -66,22 +61,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
   }, []);
 
   useEffect(() => {
-    const fetchGroups = async () => {
-      try {
-        setGroupsLoading(true);
-        try {
-          const apiGroups = await trpc.groups.list.query();
-          setGroups(apiGroups);
-          setGroupsError(null);
-        } catch (e) {
-          console.error(e);
-          setGroupsError('No se pudieron cargar tus grupos');
-        }
-      } finally {
-        setGroupsLoading(false);
-      }
-    };
-    void fetchGroups();
     void fetchClassrooms();
 
     const classroomsInterval = window.setInterval(() => {
@@ -98,10 +77,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
       window.removeEventListener('focus', onFocus);
     };
   }, [fetchClassrooms]);
-
-  const groupById = useMemo(() => {
-    return new Map(groups.map((g) => [g.id, g] as const));
-  }, [groups]);
 
   const activeGroupsByClassroom = useMemo(() => {
     return classrooms
@@ -278,9 +253,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
                 disabled={groupsLoading || !!groupsError || groups.length === 0}
               >
                 <option value="">Restaurar por defecto (Sin Grupo)</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.displayName}
+                {groupOptions.map((g) => (
+                  <option key={g.value} value={g.value}>
+                    {g.label}
                   </option>
                 ))}
               </select>

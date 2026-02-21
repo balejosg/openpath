@@ -17,6 +17,7 @@ import type { Classroom } from '../types';
 import { trpc } from '../lib/trpc';
 import { isAdmin } from '../lib/auth';
 import { getAuthTokenForHeader } from '../lib/auth-storage';
+import { useAllowedGroups } from '../hooks/useAllowedGroups';
 import { useClassroomConfigActions } from '../hooks/useClassroomConfigActions';
 import { useClassroomSchedules } from '../hooks/useClassroomSchedules';
 import { useListDetailSelection } from '../hooks/useListDetailSelection';
@@ -24,16 +25,8 @@ import { normalizeSearchTerm, useNormalizedSearch } from '../hooks/useNormalized
 import WeeklyCalendar from '../components/WeeklyCalendar';
 import ScheduleFormModal from '../components/ScheduleFormModal';
 
-// Type for API group used in dropdown
-interface GroupOption {
-  id: string;
-  name: string;
-  displayName: string;
-}
-
 const Classrooms = () => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
-  const [groups, setGroups] = useState<GroupOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
@@ -41,6 +34,23 @@ const Classrooms = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const normalizedSearchQuery = useNormalizedSearch(searchQuery);
   const admin = isAdmin();
+
+  const {
+    groupById,
+    options: groupOptions,
+    isLoading: groupsLoading,
+    error: groupsQueryError,
+    refetch: refetchGroups,
+  } = useAllowedGroups();
+
+  const allowedGroupsError = groupsQueryError ? 'Error al cargar aulas' : null;
+  const isInitialLoading = loading || groupsLoading;
+  const loadError = error ?? allowedGroupsError;
+
+  const calendarGroups = useMemo(
+    () => groupOptions.map((g) => ({ id: g.value, displayName: g.label })),
+    [groupOptions]
+  );
 
   // Enrollment state
   const [showEnrollModal, setShowEnrollModal] = useState(false);
@@ -58,15 +68,12 @@ const Classrooms = () => {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Fetch classrooms and groups from API
+  // Fetch classrooms from API
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const [apiClassrooms, apiGroups] = await Promise.all([
-        trpc.classrooms.list.query(),
-        trpc.groups.list.query(),
-      ]);
+      const apiClassrooms = await trpc.classrooms.list.query();
 
       // Map classrooms
       const mappedClassrooms = apiClassrooms.map((c) => ({
@@ -83,13 +90,6 @@ const Classrooms = () => {
       })) as Classroom[];
 
       setClassrooms(mappedClassrooms);
-      setGroups(
-        apiGroups.map((g) => ({
-          id: g.id,
-          name: g.name,
-          displayName: g.displayName || g.name,
-        }))
-      );
     } catch (err) {
       console.error('Failed to fetch classrooms:', err);
       setError('Error al cargar aulas');
@@ -311,17 +311,20 @@ const Classrooms = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-          {loading ? (
+          {isInitialLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
               <span className="ml-2 text-slate-500 text-sm">Cargando aulas...</span>
             </div>
-          ) : error ? (
+          ) : loadError ? (
             <div className="text-center py-8">
               <AlertCircle className="w-6 h-6 text-red-400 mx-auto" />
-              <span className="text-red-500 text-sm mt-2 block">{error}</span>
+              <span className="text-red-500 text-sm mt-2 block">{loadError}</span>
               <button
-                onClick={() => void fetchData()}
+                onClick={() => {
+                  void refetchGroups();
+                  void fetchData();
+                }}
                 className="text-blue-600 hover:text-blue-800 text-sm mt-2"
               >
                 Reintentar
@@ -332,9 +335,12 @@ const Classrooms = () => {
           ) : (
             filteredClassrooms.map((room) => {
               const displayGroupId = room.currentGroupId;
-              const displayGroupName = displayGroupId
-                ? (groups.find((g) => g.id === displayGroupId)?.displayName ?? displayGroupId)
-                : 'Sin grupo';
+              const displayGroupName = (() => {
+                if (!displayGroupId) return 'Sin grupo';
+                const group = groupById.get(displayGroupId);
+                if (!group) return displayGroupId;
+                return group.displayName || group.name;
+              })();
               const inferredSource = (() => {
                 if (room.currentGroupSource) return room.currentGroupSource;
                 if (room.activeGroup) return 'manual';
@@ -455,9 +461,9 @@ const Classrooms = () => {
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
                   >
                     <option value="">Sin grupo activo</option>
-                    {groups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.displayName}
+                    {groupOptions.map((g) => (
+                      <option key={g.value} value={g.value}>
+                        {g.label}
                       </option>
                     ))}
                   </select>
@@ -465,8 +471,11 @@ const Classrooms = () => {
                     <p className="mt-2 text-xs text-slate-500 italic">
                       Actualmente usando{' '}
                       <span className="font-semibold text-slate-700">
-                        {groups.find((g) => g.id === selectedClassroom.currentGroupId)
-                          ?.displayName ?? selectedClassroom.currentGroupId}
+                        {(() => {
+                          const group = groupById.get(selectedClassroom.currentGroupId);
+                          if (!group) return selectedClassroom.currentGroupId;
+                          return group.displayName || group.name;
+                        })()}
                       </span>{' '}
                       {(() => {
                         const source =
@@ -498,9 +507,9 @@ const Classrooms = () => {
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm disabled:bg-slate-50 disabled:text-slate-500"
                   >
                     <option value="">Sin grupo por defecto</option>
-                    {groups.map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.displayName}
+                    {groupOptions.map((g) => (
+                      <option key={g.value} value={g.value}>
+                        {g.label}
                       </option>
                     ))}
                   </select>
@@ -613,7 +622,7 @@ const Classrooms = () => {
                   )}
                   <WeeklyCalendar
                     schedules={schedules}
-                    groups={groups.map((g) => ({ id: g.id, displayName: g.displayName }))}
+                    groups={calendarGroups}
                     onAddClick={(dayOfWeek, startTime) => openScheduleCreate(dayOfWeek, startTime)}
                     onEditClick={(s) => openScheduleEdit(s)}
                     onDeleteClick={(s) => requestScheduleDelete(s)}
@@ -673,9 +682,9 @@ const Classrooms = () => {
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 >
                   <option value="">Sin grupo</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {g.displayName}
+                  {groupOptions.map((g) => (
+                    <option key={g.value} value={g.value}>
+                      {g.label}
                     </option>
                   ))}
                 </select>
@@ -708,7 +717,7 @@ const Classrooms = () => {
           schedule={editingSchedule}
           defaultDay={scheduleFormDay}
           defaultStartTime={scheduleFormStartTime}
-          groups={groups.map((g) => ({ id: g.id, displayName: g.displayName }))}
+          groups={calendarGroups}
           saving={scheduleSaving}
           error={scheduleError}
           onSave={(data) => void handleScheduleSave(data)}

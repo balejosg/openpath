@@ -1,6 +1,31 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import TeacherDashboard from '../TeacherDashboard';
+
+let queryClient: QueryClient | null = null;
+
+function renderTeacherDashboard() {
+  queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <TeacherDashboard />
+    </QueryClientProvider>
+  );
+}
+
+afterEach(() => {
+  queryClient?.clear();
+  queryClient = null;
+});
 
 vi.mock('../../lib/trpc', () => ({
   trpc: {
@@ -20,7 +45,7 @@ describe('TeacherDashboard', () => {
   });
 
   it('renders the teacher dashboard greeting', async () => {
-    render(<TeacherDashboard />);
+    renderTeacherDashboard();
     await waitFor(() => {
       expect(screen.getByText('¡Hola, Profesor!')).toBeInTheDocument();
     });

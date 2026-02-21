@@ -1,6 +1,35 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Classrooms from '../Classrooms';
+
+let queryClient: QueryClient | null = null;
+
+function renderClassrooms() {
+  queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+      mutations: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Classrooms />
+    </QueryClientProvider>
+  );
+}
+
+afterEach(() => {
+  queryClient?.clear();
+  queryClient = null;
+});
 
 const mockClassroomsListQuery = vi.fn();
 const mockClassroomsUpdateMutate = vi.fn();
@@ -64,7 +93,7 @@ describe('Classrooms', () => {
       },
     ]);
 
-    render(<Classrooms />);
+    renderClassrooms();
 
     await waitFor(() => {
       expect(screen.getByText(/por defecto/i, { selector: 'p' })).toBeInTheDocument();
@@ -86,7 +115,7 @@ describe('Classrooms', () => {
       },
     ]);
 
-    render(<Classrooms />);
+    renderClassrooms();
 
     await waitFor(() => {
       expect(screen.getByText(/por horario/i)).toBeInTheDocument();
@@ -108,7 +137,7 @@ describe('Classrooms', () => {
       },
     ]);
 
-    render(<Classrooms />);
+    renderClassrooms();
 
     const defaultGroupSelect = await screen.findByLabelText(/grupo por defecto/i);
     fireEvent.change(defaultGroupSelect, { target: { value: 'group-calendar' } });
@@ -139,7 +168,7 @@ describe('Classrooms', () => {
       new Error('BAD_REQUEST: default group required')
     );
 
-    render(<Classrooms />);
+    renderClassrooms();
 
     const defaultGroupSelect = await screen.findByLabelText(/grupo por defecto/i);
     fireEvent.change(defaultGroupSelect, { target: { value: '' } });
@@ -166,7 +195,7 @@ describe('Classrooms', () => {
       },
     ]);
 
-    render(<Classrooms />);
+    renderClassrooms();
 
     expect((await screen.findAllByText('Laboratorio Norte')).length).toBeGreaterThan(0);
 
@@ -195,7 +224,7 @@ describe('Classrooms', () => {
       },
     ]);
 
-    render(<Classrooms />);
+    renderClassrooms();
 
     await screen.findByText('Configuración y estado del aula');
 

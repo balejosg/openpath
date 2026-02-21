@@ -1,6 +1,35 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Groups from '../Groups';
+
+let queryClient: QueryClient | null = null;
+
+function renderGroups() {
+  queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+      mutations: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Groups onNavigateToRules={vi.fn()} />
+    </QueryClientProvider>
+  );
+}
+
+afterEach(() => {
+  queryClient?.clear();
+  queryClient = null;
+});
 
 const mockListGroups = vi.fn();
 const mockUpdateGroup = vi.fn();
@@ -23,7 +52,6 @@ vi.mock('../../components/ui/Toast', () => ({
 
 vi.mock('../../lib/auth', () => ({
   isAdmin: () => true,
-  getTeacherGroups: () => ['group-1'],
 }));
 
 describe('Groups view', () => {
@@ -45,7 +73,7 @@ describe('Groups view', () => {
   it('shows actionable inline feedback when group configuration save fails with 400', async () => {
     mockUpdateGroup.mockRejectedValueOnce(new Error('BAD_REQUEST: groups.update 400'));
 
-    render(<Groups onNavigateToRules={vi.fn()} />);
+    renderGroups();
 
     await screen.findByText('grupo-1');
     fireEvent.click(screen.getByRole('button', { name: /configurar/i }));

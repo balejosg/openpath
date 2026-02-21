@@ -1,13 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  getCurrentUser,
-  isAdmin,
-  isTeacher,
-  isStudent,
-  getTeacherGroups,
-  logout,
-  User,
-} from '../auth';
+import { getCurrentUser, isAdmin, isTeacher, isStudent, logout, User } from '../auth';
 import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '../auth-storage';
 
 const { logoutMutateMock } = vi.hoisted(() => ({
@@ -100,37 +92,6 @@ describe('Auth functions', () => {
       };
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       expect(isStudent()).toBe(true);
-    });
-  });
-
-  describe('getTeacherGroups', () => {
-    it('should return empty array if user is not teacher', () => {
-      const user: User = {
-        id: '1',
-        email: 'admin@example.com',
-        name: 'Admin',
-        roles: [{ role: 'admin' }],
-      };
-      localStorage.setItem(USER_KEY, JSON.stringify(user));
-      expect(getTeacherGroups()).toEqual([]);
-    });
-
-    it('should return unique group ids if user is teacher', () => {
-      const user: User = {
-        id: '1',
-        email: 'teacher@example.com',
-        name: 'Teacher',
-        roles: [
-          { role: 'teacher', groupIds: ['g1', 'g2'] },
-          { role: 'teacher', groupIds: ['g2', 'g3'] },
-        ],
-      };
-      localStorage.setItem(USER_KEY, JSON.stringify(user));
-      const groups = getTeacherGroups();
-      expect(groups).toHaveLength(3);
-      expect(groups).toContain('g1');
-      expect(groups).toContain('g2');
-      expect(groups).toContain('g3');
     });
   });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   MoreHorizontal,
   ShieldCheck,
@@ -12,6 +12,7 @@ import { Group } from '../types';
 import { trpc } from '../lib/trpc';
 import { isAdmin } from '../lib/auth';
 import { useToast } from '../components/ui/Toast';
+import { useAllowedGroups } from '../hooks/useAllowedGroups';
 import { useMutationFeedback } from '../hooks/useMutationFeedback';
 
 interface GroupsProps {
@@ -19,13 +20,30 @@ interface GroupsProps {
 }
 
 const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const admin = isAdmin();
+
+  const {
+    groups: allowedGroups,
+    isLoading,
+    error: groupsQueryError,
+    refetch: refetchGroups,
+  } = useAllowedGroups();
+
+  const groups = useMemo(() => {
+    return allowedGroups.map((g) => ({
+      id: g.id,
+      name: g.name,
+      description: g.displayName || g.name,
+      domainCount: g.whitelistCount + g.blockedSubdomainCount + g.blockedPathCount,
+      status: g.enabled ? 'Active' : 'Inactive',
+    })) as Group[];
+  }, [allowedGroups]);
+
+  const loading = isLoading;
+  const error = groupsQueryError ? 'Error al cargar grupos' : null;
 
   // Toast hook
   const { ToastContainer } = useToast();
@@ -52,33 +70,6 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
     fallback: 'No se pudo guardar la configuración del grupo. Intenta nuevamente.',
   });
 
-  // Fetch groups from API
-  const fetchGroups = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const apiGroups = await trpc.groups.list.query();
-      setGroups(
-        apiGroups.map((g) => ({
-          id: g.id,
-          name: g.name,
-          description: g.displayName || g.name,
-          domainCount: g.whitelistCount + g.blockedSubdomainCount + g.blockedPathCount,
-          status: g.enabled ? 'Active' : 'Inactive',
-        })) as Group[]
-      );
-    } catch (err) {
-      console.error('Failed to fetch groups:', err);
-      setError('Error al cargar grupos');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchGroups();
-  }, [fetchGroups]);
-
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) {
       setNewGroupError('El nombre del grupo es obligatorio');
@@ -92,7 +83,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
         name: newGroupName.trim().toLowerCase().replace(/\s+/g, '-'),
         displayName: newGroupDescription.trim() || newGroupName.trim(),
       });
-      await fetchGroups();
+      await refetchGroups();
       setNewGroupName('');
       setNewGroupDescription('');
       setShowNewModal(false);
@@ -115,7 +106,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
         displayName: configDescription,
         enabled: configStatus === 'Active',
       });
-      await fetchGroups();
+      await refetchGroups();
       setShowConfigModal(false);
     } catch (err) {
       console.error('Failed to update group:', err);
@@ -170,7 +161,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
             <AlertCircle className="w-6 h-6 text-red-400 mx-auto" />
             <span className="text-red-500 text-sm mt-2 block">{error}</span>
             <button
-              onClick={() => void fetchGroups()}
+              onClick={() => void refetchGroups()}
               className="text-blue-600 hover:text-blue-800 text-sm mt-2"
             >
               Reintentar
