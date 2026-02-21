@@ -104,6 +104,15 @@ export const TEACHER_CREDENTIALS = isStaging()
     };
 
 /**
+ * Waits for the authenticated layout (role-agnostic).
+ * Use this after login instead of admin-only dashboard assertions.
+ */
+export async function waitForAuthenticatedLayout(page: Page, timeout = 15000): Promise<void> {
+  // Sidebar logout button is present for all authenticated roles.
+  await page.getByRole('button', { name: /Cerrar Ses(?:i[oó]n)?/i }).waitFor({ timeout });
+}
+
+/**
  * Logs in as admin user - assumes test database is seeded
  * Note: SPA uses state-based navigation, not URL routing
  */
@@ -113,11 +122,7 @@ export async function loginAsAdmin(page: Page): Promise<void> {
   await page.locator('input[type="email"]').fill(ADMIN_CREDENTIALS.email);
   await page.locator('input[type="password"]').fill(ADMIN_CREDENTIALS.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  // Wait for dashboard content to appear (state-based navigation)
-  await page
-    .getByText(/Estado del Sistema|Grupos Activos|Dominios Permitidos/i)
-    .first()
-    .waitFor({ timeout: 15000 });
+  await waitForAuthenticatedLayout(page);
 }
 
 /**
@@ -129,8 +134,7 @@ export async function loginAsTeacher(page: Page): Promise<void> {
   await page.locator('input[type="email"]').fill(TEACHER_CREDENTIALS.email);
   await page.locator('input[type="password"]').fill(TEACHER_CREDENTIALS.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  // Wait for authenticated layout (teachers don't see the admin dashboard stats).
-  await page.getByRole('button', { name: /Cerrar Ses/i }).waitFor({ timeout: 15000 });
+  await waitForAuthenticatedLayout(page);
 }
 
 /**
@@ -139,7 +143,7 @@ export async function loginAsTeacher(page: Page): Promise<void> {
  */
 export async function logout(page: Page): Promise<void> {
   // Try sidebar logout button first
-  const logoutButton = page.getByRole('button', { name: /Cerrar Sesión/i });
+  const logoutButton = page.getByRole('button', { name: /Cerrar Ses(?:i[oó]n)?/i });
   if (await logoutButton.isVisible({ timeout: 2000 }).catch(() => false)) {
     await logoutButton.click();
     // Wait for login form to appear
