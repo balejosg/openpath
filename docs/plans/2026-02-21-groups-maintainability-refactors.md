@@ -5,6 +5,7 @@
 **Goal:** Improve maintainability of Groups RBAC enforcement (API) and teacher UX (SPA) by centralizing group-scoped authorization, removing UI-only gating helpers, and optimizing bulk storage operations, without changing external contracts.
 
 **Architecture:**
+
 - API keeps the layering: Routers (tRPC) -> Services (business logic) -> Storage (Drizzle).
 - Group-scoped procedures use reusable tRPC middleware wrappers so authorization is enforced consistently.
 - Storage bulk operations become set-based queries (IN clauses) to avoid N+1 behavior and double-fetches.
@@ -21,6 +22,7 @@
 ## Task 1: Centralize Group-Scoped RBAC in the Groups Router
 
 **Files:**
+
 - Modify: `api/src/trpc/routers/groups.ts`
 - Modify: `api/src/services/groups.service.ts`
 - Test: `api/tests/groups.test.ts`
@@ -84,6 +86,7 @@ Switch procedures that currently call `assertCanAccessGroupId` to use `teacherGr
 Update `assertCanAccessGroupId` to call `GroupsService.getGroupById` instead of importing storage directly.
 
 Add new service helpers:
+
 - `GroupsService.getRuleGroupId(ruleId)`
 - `GroupsService.getRuleGroupIds(ruleIds)` (or `getRulesByIds` returning `Rule[]`)
 
@@ -105,6 +108,7 @@ git commit -m "refactor(api): centralize group-scoped RBAC in groups router"
 ## Task 2: Optimize Storage Bulk Operations for Rules
 
 **Files:**
+
 - Modify: `api/src/lib/groups-storage.ts`
 - Modify: `api/src/services/groups.service.ts`
 - Test: `api/tests/groups.test.ts`
@@ -148,6 +152,7 @@ git commit -m "refactor(api): optimize rule bulk operations"
 ## Task 3: SPA - Add Shared Allowed-Groups Hook and Remove UI-Only Gating
 
 **Files:**
+
 - Create: `react-spa/src/hooks/useAllowedGroups.ts`
 - Modify: `react-spa/src/views/Classrooms.tsx`
 - Modify: `react-spa/src/views/Groups.tsx`
@@ -167,6 +172,7 @@ Expected: FAIL (hook file missing).
 **Step 2: Implement `useAllowedGroups` (GREEN)**
 
 Create `useAllowedGroups.ts` that:
+
 - calls `trpc.groups.list` (React Query)
 - returns `{ groups, groupsById, isLoading, error, refetch }`
 
@@ -194,6 +200,7 @@ git commit -m "refactor(spa): centralize allowed groups and remove getTeacherGro
 ## Task 4: E2E - Consolidate Authenticated Waits and Navigation
 
 **Files:**
+
 - Modify: `react-spa/e2e/fixtures/test-utils.ts`
 - Modify: `react-spa/e2e/domain-management.spec.ts`
 
@@ -221,6 +228,7 @@ git commit -m "refactor(e2e): unify authenticated waits across roles"
 ## Task 5: Documentation Updates
 
 **Files:**
+
 - Modify: `api/AGENTS.md`
 
 **Step 1: Update router table**

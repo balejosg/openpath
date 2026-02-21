@@ -21,7 +21,7 @@ Routers (tRPC) → Services (business logic) → Storage (Drizzle ORM)
 | `healthReports` | sharedSecret     | Endpoint health monitoring          |
 | `setup`         | public           | First-time admin creation           |
 | `healthcheck`   | public           | Liveness/readiness probes           |
-| `groups`        | admin            | Whitelist group/rule management     |
+| `groups`        | mixed            | Whitelist group/rule management     |
 
 ## Procedure Types
 
