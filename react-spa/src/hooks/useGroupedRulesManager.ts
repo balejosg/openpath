@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { trpc } from '../lib/trpc';
 import { detectRuleType, getRuleTypeBadge } from '../lib/ruleDetection';
+import { createLatestGuard } from '../lib/latest';
 import { getRootDomain } from '../../../shared/src/domain';
 import type { Rule } from '../components/RulesTable';
 
@@ -97,13 +98,13 @@ export function useGroupedRulesManager({
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Prevent stale in-flight fetches from overwriting newer state.
-  const fetchSeqRef = useRef(0);
+  const fetchSeqRef = useRef(createLatestGuard());
 
   // Fetch grouped rules with current filters
   const fetchRules = useCallback(async () => {
     if (!groupId) return;
 
-    const seq = (fetchSeqRef.current += 1);
+    const seq = fetchSeqRef.current.next();
 
     try {
       setLoading(true);
@@ -147,7 +148,7 @@ export function useGroupedRulesManager({
         });
 
         // Update totals
-        if (seq === fetchSeqRef.current) {
+        if (fetchSeqRef.current.isLatest(seq)) {
           setTotalGroups(allBlockedGroups.length);
           setTotalRules(blockedRules.length);
         }
@@ -166,21 +167,21 @@ export function useGroupedRulesManager({
         });
 
         filteredGroups = result.groups as DomainGroup[];
-        if (seq === fetchSeqRef.current) {
+        if (fetchSeqRef.current.isLatest(seq)) {
           setTotalGroups(result.totalGroups);
           setTotalRules(result.totalRules);
         }
       }
 
-      if (seq === fetchSeqRef.current) {
+      if (fetchSeqRef.current.isLatest(seq)) {
         setDomainGroups(filteredGroups);
       }
     } catch (err) {
-      if (seq !== fetchSeqRef.current) return;
+      if (!fetchSeqRef.current.isLatest(seq)) return;
       console.error('Failed to fetch grouped rules:', err);
       setError('Error al cargar reglas');
     } finally {
-      if (seq === fetchSeqRef.current) {
+      if (fetchSeqRef.current.isLatest(seq)) {
         setLoading(false);
       }
     }

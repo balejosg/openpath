@@ -105,21 +105,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Optional: enable proxy-aware IP parsing (e.g. for rate limiting behind reverse proxies).
-// Express supports: boolean, number (trusted hops), or a CIDR/IP list string.
-const trustProxyEnv = process.env.TRUST_PROXY?.trim();
-if (trustProxyEnv) {
-  const lower = trustProxyEnv.toLowerCase();
-  const trustProxy =
-    lower === 'true'
-      ? true
-      : lower === 'false'
-        ? false
-        : Number.isNaN(Number.parseInt(trustProxyEnv, 10))
-          ? trustProxyEnv
-          : Number.parseInt(trustProxyEnv, 10);
-
-  app.set('trust proxy', trustProxy);
-  logger.info('Express trust proxy configured', { trustProxy });
+if (config.trustProxy !== undefined) {
+  app.set('trust proxy', config.trustProxy);
+  logger.info('Express trust proxy configured', { trustProxy: config.trustProxy });
 }
 const PORT = config.port;
 const HOST = config.host;

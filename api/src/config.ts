@@ -26,6 +26,30 @@ function parseListEnv(value: string | undefined, fallback: string[]): string[] {
 }
 
 /**
+ * Parse Express trust proxy setting.
+ *
+ * Supported values:
+ * - "true"/"false" (boolean)
+ * - Integer string (trusted hop count)
+ * - Any other string is passed through (proxy-addr supports CIDRs and named ranges)
+ */
+function parseTrustProxyEnv(value: string | undefined): boolean | number | string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const lower = trimmed.toLowerCase();
+  if (lower === 'true') return true;
+  if (lower === 'false') return false;
+
+  if (/^-?\d+$/.test(trimmed)) {
+    return Number.parseInt(trimmed, 10);
+  }
+
+  return trimmed;
+}
+
+/**
  * Parse DATABASE_URL into individual components
  * Format: postgres://user:password@host:port/database
  */
@@ -71,6 +95,9 @@ export const config = {
 
   /** Node environment */
   nodeEnv: process.env.NODE_ENV ?? 'development',
+
+  /** Express trust proxy setting (optional) */
+  trustProxy: parseTrustProxyEnv(process.env.TRUST_PROXY),
 
   /** Is production environment */
   isProduction: process.env.NODE_ENV === 'production',

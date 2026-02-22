@@ -12,18 +12,20 @@ async function clickSidebarNav(page: Page, navButton: Locator): Promise<void> {
   const menuVisible = await menuButton.isVisible({ timeout: 500 }).catch(() => false);
 
   if (menuVisible) {
-    const isNavClickable = await navButton
-      .click({ trial: true, timeout: 750 })
-      .then(() => true)
+    const sidebar = page.locator('aside').first();
+    const isClosed = await sidebar
+      .evaluate((el) => el.className.includes('-translate-x-full'))
       .catch(() => false);
 
-    if (!isNavClickable) {
+    if (isClosed) {
       await menuButton.click();
-      // Wait for slide-in transition.
-      await page.waitForTimeout(350);
+      await expect(sidebar).not.toHaveClass(/-translate-x-full/);
+      // Allow slide-in transition to settle.
+      await page.waitForTimeout(50);
     }
   }
 
+  await navButton.scrollIntoViewIfNeeded().catch(() => {});
   await navButton.click();
 }
 

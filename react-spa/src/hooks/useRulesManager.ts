@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { trpc } from '../lib/trpc';
 import { detectRuleType, getRuleTypeBadge } from '../lib/ruleDetection';
+import { createLatestGuard } from '../lib/latest';
 import type { Rule } from '../components/RulesTable';
 
 const PAGE_SIZE = 50;
@@ -84,13 +85,13 @@ export function useRulesManager({
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Prevent stale in-flight fetches from overwriting newer state.
-  const fetchSeqRef = useRef(0);
+  const fetchSeqRef = useRef(createLatestGuard());
 
   // Fetch rules with current filters
   const fetchRules = useCallback(async () => {
     if (!groupId) return;
 
-    const seq = (fetchSeqRef.current += 1);
+    const seq = fetchSeqRef.current.next();
 
     try {
       setLoading(true);
@@ -136,16 +137,16 @@ export function useRulesManager({
         filteredTotal = result.total;
       }
 
-      if (seq === fetchSeqRef.current) {
+      if (fetchSeqRef.current.isLatest(seq)) {
         setRules(filteredRules);
         setTotal(filteredTotal);
       }
     } catch (err) {
-      if (seq !== fetchSeqRef.current) return;
+      if (!fetchSeqRef.current.isLatest(seq)) return;
       console.error('Failed to fetch rules:', err);
       setError('Error al cargar reglas');
     } finally {
-      if (seq === fetchSeqRef.current) {
+      if (fetchSeqRef.current.isLatest(seq)) {
         setLoading(false);
       }
     }
