@@ -65,6 +65,21 @@ export function isStudent(): boolean {
   return user.roles.some((r) => r.role === 'student');
 }
 
+const TEACHER_GROUPS_FEATURE_KEY = 'openpath_teacher_groups_enabled';
+
+/**
+ * Feature flag: allow teachers to create/manage their own groups in the UI.
+ * Disabled by default to preserve legacy deployments.
+ */
+export function isTeacherGroupsFeatureEnabled(): boolean {
+  try {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(TEACHER_GROUPS_FEATURE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Realiza login con email y password.
  */

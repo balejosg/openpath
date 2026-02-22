@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Folder, Loader2, ShieldCheck, ShieldOff, MonitorPlay, Calendar } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import { isTeacherGroupsFeatureEnabled } from '../lib/auth';
 import { useAllowedGroups } from '../hooks/useAllowedGroups';
 
 interface ClassroomFromAPI {
@@ -18,6 +19,7 @@ interface TeacherDashboardProps {
 }
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }) => {
+  const teacherGroupsEnabled = isTeacherGroupsFeatureEnabled();
   const [classrooms, setClassrooms] = useState<ClassroomFromAPI[]>([]);
   const [classroomsLoading, setClassroomsLoading] = useState(true);
   const [classroomsError, setClassroomsError] = useState<string | null>(null);
@@ -264,7 +266,9 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
 
               {!groupsLoading && !groupsError && groups.length === 0 && (
                 <p className="mt-2 text-xs text-slate-500 italic">
-                  No tienes políticas asignadas. Pide a un administrador que te asigne una.
+                  {teacherGroupsEnabled
+                    ? 'No tienes políticas. Ve a "Mis Políticas" para crear una.'
+                    : 'No tienes políticas asignadas. Pide a un administrador que te asigne una.'}
                 </p>
               )}
 

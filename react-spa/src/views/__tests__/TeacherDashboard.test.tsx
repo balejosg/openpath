@@ -42,6 +42,7 @@ vi.mock('../../lib/trpc', () => ({
 describe('TeacherDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
   });
 
   it('renders the teacher dashboard greeting', async () => {
@@ -49,5 +50,24 @@ describe('TeacherDashboard', () => {
     await waitFor(() => {
       expect(screen.getByText('¡Hola, Profesor!')).toBeInTheDocument();
     });
+  });
+
+  it('shows legacy hint when feature flag is disabled', async () => {
+    renderTeacherDashboard();
+
+    expect(
+      await screen.findByText(
+        'No tienes políticas asignadas. Pide a un administrador que te asigne una.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('shows create-policy hint when feature flag is enabled', async () => {
+    localStorage.setItem('openpath_teacher_groups_enabled', '1');
+    renderTeacherDashboard();
+
+    expect(
+      await screen.findByText('No tienes políticas. Ve a "Mis Políticas" para crear una.')
+    ).toBeInTheDocument();
   });
 });

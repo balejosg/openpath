@@ -33,6 +33,9 @@ afterEach(() => {
 
 const mockListGroups = vi.fn();
 const mockUpdateGroup = vi.fn();
+const isAdminMock = vi.fn();
+const isTeacherMock = vi.fn();
+const teacherFlagMock = vi.fn();
 
 vi.mock('../../lib/trpc', () => ({
   trpc: {
@@ -51,12 +54,17 @@ vi.mock('../../components/ui/Toast', () => ({
 }));
 
 vi.mock('../../lib/auth', () => ({
-  isAdmin: () => true,
+  isAdmin: () => isAdminMock(),
+  isTeacher: () => isTeacherMock(),
+  isTeacherGroupsFeatureEnabled: () => teacherFlagMock(),
 }));
 
 describe('Groups view', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    isAdminMock.mockReturnValue(true);
+    isTeacherMock.mockReturnValue(false);
+    teacherFlagMock.mockReturnValue(false);
     mockListGroups.mockResolvedValue([
       {
         id: 'group-1',
@@ -85,6 +93,42 @@ describe('Groups view', () => {
 
     expect(
       await screen.findByText('Revisa los datos del grupo antes de guardar.')
+    ).toBeInTheDocument();
+  });
+
+  it('does not show create CTA for teacher when feature flag is disabled', async () => {
+    isAdminMock.mockReturnValue(false);
+    isTeacherMock.mockReturnValue(true);
+    teacherFlagMock.mockReturnValue(false);
+    mockListGroups.mockResolvedValueOnce([]);
+
+    renderGroups();
+
+    expect(
+      await screen.findByText(
+        'Todavía no tienes políticas asignadas. Pide a un administrador que te asigne una.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /\+\s*nuevo\s*grupo/i })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /\+\s*crear\s*mi\s*primera\s*política/i })
+    ).toBeNull();
+  });
+
+  it('shows create CTA + updated empty-state for teacher when feature flag is enabled', async () => {
+    isAdminMock.mockReturnValue(false);
+    isTeacherMock.mockReturnValue(true);
+    teacherFlagMock.mockReturnValue(true);
+    mockListGroups.mockResolvedValueOnce([]);
+
+    renderGroups();
+
+    expect(
+      await screen.findByText('Todavía no tienes políticas. Crea una nueva para empezar.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /\+\s*nuevo\s*grupo/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /\+\s*crear\s*mi\s*primera\s*política/i })
     ).toBeInTheDocument();
   });
 });

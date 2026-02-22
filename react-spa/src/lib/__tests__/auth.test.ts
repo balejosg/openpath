@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getCurrentUser, isAdmin, isTeacher, isStudent, logout, User } from '../auth';
+import {
+  getCurrentUser,
+  isAdmin,
+  isTeacher,
+  isStudent,
+  isTeacherGroupsFeatureEnabled,
+  logout,
+  User,
+} from '../auth';
 import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '../auth-storage';
 
 const { logoutMutateMock } = vi.hoisted(() => ({
@@ -92,6 +100,17 @@ describe('Auth functions', () => {
       };
       localStorage.setItem(USER_KEY, JSON.stringify(user));
       expect(isStudent()).toBe(true);
+    });
+  });
+
+  describe('isTeacherGroupsFeatureEnabled', () => {
+    it('should default to false when unset', () => {
+      expect(isTeacherGroupsFeatureEnabled()).toBe(false);
+    });
+
+    it('should return true when enabled via localStorage flag', () => {
+      localStorage.setItem('openpath_teacher_groups_enabled', '1');
+      expect(isTeacherGroupsFeatureEnabled()).toBe(true);
     });
   });
 

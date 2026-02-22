@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { Group } from '../types';
 import { trpc } from '../lib/trpc';
-import { isAdmin } from '../lib/auth';
+import { isAdmin, isTeacher, isTeacherGroupsFeatureEnabled } from '../lib/auth';
 import { useToast } from '../components/ui/Toast';
 import { useAllowedGroups } from '../hooks/useAllowedGroups';
 import { useMutationFeedback } from '../hooks/useMutationFeedback';
@@ -24,6 +24,8 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const admin = isAdmin();
+  const teacherCanCreateGroups = isTeacher() && isTeacherGroupsFeatureEnabled();
+  const canCreateGroups = admin || teacherCanCreateGroups;
 
   const {
     groups: allowedGroups,
@@ -140,7 +142,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
           </h2>
           <p className="text-slate-500 text-sm">Gestiona políticas de acceso y restricciones.</p>
         </div>
-        {admin && (
+        {canCreateGroups && (
           <button
             onClick={openNewModal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
@@ -171,7 +173,20 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
           <div className="col-span-full text-center py-12 text-slate-500">
             {admin
               ? 'No hay grupos configurados. Crea uno nuevo para empezar.'
-              : 'Todavía no tienes políticas asignadas. Pide a un administrador que te asigne una.'}
+              : teacherCanCreateGroups
+                ? 'Todavía no tienes políticas. Crea una nueva para empezar.'
+                : 'Todavía no tienes políticas asignadas. Pide a un administrador que te asigne una.'}
+
+            {!admin && teacherCanCreateGroups && (
+              <div className="mt-4">
+                <button
+                  onClick={openNewModal}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                >
+                  + Crear mi primera política
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           groups.map((group) => (
