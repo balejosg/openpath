@@ -321,7 +321,11 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
         {/* View mode toggle */}
         <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
           <button
-            onClick={() => setViewMode('flat')}
+            onClick={() => {
+              if (viewMode === 'flat') return;
+              setViewMode('flat');
+              void flatHook.refetch();
+            }}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
               viewMode === 'flat'
@@ -334,7 +338,11 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
             <span className="hidden sm:inline">Lista</span>
           </button>
           <button
-            onClick={() => setViewMode('hierarchical')}
+            onClick={() => {
+              if (viewMode === 'hierarchical') return;
+              setViewMode('hierarchical');
+              void groupedHook.refetch();
+            }}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
               viewMode === 'hierarchical'

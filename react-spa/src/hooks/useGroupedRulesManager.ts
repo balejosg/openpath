@@ -96,9 +96,14 @@ export function useGroupedRulesManager({
   // Debounce ref for search
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Prevent stale in-flight fetches from overwriting newer state.
+  const fetchSeqRef = useRef(0);
+
   // Fetch grouped rules with current filters
   const fetchRules = useCallback(async () => {
     if (!groupId) return;
+
+    const seq = (fetchSeqRef.current += 1);
 
     try {
       setLoading(true);
@@ -142,8 +147,10 @@ export function useGroupedRulesManager({
         });
 
         // Update totals
-        setTotalGroups(allBlockedGroups.length);
-        setTotalRules(blockedRules.length);
+        if (seq === fetchSeqRef.current) {
+          setTotalGroups(allBlockedGroups.length);
+          setTotalRules(blockedRules.length);
+        }
 
         // Apply pagination manually
         const start = (page - 1) * PAGE_SIZE;
@@ -159,16 +166,23 @@ export function useGroupedRulesManager({
         });
 
         filteredGroups = result.groups as DomainGroup[];
-        setTotalGroups(result.totalGroups);
-        setTotalRules(result.totalRules);
+        if (seq === fetchSeqRef.current) {
+          setTotalGroups(result.totalGroups);
+          setTotalRules(result.totalRules);
+        }
       }
 
-      setDomainGroups(filteredGroups);
+      if (seq === fetchSeqRef.current) {
+        setDomainGroups(filteredGroups);
+      }
     } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
       console.error('Failed to fetch grouped rules:', err);
       setError('Error al cargar reglas');
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [groupId, filter, page, search]);
 
@@ -523,7 +537,9 @@ export function useGroupedRulesManager({
     bulkDeleteRules,
     bulkCreateRules,
     updateRule,
-    refetch: fetchRules,
+    refetch: async () => {
+      await Promise.all([fetchRules(), fetchCounts()]);
+    },
   };
 }
 

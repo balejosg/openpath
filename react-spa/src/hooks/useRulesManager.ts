@@ -83,9 +83,14 @@ export function useRulesManager({
   // Debounce ref for search
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Prevent stale in-flight fetches from overwriting newer state.
+  const fetchSeqRef = useRef(0);
+
   // Fetch rules with current filters
   const fetchRules = useCallback(async () => {
     if (!groupId) return;
+
+    const seq = (fetchSeqRef.current += 1);
 
     try {
       setLoading(true);
@@ -131,13 +136,18 @@ export function useRulesManager({
         filteredTotal = result.total;
       }
 
-      setRules(filteredRules);
-      setTotal(filteredTotal);
+      if (seq === fetchSeqRef.current) {
+        setRules(filteredRules);
+        setTotal(filteredTotal);
+      }
     } catch (err) {
+      if (seq !== fetchSeqRef.current) return;
       console.error('Failed to fetch rules:', err);
       setError('Error al cargar reglas');
     } finally {
-      setLoading(false);
+      if (seq === fetchSeqRef.current) {
+        setLoading(false);
+      }
     }
   }, [groupId, filter, page, search]);
 
@@ -453,7 +463,9 @@ export function useRulesManager({
     bulkDeleteRules,
     bulkCreateRules,
     updateRule,
-    refetch: fetchRules,
+    refetch: async () => {
+      await Promise.all([fetchRules(), fetchCounts()]);
+    },
   };
 }
 
