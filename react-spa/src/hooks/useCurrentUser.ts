@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { trpc } from '../lib/trpc';
+import { getPrimaryRole, getRoleDisplayLabel as getRoleDisplayLabelFromLib } from '../lib/roles';
 
 export interface CurrentUser {
   id: string;
@@ -44,10 +45,7 @@ export function useCurrentUser(): UseCurrentUserResult {
         .join('')
         .toUpperCase();
 
-      // Determine primary role for display
-      const roleHierarchy = ['admin', 'teacher'] as const;
-      const foundRole = roleHierarchy.find((r) => roles.includes(r));
-      const primaryRole = foundRole ?? 'user';
+      const primaryRole = getPrimaryRole(roles);
 
       setUser({
         id: profile.id,
@@ -77,12 +75,5 @@ export function useCurrentUser(): UseCurrentUserResult {
  * Get display label for a role.
  */
 export function getRoleDisplayLabel(role: string): string {
-  const labels: Record<string, string> = {
-    admin: 'Admin',
-    teacher: 'Profesor',
-    student: 'Usuario',
-    viewer: 'Usuario',
-    user: 'Usuario',
-  };
-  return labels[role] ?? role;
+  return getRoleDisplayLabelFromLib(role);
 }

@@ -1,42 +1,10 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Search, Filter, Mail, Edit2, Trash, Key, X, Loader2, AlertCircle } from 'lucide-react';
 import { User, UserRole } from '../types';
-import { trpc } from '../lib/trpc';
+import type { CreateUserRole } from '../lib/roles';
+import { DEFAULT_CREATE_USER_ROLE, USER_ROLE_LABELS } from '../lib/roles';
+import { useUsersList } from '../hooks/useUsersList';
 import { useUsersActions } from '../hooks/useUsersActions';
-
-// Map API user role to frontend UserRole enum
-function mapApiRole(role: string): UserRole {
-  switch (role) {
-    case 'admin':
-      return UserRole.ADMIN;
-    case 'teacher':
-      return UserRole.TEACHER;
-    case 'student':
-    case 'user':
-    case 'viewer':
-      return UserRole.STUDENT;
-    default:
-      return UserRole.NO_ROLES;
-  }
-}
-
-interface ApiUserLike {
-  id: string;
-  name: string;
-  email: string;
-  isActive: boolean;
-  roles: { role: string }[];
-}
-
-function mapApiUserToUser(u: ApiUserLike): User {
-  return {
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    roles: Array.isArray(u.roles) ? u.roles.map((r) => mapApiRole(r.role)) : [],
-    status: u.isActive ? 'Active' : 'Inactive',
-  };
-}
 
 const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
   const styles = {
@@ -45,26 +13,18 @@ const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
     [UserRole.STUDENT]: 'bg-slate-100 text-slate-600 border-slate-200',
     [UserRole.NO_ROLES]: 'bg-red-50 text-red-600 border-red-200',
   };
-  const roleNames = {
-    [UserRole.ADMIN]: 'Administrador',
-    [UserRole.TEACHER]: 'Profesor',
-    [UserRole.STUDENT]: 'Usuario',
-    [UserRole.NO_ROLES]: 'Sin Rol',
-  };
   const roleStyle = styles[role];
   return (
     <span
       className={`px-2 py-0.5 rounded text-[11px] font-semibold border uppercase tracking-wide ${roleStyle}`}
     >
-      {roleNames[role]}
+      {USER_ROLE_LABELS[role]}
     </span>
   );
 };
 
 const UsersView = () => {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { users, loading, error, fetchUsers, upsertApiUser } = useUsersList();
   const [showEditModal, setShowEditModal] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -79,27 +39,8 @@ const UsersView = () => {
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<'admin' | 'teacher'>('teacher');
+  const [newRole, setNewRole] = useState<CreateUserRole>(DEFAULT_CREATE_USER_ROLE);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
-
-  // Fetch users from API
-  const fetchUsers = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const apiUsers = await trpc.users.list.query();
-      setUsers(apiUsers.map((u) => mapApiUserToUser(u as ApiUserLike)));
-    } catch (err) {
-      console.error('Failed to fetch users:', err);
-      setError('Error al cargar usuarios');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchUsers();
-  }, [fetchUsers]);
 
   const {
     saving,
@@ -156,13 +97,14 @@ const UsersView = () => {
 
     if (!result.ok) return;
 
-    const createdUser = mapApiUserToUser(result.user as ApiUserLike);
-    setUsers((prev) => [createdUser, ...prev.filter((u) => u.id !== createdUser.id)]);
+    if (!upsertApiUser(result.user)) {
+      void fetchUsers();
+    }
 
     setNewName('');
     setNewEmail('');
     setNewPassword('');
-    setNewRole('teacher');
+    setNewRole(DEFAULT_CREATE_USER_ROLE);
     setShowNewModal(false);
   };
 
@@ -523,7 +465,7 @@ const UsersView = () => {
                 <select
                   value={newRole}
                   onChange={(e) => {
-                    setNewRole(e.target.value as 'admin' | 'teacher');
+                    setNewRole(e.target.value as CreateUserRole);
                     if (createError) setCreateError('');
                   }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
@@ -544,7 +486,7 @@ const UsersView = () => {
                     setNewName('');
                     setNewEmail('');
                     setNewPassword('');
-                    setNewRole('teacher');
+                    setNewRole(DEFAULT_CREATE_USER_ROLE);
                     setCreateError('');
                   }}
                   disabled={saving}

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { resolveErrorMessage } from '../lib/error-utils';
 import { trpc } from '../lib/trpc';
+import type { CreateUserRole } from '../lib/roles';
 
 export interface UserDeleteTarget {
   id: string;
@@ -11,7 +12,7 @@ interface CreateUserInput {
   name: string;
   email: string;
   password: string;
-  role: 'admin' | 'teacher';
+  role: CreateUserRole;
 }
 
 type CreatedUser = Awaited<ReturnType<typeof trpc.users.create.mutate>>;
