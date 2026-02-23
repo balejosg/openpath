@@ -31,17 +31,23 @@ describe('Users View', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUsersList.mockResolvedValue([]);
-    mockCreateUser.mockResolvedValue({});
+    mockCreateUser.mockResolvedValue({
+      id: 'user-created',
+      name: 'Usuario Creado',
+      email: 'creado@example.com',
+      isActive: true,
+      roles: [],
+    });
     mockDeleteUser.mockResolvedValue({});
   });
 
-  it('shows role selector with default student', async () => {
+  it('shows role selector with default teacher', async () => {
     render(<UsersView />);
 
     fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
 
     const roleSelect = await screen.findByRole('combobox');
-    expect((roleSelect as HTMLSelectElement).value).toBe('student');
+    expect((roleSelect as HTMLSelectElement).value).toBe('teacher');
   });
 
   it('sends selected role in create mutation', async () => {
@@ -72,16 +78,16 @@ describe('Users View', () => {
     });
   });
 
-  it('uses default student role when unchanged', async () => {
+  it('uses default teacher role when unchanged', async () => {
     render(<UsersView />);
 
     fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
 
     fireEvent.change(await screen.findByPlaceholderText('Nombre completo'), {
-      target: { value: 'Student User' },
+      target: { value: 'Teacher User' },
     });
     fireEvent.change(screen.getByPlaceholderText('usuario@dominio.com'), {
-      target: { value: 'student@example.com' },
+      target: { value: 'teacher@example.com' },
     });
     fireEvent.change(screen.getByPlaceholderText('Mínimo 8 caracteres'), {
       target: { value: 'SecurePass123!' },
@@ -91,10 +97,10 @@ describe('Users View', () => {
 
     await waitFor(() => {
       expect(mockCreateUser).toHaveBeenCalledWith({
-        name: 'Student User',
-        email: 'student@example.com',
+        name: 'Teacher User',
+        email: 'teacher@example.com',
         password: 'SecurePass123!',
-        role: 'student',
+        role: 'teacher',
       });
     });
   });

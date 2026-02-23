@@ -45,9 +45,9 @@ export function useCurrentUser(): UseCurrentUserResult {
         .toUpperCase();
 
       // Determine primary role for display
-      const roleHierarchy = ['admin', 'teacher', 'student'] as const;
+      const roleHierarchy = ['admin', 'teacher'] as const;
       const foundRole = roleHierarchy.find((r) => roles.includes(r));
-      const primaryRole = foundRole ?? (roles.length > 0 ? roles[0] : 'user');
+      const primaryRole = foundRole ?? 'user';
 
       setUser({
         id: profile.id,
@@ -80,6 +80,8 @@ export function getRoleDisplayLabel(role: string): string {
   const labels: Record<string, string> = {
     admin: 'Admin',
     teacher: 'Profesor',
+    student: 'Usuario',
+    viewer: 'Usuario',
     user: 'Usuario',
   };
   return labels[role] ?? role;

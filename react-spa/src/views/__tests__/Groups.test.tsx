@@ -33,9 +33,9 @@ afterEach(() => {
 
 const mockListGroups = vi.fn();
 const mockUpdateGroup = vi.fn();
-const isAdminMock = vi.fn();
-const isTeacherMock = vi.fn();
-const teacherFlagMock = vi.fn();
+const isAdminMock = vi.fn(() => true);
+const isTeacherMock = vi.fn(() => false);
+const teacherFlagMock = vi.fn(() => false);
 
 vi.mock('../../lib/trpc', () => ({
   trpc: {

@@ -202,7 +202,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                 const top = minutesToPx(startMin, ROW_HEIGHT);
                 const height = minutesToPx(durationMin, ROW_HEIGHT);
                 const colorIdx = groupColorMap.get(s.groupId) ?? 0;
-                const canEdit = !!s.canEdit;
+                const canEdit = s.canEdit;
                 const color = canEdit
                   ? (GROUP_COLORS[colorIdx] ?? GROUP_COLORS[0])
                   : RESERVED_COLOR;

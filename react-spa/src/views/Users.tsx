@@ -13,10 +13,29 @@ function mapApiRole(role: string): UserRole {
       return UserRole.TEACHER;
     case 'student':
     case 'user':
+    case 'viewer':
       return UserRole.STUDENT;
     default:
       return UserRole.NO_ROLES;
   }
+}
+
+interface ApiUserLike {
+  id: string;
+  name: string;
+  email: string;
+  isActive: boolean;
+  roles: { role: string }[];
+}
+
+function mapApiUserToUser(u: ApiUserLike): User {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    roles: Array.isArray(u.roles) ? u.roles.map((r) => mapApiRole(r.role)) : [],
+    status: u.isActive ? 'Active' : 'Inactive',
+  };
 }
 
 const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
@@ -29,7 +48,7 @@ const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
   const roleNames = {
     [UserRole.ADMIN]: 'Administrador',
     [UserRole.TEACHER]: 'Profesor',
-    [UserRole.STUDENT]: 'Estudiante',
+    [UserRole.STUDENT]: 'Usuario',
     [UserRole.NO_ROLES]: 'Sin Rol',
   };
   const roleStyle = styles[role];
@@ -60,7 +79,7 @@ const UsersView = () => {
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<'admin' | 'teacher' | 'student'>('student');
+  const [newRole, setNewRole] = useState<'admin' | 'teacher'>('teacher');
   const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   // Fetch users from API
@@ -69,15 +88,7 @@ const UsersView = () => {
       setLoading(true);
       setError(null);
       const apiUsers = await trpc.users.list.query();
-      setUsers(
-        apiUsers.map((u) => ({
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          roles: u.roles.map((r) => mapApiRole(r.role)),
-          status: u.isActive ? 'Active' : 'Inactive',
-        })) as User[]
-      );
+      setUsers(apiUsers.map((u) => mapApiUserToUser(u as ApiUserLike)));
     } catch (err) {
       console.error('Failed to fetch users:', err);
       setError('Error al cargar usuarios');
@@ -136,19 +147,22 @@ const UsersView = () => {
   };
 
   const handleCreateUserSubmit = async () => {
-    const ok = await handleCreateUser({
+    const result = await handleCreateUser({
       name: newName,
       email: newEmail,
       password: newPassword,
       role: newRole,
     });
 
-    if (!ok) return;
+    if (!result.ok) return;
+
+    const createdUser = mapApiUserToUser(result.user as ApiUserLike);
+    setUsers((prev) => [createdUser, ...prev.filter((u) => u.id !== createdUser.id)]);
 
     setNewName('');
     setNewEmail('');
     setNewPassword('');
-    setNewRole('student');
+    setNewRole('teacher');
     setShowNewModal(false);
   };
 
@@ -413,7 +427,7 @@ const UsersView = () => {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Roles</label>
                 <div className="flex flex-wrap gap-2">
-                  {Object.values(UserRole).map((role) => (
+                  {[UserRole.ADMIN, UserRole.TEACHER].map((role) => (
                     <label
                       key={role}
                       className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-lg text-sm cursor-pointer hover:bg-slate-50"
@@ -424,7 +438,7 @@ const UsersView = () => {
                         onChange={() => toggleRole(role)}
                         className="rounded"
                       />
-                      {role}
+                      {role === UserRole.ADMIN ? 'Administrador' : 'Profesor'}
                     </label>
                   ))}
                 </div>
@@ -509,12 +523,11 @@ const UsersView = () => {
                 <select
                   value={newRole}
                   onChange={(e) => {
-                    setNewRole(e.target.value as 'admin' | 'teacher' | 'student');
+                    setNewRole(e.target.value as 'admin' | 'teacher');
                     if (createError) setCreateError('');
                   }}
                   className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                 >
-                  <option value="student">Estudiante</option>
                   <option value="teacher">Profesor</option>
                   <option value="admin">Administrador</option>
                 </select>
@@ -531,7 +544,7 @@ const UsersView = () => {
                     setNewName('');
                     setNewEmail('');
                     setNewPassword('');
-                    setNewRole('student');
+                    setNewRole('teacher');
                     setCreateError('');
                   }}
                   disabled={saving}

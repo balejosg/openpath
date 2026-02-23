@@ -27,17 +27,17 @@ describe('useUsersActions', () => {
   it('validates required create fields before API call', async () => {
     const { result } = renderHook(() => useUsersActions({ fetchUsers }));
 
-    let ok = false;
+    let createResult: Awaited<ReturnType<typeof result.current.handleCreateUser>> = { ok: false };
     await act(async () => {
-      ok = await result.current.handleCreateUser({
+      createResult = await result.current.handleCreateUser({
         name: '',
         email: 'user@example.com',
         password: 'SecurePass123!',
-        role: 'student',
+        role: 'teacher',
       });
     });
 
-    expect(ok).toBe(false);
+    expect(createResult.ok).toBe(false);
     expect(result.current.createError).toBe('El nombre es obligatorio');
     expect(mockUsersCreateMutate).not.toHaveBeenCalled();
   });
@@ -51,7 +51,7 @@ describe('useUsersActions', () => {
         name: 'Usuario Repetido',
         email: 'dup@example.com',
         password: 'SecurePass123!',
-        role: 'student',
+        role: 'teacher',
       });
     });
 

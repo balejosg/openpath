@@ -11,8 +11,12 @@ interface CreateUserInput {
   name: string;
   email: string;
   password: string;
-  role: 'admin' | 'teacher' | 'student';
+  role: 'admin' | 'teacher';
 }
+
+type CreatedUser = Awaited<ReturnType<typeof trpc.users.create.mutate>>;
+
+export type CreateUserResult = { ok: true; user: CreatedUser } | { ok: false };
 
 interface UpdateUserInput {
   id: string;
@@ -49,31 +53,30 @@ export const useUsersActions = ({ fetchUsers }: UseUsersActionsParams) => {
   );
 
   const handleCreateUser = useCallback(
-    async (input: CreateUserInput): Promise<boolean> => {
+    async (input: CreateUserInput): Promise<CreateUserResult> => {
       if (!input.name.trim()) {
         setCreateError('El nombre es obligatorio');
-        return false;
+        return { ok: false };
       }
       if (!input.email.trim()) {
         setCreateError('El email es obligatorio');
-        return false;
+        return { ok: false };
       }
       if (!input.password.trim() || input.password.length < 8) {
         setCreateError('La contraseña debe tener al menos 8 caracteres');
-        return false;
+        return { ok: false };
       }
 
       try {
         setSaving(true);
         setCreateError('');
-        await trpc.users.create.mutate({
+        const user = await trpc.users.create.mutate({
           name: input.name.trim(),
           email: input.email.trim(),
           password: input.password,
           role: input.role,
         });
-        await fetchUsers();
-        return true;
+        return { ok: true, user };
       } catch (err) {
         console.error('Failed to create user:', err);
         setCreateError(
@@ -92,12 +95,12 @@ export const useUsersActions = ({ fetchUsers }: UseUsersActionsParams) => {
             'Error al crear usuario. Intenta nuevamente.'
           )
         );
-        return false;
+        return { ok: false };
       } finally {
         setSaving(false);
       }
     },
-    [fetchUsers]
+    []
   );
 
   const requestDeleteUser = useCallback((target: UserDeleteTarget) => {
