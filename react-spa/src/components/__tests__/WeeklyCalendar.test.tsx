@@ -78,4 +78,40 @@ describe('WeeklyCalendar Component', () => {
     fireEvent.click(block);
     expect(onEditClick).toHaveBeenCalledWith(schedule);
   });
+
+  it('renders a reserved block when schedule is not editable and group is unknown', () => {
+    const onEditClick = vi.fn();
+    const schedule: ScheduleWithPermissions = {
+      id: 's2',
+      classroomId: 'c1',
+      dayOfWeek: 2,
+      startTime: '08:00',
+      endTime: '09:00',
+      groupId: 'g-unknown',
+      teacherId: 't-other',
+      recurrence: 'weekly',
+      createdAt: new Date().toISOString(),
+      updatedAt: undefined,
+      isMine: false,
+      canEdit: false,
+    };
+
+    render(
+      <WeeklyCalendar
+        schedules={[schedule]}
+        groups={groups}
+        onAddClick={vi.fn()}
+        onEditClick={onEditClick}
+        onDeleteClick={vi.fn()}
+      />
+    );
+
+    const block = screen.getByTestId('schedule-block-s2');
+    expect(block).toHaveTextContent('Reservado');
+
+    fireEvent.click(block);
+    expect(onEditClick).not.toHaveBeenCalled();
+
+    expect(block.querySelectorAll('button')).toHaveLength(0);
+  });
 });

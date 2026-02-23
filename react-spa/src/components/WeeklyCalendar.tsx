@@ -61,6 +61,15 @@ const GROUP_COLORS = [
   },
 ];
 
+// Style for blocks the current user cannot edit.
+// This keeps the schedule visible while clearly marking it as reserved.
+const RESERVED_COLOR = {
+  bg: 'bg-slate-100',
+  border: 'border-slate-300',
+  text: 'text-slate-700',
+  hover: 'hover:bg-slate-200',
+};
+
 interface GroupInfo {
   id: string;
   displayName: string;
@@ -193,29 +202,35 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                 const top = minutesToPx(startMin, ROW_HEIGHT);
                 const height = minutesToPx(durationMin, ROW_HEIGHT);
                 const colorIdx = groupColorMap.get(s.groupId) ?? 0;
-                const color = GROUP_COLORS[colorIdx] ?? GROUP_COLORS[0];
-                const groupName = groupNameMap.get(s.groupId) ?? s.groupId;
+                const canEdit = !!s.canEdit;
+                const color = canEdit
+                  ? (GROUP_COLORS[colorIdx] ?? GROUP_COLORS[0])
+                  : RESERVED_COLOR;
+                const knownGroupName = groupNameMap.get(s.groupId);
+                const groupName = knownGroupName ?? (canEdit ? s.groupId : 'Reservado');
 
                 return (
                   <div
                     key={s.id}
-                    className={`absolute inset-x-1 rounded-md border ${color.bg} ${color.border} ${color.hover} cursor-pointer overflow-hidden z-10 transition-colors group/block`}
+                    className={`absolute inset-x-1 rounded-md border ${color.bg} ${color.border} ${color.hover} overflow-hidden z-10 transition-colors group/block ${
+                      canEdit ? 'cursor-pointer' : 'cursor-default opacity-90'
+                    }`}
                     style={{ top, height: Math.max(height, 20) }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (s.canEdit) onEditClick(s);
+                      if (canEdit) onEditClick(s);
                     }}
                     onKeyDown={(e) => {
-                      if (!s.canEdit) return;
+                      if (!canEdit) return;
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
                         onEditClick(s);
                       }
                     }}
-                    role={s.canEdit ? 'button' : undefined}
-                    tabIndex={s.canEdit ? 0 : -1}
+                    role={canEdit ? 'button' : undefined}
+                    tabIndex={canEdit ? 0 : -1}
                     aria-label={
-                      s.canEdit
+                      canEdit
                         ? `Editar ${groupName} ${s.startTime}-${s.endTime}`
                         : `${groupName} ${s.startTime}-${s.endTime}`
                     }
