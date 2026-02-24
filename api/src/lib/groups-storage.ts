@@ -41,12 +41,17 @@ export type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
 /** Rule source for whitelist entries */
 export type RuleSource = 'manual' | 'auto_extension';
 
+/** Group visibility scope */
+export type GroupVisibility = 'private' | 'instance_public';
+
 /** Group with computed rule counts */
 export interface GroupWithCounts {
   id: string;
   name: string;
   displayName: string;
   enabled: boolean;
+  visibility: GroupVisibility;
+  ownerUserId: string | null;
   createdAt: string;
   updatedAt: string | null;
   whitelistCount: number;
@@ -60,6 +65,8 @@ export interface GroupMeta {
   name: string;
   displayName: string;
   enabled: boolean;
+  visibility: GroupVisibility;
+  ownerUserId: string | null;
   updatedAt: Date;
 }
 
@@ -148,8 +155,21 @@ export interface IGroupsStorage {
   getAllGroups(): Promise<GroupWithCounts[]>;
   getGroupById(id: string): Promise<GroupWithCounts | null>;
   getGroupByName(name: string): Promise<GroupWithCounts | null>;
-  createGroup(name: string, displayName: string): Promise<string>;
-  updateGroup(id: string, displayName: string, enabled: boolean): Promise<void>;
+  createGroup(
+    name: string,
+    displayName: string,
+    opts?: {
+      enabled?: boolean;
+      visibility?: GroupVisibility;
+      ownerUserId?: string | null;
+    }
+  ): Promise<string>;
+  updateGroup(
+    id: string,
+    displayName: string,
+    enabled: boolean,
+    visibility?: GroupVisibility
+  ): Promise<void>;
   deleteGroup(id: string): Promise<boolean>;
   getRulesByGroup(groupId: string, type?: RuleType): Promise<Rule[]>;
   getRulesByGroupPaginated(options: ListRulesOptions): Promise<PaginatedRulesResult>;
@@ -191,6 +211,8 @@ function dbGroupToApi(
     name: g.name,
     displayName: g.displayName,
     enabled: g.enabled === 1,
+    visibility: g.visibility === 'instance_public' ? 'instance_public' : 'private',
+    ownerUserId: g.ownerUserId ?? null,
     createdAt: g.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: g.updatedAt?.toISOString() ?? null,
   };
@@ -202,6 +224,8 @@ function dbGroupToMeta(g: WhitelistGroup): GroupMeta {
     name: g.name,
     displayName: g.displayName,
     enabled: g.enabled === 1,
+    visibility: g.visibility === 'instance_public' ? 'instance_public' : 'private',
+    ownerUserId: g.ownerUserId ?? null,
     updatedAt: g.updatedAt ?? new Date(),
   };
 }
@@ -313,21 +337,35 @@ export async function getGroupByName(name: string): Promise<GroupWithCounts | nu
  * @returns The created group ID
  * @throws Error if a group with the same name already exists
  */
-export async function createGroup(name: string, displayName: string): Promise<string> {
+export async function createGroup(
+  name: string,
+  displayName: string,
+  opts?: {
+    enabled?: boolean;
+    visibility?: GroupVisibility;
+    ownerUserId?: string | null;
+  }
+): Promise<string> {
   const existing = await getGroupByName(name);
   if (existing) {
     throw new Error('UNIQUE_CONSTRAINT_VIOLATION');
   }
 
   const id = uuidv4();
+  const enabled = opts?.enabled === false ? 0 : 1;
+  const visibility = opts?.visibility ?? 'private';
+  const ownerUserId = opts?.ownerUserId ?? null;
+
   await db.insert(whitelistGroups).values({
     id,
     name,
     displayName,
-    enabled: 1,
+    enabled,
+    visibility,
+    ownerUserId,
   });
 
-  logger.debug('Created group', { id, name });
+  logger.debug('Created group', { id, name, visibility, ownerUserId });
   return id;
 }
 
@@ -337,18 +375,20 @@ export async function createGroup(name: string, displayName: string): Promise<st
 export async function updateGroup(
   id: string,
   displayName: string,
-  enabled: boolean
+  enabled: boolean,
+  visibility?: GroupVisibility
 ): Promise<void> {
   await db
     .update(whitelistGroups)
     .set({
       displayName,
       enabled: enabled ? 1 : 0,
+      ...(visibility ? { visibility } : {}),
       updatedAt: new Date(),
     })
     .where(eq(whitelistGroups.id, id));
 
-  logger.debug('Updated group', { id, displayName, enabled });
+  logger.debug('Updated group', { id, displayName, enabled, visibility });
 }
 
 /**
@@ -361,6 +401,41 @@ export async function deleteGroup(id: string): Promise<boolean> {
     logger.debug('Deleted group', { id });
   }
   return deleted;
+}
+
+/**
+ * Copy all rules from one group to another.
+ *
+ * Note: destination group should be empty to avoid unique constraint conflicts.
+ */
+export async function copyRulesToGroup(params: {
+  fromGroupId: string;
+  toGroupId: string;
+}): Promise<number> {
+  const source = await db
+    .select()
+    .from(whitelistRules)
+    .where(eq(whitelistRules.groupId, params.fromGroupId));
+
+  if (source.length === 0) return 0;
+
+  const BATCH_SIZE = 500;
+  let inserted = 0;
+  for (let i = 0; i < source.length; i += BATCH_SIZE) {
+    const batch = source.slice(i, i + BATCH_SIZE).map((r) => ({
+      id: uuidv4(),
+      groupId: params.toGroupId,
+      type: r.type,
+      value: r.value,
+      source: (r.source as RuleSource | null) ?? 'manual',
+      comment: r.comment ?? null,
+    }));
+
+    await db.insert(whitelistRules).values(batch);
+    inserted += batch.length;
+  }
+
+  return inserted;
 }
 
 // =============================================================================

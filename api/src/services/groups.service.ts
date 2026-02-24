@@ -6,8 +6,10 @@
  */
 
 import * as groupsStorage from '../lib/groups-storage.js';
+import { v4 as uuidv4 } from 'uuid';
 import type {
   GroupWithCounts,
+  GroupVisibility,
   Rule,
   RuleType,
   GroupStats,
@@ -40,12 +42,15 @@ export type GroupsResult<T> = { ok: true; data: T } | { ok: false; error: Groups
 export interface CreateGroupInput {
   name: string;
   displayName: string;
+  visibility?: GroupVisibility | undefined;
+  ownerUserId?: string | null | undefined;
 }
 
 export interface UpdateGroupInput {
   id: string;
   displayName: string;
   enabled: boolean;
+  visibility?: GroupVisibility | undefined;
 }
 
 export interface CreateRuleInput {
@@ -71,6 +76,13 @@ export interface UpdateRuleInput {
 export interface ExportResult {
   name: string;
   content: string;
+}
+
+export interface CloneGroupInput {
+  sourceGroupId: string;
+  name?: string | undefined;
+  displayName: string;
+  ownerUserId: string;
 }
 
 // =============================================================================
@@ -124,7 +136,10 @@ export async function createGroup(
   const safeName = input.name.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
 
   try {
-    const id = await groupsStorage.createGroup(safeName, input.displayName);
+    const id = await groupsStorage.createGroup(safeName, input.displayName, {
+      ...(input.visibility ? { visibility: input.visibility } : {}),
+      ...(input.ownerUserId !== undefined ? { ownerUserId: input.ownerUserId } : {}),
+    });
     return { ok: true, data: { id, name: safeName } };
   } catch (err) {
     if (err instanceof Error && err.message === 'UNIQUE_CONSTRAINT_VIOLATION') {
@@ -147,7 +162,7 @@ export async function updateGroup(input: UpdateGroupInput): Promise<GroupsResult
     return { ok: false, error: { code: 'NOT_FOUND', message: 'Group not found' } };
   }
 
-  await groupsStorage.updateGroup(input.id, input.displayName, input.enabled);
+  await groupsStorage.updateGroup(input.id, input.displayName, input.enabled, input.visibility);
 
   const updated = await groupsStorage.getGroupById(input.id);
   if (!updated) {
@@ -182,6 +197,67 @@ export async function deleteGroup(id: string): Promise<GroupsResult<{ deleted: b
   }
 
   return { ok: true, data: { deleted } };
+}
+
+function sanitizeGroupName(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9-_]/g, '-');
+}
+
+async function findAvailableGroupName(baseName: string): Promise<string> {
+  const safeBase = sanitizeGroupName(baseName);
+  const trimmedBase = safeBase.replace(/^-+/, '').replace(/-+$/, '');
+  if (!trimmedBase) {
+    return `group-${uuidv4().slice(0, 8)}`;
+  }
+
+  const maxAttempts = 50;
+  for (let i = 0; i < maxAttempts; i++) {
+    const suffix = i === 0 ? '' : `-${String(i + 1)}`;
+    const candidate = `${trimmedBase}${suffix}`.slice(0, 100);
+    const exists = await groupsStorage.getGroupMetaByName(candidate);
+    if (!exists) return candidate;
+  }
+  return `${trimmedBase}-${uuidv4().slice(0, 8)}`.slice(0, 100);
+}
+
+/**
+ * Clone an existing group into a new private group (copy rules).
+ */
+export async function cloneGroup(
+  input: CloneGroupInput
+): Promise<GroupsResult<{ id: string; name: string }>> {
+  const source = await groupsStorage.getGroupById(input.sourceGroupId);
+  if (!source) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Group not found' } };
+  }
+
+  let baseName = `${source.name}-copy`;
+  const trimmedName = input.name?.trim();
+  if (trimmedName) {
+    baseName = trimmedName;
+  }
+
+  const name = await findAvailableGroupName(baseName);
+
+  try {
+    const id = await groupsStorage.createGroup(name, input.displayName, {
+      visibility: 'private',
+      ownerUserId: input.ownerUserId,
+    });
+
+    await groupsStorage.copyRulesToGroup({ fromGroupId: source.id, toGroupId: id });
+    await touchGroupAndEmitWhitelistChanged(id);
+
+    return { ok: true, data: { id, name } };
+  } catch (err) {
+    if (err instanceof Error && err.message === 'UNIQUE_CONSTRAINT_VIOLATION') {
+      return {
+        ok: false,
+        error: { code: 'CONFLICT', message: 'A group with this name already exists' },
+      };
+    }
+    throw err;
+  }
 }
 
 /**
@@ -494,6 +570,7 @@ export const GroupsService = {
   getGroupById,
   getGroupByName,
   createGroup,
+  cloneGroup,
   updateGroup,
   deleteGroup,
   listRules,

@@ -44,6 +44,7 @@ interface RulesTableProps {
   onDelete: (rule: Rule) => void;
   onEdit?: (rule: Rule) => void;
   onSave?: (id: string, data: { value?: string; comment?: string | null }) => Promise<boolean>;
+  readOnly?: boolean;
   emptyMessage?: string;
   className?: string;
   // Selection props
@@ -63,6 +64,7 @@ export const RulesTable: React.FC<RulesTableProps> = ({
   onDelete,
   onEdit: _onEdit,
   onSave,
+  readOnly = false,
   emptyMessage = 'No hay reglas configuradas',
   className,
   selectedIds,
@@ -77,7 +79,8 @@ export const RulesTable: React.FC<RulesTableProps> = ({
   const [editComment, setEditComment] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const hasSelectionFeature = selectedIds !== undefined && onToggleSelection !== undefined;
+  const hasSelectionFeature =
+    !readOnly && selectedIds !== undefined && onToggleSelection !== undefined;
 
   // Start editing a rule
   const startEdit = useCallback((rule: Rule) => {
@@ -282,7 +285,7 @@ export const RulesTable: React.FC<RulesTableProps> = ({
               {renderSortableHeader('type', 'Tipo', 'px-4 py-3 w-32')}
               <th className="px-4 py-3 hidden md:table-cell">Comentario</th>
               {renderSortableHeader('createdAt', 'Fecha', 'px-4 py-3 w-28 hidden sm:table-cell')}
-              <th className="px-4 py-3 w-20 text-right">Acciones</th>
+              {!readOnly && <th className="px-4 py-3 w-20 text-right">Acciones</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -385,54 +388,56 @@ export const RulesTable: React.FC<RulesTableProps> = ({
                   <td className="px-4 py-3 hidden sm:table-cell">
                     <span className="text-xs text-slate-400">{formatDate(rule.createdAt)}</span>
                   </td>
-                  <td className="px-4 py-3">
-                    {isEditing ? (
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => void saveEdit()}
-                          disabled={isSaving || !editValue.trim()}
-                          className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Guardar (Enter)"
-                          data-testid="save-edit-button"
-                        >
-                          {isSaving ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : (
-                            <Save size={14} />
-                          )}
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          disabled={isSaving}
-                          className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors disabled:opacity-50"
-                          title="Cancelar (Esc)"
-                          data-testid="cancel-edit-button"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {onSave && (
+                  {!readOnly && (
+                    <td className="px-4 py-3">
+                      {isEditing ? (
+                        <div className="flex items-center justify-end gap-1">
                           <button
-                            onClick={() => startEdit(rule)}
-                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Editar"
-                            data-testid="edit-button"
+                            onClick={() => void saveEdit()}
+                            disabled={isSaving || !editValue.trim()}
+                            className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Guardar (Enter)"
+                            data-testid="save-edit-button"
                           >
-                            <Edit2 size={14} />
+                            {isSaving ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Save size={14} />
+                            )}
                           </button>
-                        )}
-                        <button
-                          onClick={() => onDelete(rule)}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    )}
-                  </td>
+                          <button
+                            onClick={cancelEdit}
+                            disabled={isSaving}
+                            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors disabled:opacity-50"
+                            title="Cancelar (Esc)"
+                            data-testid="cancel-edit-button"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {onSave && (
+                            <button
+                              onClick={() => startEdit(rule)}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Editar"
+                              data-testid="edit-button"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => onDelete(rule)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Eliminar"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  )}
                 </tr>
               );
             })}

@@ -1,7 +1,10 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { UserRole } from '../../types';
 import { useUsersList } from '../useUsersList';
+
+let queryClient: QueryClient | null = null;
 
 const { mockUsersList } = vi.hoisted(() => ({
   mockUsersList: vi.fn(),
@@ -21,6 +24,29 @@ describe('useUsersList', () => {
     mockUsersList.mockResolvedValue([]);
   });
 
+  afterEach(() => {
+    queryClient?.clear();
+    queryClient = null;
+  });
+
+  function renderUseUsersList() {
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+          gcTime: 0,
+        },
+      },
+    });
+
+    return renderHook(() => useUsersList(), {
+      wrapper: ({ children }) => {
+        if (!queryClient) throw new Error('queryClient not initialized');
+        return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+      },
+    });
+  }
+
   it('fetches users on mount and maps roles/status', async () => {
     mockUsersList.mockResolvedValueOnce([
       {
@@ -32,7 +58,7 @@ describe('useUsersList', () => {
       },
     ]);
 
-    const { result } = renderHook(() => useUsersList());
+    const { result } = renderUseUsersList();
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -50,57 +76,48 @@ describe('useUsersList', () => {
     ]);
   });
 
-  it('upserts an API user to the front of the list', async () => {
-    const { result } = renderHook(() => useUsersList());
+  it('refetches users via fetchUsers()', async () => {
+    mockUsersList.mockResolvedValueOnce([
+      {
+        id: 'u1',
+        name: 'User 1',
+        email: 'user1@example.com',
+        isActive: true,
+        roles: [{ role: 'teacher' }],
+      },
+    ]);
+
+    const { result } = renderUseUsersList();
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
 
-    act(() => {
-      const ok = result.current.upsertApiUser({
+    expect(result.current.users[0]?.id).toBe('u1');
+
+    mockUsersList.mockResolvedValueOnce([
+      {
         id: 'u2',
-        name: 'Admin User',
-        email: 'admin@example.com',
-        isActive: true,
+        name: 'User 2',
+        email: 'user2@example.com',
+        isActive: false,
         roles: [{ role: 'admin' }],
-      });
-      expect(ok).toBe(true);
+      },
+    ]);
+
+    await act(async () => {
+      await result.current.fetchUsers();
     });
-
-    expect(result.current.users[0]?.id).toBe('u2');
-
-    act(() => {
-      const ok = result.current.upsertApiUser({
-        id: 'u2',
-        name: 'Admin Renamed',
-        email: 'admin@example.com',
-        isActive: true,
-        roles: [{ role: 'admin' }],
-      });
-      expect(ok).toBe(true);
-    });
-
-    expect(result.current.users).toHaveLength(1);
-    expect(result.current.users[0]?.name).toBe('Admin Renamed');
-  });
-
-  it('returns false for invalid API user shapes', async () => {
-    const { result } = renderHook(() => useUsersList());
 
     await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    act(() => {
-      expect(result.current.upsertApiUser({})).toBe(false);
+      expect(result.current.users[0]?.id).toBe('u2');
     });
   });
 
   it('surfaces fetch errors via error state', async () => {
     mockUsersList.mockRejectedValueOnce(new Error('network'));
 
-    const { result } = renderHook(() => useUsersList());
+    const { result } = renderUseUsersList();
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);

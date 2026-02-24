@@ -38,6 +38,7 @@ interface HierarchicalRulesTableProps {
   /** Pre-grouped domain groups from the backend (preferred mode) */
   domainGroups?: DomainGroup[];
   loading?: boolean;
+  readOnly?: boolean;
   onDelete: (rule: Rule) => void;
   onSave?: (id: string, data: { value?: string; comment?: string | null }) => Promise<boolean>;
   onAddSubdomain?: (rootDomain: string) => void;
@@ -59,6 +60,7 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
   rules,
   domainGroups: preGroupedDomains,
   loading = false,
+  readOnly = false,
   onDelete,
   onSave,
   onAddSubdomain,
@@ -76,7 +78,12 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
   const [editComment, setEditComment] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  const hasSelectionFeature = selectedIds !== undefined && onToggleSelection !== undefined;
+  const canEdit = !readOnly && onSave !== undefined;
+  const hasSelectionFeature =
+    !readOnly &&
+    selectedIds !== undefined &&
+    onToggleSelection !== undefined &&
+    onToggleSelectAll !== undefined;
 
   // Group rules by root domain (client-side grouping if no pre-grouped data)
   const groups = useMemo(() => {
@@ -233,7 +240,7 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
               <th className="px-4 py-3 w-8"></th>
               <th className="px-4 py-3">Dominio / Regla</th>
               <th className="px-4 py-3 w-32">Estado</th>
-              <th className="px-4 py-3 w-24 text-right">Acciones</th>
+              {!readOnly && <th className="px-4 py-3 w-24 text-right">Acciones</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -321,20 +328,22 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
                             : 'Mixto'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      {onAddSubdomain && group.root && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onAddSubdomain(group.root);
-                          }}
-                          className="p-1.5 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-700 transition-colors"
-                          title={`Añadir subdominio a ${group.root}`}
-                        >
-                          <Plus size={16} />
-                        </button>
-                      )}
-                    </td>
+                    {!readOnly && (
+                      <td className="px-4 py-3 text-right">
+                        {onAddSubdomain && group.root && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAddSubdomain(group.root);
+                            }}
+                            className="p-1.5 hover:bg-slate-200 rounded text-slate-500 hover:text-slate-700 transition-colors"
+                            title={`Añadir subdominio a ${group.root}`}
+                          >
+                            <Plus size={16} />
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
 
                   {/* Child Rule Rows */}
@@ -386,13 +395,13 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
                                 <span
                                   className={cn(
                                     'text-sm font-mono text-slate-600 break-all',
-                                    onSave && 'cursor-pointer hover:text-blue-600'
+                                    canEdit && 'cursor-pointer hover:text-blue-600'
                                   )}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (onSave) startEdit(rule);
+                                    if (canEdit) startEdit(rule);
                                   }}
-                                  title={onSave ? 'Haz clic para editar' : undefined}
+                                  title={canEdit ? 'Haz clic para editar' : undefined}
                                 >
                                   {rule.value}
                                 </span>
@@ -411,60 +420,62 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-2 text-right">
-                            {isEditing ? (
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  onClick={() => void saveEdit()}
-                                  disabled={isSaving || !editValue.trim()}
-                                  className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                  title="Guardar (Enter)"
-                                  data-testid="save-edit-button"
-                                >
-                                  {isSaving ? (
-                                    <Loader2 size={14} className="animate-spin" />
-                                  ) : (
-                                    <Save size={14} />
+                          {!readOnly && (
+                            <td className="px-4 py-2 text-right">
+                              {isEditing ? (
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => void saveEdit()}
+                                    disabled={isSaving || !editValue.trim()}
+                                    className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Guardar (Enter)"
+                                    data-testid="save-edit-button"
+                                  >
+                                    {isSaving ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <Save size={14} />
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={cancelEdit}
+                                    disabled={isSaving}
+                                    className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors disabled:opacity-50"
+                                    title="Cancelar (Esc)"
+                                    data-testid="cancel-edit-button"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  {canEdit && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        startEdit(rule);
+                                      }}
+                                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                      title="Editar"
+                                      data-testid="edit-button"
+                                    >
+                                      <Edit2 size={14} />
+                                    </button>
                                   )}
-                                </button>
-                                <button
-                                  onClick={cancelEdit}
-                                  disabled={isSaving}
-                                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors disabled:opacity-50"
-                                  title="Cancelar (Esc)"
-                                  data-testid="cancel-edit-button"
-                                >
-                                  <X size={14} />
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                {onSave && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      startEdit(rule);
+                                      onDelete(rule);
                                     }}
-                                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                    title="Editar"
-                                    data-testid="edit-button"
+                                    className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    title="Eliminar"
                                   >
-                                    <Edit2 size={14} />
+                                    <Trash2 size={14} />
                                   </button>
-                                )}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDelete(rule);
-                                  }}
-                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                                  title="Eliminar"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
-                            )}
-                          </td>
+                                </div>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       );
                     })}

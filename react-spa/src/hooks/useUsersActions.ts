@@ -1,7 +1,11 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
+
+import type { User } from '../types';
+import type { CreateUserRole } from '../lib/roles';
 import { resolveErrorMessage } from '../lib/error-utils';
 import { trpc } from '../lib/trpc';
-import type { CreateUserRole } from '../lib/roles';
+import { mapUnknownApiUserToUser, USERS_QUERY_KEY } from './useUsersList';
 
 export interface UserDeleteTarget {
   id: string;
@@ -25,32 +29,86 @@ interface UpdateUserInput {
   email: string;
 }
 
-interface UseUsersActionsParams {
-  fetchUsers: () => Promise<void>;
-}
+export const useUsersActions = () => {
+  const queryClient = useQueryClient();
 
-export const useUsersActions = ({ fetchUsers }: UseUsersActionsParams) => {
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [createError, setCreateError] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<UserDeleteTarget | null>(null);
 
+  const createMutation = useMutation({
+    mutationFn: async (input: CreateUserInput) => {
+      return await trpc.users.create.mutate(input);
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (input: UpdateUserInput) => {
+      return await trpc.users.update.mutate(input);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (input: { id: string }) => {
+      return await trpc.users.delete.mutate(input);
+    },
+  });
+
+  const saving = createMutation.status === 'pending' || updateMutation.status === 'pending';
+  const deleting = deleteMutation.status === 'pending';
+
+  const upsertUserInCache = useCallback(
+    async (apiUser: unknown) => {
+      const mapped = mapUnknownApiUserToUser(apiUser);
+      if (!mapped) {
+        void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+        return;
+      }
+
+      await queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
+      queryClient.setQueryData<User[]>(USERS_QUERY_KEY, (prev) => {
+        const prevUsers = Array.isArray(prev) ? prev : [];
+        return [mapped, ...prevUsers.filter((u) => u.id !== mapped.id)];
+      });
+      void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+    },
+    [queryClient]
+  );
+
+  const updateUserInCache = useCallback(
+    async (apiUser: unknown) => {
+      const mapped = mapUnknownApiUserToUser(apiUser);
+      if (!mapped) {
+        void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+        return;
+      }
+
+      await queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
+      queryClient.setQueryData<User[]>(USERS_QUERY_KEY, (prev) => {
+        const prevUsers = Array.isArray(prev) ? prev : [];
+        const idx = prevUsers.findIndex((u) => u.id === mapped.id);
+        if (idx === -1) return [mapped, ...prevUsers];
+        const next = [...prevUsers];
+        next[idx] = mapped;
+        return next;
+      });
+      void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+    },
+    [queryClient]
+  );
+
   const handleSaveEdit = useCallback(
     async (input: UpdateUserInput): Promise<boolean> => {
       try {
-        setSaving(true);
-        await trpc.users.update.mutate(input);
-        await fetchUsers();
+        const updated = await updateMutation.mutateAsync(input);
+        await updateUserInCache(updated);
         return true;
       } catch (err) {
         console.error('Failed to update user:', err);
         return false;
-      } finally {
-        setSaving(false);
       }
     },
-    [fetchUsers]
+    [updateMutation, updateUserInCache]
   );
 
   const handleCreateUser = useCallback(
@@ -69,14 +127,15 @@ export const useUsersActions = ({ fetchUsers }: UseUsersActionsParams) => {
       }
 
       try {
-        setSaving(true);
         setCreateError('');
-        const user = await trpc.users.create.mutate({
+        const user = await createMutation.mutateAsync({
           name: input.name.trim(),
           email: input.email.trim(),
           password: input.password,
           role: input.role,
         });
+
+        await upsertUserInCache(user);
         return { ok: true, user };
       } catch (err) {
         console.error('Failed to create user:', err);
@@ -97,11 +156,9 @@ export const useUsersActions = ({ fetchUsers }: UseUsersActionsParams) => {
           )
         );
         return { ok: false };
-      } finally {
-        setSaving(false);
       }
     },
-    []
+    [createMutation, upsertUserInCache]
   );
 
   const requestDeleteUser = useCallback((target: UserDeleteTarget) => {
@@ -118,20 +175,24 @@ export const useUsersActions = ({ fetchUsers }: UseUsersActionsParams) => {
     if (!deleteTarget) return false;
 
     try {
-      setDeleting(true);
       setDeleteError('');
-      await trpc.users.delete.mutate({ id: deleteTarget.id });
-      await fetchUsers();
+      await deleteMutation.mutateAsync({ id: deleteTarget.id });
+
+      await queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
+      queryClient.setQueryData<User[]>(USERS_QUERY_KEY, (prev) => {
+        const prevUsers = Array.isArray(prev) ? prev : [];
+        return prevUsers.filter((u) => u.id !== deleteTarget.id);
+      });
+      void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+
       setDeleteTarget(null);
       return true;
     } catch (err) {
       console.error('Failed to delete user:', err);
       setDeleteError('No se pudo eliminar usuario. Intenta nuevamente.');
       return false;
-    } finally {
-      setDeleting(false);
     }
-  }, [deleteTarget, fetchUsers]);
+  }, [deleteTarget, deleteMutation, queryClient]);
 
   return {
     saving,

@@ -971,6 +971,7 @@ await describe('Groups Router (tRPC)', { timeout: 30000 }, async () => {
   await describe('REST Export Endpoint', async () => {
     let restGroupName: string;
     let restGroupId: string;
+    let privateGroupName: string;
 
     before(async () => {
       restGroupName = uniqueGroupName('rest-export');
@@ -996,6 +997,46 @@ await describe('Groups Router (tRPC)', { timeout: 30000 }, async () => {
           groupId: restGroupId,
           type: 'whitelist',
           values: ['rest-domain-1.com', 'rest-domain-2.com'],
+        },
+        bearerAuth(ADMIN_TOKEN)
+      );
+
+      // Public REST export should only be allowed for instance_public groups.
+      await trpcMutate(
+        API_URL,
+        'groups.update',
+        {
+          id: restGroupId,
+          displayName: 'REST Export Test Group',
+          enabled: true,
+          visibility: 'instance_public',
+        },
+        bearerAuth(ADMIN_TOKEN)
+      );
+
+      // Private group should not be exportable via REST endpoint.
+      privateGroupName = uniqueGroupName('rest-export-private');
+      const createPrivateResp = await trpcMutate(
+        API_URL,
+        'groups.create',
+        {
+          name: privateGroupName,
+          displayName: 'REST Private Export Test Group',
+        },
+        bearerAuth(ADMIN_TOKEN)
+      );
+      const { data: privateData } = (await parseTRPC(createPrivateResp)) as {
+        data?: CreateGroupResult;
+      };
+      const privateGroupId = privateData?.id ?? '';
+      privateGroupName = privateData?.name ?? privateGroupName;
+      await trpcMutate(
+        API_URL,
+        'groups.bulkCreateRules',
+        {
+          groupId: privateGroupId,
+          type: 'whitelist',
+          values: ['rest-private-domain-1.com'],
         },
         bearerAuth(ADMIN_TOKEN)
       );
@@ -1053,6 +1094,11 @@ await describe('Groups Router (tRPC)', { timeout: 30000 }, async () => {
         },
         bearerAuth(ADMIN_TOKEN)
       );
+    });
+
+    await test('should return 404 for private group', async () => {
+      const response = await fetch(`${API_URL}/export/${privateGroupName}.txt`);
+      assert.strictEqual(response.status, 404);
     });
   });
 });

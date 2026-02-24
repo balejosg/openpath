@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
 import type { User } from '../types';
 import { trpc } from '../lib/trpc';
 import { mapBackendRoleToUserRole } from '../lib/roles';
+
+export const USERS_QUERY_KEY = ['users.list'] as const;
 
 interface ApiUserLike {
   id: string;
@@ -50,53 +53,49 @@ function mapApiUserToUser(u: ApiUserLike): User {
   };
 }
 
+export function mapUnknownApiUserToUser(value: unknown): User | null {
+  const parsed = parseApiUserLike(value);
+  if (!parsed) return null;
+  return mapApiUserToUser(parsed);
+}
+
+function mapApiUsersToUsers(apiUsers: unknown): User[] {
+  const mapped: User[] = [];
+
+  if (Array.isArray(apiUsers)) {
+    for (const u of apiUsers) {
+      const next = mapUnknownApiUserToUser(u);
+      if (!next) continue;
+      mapped.push(next);
+    }
+  }
+
+  return mapped;
+}
+
 export function useUsersList(): {
   users: User[];
   loading: boolean;
+  fetching: boolean;
   error: string | null;
   fetchUsers: () => Promise<void>;
-  upsertApiUser: (apiUser: unknown) => boolean;
 } {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useQuery({
+    queryKey: USERS_QUERY_KEY,
+    queryFn: async () => {
+      const apiUsers = await trpc.users.list.query();
+      return mapApiUsersToUsers(apiUsers);
+    },
+  });
 
   const fetchUsers = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const apiUsers = await trpc.users.list.query();
-      const mapped: User[] = [];
+    await query.refetch();
+  }, [query.refetch]);
 
-      if (Array.isArray(apiUsers)) {
-        for (const u of apiUsers) {
-          const parsed = parseApiUserLike(u);
-          if (!parsed) continue;
-          mapped.push(mapApiUserToUser(parsed));
-        }
-      }
+  const users = query.data ?? [];
+  const loading = query.status === 'pending';
+  const fetching = query.fetchStatus === 'fetching';
+  const error = query.status === 'error' ? 'Error al cargar usuarios' : null;
 
-      setUsers(mapped);
-    } catch (err) {
-      console.error('Failed to fetch users:', err);
-      setError('Error al cargar usuarios');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const upsertApiUser = useCallback((apiUser: unknown): boolean => {
-    const parsed = parseApiUserLike(apiUser);
-    if (!parsed) return false;
-
-    const next = mapApiUserToUser(parsed);
-    setUsers((prev) => [next, ...prev.filter((u) => u.id !== next.id)]);
-    return true;
-  }, []);
-
-  useEffect(() => {
-    void fetchUsers();
-  }, [fetchUsers]);
-
-  return { users, loading, error, fetchUsers, upsertApiUser };
+  return { users, loading, fetching, error, fetchUsers };
 }

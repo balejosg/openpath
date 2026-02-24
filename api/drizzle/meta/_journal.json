@@ -43,6 +43,13 @@
       "when": 1768060800000,
       "tag": "0005_request_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1771955094371,
+      "tag": "0006_add_group_visibility",
+      "breakpoints": true
     }
   ]
 }

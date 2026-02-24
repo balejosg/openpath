@@ -528,6 +528,13 @@ app.get('/export/:name.txt', (req: Request, res: Response): void => {
       return;
     }
 
+    // Do not allow anonymous exports of private groups.
+    // Return 404 (not 403) to avoid leaking that a private group exists.
+    if (group.visibility !== 'instance_public') {
+      res.status(404).type('text/plain').send('Group not found');
+      return;
+    }
+
     const etag = buildWhitelistEtag({
       groupId: group.id,
       updatedAt: group.updatedAt,

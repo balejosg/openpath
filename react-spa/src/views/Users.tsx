@@ -24,7 +24,7 @@ const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
 };
 
 const UsersView = () => {
-  const { users, loading, error, fetchUsers, upsertApiUser } = useUsersList();
+  const { users, loading, fetching, error, fetchUsers } = useUsersList();
   const [showEditModal, setShowEditModal] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -54,7 +54,7 @@ const UsersView = () => {
     requestDeleteUser,
     clearDeleteState,
     handleConfirmDeleteUser,
-  } = useUsersActions({ fetchUsers });
+  } = useUsersActions();
 
   // Filter users based on search
   const filteredUsers = useMemo(() => {
@@ -96,10 +96,6 @@ const UsersView = () => {
     });
 
     if (!result.ok) return;
-
-    if (!upsertApiUser(result.user)) {
-      void fetchUsers();
-    }
 
     setNewName('');
     setNewEmail('');
@@ -150,6 +146,7 @@ const UsersView = () => {
   const totalCount = users.length;
   const rangeStart = visibleCount === 0 ? 0 : 1;
   const rangeEnd = visibleCount === 0 ? 0 : visibleCount;
+  const showInitialLoading = loading && users.length === 0;
 
   return (
     <div className="space-y-6">
@@ -216,14 +213,7 @@ const UsersView = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center">
-                    <Loader2 className="w-6 h-6 animate-spin text-slate-400 mx-auto" />
-                    <span className="text-slate-500 text-sm mt-2 block">Cargando usuarios...</span>
-                  </td>
-                </tr>
-              ) : error ? (
+              {error ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center">
                     <AlertCircle className="w-6 h-6 text-red-400 mx-auto" />
@@ -234,6 +224,13 @@ const UsersView = () => {
                     >
                       Reintentar
                     </button>
+                  </td>
+                </tr>
+              ) : showInitialLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-400 mx-auto" />
+                    <span className="text-slate-500 text-sm mt-2 block">Cargando usuarios...</span>
                   </td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
@@ -314,9 +311,20 @@ const UsersView = () => {
 
         {/* Pagination Mock */}
         <div className="px-6 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 bg-slate-50">
-          <span>
-            Mostrando {rangeStart}-{rangeEnd} de {totalCount} usuarios
-          </span>
+          <div className="flex items-center gap-2">
+            <span>
+              Mostrando {rangeStart}-{rangeEnd} de {totalCount} usuarios
+            </span>
+            {fetching && users.length > 0 && (
+              <span
+                className="inline-flex items-center gap-1 text-slate-400"
+                aria-label="Actualizando usuarios"
+              >
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Actualizando...
+              </span>
+            )}
+          </div>
           <div className="flex gap-2">
             <button
               disabled={visibleCount === 0}

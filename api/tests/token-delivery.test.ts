@@ -564,6 +564,15 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
   await describe('GET /export/:name.txt', async () => {
     before(async () => {
       await createTestClassroom('ExportETagClassroom', 'etag-export-group');
+
+      // Anonymous /export should only work for instance_public groups.
+      await db.execute(
+        sql.raw(`
+          UPDATE whitelist_groups
+          SET visibility = 'instance_public'
+          WHERE name = 'etag-export-group'
+        `)
+      );
     });
 
     await test('should return ETag and support 304', async () => {

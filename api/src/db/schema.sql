@@ -137,6 +137,8 @@ CREATE TABLE IF NOT EXISTS "whitelist_groups" (
 	"name" varchar(100) NOT NULL,
 	"display_name" varchar(255) NOT NULL,
 	"enabled" integer DEFAULT 1 NOT NULL,
+	"visibility" varchar(20) DEFAULT 'private' NOT NULL,
+	"owner_user_id" varchar(50),
 	"created_at" timestamp with time zone DEFAULT now(),
 	"updated_at" timestamp with time zone DEFAULT now(),
 	CONSTRAINT "whitelist_groups_name_unique" UNIQUE("name")
@@ -202,6 +204,12 @@ DO $$ BEGIN
     ALTER TABLE "tokens" ADD CONSTRAINT "tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION
     WHEN duplicate_object THEN NULL;
+END $$;
+--> statement-breakpoint
+DO $$ BEGIN
+	ALTER TABLE "whitelist_groups" ADD CONSTRAINT "whitelist_groups_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION
+	WHEN duplicate_object THEN NULL;
 END $$;
 --> statement-breakpoint
 DO $$ BEGIN

@@ -1,6 +1,35 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import UsersView from '../Users';
+
+let queryClient: QueryClient | null = null;
+
+function renderUsersView() {
+  queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+      mutations: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <UsersView />
+    </QueryClientProvider>
+  );
+}
+
+afterEach(() => {
+  queryClient?.clear();
+  queryClient = null;
+});
 
 const { mockUsersList, mockCreateUser, mockDeleteUser } = vi.hoisted(() => ({
   mockUsersList: vi.fn(),
@@ -27,6 +56,16 @@ vi.mock('../../lib/trpc', () => ({
   },
 }));
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('Users View', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -42,7 +81,7 @@ describe('Users View', () => {
   });
 
   it('shows role selector with default teacher', async () => {
-    render(<UsersView />);
+    renderUsersView();
 
     fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
 
@@ -51,7 +90,7 @@ describe('Users View', () => {
   });
 
   it('sends selected role in create mutation', async () => {
-    render(<UsersView />);
+    renderUsersView();
 
     fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
 
@@ -79,7 +118,7 @@ describe('Users View', () => {
   });
 
   it('uses default teacher role when unchanged', async () => {
-    render(<UsersView />);
+    renderUsersView();
 
     fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
 
@@ -106,7 +145,7 @@ describe('Users View', () => {
   });
 
   it('shows valid empty pagination range and disables navigation on empty state', async () => {
-    render(<UsersView />);
+    renderUsersView();
 
     expect(await screen.findByText('Mostrando 0-0 de 0 usuarios')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Filtros' })).toBeDisabled();
@@ -115,7 +154,7 @@ describe('Users View', () => {
   });
 
   it('shows feedback when exporting with no users', async () => {
-    render(<UsersView />);
+    renderUsersView();
 
     await screen.findByText('Mostrando 0-0 de 0 usuarios');
     fireEvent.click(screen.getByRole('button', { name: 'Exportar' }));
@@ -126,7 +165,7 @@ describe('Users View', () => {
   it('shows specific message when email format is invalid', async () => {
     mockCreateUser.mockRejectedValueOnce(new Error('Invalid email'));
 
-    render(<UsersView />);
+    renderUsersView();
 
     fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
     fireEvent.change(await screen.findByPlaceholderText('Nombre completo'), {
@@ -147,7 +186,7 @@ describe('Users View', () => {
   it('shows duplicate-email message when backend reports conflict', async () => {
     mockCreateUser.mockRejectedValueOnce(new Error('User already exists'));
 
-    render(<UsersView />);
+    renderUsersView();
 
     fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
     fireEvent.change(await screen.findByPlaceholderText('Nombre completo'), {
@@ -165,6 +204,65 @@ describe('Users View', () => {
     expect(await screen.findByText('Ya existe un usuario con ese email')).toBeInTheDocument();
   });
 
+  it('keeps existing rows visible while refreshing and ignores stale list responses after create', async () => {
+    const firstList = createDeferred<unknown[]>();
+    const secondList = createDeferred<unknown[]>();
+
+    mockUsersList.mockImplementationOnce(() => firstList.promise);
+    mockUsersList.mockImplementationOnce(() => secondList.promise);
+
+    renderUsersView();
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
+    fireEvent.change(await screen.findByPlaceholderText('Nombre completo'), {
+      target: { value: 'Usuario Creado' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('usuario@dominio.com'), {
+      target: { value: 'creado@example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Mínimo 8 caracteres'), {
+      target: { value: 'SecurePass123!' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Usuario' }));
+
+    // Optimistic insert should render immediately and should NOT replace the grid
+    // with the initial loading state.
+    expect(await screen.findByText('Usuario Creado')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText('Cargando usuarios...')).not.toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(mockUsersList).toHaveBeenCalledTimes(2);
+    });
+
+    // While the post-create refresh is in-flight, the grid should remain visible.
+    expect(screen.getByLabelText('Actualizando usuarios')).toBeInTheDocument();
+
+    // Newer fetch returns the created user.
+    secondList.resolve([
+      {
+        id: 'user-created',
+        name: 'Usuario Creado',
+        email: 'creado@example.com',
+        isActive: true,
+        roles: [],
+      },
+    ]);
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText('Actualizando usuarios')).not.toBeInTheDocument();
+    });
+
+    // Older in-flight fetch resolves after: it should be ignored.
+    firstList.resolve([]);
+
+    // Allow any stale promise handlers to run.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByText('Usuario Creado')).toBeInTheDocument();
+  });
+
   it('opens delete confirmation modal and deletes user on confirm', async () => {
     mockUsersList.mockResolvedValue([
       {
@@ -176,7 +274,7 @@ describe('Users View', () => {
       },
     ]);
 
-    render(<UsersView />);
+    renderUsersView();
 
     await screen.findByText('Delete Me');
     fireEvent.click(screen.getByRole('button', { name: 'Eliminar usuario Delete Me' }));
@@ -201,7 +299,7 @@ describe('Users View', () => {
     ]);
     mockDeleteUser.mockRejectedValueOnce(new Error('backend failure'));
 
-    render(<UsersView />);
+    renderUsersView();
 
     await screen.findByText('Cannot Delete');
     fireEvent.click(screen.getByRole('button', { name: 'Eliminar usuario Cannot Delete' }));

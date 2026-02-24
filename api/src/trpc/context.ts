@@ -1,6 +1,7 @@
 import type { CreateExpressContextOptions } from '@trpc/server/adapters/express';
 import * as auth from '../lib/auth.js';
 import type { JWTPayload } from '../lib/auth.js';
+import * as roleStorage from '../lib/role-storage.js';
 import { logger } from '../lib/logger.js';
 
 export interface Context {
@@ -49,6 +50,33 @@ export async function createContext({ req, res }: CreateExpressContextOptions): 
       logger.info('Legacy admin token used for request context');
       user = auth.createLegacyAdminPayload() as unknown as JWTPayload;
       break;
+    }
+  }
+
+  // Sync role/group assignments from DB so group permissions don't depend on stale JWT claims.
+  // Skip legacy admin payload (used by ADMIN_TOKEN tests).
+  if (
+    user &&
+    !(typeof (user as unknown as { isLegacy?: unknown }).isLegacy === 'boolean'
+      ? (user as unknown as { isLegacy?: boolean }).isLegacy
+      : false)
+  ) {
+    try {
+      const dbRoles = await roleStorage.getUserRoles(user.sub);
+      if (dbRoles.length > 0) {
+        user = {
+          ...user,
+          roles: dbRoles.map((r) => ({
+            role: r.role as 'admin' | 'teacher' | 'student',
+            groupIds: r.groupIds ?? [],
+          })),
+        } as JWTPayload;
+      }
+    } catch (err) {
+      logger.warn('Failed to sync user roles from DB', {
+        userId: user.sub,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

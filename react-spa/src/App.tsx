@@ -20,6 +20,7 @@ type AuthView = 'login' | 'register' | 'forgot-password' | 'reset-password';
 interface SelectedGroup {
   id: string;
   name: string;
+  readOnly?: boolean;
 }
 
 const App: React.FC = () => {
@@ -72,6 +73,7 @@ const App: React.FC = () => {
           <RulesManager
             groupId={selectedGroup.id}
             groupName={selectedGroup.name}
+            readOnly={selectedGroup.readOnly}
             onBack={handleBackFromRules}
           />
         ) : (

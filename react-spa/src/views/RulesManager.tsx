@@ -34,13 +34,19 @@ type ViewMode = 'flat' | 'hierarchical';
 interface RulesManagerProps {
   groupId: string;
   groupName: string;
+  readOnly?: boolean;
   onBack: () => void;
 }
 
 /**
  * RulesManager - Full-page view for managing domain rules.
  */
-export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, onBack }) => {
+export const RulesManager: React.FC<RulesManagerProps> = ({
+  groupId,
+  groupName,
+  readOnly = false,
+  onBack,
+}) => {
   const { success, error: toastError, ToastContainer } = useToast();
 
   // View mode state
@@ -159,6 +165,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
 
   // Handle add rule
   const handleAddRule = async () => {
+    if (readOnly) return;
     if (!newValue.trim() || adding) return;
 
     // Validate format before sending to API
@@ -282,13 +289,13 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
   return (
     <div
       className="space-y-6 relative"
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
+      onDragEnter={readOnly ? undefined : handleDragEnter}
+      onDragLeave={readOnly ? undefined : handleDragLeave}
+      onDragOver={readOnly ? undefined : handleDragOver}
+      onDrop={readOnly ? undefined : handleDrop}
     >
       {/* Page-level drag overlay */}
-      {isDragOver && (
+      {!readOnly && isDragOver && (
         <div
           className="absolute inset-0 z-50 flex items-center justify-center bg-blue-50/95 rounded-xl border-2 border-dashed border-blue-400 pointer-events-none"
           data-testid="page-drag-overlay"
@@ -357,6 +364,16 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
         </div>
       </div>
 
+      {readOnly && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-900 text-sm flex items-start gap-2">
+          <Info size={16} className="mt-0.5 text-amber-700" />
+          <div>
+            <p className="font-medium">Vista de solo lectura</p>
+            <p className="text-amber-800">Clona este grupo para editar sus reglas.</p>
+          </div>
+        </div>
+      )}
+
       {/* Search and Add */}
       <div className="flex flex-col sm:flex-row gap-4">
         {/* Search */}
@@ -373,39 +390,43 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
 
         {/* Add rule input */}
         <div className="flex gap-2 sm:w-auto w-full">
-          <div className="flex-1 sm:w-80">
-            <input
-              type="text"
-              placeholder="Añadir dominio, subdominio o ruta..."
-              value={newValue}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              className={cn(
-                'w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none',
-                inputError || validationError
-                  ? 'border-red-300 focus:ring-red-500'
-                  : 'border-slate-200'
-              )}
-            />
-          </div>
-          <Button
-            onClick={() => void handleAddRule()}
-            disabled={adding || !newValue.trim() || !!validationError}
-            isLoading={adding}
-            size="md"
-          >
-            <Plus size={16} className="mr-1" />
-            Añadir
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setShowImportModal(true)}
-            size="md"
-            title="Importar múltiples reglas"
-          >
-            <Upload size={16} className="mr-1" />
-            Importar
-          </Button>
+          {!readOnly && (
+            <>
+              <div className="flex-1 sm:w-80">
+                <input
+                  type="text"
+                  placeholder="Añadir dominio, subdominio o ruta..."
+                  value={newValue}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  className={cn(
+                    'w-full px-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none',
+                    inputError || validationError
+                      ? 'border-red-300 focus:ring-red-500'
+                      : 'border-slate-200'
+                  )}
+                />
+              </div>
+              <Button
+                onClick={() => void handleAddRule()}
+                disabled={adding || !newValue.trim() || !!validationError}
+                isLoading={adding}
+                size="md"
+              >
+                <Plus size={16} className="mr-1" />
+                Añadir
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowImportModal(true)}
+                size="md"
+                title="Importar múltiples reglas"
+              >
+                <Upload size={16} className="mr-1" />
+                Importar
+              </Button>
+            </>
+          )}
           <ExportDropdown
             onExport={(format) => exportRules(rules, format, `${groupName}-rules`)}
             rulesCount={rules.length}
@@ -471,13 +492,17 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
         <RulesTable
           rules={rules}
           loading={loading}
-          onDelete={(rule) => void deleteRule(rule)}
-          onSave={updateRule}
-          selectedIds={selectedIds}
-          onToggleSelection={toggleSelection}
-          onToggleSelectAll={toggleSelectAll}
-          isAllSelected={isAllSelected}
-          hasSelection={hasSelection}
+          readOnly={readOnly}
+          onDelete={(rule) => {
+            if (readOnly) return;
+            void deleteRule(rule);
+          }}
+          onSave={readOnly ? undefined : updateRule}
+          selectedIds={readOnly ? undefined : selectedIds}
+          onToggleSelection={readOnly ? undefined : toggleSelection}
+          onToggleSelectAll={readOnly ? undefined : toggleSelectAll}
+          isAllSelected={readOnly ? undefined : isAllSelected}
+          hasSelection={readOnly ? undefined : hasSelection}
           emptyMessage={
             search
               ? 'No se encontraron resultados para tu búsqueda'
@@ -495,13 +520,17 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
         <HierarchicalRulesTable
           domainGroups={groupedHook.domainGroups}
           loading={loading}
-          onDelete={(rule) => void deleteRule(rule)}
-          onSave={updateRule}
-          selectedIds={selectedIds}
-          onToggleSelection={toggleSelection}
-          onToggleSelectAll={toggleSelectAll}
-          isAllSelected={isAllSelected}
-          hasSelection={hasSelection}
+          readOnly={readOnly}
+          onDelete={(rule) => {
+            if (readOnly) return;
+            void deleteRule(rule);
+          }}
+          onSave={readOnly ? undefined : updateRule}
+          selectedIds={readOnly ? undefined : selectedIds}
+          onToggleSelection={readOnly ? undefined : toggleSelection}
+          onToggleSelectAll={readOnly ? undefined : toggleSelectAll}
+          isAllSelected={readOnly ? undefined : isAllSelected}
+          hasSelection={readOnly ? undefined : hasSelection}
           emptyMessage={
             search
               ? 'No se encontraron resultados para tu búsqueda'
@@ -555,20 +584,24 @@ export const RulesManager: React.FC<RulesManagerProps> = ({ groupId, groupName, 
       <ToastContainer />
 
       {/* Bulk action bar */}
-      <BulkActionBar
-        selectedCount={selectedIds.size}
-        onDelete={() => void handleBulkDelete()}
-        onClear={clearSelection}
-        isDeleting={bulkDeleting}
-      />
+      {!readOnly && (
+        <BulkActionBar
+          selectedCount={selectedIds.size}
+          onDelete={() => void handleBulkDelete()}
+          onClear={clearSelection}
+          isDeleting={bulkDeleting}
+        />
+      )}
 
       {/* Bulk import modal */}
-      <BulkImportModal
-        isOpen={showImportModal}
-        onClose={handleImportModalClose}
-        onImport={bulkCreateRules}
-        initialText={importInitialText}
-      />
+      {!readOnly && (
+        <BulkImportModal
+          isOpen={showImportModal}
+          onClose={handleImportModalClose}
+          onImport={bulkCreateRules}
+          initialText={importInitialText}
+        />
+      )}
     </div>
   );
 };

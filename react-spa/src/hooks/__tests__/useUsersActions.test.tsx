@@ -1,6 +1,31 @@
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useUsersActions } from '../useUsersActions';
+
+let queryClient: QueryClient | null = null;
+
+function renderUseUsersActions() {
+  queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+      mutations: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  });
+
+  return renderHook(() => useUsersActions(), {
+    wrapper: ({ children }) => {
+      if (!queryClient) throw new Error('queryClient not initialized');
+      return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    },
+  });
+}
 
 const mockUsersCreateMutate = vi.fn();
 const mockUsersUpdateMutate = vi.fn();
@@ -17,15 +42,17 @@ vi.mock('../../lib/trpc', () => ({
 }));
 
 describe('useUsersActions', () => {
-  const fetchUsers = vi.fn<() => Promise<void>>();
-
   beforeEach(() => {
     vi.clearAllMocks();
-    fetchUsers.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    queryClient?.clear();
+    queryClient = null;
   });
 
   it('validates required create fields before API call', async () => {
-    const { result } = renderHook(() => useUsersActions({ fetchUsers }));
+    const { result } = renderUseUsersActions();
 
     let createResult: Awaited<ReturnType<typeof result.current.handleCreateUser>> = { ok: false };
     await act(async () => {
@@ -44,7 +71,7 @@ describe('useUsersActions', () => {
 
   it('maps duplicate-user errors into actionable create message', async () => {
     mockUsersCreateMutate.mockRejectedValueOnce(new Error('User already exists'));
-    const { result } = renderHook(() => useUsersActions({ fetchUsers }));
+    const { result } = renderUseUsersActions();
 
     await act(async () => {
       await result.current.handleCreateUser({
@@ -60,7 +87,7 @@ describe('useUsersActions', () => {
 
   it('shows inline delete error when delete mutation fails', async () => {
     mockUsersDeleteMutate.mockRejectedValueOnce(new Error('backend failure'));
-    const { result } = renderHook(() => useUsersActions({ fetchUsers }));
+    const { result } = renderUseUsersActions();
 
     act(() => {
       result.current.requestDeleteUser({ id: 'user-1', name: 'Cannot Delete' });

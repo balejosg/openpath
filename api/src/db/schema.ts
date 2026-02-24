@@ -214,6 +214,10 @@ export const whitelistGroups = pgTable('whitelist_groups', {
   name: varchar('name', { length: 100 }).unique().notNull(),
   displayName: varchar('display_name', { length: 255 }).notNull(),
   enabled: integer('enabled').default(1).notNull(),
+  visibility: varchar('visibility', { length: 20 }).default('private').notNull(),
+  ownerUserId: varchar('owner_user_id', { length: 50 }).references(() => users.id, {
+    onDelete: 'set null',
+  }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
 });
