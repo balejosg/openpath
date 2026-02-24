@@ -84,6 +84,45 @@ DEFAULT_WHITELIST_URL="${DEFAULT_WHITELIST_URL:-}"
 # Lock file for mutual exclusion between scripts that modify firewall/dnsmasq
 export OPENPATH_LOCK_FILE="${OPENPATH_LOCK_FILE:-/var/run/openpath.lock}"
 
+# Acquire the shared OpenPath lock on file descriptor 200.
+# Intended for scripts that hold the lock for their entire runtime.
+# Returns 0 on success, 1 on failure.
+openpath_lock_acquire() {
+    local timeout_sec="${1:-30}"
+
+    exec 200>"$OPENPATH_LOCK_FILE"
+    if ! timeout "$timeout_sec" flock -x 200; then
+        return 1
+    fi
+    return 0
+}
+
+# Remove the lock file on exit (best-effort).
+openpath_lock_cleanup() {
+    flock -u 200 2>/dev/null || true
+    exec 200>&- 2>/dev/null || true
+}
+
+# Run a command under the shared OpenPath lock (short-lived).
+# Uses file descriptor 201 to avoid interfering with scripts holding the lock
+# on fd 200.
+with_openpath_lock() {
+    local timeout_sec="${OPENPATH_LOCK_TIMEOUT_SEC:-30}"
+
+    exec 201>"$OPENPATH_LOCK_FILE"
+    if ! timeout "$timeout_sec" flock -x 201; then
+        exec 201>&- 2>/dev/null || true
+        return 1
+    fi
+
+    "$@"
+    local rc=$?
+
+    flock -u 201 2>/dev/null || true
+    exec 201>&- 2>/dev/null || true
+    return "$rc"
+}
+
 # Global variables (initialized at runtime) - exported for use by other scripts
 export PRIMARY_DNS=""
 export GATEWAY_IP=""

@@ -70,15 +70,9 @@ enter_portal_mode_locked() {
 
     log "[CAPTIVE] Portal cautivo detectado - activando modo fail-open (DNS passthrough + firewall permisivo)" "WARN"
 
-    cat > "$DNSMASQ_CONF" << EOF
-# OPENPATH PORTAL MODE - DNS passthrough (temporary)
-no-resolv
-resolv-file=/run/dnsmasq/resolv.conf
-listen-address=127.0.0.1
-bind-interfaces
-cache-size=1000
-server=$PRIMARY_DNS
-EOF
+    if ! write_dnsmasq_passthrough_config "$PRIMARY_DNS" "$DNSMASQ_CONF"; then
+        log "[CAPTIVE] ERROR: No se pudo escribir la configuración DNS de modo portal" "ERROR"
+    fi
 
     if ! restart_dnsmasq; then
         log "[CAPTIVE] ERROR: dnsmasq no reinició en modo portal" "ERROR"

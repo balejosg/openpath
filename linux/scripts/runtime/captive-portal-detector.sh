@@ -58,20 +58,6 @@ interruptible_sleep() {
     SLEEP_PID=""
 }
 
-with_openpath_lock() {
-    exec 200>"$OPENPATH_LOCK_FILE"
-    if ! timeout 30 flock -x 200; then
-        log "[CAPTIVE] Could not acquire lock after 30s - skipping modification" "WARN"
-        return 1
-    fi
-
-    "$@"
-    local rc=$?
-
-    flock -u 200
-    return "$rc"
-}
-
 # Bucle principal
 main() {
     log "[CAPTIVE] Iniciando detector de portal cautivo"

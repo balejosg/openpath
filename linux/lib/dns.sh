@@ -230,6 +230,33 @@ d /run/dnsmasq 0755 root root -
 EOF
 }
 
+# Write a temporary dnsmasq config that forwards all queries upstream.
+# Used for captive portal authentication (fail-open DNS passthrough).
+# Args:
+#   1) upstream DNS IP (required)
+#   2) output path (optional; defaults to $DNSMASQ_CONF)
+write_dnsmasq_passthrough_config() {
+    local upstream_dns="$1"
+    local conf_path="${2:-$DNSMASQ_CONF}"
+
+    if [ -z "${upstream_dns:-}" ]; then
+        log_warn "write_dnsmasq_passthrough_config: upstream DNS is empty"
+        return 1
+    fi
+
+    cat > "$conf_path" << EOF
+# OPENPATH PORTAL MODE - DNS passthrough (temporary)
+no-resolv
+resolv-file=/run/dnsmasq/resolv.conf
+listen-address=127.0.0.1
+bind-interfaces
+cache-size=1000
+server=$upstream_dns
+EOF
+
+    return 0
+}
+
 # Generate dnsmasq configuration
 generate_dnsmasq_config() {
     log "Generating dnsmasq configuration..."

@@ -33,14 +33,10 @@ INSTALL_DIR="/usr/local/lib/openpath"
 source "$INSTALL_DIR/lib/common.sh"
 
 # Cleanup on exit (normal or error)
-cleanup_lock() {
-    rm -f "$OPENPATH_LOCK_FILE" 2>/dev/null || true
-}
-trap cleanup_lock EXIT
+trap openpath_lock_cleanup EXIT
 
 # Acquire exclusive lock with timeout (prevents race with captive-portal-detector)
-exec 200>"$OPENPATH_LOCK_FILE"
-if ! timeout 30 flock -x 200; then
+if ! openpath_lock_acquire 30; then
     echo "Could not acquire lock after 30s - another process may be stuck"
     exit 1
 fi
