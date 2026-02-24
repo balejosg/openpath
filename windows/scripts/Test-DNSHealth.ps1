@@ -34,6 +34,7 @@ Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
 $issues = @()
 $watchdogFailCountPath = "$OpenPathRoot\data\watchdog-fails.txt"
 $staleFailsafeStatePath = "$OpenPathRoot\data\stale-failsafe-state.json"
+$captivePortalStatePath = "$OpenPathRoot\data\captive-portal-active.json"
 $config = $null
 
 try {
@@ -113,6 +114,245 @@ function Restore-CheckpointFromWatchdog {
     }
 }
 
+function Get-OpenPathCaptivePortalMarker {
+    if (-not (Test-Path $captivePortalStatePath)) {
+        return $null
+    }
+
+    try {
+        $raw = Get-Content $captivePortalStatePath -Raw -ErrorAction Stop
+        if (-not $raw) {
+            return $null
+        }
+        return ($raw | ConvertFrom-Json -ErrorAction Stop)
+    }
+    catch {
+        return $null
+    }
+}
+
+function Set-OpenPathCaptivePortalMarker {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$State
+    )
+
+    try {
+        $dir = Split-Path $captivePortalStatePath -Parent
+        if (-not (Test-Path $dir)) {
+            New-Item -ItemType Directory -Path $dir -Force | Out-Null
+        }
+
+        $existing = Get-OpenPathCaptivePortalMarker
+        $since = (Get-Date).ToString('o')
+        if ($existing -and $existing.PSObject.Properties['since'] -and $existing.since) {
+            $since = [string]$existing.since
+        }
+
+        $payload = @{
+            active = $true
+            state = [string]$State
+            since = [string]$since
+            updatedAt = (Get-Date).ToString('o')
+        } | ConvertTo-Json -Depth 8
+
+        $payload | Set-Content -Path $captivePortalStatePath -Encoding UTF8 -Force
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function Clear-OpenPathCaptivePortalMarker {
+    try {
+        Remove-Item -Path $captivePortalStatePath -Force -ErrorAction SilentlyContinue
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function Test-OpenPathCaptivePortalState {
+    <#
+    .SYNOPSIS
+        Detects captive portal state using multiple endpoints.
+    .OUTPUTS
+        String: Authenticated | Portal | NoNetwork
+    #>
+    [CmdletBinding()]
+    param(
+        [int]$TimeoutSec = 3
+    )
+
+    $checks = @(
+        @{ Url = 'http://www.msftconnecttest.com/connecttest.txt'; ExpectedStatus = 200; ExpectedBody = 'Microsoft Connect Test' },
+        @{ Url = 'http://detectportal.firefox.com/success.txt'; ExpectedStatus = 200; ExpectedBody = 'success' },
+        @{ Url = 'http://clients3.google.com/generate_204'; ExpectedStatus = 204; ExpectedBody = '' }
+    )
+
+    $total = 0
+    $success = 0
+    $transportFail = 0
+
+    foreach ($check in $checks) {
+        $total += 1
+
+        $statusCode = $null
+        $content = ''
+
+        try {
+            $resp = Invoke-WebRequest -Uri $check.Url -UseBasicParsing -TimeoutSec $TimeoutSec -MaximumRedirection 0 -ErrorAction Stop
+            $statusCode = [int]$resp.StatusCode
+            if ($resp.PSObject.Properties['Content'] -and $resp.Content) {
+                $content = [string]$resp.Content
+            }
+        }
+        catch {
+            $ex = $_.Exception
+
+            # Attempt to extract HTTP status code from the exception if present
+            try {
+                if ($ex -and $ex.Response -and $ex.Response.StatusCode) {
+                    $statusCode = [int]$ex.Response.StatusCode
+                }
+            }
+            catch {
+                # Ignore
+            }
+
+            try {
+                if (-not $statusCode -and $ex -and $ex.PSObject.Properties['StatusCode']) {
+                    $statusCode = [int]$ex.StatusCode
+                }
+            }
+            catch {
+                # Ignore
+            }
+
+            if (-not $statusCode) {
+                $transportFail += 1
+            }
+            continue
+        }
+
+        $content = $content.Trim()
+        if ($statusCode -eq [int]$check.ExpectedStatus) {
+            if ([string]$check.ExpectedBody -eq '' -or $content -eq [string]$check.ExpectedBody) {
+                $success += 1
+            }
+        }
+    }
+
+    if ($total -le 0) {
+        return 'NoNetwork'
+    }
+    if ($transportFail -ge $total) {
+        return 'NoNetwork'
+    }
+
+    $threshold = [Math]::Floor($total / 2) + 1
+    if ($success -ge $threshold) {
+        return 'Authenticated'
+    }
+    return 'Portal'
+}
+
+function Enable-OpenPathCaptivePortalMode {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [string]$State = 'Portal'
+    )
+
+    if (-not $PSCmdlet.ShouldProcess('OpenPath', 'Enable captive portal mode')) {
+        return $false
+    }
+
+    if (Test-Path $captivePortalStatePath) {
+        Set-OpenPathCaptivePortalMarker -State $State | Out-Null
+        return $true
+    }
+
+    Write-OpenPathLog 'Watchdog: Captive portal detected - entering portal mode (temporarily opening DNS + firewall)' -Level WARN
+
+    Disable-OpenPathFirewall | Out-Null
+    Restore-OriginalDNS
+    Set-OpenPathCaptivePortalMarker -State $State | Out-Null
+    return $true
+}
+
+function Disable-OpenPathCaptivePortalMode {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [PSCustomObject]$Config = $null
+    )
+
+    if (-not $PSCmdlet.ShouldProcess('OpenPath', 'Disable captive portal mode')) {
+        return $false
+    }
+
+    if (-not (Test-Path $captivePortalStatePath)) {
+        return $true
+    }
+
+    Write-OpenPathLog 'Watchdog: Captive portal resolved - restoring DNS protection' -Level WARN
+
+    Set-LocalDNS
+
+    if (-not $Config) {
+        try {
+            $Config = Get-OpenPathConfig
+        }
+        catch {
+            $Config = $null
+        }
+    }
+
+    try {
+        $acrylicPath = Get-AcrylicPath
+        $upstream = '8.8.8.8'
+        if ($Config -and $Config.PSObject.Properties['primaryDNS'] -and $Config.primaryDNS) {
+            $upstream = [string]$Config.primaryDNS
+        }
+
+        if ($acrylicPath) {
+            Set-OpenPathFirewall -UpstreamDNS $upstream -AcrylicPath $acrylicPath | Out-Null
+        }
+        else {
+            Enable-OpenPathFirewall | Out-Null
+        }
+    }
+    catch {
+        # Non-fatal
+    }
+
+    Clear-OpenPathCaptivePortalMarker | Out-Null
+    return $true
+}
+
+# Pre-check: Captive portal state
+$portalModeActive = (Test-Path $captivePortalStatePath)
+$captiveState = 'NoNetwork'
+try {
+    $captiveState = Test-OpenPathCaptivePortalState -TimeoutSec 3
+}
+catch {
+    $captiveState = 'NoNetwork'
+}
+
+if ($captiveState -eq 'Portal') {
+    Enable-OpenPathCaptivePortalMode -State $captiveState | Out-Null
+}
+elseif ($captiveState -eq 'Authenticated' -and $portalModeActive) {
+    Disable-OpenPathCaptivePortalMode -Config $config | Out-Null
+}
+
+$portalModeActive = (Test-Path $captivePortalStatePath)
+if ($portalModeActive) {
+    $issues += 'Captive portal mode active'
+}
+
 # Check 1: Acrylic service running
 try {
     $acrylicService = Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -128,7 +368,7 @@ catch {
 
 # Check 2: DNS resolution working (should resolve whitelisted domain)
 try {
-    if (-not (Test-DNSResolution -Domain "google.com")) {
+    if (-not $portalModeActive -and -not (Test-DNSResolution -Domain "google.com")) {
         $issues += "DNS resolution failed for whitelisted domain"
         Write-OpenPathLog "Watchdog: DNS resolution failed, restarting Acrylic..." -Level WARN
         Restart-AcrylicService
@@ -141,7 +381,7 @@ catch {
 
 # Check 3: DNS sinkhole working (should block non-whitelisted)
 try {
-    if (-not (Test-DNSSinkhole -Domain "this-should-be-blocked-test-12345.com")) {
+    if (-not $portalModeActive -and -not (Test-DNSSinkhole -Domain "this-should-be-blocked-test-12345.com")) {
         $issues += "DNS sinkhole not working"
         Write-OpenPathLog "Watchdog: Sinkhole not working properly" -Level WARN
     }
@@ -152,7 +392,7 @@ catch {
 
 # Check 4: Firewall rules active
 try {
-    if (-not (Test-FirewallActive)) {
+    if (-not $portalModeActive -and -not (Test-FirewallActive)) {
         $issues += "Firewall rules not active"
         Write-OpenPathLog "Watchdog: Firewall rules missing, reconfiguring..." -Level WARN
         if (-not $config) {
@@ -171,7 +411,7 @@ try {
     $dnsServers = Get-DnsClientServerAddress -AddressFamily IPv4 | 
         Where-Object { $_.ServerAddresses -contains "127.0.0.1" }
 
-    if (-not $dnsServers) {
+    if (-not $portalModeActive -and -not $dnsServers) {
         $issues += "Local DNS not configured"
         Write-OpenPathLog "Watchdog: Local DNS not configured, fixing..." -Level WARN
         Set-LocalDNS
@@ -236,40 +476,8 @@ catch {
     Write-OpenPathLog "Watchdog: Error during integrity checks: $_" -Level ERROR
 }
 
-# Check 9: Captive portal detection
-# If we're behind a captive portal (WiFi login), temporarily allow full access
-try {
-    $captiveResponse = Invoke-WebRequest -Uri "http://www.msftconnecttest.com/connecttest.txt" `
-        -UseBasicParsing -TimeoutSec 5 -MaximumRedirection 0 -ErrorAction Stop
-    $isCaptive = ($captiveResponse.StatusCode -ne 200 -or $captiveResponse.Content.Trim() -ne "Microsoft Connect Test")
-}
-catch {
-    # A redirect (3xx) or connection failure could indicate captive portal
-    $isCaptive = $true
-}
-
-if ($isCaptive -and (Test-InternetConnection)) {
-    # We have network connectivity but captive portal detected
-    $issues += "Captive portal detected"
-    Write-OpenPathLog "Watchdog: Captive portal detected - temporarily opening DNS for authentication" -Level WARN
-    Restore-OriginalDNS
-    
-    # Wait for user to complete captive portal authentication
-    Start-Sleep -Seconds 30
-    
-    # Re-check if captive portal is resolved
-    try {
-        $recheck = Invoke-WebRequest -Uri "http://www.msftconnecttest.com/connecttest.txt" `
-            -UseBasicParsing -TimeoutSec 5 -MaximumRedirection 0 -ErrorAction Stop
-        if ($recheck.StatusCode -eq 200 -and $recheck.Content.Trim() -eq "Microsoft Connect Test") {
-            Write-OpenPathLog "Watchdog: Captive portal resolved - restoring DNS protection" 
-            Set-LocalDNS
-        }
-    }
-    catch {
-        Write-OpenPathLog "Watchdog: Captive portal still active - will retry next cycle" -Level WARN
-    }
-}
+# Captive portal handling now runs as a pre-check so other checks can skip
+# enforcement while portal mode is active.
 
 # Summary
 $status = 'HEALTHY'
@@ -284,7 +492,7 @@ elseif ($issues.Count -gt 0) {
 }
 
 $watchdogFailCount = 0
-if ($status -eq 'HEALTHY' -or $status -eq 'STALE_FAILSAFE') {
+if ($status -eq 'HEALTHY' -or $status -eq 'STALE_FAILSAFE' -or ($portalModeActive -and $status -eq 'DEGRADED')) {
     Reset-WatchdogFailCount
 }
 else {

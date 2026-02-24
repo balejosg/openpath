@@ -202,6 +202,7 @@ rm -f /etc/tmpfiles.d/openpath-dnsmasq.conf
 rm -f /etc/logrotate.d/openpath-dnsmasq
 rm -rf /run/dnsmasq
 rm -f /etc/sudoers.d/openpath
+rm -f /etc/NetworkManager/dispatcher.d/99-openpath-captive-check
 
 # Limpiar políticas de navegadores
 echo '{"policies": {}}' > /etc/firefox/policies/policies.json 2>/dev/null || true

@@ -1042,7 +1042,11 @@ Describe "Watchdog Script" {
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 'msftconnecttest.com',
+                'detectportal.firefox.com',
+                'clients3.google.com',
+                'captive-portal-active.json',
                 'Captive portal detected',
+                'Disable-OpenPathFirewall',
                 'Restore-OriginalDNS'
             )
         }
@@ -1054,7 +1058,9 @@ Describe "Watchdog Script" {
             Assert-ContentContainsAll -Content $content -Needles @(
                 'Captive portal resolved',
                 'restoring DNS protection',
-                'Set-LocalDNS'
+                'Set-LocalDNS',
+                'Set-OpenPathFirewall',
+                'Clear-OpenPathCaptivePortalMarker'
             )
         }
     }

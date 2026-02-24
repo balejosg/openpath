@@ -23,6 +23,7 @@ case "$1" in
         rm -f /var/log/captive-portal-detector.log
         rm -f /etc/tmpfiles.d/openpath-dnsmasq.conf
         rm -f /etc/logrotate.d/openpath-dnsmasq
+        rm -f /etc/NetworkManager/dispatcher.d/99-openpath-captive-check
         rm -rf /run/dnsmasq
         
         # Unprotect resolv.conf

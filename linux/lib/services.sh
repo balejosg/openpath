@@ -33,6 +33,7 @@ create_systemd_services() {
     create_captive_portal_service
     create_dnsmasq_override
     create_tmpfiles_config
+    install_nm_dispatcher
     
     systemctl daemon-reload
     
@@ -217,6 +218,7 @@ remove_services() {
     rm -f /etc/systemd/system/dnsmasq-watchdog.timer
     rm -f /etc/systemd/system/captive-portal-detector.service
     rm -rf /etc/systemd/system/dnsmasq.service.d
+    remove_nm_dispatcher
     
     systemctl daemon-reload
     
@@ -246,4 +248,46 @@ create_tmpfiles_config() {
     cat > /etc/tmpfiles.d/openpath-dnsmasq.conf << 'EOF'
 d /run/dnsmasq 0755 root root -
 EOF
+}
+
+# Install a NetworkManager dispatcher hook to wake the captive portal detector
+# immediately on network changes.
+# Optional: only installed if NetworkManager dispatcher directory exists.
+install_nm_dispatcher() {
+    local dispatcher_dir="/etc/NetworkManager/dispatcher.d"
+    local hook_path="$dispatcher_dir/99-openpath-captive-check"
+
+    if [ ! -d "$dispatcher_dir" ]; then
+        log_debug "[CAPTIVE] NetworkManager dispatcher dir not found; skipping hook install"
+        return 0
+    fi
+
+    cat > "$hook_path" << 'EOF'
+#!/bin/bash
+set -o pipefail
+
+INTERFACE="$1"
+ACTION="$2"
+
+case "$ACTION" in
+    up|connectivity-change|dhcp4-change|dhcp6-change)
+        # Wake captive portal detector service (interrupts sleep)
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl kill -s USR1 captive-portal-detector.service 2>/dev/null || true
+        fi
+        logger -t openpath "[CAPTIVE] Network change ($ACTION on $INTERFACE) - waking captive portal detector" 2>/dev/null || true
+        ;;
+esac
+
+exit 0
+EOF
+
+    chmod 755 "$hook_path" 2>/dev/null || true
+    log "✓ NetworkManager dispatcher hook installed: $hook_path"
+    return 0
+}
+
+remove_nm_dispatcher() {
+    local hook_path="/etc/NetworkManager/dispatcher.d/99-openpath-captive-check"
+    rm -f "$hook_path" 2>/dev/null || true
 }

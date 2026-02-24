@@ -107,6 +107,7 @@ EOF
         # Step 9: Create logrotate and tmpfiles config
         create_logrotate_config
         create_tmpfiles_config
+        install_nm_dispatcher
         
         # Step 10: Reload systemd and enable services
         echo "  Habilitando servicios..."

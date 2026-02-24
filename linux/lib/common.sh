@@ -202,33 +202,115 @@ check_internet() {
 # Captive Portal Detection (shared by update and detector scripts)
 # =============================================================================
 
-# URL and expected response for captive portal detection
+# URL and expected response for (single) captive portal detection
 # Configurable via defaults.conf or environment variables
-CAPTIVE_PORTAL_CHECK_URL="${CAPTIVE_PORTAL_URL:-http://detectportal.firefox.com/success.txt}"
-CAPTIVE_PORTAL_CHECK_EXPECTED="${CAPTIVE_PORTAL_EXPECTED:-success}"
+# NOTE: CAPTIVE_PORTAL_CHECK_URL/CAPTIVE_PORTAL_CHECK_EXPECTED are kept for testability.
+CAPTIVE_PORTAL_CHECK_URL="${CAPTIVE_PORTAL_CHECK_URL:-${CAPTIVE_PORTAL_URL:-http://detectportal.firefox.com/success.txt}}"
+CAPTIVE_PORTAL_CHECK_EXPECTED="${CAPTIVE_PORTAL_CHECK_EXPECTED:-${CAPTIVE_PORTAL_EXPECTED:-success}}"
 
-# Check if there's a captive portal (not authenticated)
-# Returns 0 if captive portal detected (needs auth)
-# Returns 1 if no captive portal (authenticated/normal)
-check_captive_portal() {
-    local response
-    response=$(timeout 5 curl -s -L "$CAPTIVE_PORTAL_CHECK_URL" 2>/dev/null | tr -d '\n\r')
+# Get captive portal state.
+# Returns one of:
+# - AUTHENTICATED: endpoint(s) return expected response (no portal)
+# - PORTAL: network reachable but response differs (login/redirect/HTML)
+# - NO_NETWORK: transport failure (timeout/DNS failure/no route)
+get_captive_portal_state() {
+    local timeout_sec="${CAPTIVE_PORTAL_TIMEOUT:-3}"
+    local checks_raw="${CAPTIVE_PORTAL_CHECKS:-}"
 
-    if [ "$response" = "$CAPTIVE_PORTAL_CHECK_EXPECTED" ]; then
-        return 1  # NO captive portal (authenticated)
-    else
-        return 0  # Captive portal detected (needs auth)
+    # Multi-check mode (pipe-separated: url,expected)
+    if [ -n "$checks_raw" ]; then
+        local total=0
+        local success=0
+        local transport_fail=0
+
+        local check
+        local -a checks
+        IFS='|' read -r -a checks <<< "$checks_raw"
+
+        for check in "${checks[@]}"; do
+            [ -z "$check" ] && continue
+            total=$((total + 1))
+
+            local url expected
+            IFS=',' read -r url expected <<< "$check"
+
+            # Best-effort trim for URL only
+            url="${url//[[:space:]]/}"
+
+            local response rc
+            response=$(timeout "$timeout_sec" curl -s -L "$url" 2>/dev/null)
+            rc=$?
+            if [ "$rc" -ne 0 ]; then
+                transport_fail=$((transport_fail + 1))
+                continue
+            fi
+
+            response=$(printf '%s' "$response" | tr -d '\n\r')
+            if [ "$response" = "$expected" ]; then
+                success=$((success + 1))
+            fi
+        done
+
+        if [ "$total" -eq 0 ]; then
+            echo "NO_NETWORK"
+            return 0
+        fi
+
+        if [ "$transport_fail" -ge "$total" ]; then
+            echo "NO_NETWORK"
+            return 0
+        fi
+
+        local threshold
+        threshold=$(( (total / 2) + 1 ))
+        if [ "$success" -ge "$threshold" ]; then
+            echo "AUTHENTICATED"
+            return 0
+        fi
+
+        echo "PORTAL"
+        return 0
     fi
+
+    # Single-check fallback (legacy behavior)
+    local response rc
+    response=$(timeout "$timeout_sec" curl -s -L "$CAPTIVE_PORTAL_CHECK_URL" 2>/dev/null)
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        echo "NO_NETWORK"
+        return 0
+    fi
+
+    response=$(printf '%s' "$response" | tr -d '\n\r')
+    if [ "$response" = "$CAPTIVE_PORTAL_CHECK_EXPECTED" ]; then
+        echo "AUTHENTICATED"
+        return 0
+    fi
+
+    echo "PORTAL"
+    return 0
+}
+
+# Check if there's a captive portal (not authenticated).
+# Returns 0 if captive portal detected (needs auth) OR no network.
+# Returns 1 if no captive portal (authenticated/normal).
+check_captive_portal() {
+    local state
+    state=$(get_captive_portal_state)
+
+    if [ "$state" = "AUTHENTICATED" ]; then
+        return 1  # NO captive portal (authenticated)
+    fi
+    return 0  # Captive portal detected (needs auth) OR no network
 }
 
 # Check if authenticated (inverse of check_captive_portal for readability)
 # Returns 0 if authenticated
-# Returns 1 if captive portal detected
+# Returns 1 if captive portal detected OR no network
 is_network_authenticated() {
-    local response
-    response=$(timeout 5 curl -s -L "$CAPTIVE_PORTAL_CHECK_URL" 2>/dev/null | tr -d '\n\r')
-
-    [ "$response" = "$CAPTIVE_PORTAL_CHECK_EXPECTED" ]
+    local state
+    state=$(get_captive_portal_state)
+    [ "$state" = "AUTHENTICATED" ]
 }
 
 # Parse whitelist file sections
