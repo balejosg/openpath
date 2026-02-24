@@ -248,6 +248,7 @@ step_install_libraries() {
     cp "$SCRIPT_DIR/lib/common.sh" "$INSTALL_DIR/lib/"
     cp "$SCRIPT_DIR/lib/dns.sh" "$INSTALL_DIR/lib/"
     cp "$SCRIPT_DIR/lib/firewall.sh" "$INSTALL_DIR/lib/"
+    cp "$SCRIPT_DIR/lib/captive-portal.sh" "$INSTALL_DIR/lib/"
     cp "$SCRIPT_DIR/lib/browser.sh" "$INSTALL_DIR/lib/"
     cp "$SCRIPT_DIR/lib/services.sh" "$INSTALL_DIR/lib/"
     cp "$SCRIPT_DIR/lib/rollback.sh" "$INSTALL_DIR/lib/"

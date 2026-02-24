@@ -1038,9 +1038,17 @@ Describe "Watchdog Script" {
     Context "Captive portal detection" {
         It "Detects captive portals and temporarily opens DNS" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
-            $content = Get-Content $scriptPath -Raw
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "CaptivePortal.psm1"
+            $scriptContent = Get-Content $scriptPath -Raw
+            $moduleContent = Get-Content $modulePath -Raw
 
-            Assert-ContentContainsAll -Content $content -Needles @(
+            Assert-ContentContainsAll -Content $scriptContent -Needles @(
+                'CaptivePortal.psm1',
+                'Test-OpenPathCaptivePortalState',
+                'Enable-OpenPathCaptivePortalMode'
+            )
+
+            Assert-ContentContainsAll -Content $moduleContent -Needles @(
                 'msftconnecttest.com',
                 'detectportal.firefox.com',
                 'clients3.google.com',
@@ -1053,9 +1061,16 @@ Describe "Watchdog Script" {
 
         It "Restores DNS protection after captive portal is resolved" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
-            $content = Get-Content $scriptPath -Raw
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "CaptivePortal.psm1"
+            $scriptContent = Get-Content $scriptPath -Raw
+            $moduleContent = Get-Content $modulePath -Raw
 
-            Assert-ContentContainsAll -Content $content -Needles @(
+            Assert-ContentContainsAll -Content $scriptContent -Needles @(
+                'Disable-OpenPathCaptivePortalMode',
+                'Test-OpenPathCaptivePortalModeActive'
+            )
+
+            Assert-ContentContainsAll -Content $moduleContent -Needles @(
                 'Captive portal resolved',
                 'restoring DNS protection',
                 'Set-LocalDNS',

@@ -444,6 +444,7 @@ function Get-OpenPathCriticalFiles {
         "$script:OpenPathRoot\lib\Firewall.psm1",
         "$script:OpenPathRoot\lib\Browser.psm1",
         "$script:OpenPathRoot\lib\Services.psm1",
+        "$script:OpenPathRoot\lib\CaptivePortal.psm1",
         "$script:OpenPathRoot\scripts\Update-OpenPath.ps1",
         "$script:OpenPathRoot\scripts\Test-DNSHealth.ps1",
         "$script:OpenPathRoot\scripts\Start-SSEListener.ps1"

@@ -478,6 +478,7 @@ CRITICAL_FILES=(
     "$INSTALL_DIR/lib/common.sh"
     "$INSTALL_DIR/lib/dns.sh"
     "$INSTALL_DIR/lib/firewall.sh"
+    "$INSTALL_DIR/lib/captive-portal.sh"
     "$INSTALL_DIR/lib/browser.sh"
     "$INSTALL_DIR/lib/services.sh"
     "$INSTALL_DIR/lib/rollback.sh"

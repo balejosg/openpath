@@ -30,12 +30,9 @@ INSTALL_DIR="/usr/local/lib/openpath"
 source "$INSTALL_DIR/lib/common.sh"
 source "$INSTALL_DIR/lib/dns.sh"
 source "$INSTALL_DIR/lib/firewall.sh"
+source "$INSTALL_DIR/lib/captive-portal.sh"
 
 # Lock file compartido con openpath-update.sh (defined in common.sh as OPENPATH_LOCK_FILE)
-
-# Files (Debian FHS compliant)
-CAPTIVE_PORTAL_STATE_FILE="$VAR_STATE_DIR/captive-portal-active.state"
-CAPTIVE_DNSMASQ_BACKUP_FILE="$VAR_STATE_DIR/openpath.conf.pre-portal"
 
 CAPTIVE_PORTAL_DETECTED=false
 LAST_STATE=""
@@ -73,101 +70,6 @@ with_openpath_lock() {
 
     flock -u 200
     return "$rc"
-}
-
-is_portal_mode_active() {
-    [ -f "$CAPTIVE_PORTAL_STATE_FILE" ]
-}
-
-get_portal_mode_start_ts() {
-    if [ ! -f "$CAPTIVE_PORTAL_STATE_FILE" ]; then
-        return 1
-    fi
-
-    local ts
-    ts=$(cat "$CAPTIVE_PORTAL_STATE_FILE" 2>/dev/null | head -1)
-    if [[ "$ts" =~ ^[0-9]+$ ]]; then
-        echo "$ts"
-        return 0
-    fi
-    return 1
-}
-
-get_active_ssid() {
-    if ! command -v nmcli >/dev/null 2>&1; then
-        return 1
-    fi
-
-    LC_ALL=C nmcli -t -f ACTIVE,SSID dev wifi 2>/dev/null \
-        | awk -F: '$1=="yes" {print $2; exit}'
-}
-
-enter_portal_mode_locked() {
-    mkdir -p "$VAR_STATE_DIR" 2>/dev/null || true
-
-    PRIMARY_DNS=$(detect_primary_dns)
-    export PRIMARY_DNS
-
-    if [ -f "$DNSMASQ_CONF" ]; then
-        cp "$DNSMASQ_CONF" "$CAPTIVE_DNSMASQ_BACKUP_FILE" 2>/dev/null || true
-    fi
-
-    log "[CAPTIVE] Portal cautivo detectado - activando modo fail-open (DNS passthrough + firewall permisivo)" "WARN"
-
-    cat > "$DNSMASQ_CONF" << EOF
-# OPENPATH PORTAL MODE - DNS passthrough (temporary)
-no-resolv
-resolv-file=/run/dnsmasq/resolv.conf
-listen-address=127.0.0.1
-bind-interfaces
-cache-size=1000
-server=$PRIMARY_DNS
-EOF
-
-    if ! restart_dnsmasq; then
-        log "[CAPTIVE] ERROR: dnsmasq no reinició en modo portal" "ERROR"
-        if [ -f "$CAPTIVE_DNSMASQ_BACKUP_FILE" ]; then
-            log "[CAPTIVE] Restaurando configuración DNS previa" "WARN"
-            cp "$CAPTIVE_DNSMASQ_BACKUP_FILE" "$DNSMASQ_CONF" 2>/dev/null || true
-            restart_dnsmasq 2>/dev/null || true
-        fi
-    fi
-
-    deactivate_firewall
-    flush_connections 2>/dev/null || true
-
-    date +%s > "$CAPTIVE_PORTAL_STATE_FILE" 2>/dev/null || true
-    return 0
-}
-
-exit_portal_mode_locked() {
-    PRIMARY_DNS=$(detect_primary_dns)
-    export PRIMARY_DNS
-
-    local start_ts duration
-    duration=""
-    if start_ts=$(get_portal_mode_start_ts); then
-        duration=$(( $(date +%s) - start_ts ))
-    fi
-
-    log "[CAPTIVE] Autenticación completada - restaurando protecciones" "INFO"
-    if [ -n "$duration" ]; then
-        log "[CAPTIVE] Tiempo en modo portal: ${duration}s" "INFO"
-    fi
-
-    if [ -f "$DNSMASQ_CONF" ] && grep -q "^# OPENPATH PORTAL MODE" "$DNSMASQ_CONF" 2>/dev/null; then
-        if [ -f "$CAPTIVE_DNSMASQ_BACKUP_FILE" ]; then
-            cp "$CAPTIVE_DNSMASQ_BACKUP_FILE" "$DNSMASQ_CONF" 2>/dev/null || true
-            restart_dnsmasq 2>/dev/null || true
-        fi
-    fi
-
-    rm -f "$CAPTIVE_DNSMASQ_BACKUP_FILE" 2>/dev/null || true
-    rm -f "$CAPTIVE_PORTAL_STATE_FILE" 2>/dev/null || true
-
-    activate_firewall
-    flush_connections 2>/dev/null || true
-    return 0
 }
 
 # Bucle principal
