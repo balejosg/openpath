@@ -263,6 +263,65 @@ describe('Users View', () => {
     expect(screen.getByText('Usuario Creado')).toBeInTheDocument();
   });
 
+  it('refetches users list after create even when create response is unmappable and initial list is in-flight', async () => {
+    const firstList = createDeferred<unknown[]>();
+    const secondList = createDeferred<unknown[]>();
+
+    mockUsersList.mockImplementationOnce(() => firstList.promise);
+    mockUsersList.mockImplementationOnce(() => secondList.promise);
+
+    // Simulate a backend shape regression where create returns "active" instead of "isActive".
+    // The UI mapper will treat this as unmappable and must still refresh the list.
+    mockCreateUser.mockResolvedValueOnce({
+      id: 'user-created',
+      name: 'Usuario Creado',
+      email: 'creado@example.com',
+      active: true,
+      roles: [],
+    });
+
+    renderUsersView();
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
+    fireEvent.change(await screen.findByPlaceholderText('Nombre completo'), {
+      target: { value: 'Usuario Creado' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('usuario@dominio.com'), {
+      target: { value: 'creado@example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Mínimo 8 caracteres'), {
+      target: { value: 'SecurePass123!' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Usuario' }));
+
+    await waitFor(() => {
+      expect(mockCreateUser).toHaveBeenCalledTimes(1);
+    });
+
+    // The initial list request started before the user was created.
+    // Once we create, the view MUST trigger a refetch that is not blocked by the in-flight request.
+    await waitFor(() => {
+      expect(mockUsersList).toHaveBeenCalledTimes(2);
+    });
+
+    // Resolve the old request (stale snapshot) after the create.
+    firstList.resolve([]);
+
+    // Resolve the post-create refetch with the newly created user.
+    secondList.resolve([
+      {
+        id: 'user-created',
+        name: 'Usuario Creado',
+        email: 'creado@example.com',
+        isActive: true,
+        roles: [],
+      },
+    ]);
+
+    expect(await screen.findByText('Usuario Creado')).toBeInTheDocument();
+  });
+
   it('opens delete confirmation modal and deletes user on confirm', async () => {
     mockUsersList.mockResolvedValue([
       {

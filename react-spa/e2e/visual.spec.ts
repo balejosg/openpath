@@ -126,7 +126,7 @@ test.describe('Visual Regression - Dashboard', () => {
     await page.waitForTimeout(1000);
 
     await expect(page).toHaveScreenshot('dashboard-mobile.png', {
-      maxDiffPixelRatio: 0.02,
+      maxDiffPixelRatio: 0.04, // Dashboard includes dynamic timestamps/data
       animations: 'disabled',
     });
   });

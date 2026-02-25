@@ -32,6 +32,16 @@ interface UpdateUserInput {
 export const useUsersActions = () => {
   const queryClient = useQueryClient();
 
+  const invalidateUsersList = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+  }, [queryClient]);
+
+  const refreshUsersList = useCallback(async () => {
+    // Cancelling first prevents in-flight list responses from overwriting newer state.
+    await queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
+    invalidateUsersList();
+  }, [invalidateUsersList, queryClient]);
+
   const [createError, setCreateError] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<UserDeleteTarget | null>(null);
@@ -61,7 +71,8 @@ export const useUsersActions = () => {
     async (apiUser: unknown) => {
       const mapped = mapUnknownApiUserToUser(apiUser);
       if (!mapped) {
-        void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+        // If we can't safely map the create response, still force a refresh.
+        await refreshUsersList();
         return;
       }
 
@@ -70,16 +81,16 @@ export const useUsersActions = () => {
         const prevUsers = Array.isArray(prev) ? prev : [];
         return [mapped, ...prevUsers.filter((u) => u.id !== mapped.id)];
       });
-      void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+      invalidateUsersList();
     },
-    [queryClient]
+    [invalidateUsersList, queryClient, refreshUsersList]
   );
 
   const updateUserInCache = useCallback(
     async (apiUser: unknown) => {
       const mapped = mapUnknownApiUserToUser(apiUser);
       if (!mapped) {
-        void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+        await refreshUsersList();
         return;
       }
 
@@ -92,9 +103,9 @@ export const useUsersActions = () => {
         next[idx] = mapped;
         return next;
       });
-      void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+      invalidateUsersList();
     },
-    [queryClient]
+    [invalidateUsersList, queryClient, refreshUsersList]
   );
 
   const handleSaveEdit = useCallback(
@@ -183,7 +194,7 @@ export const useUsersActions = () => {
         const prevUsers = Array.isArray(prev) ? prev : [];
         return prevUsers.filter((u) => u.id !== deleteTarget.id);
       });
-      void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
+      invalidateUsersList();
 
       setDeleteTarget(null);
       return true;
@@ -192,7 +203,7 @@ export const useUsersActions = () => {
       setDeleteError('No se pudo eliminar usuario. Intenta nuevamente.');
       return false;
     }
-  }, [deleteTarget, deleteMutation, queryClient]);
+  }, [deleteTarget, deleteMutation, invalidateUsersList, queryClient]);
 
   return {
     saving,
