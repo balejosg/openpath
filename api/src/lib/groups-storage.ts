@@ -8,6 +8,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { eq, and, inArray } from 'drizzle-orm';
 import { normalize, getRootDomain } from '@openpath/shared';
+import type { GroupVisibility } from '@openpath/shared';
 import { db, whitelistGroups, whitelistRules } from '../db/index.js';
 import { logger } from './logger.js';
 import type { WhitelistGroup, WhitelistRule } from '../db/schema.js';
@@ -42,7 +43,7 @@ export type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
 export type RuleSource = 'manual' | 'auto_extension';
 
 /** Group visibility scope */
-export type GroupVisibility = 'private' | 'instance_public';
+export type { GroupVisibility };
 
 /** Group with computed rule counts */
 export interface GroupWithCounts {

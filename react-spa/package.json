@@ -25,6 +25,7 @@
   ],
   "dependencies": {
     "@openpath/api": "file:../api",
+    "@openpath/shared": "file:../shared",
     "@tanstack/react-query": "^5.90.18",
     "@trpc/client": "^11.8.1",
     "lucide-react": "^0.562.0",

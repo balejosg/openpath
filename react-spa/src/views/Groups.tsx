@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
+import type { GroupVisibility } from '@openpath/shared';
 import { trpc } from '../lib/trpc';
 import { isAdmin, isTeacher, isTeacherGroupsFeatureEnabled } from '../lib/auth';
 import { useToast } from '../components/ui/Toast';
@@ -26,8 +27,6 @@ type AllowedGroup = GroupsListOutput[number];
 
 type LibraryListOutput = Awaited<ReturnType<typeof trpc.groups.libraryList.query>>;
 type LibraryGroup = LibraryListOutput[number];
-
-type GroupVisibility = 'private' | 'instance_public';
 
 const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
   const [activeView, setActiveView] = useState<'my' | 'library'>('my');

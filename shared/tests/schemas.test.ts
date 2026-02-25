@@ -6,6 +6,7 @@ import {
   RequestStatus,
   RequestPriority,
   UserRole,
+  GroupVisibility,
   MachineStatus,
   HealthStatus,
   DomainRequest,
@@ -70,6 +71,18 @@ describe('Enum Schemas', () => {
     it('rejects invalid values', () => {
       assert.throws(() => UserRole.parse('superadmin'));
       assert.throws(() => UserRole.parse('guest'));
+    });
+  });
+
+  describe('GroupVisibility', () => {
+    it('accepts valid values', () => {
+      assert.doesNotThrow(() => GroupVisibility.parse('private'));
+      assert.doesNotThrow(() => GroupVisibility.parse('instance_public'));
+    });
+
+    it('rejects invalid values', () => {
+      assert.throws(() => GroupVisibility.parse('public'));
+      assert.throws(() => GroupVisibility.parse('org_public'));
     });
   });
 

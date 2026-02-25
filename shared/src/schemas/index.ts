@@ -7,6 +7,7 @@ import { z } from 'zod';
 export const RequestStatus = z.enum(['pending', 'approved', 'rejected']);
 export const RequestPriority = z.enum(['low', 'normal', 'high', 'urgent']);
 export const UserRole = z.enum(['admin', 'teacher', 'student']);
+export const GroupVisibility = z.enum(['private', 'instance_public']);
 export const MachineStatus = z.enum(['online', 'offline', 'unknown']);
 export const HealthStatus = z.enum([
   'HEALTHY',
@@ -150,6 +151,7 @@ export const PushSubscription = z.object({
 export type RequestStatus = z.infer<typeof RequestStatus>;
 export type RequestPriority = z.infer<typeof RequestPriority>;
 export type UserRole = z.infer<typeof UserRole>;
+export type GroupVisibility = z.infer<typeof GroupVisibility>;
 export type MachineStatus = z.infer<typeof MachineStatus>;
 export type HealthStatus = z.infer<typeof HealthStatus>;
 

@@ -202,7 +202,7 @@ const UsersView = () => {
       {/* Table */}
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table data-testid="users-table" className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-bold tracking-wider">
                 <th className="px-6 py-4">Usuario</th>
@@ -310,7 +310,10 @@ const UsersView = () => {
         </div>
 
         {/* Pagination Mock */}
-        <div className="px-6 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 bg-slate-50">
+        <div
+          data-testid="users-summary"
+          className="px-6 py-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 bg-slate-50"
+        >
           <div className="flex items-center gap-2">
             <span>
               Mostrando {rangeStart}-{rangeEnd} de {totalCount} usuarios

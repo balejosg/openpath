@@ -12,7 +12,7 @@ import { GroupsService } from '../../services/groups.service.js';
 import * as auth from '../../lib/auth.js';
 import * as roleStorage from '../../lib/role-storage.js';
 import type { JWTPayload } from '../../lib/auth.js';
-import { validateRuleValue } from '@openpath/shared';
+import { GroupVisibility as GroupVisibilitySchema, validateRuleValue } from '@openpath/shared';
 
 function canAccessGroup(
   user: JWTPayload,
@@ -147,8 +147,6 @@ const teacherViewGroupIdProcedure = <TSchema extends z.ZodTypeAny>(
 // =============================================================================
 
 const RuleTypeSchema = z.enum(['whitelist', 'blocked_subdomain', 'blocked_path']);
-
-const GroupVisibilitySchema = z.enum(['private', 'instance_public']);
 
 const CreateGroupSchema = z.object({
   name: z.string().min(1).max(100),
