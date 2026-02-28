@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, Loader2, AlertCircle } from 'lucide-react';
 import type { ScheduleWithPermissions } from '../types';
+import { GroupSelect } from './groups/GroupSelect';
+import { isGroupEnabled, type GroupLike } from './groups/GroupLabel';
 
 const DAY_OPTIONS = [
   { value: 1, label: 'Lunes' },
@@ -42,11 +44,6 @@ function normalizeDayOfWeek(value: unknown): number | null {
   return n;
 }
 
-interface GroupInfo {
-  id: string;
-  displayName: string;
-}
-
 interface ScheduleFormModalProps {
   /** null = create mode; populated = edit mode */
   schedule: ScheduleWithPermissions | null;
@@ -54,7 +51,7 @@ interface ScheduleFormModalProps {
   defaultDay?: number;
   /** Pre-filled start time when creating from calendar click */
   defaultStartTime?: string;
-  groups: GroupInfo[];
+  groups: GroupLike[];
   saving: boolean;
   error: string;
   onSave: (data: {
@@ -94,13 +91,22 @@ const ScheduleFormModal: React.FC<ScheduleFormModalProps> = ({
         return `${String(Math.min(hour + 1, 21)).padStart(2, '0')}:00`;
       })()
   );
-  const [groupId, setGroupId] = useState<string>(schedule?.groupId ?? groups.at(0)?.id ?? '');
+  const [groupId, setGroupId] = useState<string>(
+    schedule?.groupId ?? groups.find((g) => isGroupEnabled(g))?.id ?? ''
+  );
   const [localError, setLocalError] = useState('');
 
   // Sync error prop
   useEffect(() => {
     if (error) setLocalError(error);
   }, [error]);
+
+  useEffect(() => {
+    if (schedule?.groupId) return;
+    if (groupId) return;
+    const firstEnabled = groups.find((g) => isGroupEnabled(g));
+    if (firstEnabled) setGroupId(firstEnabled.id);
+  }, [groups, groupId, schedule?.groupId]);
 
   const handleSubmit = () => {
     setLocalError('');
@@ -209,19 +215,17 @@ const ScheduleFormModal: React.FC<ScheduleFormModalProps> = ({
             >
               Grupo de Reglas
             </label>
-            <select
+            <GroupSelect
               id="schedule-group"
               value={groupId}
-              onChange={(e) => setGroupId(e.target.value)}
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-            >
-              {groups.length === 0 && <option value="">Sin grupos disponibles</option>}
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.displayName}
-                </option>
-              ))}
-            </select>
+              onChange={setGroupId}
+              groups={groups}
+              includeNoneOption={false}
+              inactiveBehavior={schedule ? 'disable' : 'hide'}
+              disabled={saving || groups.length === 0}
+              emptyLabel="Sin grupos disponibles"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none disabled:bg-slate-50 disabled:text-slate-500"
+            />
           </div>
 
           {/* Error */}

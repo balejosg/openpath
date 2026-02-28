@@ -5,8 +5,8 @@ import type { ScheduleWithPermissions } from '../../types';
 
 describe('ScheduleFormModal Component', () => {
   const groups = [
-    { id: 'g1', displayName: 'Grupo 1' },
-    { id: 'g2', displayName: 'Grupo 2' },
+    { id: 'g1', name: 'grupo-1', displayName: 'Grupo 1' },
+    { id: 'g2', name: 'grupo-2', displayName: 'Grupo 2' },
   ];
 
   it('renders create mode by default and calls onClose', () => {

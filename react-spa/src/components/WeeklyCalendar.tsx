@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 import type { ScheduleWithPermissions } from '../types';
+import { resolveGroupDisplayName } from './groups/GroupLabel';
 
 const DAYS = [
   { key: 1, short: 'Lun', full: 'Lunes' },
@@ -207,8 +208,15 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                   ? (GROUP_COLORS[colorIdx] ?? GROUP_COLORS[0])
                   : RESERVED_COLOR;
                 const knownGroupName = groupNameMap.get(s.groupId);
-                const groupName =
-                  knownGroupName ?? (canEdit ? s.groupId : 'Reservado por otro profesor');
+                const group = knownGroupName
+                  ? { id: s.groupId, name: knownGroupName, displayName: knownGroupName }
+                  : null;
+                const groupName = resolveGroupDisplayName({
+                  groupId: s.groupId,
+                  group,
+                  source: 'schedule',
+                  revealUnknownId: canEdit,
+                });
 
                 return (
                   <div

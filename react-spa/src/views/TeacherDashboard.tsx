@@ -3,6 +3,12 @@ import { Folder, Loader2, ShieldCheck, ShieldOff, MonitorPlay, Calendar } from '
 import { trpc } from '../lib/trpc';
 import { isTeacherGroupsFeatureEnabled } from '../lib/auth';
 import { useAllowedGroups } from '../hooks/useAllowedGroups';
+import {
+  GroupLabel,
+  inferGroupSource,
+  resolveGroupDisplayName,
+} from '../components/groups/GroupLabel';
+import { GroupSelect } from '../components/groups/GroupSelect';
 
 interface ClassroomFromAPI {
   id: string;
@@ -27,7 +33,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
   const {
     groups,
     groupById,
-    options: groupOptions,
     isLoading: groupsLoading,
     error: groupsQueryError,
   } = useAllowedGroups();
@@ -86,54 +91,23 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
         const groupId = c.currentGroupId;
         if (!groupId) return null;
 
-        const group = groupById.get(groupId);
+        const group = groupById.get(groupId) ?? null;
         const classroomName = c.displayName || c.name;
 
-        const inferredSource = (() => {
-          if (c.currentGroupSource) return c.currentGroupSource;
-          if (c.activeGroupId) return 'manual';
-          if (!c.currentGroupId) return 'none';
-          if (c.defaultGroupId && c.currentGroupId === c.defaultGroupId) return 'default';
-          return 'schedule';
-        })();
-
-        const groupName = (() => {
-          if (group) return group.displayName || group.name;
-          if (inferredSource === 'manual') return 'Aplicado por otro profesor';
-          if (inferredSource === 'default') return 'Asignado por admin';
-          if (inferredSource === 'schedule') return 'Reservado por otro profesor';
-          return 'Grupo no disponible';
-        })();
-
-        const badgeVariant =
-          inferredSource === 'manual'
-            ? 'bg-blue-50 text-blue-700 border-blue-200'
-            : inferredSource === 'schedule'
-              ? 'bg-amber-50 text-amber-700 border-amber-200'
-              : inferredSource === 'default'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-slate-100 text-slate-500 border-slate-200';
-
-        const sourceLabel =
-          inferredSource === 'manual'
-            ? 'manual'
-            : inferredSource === 'schedule'
-              ? 'horario'
-              : inferredSource === 'default'
-                ? 'defecto'
-                : '';
-
-        const badgeParts = [groupName];
-        if (sourceLabel) badgeParts.push(sourceLabel);
+        const source = inferGroupSource({
+          currentGroupSource: c.currentGroupSource,
+          activeGroupId: c.activeGroupId,
+          currentGroupId: c.currentGroupId,
+          defaultGroupId: c.defaultGroupId,
+        });
 
         return {
           classroomId: c.id,
           classroomName,
-          badgeText: badgeParts.join(' · '),
-          badgeVariant,
-          sourceLabel,
-          groupId: groupId,
-          isActive: !!c.activeGroupId,
+          groupId,
+          group,
+          source,
+          hasManualOverride: !!c.activeGroupId,
         };
       })
       .filter((row): row is NonNullable<typeof row> => row !== null)
@@ -157,14 +131,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
       if (currentActiveGroupId && currentActiveGroupId !== nextGroupId) {
         const currentGroup = groupById.get(currentActiveGroupId);
         const nextGroup = nextGroupId ? groupById.get(nextGroupId) : null;
-        const currentName = currentGroup
-          ? currentGroup.displayName || currentGroup.name
-          : currentActiveGroupId;
-        const nextName = nextGroupId
-          ? nextGroup
-            ? nextGroup.displayName || nextGroup.name
-            : nextGroupId
-          : 'Sin grupo';
+        const currentName = resolveGroupDisplayName({
+          groupId: currentActiveGroupId,
+          group: currentGroup ?? null,
+          source: 'manual',
+          revealUnknownId: false,
+        });
+        const nextName = resolveGroupDisplayName({
+          groupId: nextGroupId,
+          group: nextGroup ?? null,
+          source: 'manual',
+          noneLabel: 'Sin grupo',
+          revealUnknownId: true,
+        });
 
         const ok = window.confirm(
           `El aula ya tiene una politica aplicada manualmente (${currentName}).\n\nReemplazar por: ${nextName}?`
@@ -277,19 +256,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Política a aplicar
               </label>
-              <select
+              <GroupSelect
+                id="teacher-control-group"
                 className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none"
                 value={selectedGroupForControl}
-                onChange={(e) => setSelectedGroupForControl(e.target.value)}
+                onChange={setSelectedGroupForControl}
                 disabled={groupsLoading || !!groupsError || groups.length === 0}
-              >
-                <option value="">Restaurar por defecto (Sin Grupo)</option>
-                {groupOptions.map((g) => (
-                  <option key={g.value} value={g.value}>
-                    {g.label}
-                  </option>
-                ))}
-              </select>
+                groups={groups}
+                includeNoneOption
+                noneLabel="Restaurar por defecto (Sin Grupo)"
+                inactiveBehavior="hide"
+              />
 
               {groupsError && <p className="mt-2 text-xs text-red-600">{groupsError}</p>}
 
@@ -355,10 +332,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
                   <div>
                     <h4 className="font-semibold text-slate-800 text-sm">{c.classroomName}</h4>
                     <p className="text-xs text-slate-500 mt-1">
-                      Usando: <span className="font-medium text-slate-700">{c.badgeText}</span>
+                      Usando:{' '}
+                      <GroupLabel
+                        variant="text"
+                        className="font-medium text-slate-700"
+                        groupId={c.groupId}
+                        group={c.group}
+                        source={c.source}
+                      />
                     </p>
                   </div>
-                  {c.isActive && c.sourceLabel === 'manual' && (
+                  {c.hasManualOverride && c.source === 'manual' && (
                     <button
                       onClick={() => void handleReleaseClass(c.classroomId)}
                       className="text-xs bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg transition-colors font-medium shadow-sm"

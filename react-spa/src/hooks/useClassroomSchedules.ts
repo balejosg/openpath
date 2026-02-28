@@ -31,9 +31,13 @@ interface ScheduleFormData {
 
 interface UseClassroomSchedulesParams {
   selectedClassroomId: string | null;
+  onSchedulesUpdated?: () => void | Promise<void>;
 }
 
-export const useClassroomSchedules = ({ selectedClassroomId }: UseClassroomSchedulesParams) => {
+export const useClassroomSchedules = ({
+  selectedClassroomId,
+  onSchedulesUpdated,
+}: UseClassroomSchedulesParams) => {
   const [schedules, setSchedules] = useState<ScheduleWithPermissions[]>([]);
   const [loadingSchedules, setLoadingSchedules] = useState(false);
   const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
@@ -121,6 +125,7 @@ export const useClassroomSchedules = ({ selectedClassroomId }: UseClassroomSched
         }
 
         await fetchSchedules(selectedClassroomId);
+        await onSchedulesUpdated?.();
         setScheduleFormOpen(false);
         setEditingSchedule(null);
         setScheduleFormDay(undefined);
@@ -132,7 +137,7 @@ export const useClassroomSchedules = ({ selectedClassroomId }: UseClassroomSched
         setScheduleSaving(false);
       }
     },
-    [selectedClassroomId, editingSchedule, fetchSchedules]
+    [selectedClassroomId, editingSchedule, fetchSchedules, onSchedulesUpdated]
   );
 
   const requestScheduleDelete = useCallback((schedule: ScheduleWithPermissions) => {
@@ -154,6 +159,7 @@ export const useClassroomSchedules = ({ selectedClassroomId }: UseClassroomSched
       setScheduleError('');
       await trpc.schedules.delete.mutate({ id: scheduleDeleteTarget.id });
       await fetchSchedules(selectedClassroomId);
+      await onSchedulesUpdated?.();
       setScheduleDeleteTarget(null);
     } catch (err: unknown) {
       console.error('Failed to delete schedule:', err);
@@ -161,7 +167,7 @@ export const useClassroomSchedules = ({ selectedClassroomId }: UseClassroomSched
     } finally {
       setScheduleSaving(false);
     }
-  }, [selectedClassroomId, scheduleDeleteTarget, fetchSchedules]);
+  }, [selectedClassroomId, scheduleDeleteTarget, fetchSchedules, onSchedulesUpdated]);
 
   return {
     schedules,

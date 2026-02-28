@@ -5,6 +5,7 @@ import type { CreateUserRole } from '../lib/roles';
 import { DEFAULT_CREATE_USER_ROLE, USER_ROLE_LABELS } from '../lib/roles';
 import { useUsersList } from '../hooks/useUsersList';
 import { useUsersActions } from '../hooks/useUsersActions';
+import { downloadFile } from '../lib/exportRules';
 
 const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
   const styles = {
@@ -129,15 +130,7 @@ const UsersView = () => {
       .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
       .join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'usuarios.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    downloadFile(csvContent, 'usuarios.csv', 'text/csv;charset=utf-8');
 
     setExportMessage('Exportación iniciada');
   };

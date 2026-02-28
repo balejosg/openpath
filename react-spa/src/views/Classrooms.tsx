@@ -20,11 +20,18 @@ import { getAuthTokenForHeader } from '../lib/auth-storage';
 import { useAllowedGroups } from '../hooks/useAllowedGroups';
 import { useClassroomConfigActions } from '../hooks/useClassroomConfigActions';
 import { useClassroomSchedules } from '../hooks/useClassroomSchedules';
+import { useScheduleBoundaryInvalidation } from '../hooks/useScheduleBoundaryInvalidation';
 import { useClipboard } from '../hooks/useClipboard';
 import { useListDetailSelection } from '../hooks/useListDetailSelection';
 import { normalizeSearchTerm, useNormalizedSearch } from '../hooks/useNormalizedSearch';
 import WeeklyCalendar from '../components/WeeklyCalendar';
 import ScheduleFormModal from '../components/ScheduleFormModal';
+import {
+  GroupLabel,
+  inferGroupSource,
+  getGroupSourcePhrase,
+} from '../components/groups/GroupLabel';
+import { GroupSelect } from '../components/groups/GroupSelect';
 import { Modal } from '../components/ui/Modal';
 
 const Classrooms = () => {
@@ -53,11 +60,6 @@ const Classrooms = () => {
   const calendarGroupsForDisplay = useMemo(
     () => allowedGroups.map((g) => ({ id: g.id, displayName: g.displayName || g.name })),
     [allowedGroups]
-  );
-
-  const calendarGroupsForSelect = useMemo(
-    () => groupOptions.map((g) => ({ id: g.value, displayName: g.label })),
-    [groupOptions]
   );
 
   // Enrollment state
@@ -235,7 +237,20 @@ const Classrooms = () => {
     requestScheduleDelete,
     closeScheduleDelete,
     handleConfirmDeleteSchedule,
-  } = useClassroomSchedules({ selectedClassroomId: selectedClassroom?.id ?? null });
+  } = useClassroomSchedules({
+    selectedClassroomId: selectedClassroom?.id ?? null,
+    onSchedulesUpdated: async () => {
+      await refetchClassrooms();
+    },
+  });
+
+  useScheduleBoundaryInvalidation({
+    schedules,
+    enabled: !!selectedClassroom && !selectedClassroom.activeGroup,
+    onBoundary: () => {
+      void refetchClassrooms();
+    },
+  });
 
   const openEnrollModal = async () => {
     setLoadingToken(true);
@@ -352,45 +367,12 @@ const Classrooms = () => {
             <div className="text-center py-8 text-slate-500 text-sm">No se encontraron aulas</div>
           ) : (
             filteredClassrooms.map((room) => {
-              const displayGroupId = room.currentGroupId;
-              const inferredSource = (() => {
-                if (room.currentGroupSource) return room.currentGroupSource;
-                if (room.activeGroup) return 'manual';
-                if (!room.currentGroupId) return 'none';
-                if (room.defaultGroupId && room.currentGroupId === room.defaultGroupId)
-                  return 'default';
-                return 'schedule';
-              })();
-
-              const displayGroupName = (() => {
-                if (!displayGroupId) return 'Sin grupo';
-                const group = groupById.get(displayGroupId);
-                if (group) return group.displayName || group.name;
-                if (admin) return displayGroupId;
-
-                if (inferredSource === 'manual') return 'Aplicado por otro profesor';
-                if (inferredSource === 'default') return 'Asignado por admin';
-                if (inferredSource === 'schedule') return 'Reservado por otro profesor';
-                return 'Grupo no disponible';
-              })();
-
-              const badgeVariant =
-                inferredSource === 'manual'
-                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                  : inferredSource === 'schedule'
-                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : inferredSource === 'default'
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                      : 'bg-slate-100 text-slate-500 border-slate-200';
-
-              const sourceLabel =
-                inferredSource === 'manual'
-                  ? 'manual'
-                  : inferredSource === 'schedule'
-                    ? 'horario'
-                    : inferredSource === 'default'
-                      ? 'defecto'
-                      : '';
+              const inferredSource = inferGroupSource({
+                currentGroupSource: room.currentGroupSource ?? null,
+                activeGroupId: room.activeGroup,
+                currentGroupId: room.currentGroupId,
+                defaultGroupId: room.defaultGroupId,
+              });
 
               return (
                 <div
@@ -416,9 +398,13 @@ const Classrooms = () => {
                     <span className="flex items-center gap-1">
                       <Laptop size={12} /> {room.computerCount} Equipos
                     </span>
-                    <span className={`px-2 py-0.5 rounded-full border ${badgeVariant}`}>
-                      {sourceLabel ? `${displayGroupName} · ${sourceLabel}` : displayGroupName}
-                    </span>
+                    <GroupLabel
+                      groupId={room.currentGroupId}
+                      group={room.currentGroupId ? groupById.get(room.currentGroupId) : null}
+                      source={inferredSource}
+                      revealUnknownId={admin}
+                      showSourceTag={inferredSource !== 'none'}
+                    />
                   </div>
                 </div>
               );
@@ -478,58 +464,54 @@ const Classrooms = () => {
                   >
                     Grupo Activo
                   </label>
-                  <select
+                  <GroupSelect
                     id="classroom-active-group"
                     value={selectedClassroom.activeGroup ?? ''}
-                    onChange={(e) => void handleGroupChange(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
-                  >
-                    <option value="">Sin grupo activo</option>
-                    {!admin &&
+                    onChange={(next) => void handleGroupChange(next)}
+                    groups={allowedGroups}
+                    includeNoneOption
+                    noneLabel="Sin grupo activo"
+                    inactiveBehavior="hide"
+                    unknownValueLabel={
+                      !admin &&
                       selectedClassroom.activeGroup &&
-                      !groupById.get(selectedClassroom.activeGroup) && (
-                        <option value={selectedClassroom.activeGroup} disabled>
-                          Aplicado por otro profesor
-                        </option>
-                      )}
-                    {groupOptions.map((g) => (
-                      <option key={g.value} value={g.value}>
-                        {g.label}
-                      </option>
-                    ))}
-                  </select>
+                      !groupById.get(selectedClassroom.activeGroup)
+                        ? 'Aplicado por otro profesor'
+                        : undefined
+                    }
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
+                  />
                   {!selectedClassroom.activeGroup && selectedClassroom.currentGroupId && (
                     <p className="mt-2 text-xs text-slate-500 italic">
                       Actualmente usando{' '}
-                      <span className="font-semibold text-slate-700">
-                        {(() => {
-                          const group = groupById.get(selectedClassroom.currentGroupId);
-                          if (group) return group.displayName || group.name;
-                          if (admin) return selectedClassroom.currentGroupId;
-
-                          const source =
-                            selectedClassroom.currentGroupSource ??
-                            (selectedClassroom.defaultGroupId !== null &&
-                            selectedClassroom.currentGroupId === selectedClassroom.defaultGroupId
-                              ? 'default'
-                              : 'schedule');
-
-                          if (source === 'default') return 'Asignado por admin';
-                          if (source === 'schedule') return 'Reservado por otro profesor';
-                          return 'Grupo no disponible';
-                        })()}
-                      </span>{' '}
                       {(() => {
-                        const source =
-                          selectedClassroom.currentGroupSource ??
-                          (selectedClassroom.defaultGroupId !== null &&
-                          selectedClassroom.currentGroupId === selectedClassroom.defaultGroupId
-                            ? 'default'
-                            : 'schedule');
+                        const source = inferGroupSource({
+                          currentGroupSource: selectedClassroom.currentGroupSource ?? null,
+                          activeGroupId: selectedClassroom.activeGroup,
+                          currentGroupId: selectedClassroom.currentGroupId,
+                          defaultGroupId: selectedClassroom.defaultGroupId,
+                        });
 
-                        if (source === 'default') return 'por defecto';
-                        if (source === 'schedule') return 'por horario';
-                        return '';
+                        const phrase = getGroupSourcePhrase(source);
+
+                        return (
+                          <>
+                            <GroupLabel
+                              variant="text"
+                              className="font-semibold text-slate-700"
+                              groupId={selectedClassroom.currentGroupId}
+                              group={
+                                selectedClassroom.currentGroupId
+                                  ? groupById.get(selectedClassroom.currentGroupId)
+                                  : null
+                              }
+                              source={source}
+                              revealUnknownId={admin}
+                              showSourceTag={false}
+                            />
+                            {phrase ? ` ${phrase}` : ''}
+                          </>
+                        );
                       })()}
                     </p>
                   )}
@@ -541,25 +523,24 @@ const Classrooms = () => {
                   >
                     Grupo por defecto
                   </label>
-                  <select
+                  <GroupSelect
                     id="classroom-default-group"
                     value={selectedClassroom.defaultGroupId ?? ''}
-                    onChange={(e) => void handleDefaultGroupChange(e.target.value)}
+                    onChange={(next) => void handleDefaultGroupChange(next)}
                     disabled={!admin}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm disabled:bg-slate-50 disabled:text-slate-500"
-                  >
-                    <option value="">Sin grupo por defecto</option>
-                    {!admin &&
+                    groups={allowedGroups}
+                    includeNoneOption
+                    noneLabel="Sin grupo por defecto"
+                    inactiveBehavior="disable"
+                    unknownValueLabel={
+                      !admin &&
                       selectedClassroom.defaultGroupId &&
-                      !groupById.get(selectedClassroom.defaultGroupId) && (
-                        <option value={selectedClassroom.defaultGroupId}>Asignado por admin</option>
-                      )}
-                    {groupOptions.map((g) => (
-                      <option key={g.value} value={g.value}>
-                        {g.label}
-                      </option>
-                    ))}
-                  </select>
+                      !groupById.get(selectedClassroom.defaultGroupId)
+                        ? 'Asignado por admin'
+                        : undefined
+                    }
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm disabled:bg-slate-50 disabled:text-slate-500"
+                  />
                   <p className="mt-2 text-xs text-slate-500 italic">
                     Se usa cuando no hay grupo activo ni bloque de horario vigente.
                   </p>
@@ -764,7 +745,7 @@ const Classrooms = () => {
           schedule={editingSchedule}
           defaultDay={scheduleFormDay}
           defaultStartTime={scheduleFormStartTime}
-          groups={calendarGroupsForSelect}
+          groups={allowedGroups}
           saving={scheduleSaving}
           error={scheduleError}
           onSave={(data) => void handleScheduleSave(data)}

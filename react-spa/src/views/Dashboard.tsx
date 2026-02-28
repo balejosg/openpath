@@ -13,6 +13,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import { GroupLabel, inferGroupSource } from '../components/groups/GroupLabel';
 
 interface StatsData {
   groupCount: number;
@@ -246,52 +247,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
         const groupId = c.currentGroupId;
         if (!groupId) return null;
 
-        const group = groupById.get(groupId);
-
         const classroomName = c.displayName || c.name;
-        const groupName = group ? group.displayName || group.name : groupId;
+        const group = groupById.get(groupId) ?? null;
 
-        const inferredSource = (() => {
-          if (c.currentGroupSource) return c.currentGroupSource;
-          if (c.activeGroupId) return 'manual';
-          if (!c.currentGroupId) return 'none';
-          if (c.defaultGroupId && c.currentGroupId === c.defaultGroupId) return 'default';
-          return 'schedule';
-        })();
-
-        let badgeVariant =
-          inferredSource === 'manual'
-            ? 'bg-blue-50 text-blue-700 border-blue-200'
-            : inferredSource === 'schedule'
-              ? 'bg-amber-50 text-amber-700 border-amber-200'
-              : inferredSource === 'default'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-slate-100 text-slate-500 border-slate-200';
-
-        const sourceLabel =
-          inferredSource === 'manual'
-            ? 'manual'
-            : inferredSource === 'schedule'
-              ? 'horario'
-              : inferredSource === 'default'
-                ? 'defecto'
-                : '';
-
-        const isGroupEnabled = group ? group.enabled : true;
-        if (!isGroupEnabled) {
-          badgeVariant = 'bg-slate-100 text-slate-600 border-slate-200';
-        }
-
-        const badgeParts = [groupName];
-        if (sourceLabel) badgeParts.push(sourceLabel);
-        if (!isGroupEnabled) badgeParts.push('inactivo');
+        const source = inferGroupSource({
+          currentGroupSource: c.currentGroupSource,
+          activeGroupId: c.activeGroupId,
+          currentGroupId: c.currentGroupId,
+          defaultGroupId: c.defaultGroupId,
+        });
 
         return {
           classroomId: c.id,
           classroomName,
-          badgeText: badgeParts.join(' · '),
-          badgeVariant,
-          sourceLabel,
+          groupId,
+          group,
+          source,
         };
       })
       .filter((row): row is NonNullable<typeof row> => row !== null)
@@ -380,12 +351,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
               {activeGroupsByClassroom.map((row) => (
                 <li key={row.classroomId} className="flex items-center justify-between gap-3">
                   <span className="text-sm text-slate-700 truncate">{row.classroomName}</span>
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-full border whitespace-nowrap ${row.badgeVariant}`}
-                    title={row.sourceLabel ? `Asignado por ${row.sourceLabel}` : undefined}
-                  >
-                    {row.badgeText}
-                  </span>
+                  <GroupLabel
+                    className="text-xs whitespace-nowrap"
+                    groupId={row.groupId}
+                    group={row.group}
+                    source={row.source}
+                    revealUnknownId
+                    showSourceTag={row.source !== 'none'}
+                    showInactiveTag
+                  />
                 </li>
               ))}
             </ul>
