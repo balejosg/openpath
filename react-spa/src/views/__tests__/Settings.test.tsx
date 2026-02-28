@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import Settings from '../Settings';
 
 const { mockChangePassword, mockListTokens, mockCreateToken } = vi.hoisted(() => ({
@@ -131,7 +131,7 @@ describe('Settings View - Change Password', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Crear Token' }));
     expect(await screen.findByText('El nombre es obligatorio')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Cerrar modal de token API' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cerrar' }));
     await waitFor(() => {
       expect(screen.queryByText('Crear Token API')).not.toBeInTheDocument();
     });

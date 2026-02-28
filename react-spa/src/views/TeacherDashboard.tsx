@@ -3,12 +3,14 @@ import { Folder, Loader2, ShieldCheck, ShieldOff, MonitorPlay, Calendar } from '
 import { trpc } from '../lib/trpc';
 import { isTeacherGroupsFeatureEnabled } from '../lib/auth';
 import { useAllowedGroups } from '../hooks/useAllowedGroups';
+import { useIntervalRefetch, useRefetchOnFocus } from '../hooks/useLiveRefetch';
 import {
   GroupLabel,
   inferGroupSource,
   resolveGroupDisplayName,
 } from '../components/groups/GroupLabel';
 import { GroupSelect } from '../components/groups/GroupSelect';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
 interface ClassroomFromAPI {
   id: string;
@@ -42,6 +44,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
   const [selectedClassroomForControl, setSelectedClassroomForControl] = useState<string>('');
   const [selectedGroupForControl, setSelectedGroupForControl] = useState<string>('');
   const [controlLoading, setControlLoading] = useState(false);
+  const [controlError, setControlError] = useState<string | null>(null);
+  const [controlConfirm, setControlConfirm] = useState<{
+    classroomId: string;
+    nextGroupId: string | null;
+    currentName: string;
+    nextName: string;
+  } | null>(null);
 
   const fetchClassrooms = useCallback(async () => {
     try {
@@ -67,23 +76,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
     }
   }, []);
 
+  const shouldPoll = import.meta.env.MODE !== 'test';
+
   useEffect(() => {
     void fetchClassrooms();
-
-    const classroomsInterval = window.setInterval(() => {
-      void fetchClassrooms();
-    }, 30000);
-
-    const onFocus = () => {
-      void fetchClassrooms();
-    };
-
-    window.addEventListener('focus', onFocus);
-    return () => {
-      window.clearInterval(classroomsInterval);
-      window.removeEventListener('focus', onFocus);
-    };
   }, [fetchClassrooms]);
+
+  useIntervalRefetch(fetchClassrooms, 30000, { enabled: shouldPoll });
+  useRefetchOnFocus(fetchClassrooms);
 
   const activeGroupsByClassroom = useMemo(() => {
     return classrooms
@@ -120,50 +120,65 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
     return activeGroupsByClassroom.filter((c) => allowedGroupIds.has(c.groupId));
   }, [activeGroupsByClassroom, groups]);
 
-  const handleTakeControl = async () => {
-    if (!selectedClassroomForControl) return;
-    setControlLoading(true);
-    try {
-      const current = classrooms.find((c) => c.id === selectedClassroomForControl);
-      const currentActiveGroupId = current?.activeGroupId ?? null;
-      const nextGroupId = selectedGroupForControl || null;
-
-      if (currentActiveGroupId && currentActiveGroupId !== nextGroupId) {
-        const currentGroup = groupById.get(currentActiveGroupId);
-        const nextGroup = nextGroupId ? groupById.get(nextGroupId) : null;
-        const currentName = resolveGroupDisplayName({
-          groupId: currentActiveGroupId,
-          group: currentGroup ?? null,
-          source: 'manual',
-          revealUnknownId: false,
-        });
-        const nextName = resolveGroupDisplayName({
+  const applyControlChange = useCallback(
+    async (classroomId: string, nextGroupId: string | null) => {
+      setControlLoading(true);
+      setControlError(null);
+      try {
+        await trpc.classrooms.setActiveGroup.mutate({
+          id: classroomId,
           groupId: nextGroupId,
-          group: nextGroup ?? null,
-          source: 'manual',
-          noneLabel: 'Sin grupo',
-          revealUnknownId: true,
         });
-
-        const ok = window.confirm(
-          `El aula ya tiene una politica aplicada manualmente (${currentName}).\n\nReemplazar por: ${nextName}?`
-        );
-        if (!ok) return;
+        await fetchClassrooms();
+        setSelectedClassroomForControl('');
+        setSelectedGroupForControl('');
+        return true;
+      } catch (e) {
+        console.error(e);
+        setControlError('Error al aplicar el grupo al aula');
+        return false;
+      } finally {
+        setControlLoading(false);
       }
+    },
+    [fetchClassrooms]
+  );
 
-      await trpc.classrooms.setActiveGroup.mutate({
-        id: selectedClassroomForControl,
-        groupId: nextGroupId,
+  const handleTakeControl = () => {
+    if (!selectedClassroomForControl) return;
+
+    const current = classrooms.find((c) => c.id === selectedClassroomForControl);
+    const currentActiveGroupId = current?.activeGroupId ?? null;
+    const nextGroupId = selectedGroupForControl || null;
+
+    if (currentActiveGroupId && currentActiveGroupId !== nextGroupId) {
+      const currentGroup = groupById.get(currentActiveGroupId);
+      const nextGroup = nextGroupId ? groupById.get(nextGroupId) : null;
+
+      const currentName = resolveGroupDisplayName({
+        groupId: currentActiveGroupId,
+        group: currentGroup ?? null,
+        source: 'manual',
+        revealUnknownId: false,
       });
-      await fetchClassrooms();
-      setSelectedClassroomForControl('');
-      setSelectedGroupForControl('');
-    } catch (e) {
-      console.error(e);
-      alert('Error al aplicar el grupo al aula');
-    } finally {
-      setControlLoading(false);
+      const nextName = resolveGroupDisplayName({
+        groupId: nextGroupId,
+        group: nextGroup ?? null,
+        source: 'manual',
+        noneLabel: 'Sin grupo',
+        revealUnknownId: true,
+      });
+
+      setControlConfirm({
+        classroomId: selectedClassroomForControl,
+        nextGroupId,
+        currentName,
+        nextName,
+      });
+      return;
     }
+
+    void applyControlChange(selectedClassroomForControl, nextGroupId);
   };
 
   const handleReleaseClass = async (classroomId: string) => {
@@ -297,13 +312,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
             </div>
 
             <button
-              onClick={() => void handleTakeControl()}
+              onClick={handleTakeControl}
               disabled={!selectedClassroomForControl || controlLoading}
               className="w-full mt-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
             >
               {controlLoading && <Loader2 size={16} className="animate-spin" />}
               {selectedGroupForControl ? 'Aplicar Política' : 'Liberar Aula'}
             </button>
+
+            {controlError && <p className="text-xs text-red-600">{controlError}</p>}
           </div>
         </div>
 
@@ -356,6 +373,37 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={controlConfirm !== null}
+        title="Confirmar cambio"
+        confirmLabel={controlConfirm?.nextGroupId ? 'Reemplazar' : 'Liberar Aula'}
+        cancelLabel="Cancelar"
+        isLoading={controlLoading}
+        errorMessage={controlConfirm ? (controlError ?? undefined) : undefined}
+        onClose={() => {
+          setControlConfirm(null);
+          setControlError(null);
+        }}
+        onConfirm={async () => {
+          if (!controlConfirm) return;
+          const ok = await applyControlChange(
+            controlConfirm.classroomId,
+            controlConfirm.nextGroupId
+          );
+          if (!ok) return;
+          setControlConfirm(null);
+        }}
+      >
+        <p className="text-sm text-slate-600">
+          El aula ya tiene una política aplicada manualmente (
+          <strong>{controlConfirm?.currentName}</strong>).
+        </p>
+        <p className="text-sm text-slate-600">
+          {controlConfirm?.nextGroupId ? 'Reemplazar por' : 'Liberar (sin grupo)'}:{' '}
+          <strong>{controlConfirm?.nextName}</strong>?
+        </p>
+      </ConfirmDialog>
     </div>
   );
 };

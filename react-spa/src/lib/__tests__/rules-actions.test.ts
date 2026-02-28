@@ -81,7 +81,7 @@ describe('rules-actions', () => {
   });
 
   it('toasts duplicate when API throws conflict-like error', async () => {
-    mockCreateRule.mockRejectedValue(new Error('CONFLICT'));
+    mockCreateRule.mockRejectedValue({ data: { code: 'CONFLICT' } });
 
     await expect(addRuleWithDetection('example.com', params)).resolves.toBe(false);
     expect(onToast).toHaveBeenCalledWith('"example.com" ya existe como Permitido', 'error');

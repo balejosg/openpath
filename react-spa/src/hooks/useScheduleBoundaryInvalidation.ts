@@ -1,23 +1,14 @@
 import { useEffect, useRef } from 'react';
 import type { ScheduleWithPermissions } from '../types';
+import { parseTimeOfDayToMinutes } from '../lib/time-of-day';
 
 export type ScheduleBoundaryLike = Pick<
   ScheduleWithPermissions,
   'dayOfWeek' | 'startTime' | 'endTime'
 >;
 
-function parseTimeToMinutes(value: string): number | null {
-  const [hRaw, mRaw] = value.split(':');
-  const h = Number(hRaw);
-  const m = Number(mRaw);
-  if (!Number.isInteger(h) || !Number.isInteger(m)) return null;
-  if (h < 0 || h > 23) return null;
-  if (m < 0 || m > 59) return null;
-  return h * 60 + m;
-}
-
 function computeNextOccurrenceAt(now: Date, dayOfWeek: number, time: string): Date | null {
-  const minutes = parseTimeToMinutes(time);
+  const minutes = parseTimeOfDayToMinutes(time);
   if (minutes === null) return null;
 
   // JS Date.getDay(): 0=Sun..6=Sat. Our schedule uses 1=Mon..5=Fri.
@@ -48,8 +39,8 @@ export function getNextScheduleBoundaryAt(
   let best: Date | null = null;
 
   for (const s of schedules) {
-    const startMin = parseTimeToMinutes(s.startTime);
-    const endMin = parseTimeToMinutes(s.endTime);
+    const startMin = parseTimeOfDayToMinutes(s.startTime);
+    const endMin = parseTimeOfDayToMinutes(s.endTime);
     if (startMin === null || endMin === null) continue;
     if (endMin <= startMin) continue;
 

@@ -6,7 +6,6 @@ import {
   Search,
   Clock,
   Laptop,
-  X,
   AlertCircle,
   Loader2,
   Download,
@@ -33,6 +32,7 @@ import {
 } from '../components/groups/GroupLabel';
 import { GroupSelect } from '../components/groups/GroupSelect';
 import { Modal } from '../components/ui/Modal';
+import { ConfirmDialog, DangerConfirmDialog } from '../components/ui/ConfirmDialog';
 
 const Classrooms = () => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
@@ -40,6 +40,12 @@ const Classrooms = () => {
   const [error, setError] = useState<string | null>(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [activeGroupOverwriteConfirm, setActiveGroupOverwriteConfirm] = useState<{
+    classroomId: string;
+    currentGroupId: string;
+    nextGroupId: string | null;
+  } | null>(null);
+  const [activeGroupOverwriteLoading, setActiveGroupOverwriteLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const normalizedSearchQuery = useNormalizedSearch(searchQuery);
   const admin = isAdmin();
@@ -219,6 +225,38 @@ const Classrooms = () => {
     setNewError('');
     setShowNewModal(true);
   };
+
+  const closeNewModal = () => {
+    if (saving) return;
+    setShowNewModal(false);
+  };
+
+  const resolveGroupName = (groupId: string | null) => {
+    if (!groupId) return 'Sin grupo activo';
+    const group = groupById.get(groupId);
+    return group?.displayName ?? group?.name ?? groupId;
+  };
+
+  const requestActiveGroupChange = useCallback(
+    (next: string) => {
+      if (!selectedClassroom) return;
+
+      const currentActiveGroupId = selectedClassroom.activeGroup ?? null;
+      const nextGroupId = next || null;
+
+      if (currentActiveGroupId && currentActiveGroupId !== nextGroupId) {
+        setActiveGroupOverwriteConfirm({
+          classroomId: selectedClassroom.id,
+          currentGroupId: currentActiveGroupId,
+          nextGroupId,
+        });
+        return;
+      }
+
+      void handleGroupChange(next);
+    },
+    [selectedClassroom, handleGroupChange]
+  );
 
   const {
     schedules,
@@ -467,7 +505,7 @@ const Classrooms = () => {
                   <GroupSelect
                     id="classroom-active-group"
                     value={selectedClassroom.activeGroup ?? ''}
-                    onChange={(next) => void handleGroupChange(next)}
+                    onChange={requestActiveGroupChange}
                     groups={allowedGroups}
                     includeNoneOption
                     noneLabel="Sin grupo activo"
@@ -668,76 +706,98 @@ const Classrooms = () => {
 
       {/* Modal: Nueva Aula */}
       {showNewModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Nueva Aula</h3>
-              <button
-                onClick={() => setShowNewModal(false)}
-                className="text-slate-400 hover:text-slate-600"
+        <Modal isOpen onClose={closeNewModal} title="Nueva Aula" className="max-w-md">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Nombre del Aula
+              </label>
+              <input
+                type="text"
+                placeholder="Ej: Laboratorio C"
+                value={newName}
+                onChange={(e) => {
+                  setNewName(e.target.value);
+                  if (newError) setNewError('');
+                }}
+                className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${newError ? 'border-red-300' : 'border-slate-300'}`}
+              />
+              {newError && (
+                <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                  <AlertCircle size={12} /> {newError}
+                </p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Grupo Inicial</label>
+              <select
+                value={newGroup}
+                onChange={(e) => setNewGroup(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               >
-                <X size={20} />
+                <option value="">Sin grupo</option>
+                {groupOptions.map((g) => (
+                  <option key={g.value} value={g.value}>
+                    {g.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={closeNewModal}
+                disabled={saving}
+                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void handleCreateClassroom()}
+                disabled={saving}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving && <Loader2 size={16} className="animate-spin" />}
+                Crear Aula
               </button>
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Nombre del Aula
-                </label>
-                <input
-                  type="text"
-                  placeholder="Ej: Laboratorio C"
-                  value={newName}
-                  onChange={(e) => {
-                    setNewName(e.target.value);
-                    if (newError) setNewError('');
-                  }}
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${newError ? 'border-red-300' : 'border-slate-300'}`}
-                />
-                {newError && (
-                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                    <AlertCircle size={12} /> {newError}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Grupo Inicial
-                </label>
-                <select
-                  value={newGroup}
-                  onChange={(e) => setNewGroup(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                >
-                  <option value="">Sin grupo</option>
-                  {groupOptions.map((g) => (
-                    <option key={g.value} value={g.value}>
-                      {g.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowNewModal(false)}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => void handleCreateClassroom()}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {saving && <Loader2 size={16} className="animate-spin" />}
-                  Crear Aula
-                </button>
-              </div>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
+
+      <ConfirmDialog
+        isOpen={activeGroupOverwriteConfirm !== null}
+        title="Reemplazar grupo activo"
+        confirmLabel="Reemplazar"
+        cancelLabel="Cancelar"
+        isLoading={activeGroupOverwriteLoading}
+        onClose={() => setActiveGroupOverwriteConfirm(null)}
+        onConfirm={async () => {
+          if (!activeGroupOverwriteConfirm) return;
+
+          if (selectedClassroom?.id !== activeGroupOverwriteConfirm.classroomId) {
+            setActiveGroupOverwriteConfirm(null);
+            return;
+          }
+
+          setActiveGroupOverwriteLoading(true);
+          try {
+            await handleGroupChange(activeGroupOverwriteConfirm.nextGroupId);
+            setActiveGroupOverwriteConfirm(null);
+          } finally {
+            setActiveGroupOverwriteLoading(false);
+          }
+        }}
+      >
+        <p className="text-sm text-slate-600">
+          Este aula ya tiene un grupo aplicado manualmente (
+          <strong>{resolveGroupName(activeGroupOverwriteConfirm?.currentGroupId ?? null)}</strong>
+          ).
+        </p>
+        <p className="text-sm text-slate-600">
+          ¿Reemplazar por{' '}
+          <strong>{resolveGroupName(activeGroupOverwriteConfirm?.nextGroupId ?? null)}</strong>?
+        </p>
+      </ConfirmDialog>
 
       {/* Modal: Configurar Horario */}
       {scheduleFormOpen && selectedClassroom && (
@@ -755,77 +815,50 @@ const Classrooms = () => {
 
       {/* Modal: Confirmar Eliminación */}
       {showDeleteConfirm && selectedClassroom && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="text-red-600" size={24} />
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-2">Eliminar Aula</h3>
-              <p className="text-sm text-slate-600 mb-6">
-                ¿Estás seguro de que quieres eliminar <strong>{selectedClassroom.name}</strong>?
-                Esta acción no se puede deshacer.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  disabled={deleting}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => void handleDeleteClassroom()}
-                  disabled={deleting}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {deleting && <Loader2 size={16} className="animate-spin" />}
-                  Eliminar
-                </button>
-              </div>
+        <DangerConfirmDialog
+          isOpen
+          title="Eliminar Aula"
+          confirmLabel="Eliminar"
+          cancelLabel="Cancelar"
+          isLoading={deleting}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={() => void handleDeleteClassroom()}
+        >
+          <div className="text-center">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="text-red-600" size={24} />
             </div>
+            <p className="text-sm text-slate-600">
+              ¿Estás seguro de que quieres eliminar <strong>{selectedClassroom.name}</strong>?
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Esta acción no se puede deshacer.</p>
           </div>
-        </div>
+        </DangerConfirmDialog>
       )}
 
       {/* Modal: Confirmar Eliminación de Horario */}
       {scheduleDeleteTarget && selectedClassroom && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Trash2 className="text-red-600" size={24} />
-              </div>
-              <h3 className="text-lg font-bold text-slate-800 mb-2">Eliminar Horario</h3>
-              <p className="text-sm text-slate-600 mb-6">
-                ¿Eliminar este bloque ({scheduleDeleteTarget.startTime}–
-                {scheduleDeleteTarget.endTime})? Esta acción no se puede deshacer.
-              </p>
-              {scheduleError && (
-                <p className="text-red-500 text-sm flex items-center justify-center gap-1 mb-4">
-                  <AlertCircle size={14} /> {scheduleError}
-                </p>
-              )}
-              <div className="flex gap-3">
-                <button
-                  onClick={closeScheduleDelete}
-                  disabled={scheduleSaving}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => void handleConfirmDeleteSchedule()}
-                  disabled={scheduleSaving}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {scheduleSaving && <Loader2 size={16} className="animate-spin" />}
-                  Eliminar
-                </button>
-              </div>
+        <DangerConfirmDialog
+          isOpen
+          title="Eliminar Horario"
+          confirmLabel="Eliminar"
+          cancelLabel="Cancelar"
+          isLoading={scheduleSaving}
+          errorMessage={scheduleError}
+          onClose={closeScheduleDelete}
+          onConfirm={() => void handleConfirmDeleteSchedule()}
+        >
+          <div className="text-center">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="text-red-600" size={24} />
             </div>
+            <p className="text-sm text-slate-600">
+              ¿Eliminar este bloque ({scheduleDeleteTarget.startTime}–{scheduleDeleteTarget.endTime}
+              )?
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Esta acción no se puede deshacer.</p>
           </div>
-        </div>
+        </DangerConfirmDialog>
       )}
 
       {/* Modal: Instalar Equipos */}

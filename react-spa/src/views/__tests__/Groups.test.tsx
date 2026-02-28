@@ -79,7 +79,7 @@ describe('Groups view', () => {
   });
 
   it('shows actionable inline feedback when group configuration save fails with 400', async () => {
-    mockUpdateGroup.mockRejectedValueOnce(new Error('BAD_REQUEST: groups.update 400'));
+    mockUpdateGroup.mockRejectedValueOnce({ data: { code: 'BAD_REQUEST' } });
 
     renderGroups();
 

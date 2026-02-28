@@ -1,11 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Filter, Mail, Edit2, Trash, Key, X, Loader2, AlertCircle } from 'lucide-react';
+import { Search, Filter, Mail, Edit2, Trash, Key, Loader2, AlertCircle } from 'lucide-react';
 import { User, UserRole } from '../types';
 import type { CreateUserRole } from '../lib/roles';
 import { DEFAULT_CREATE_USER_ROLE, USER_ROLE_LABELS } from '../lib/roles';
 import { useUsersList } from '../hooks/useUsersList';
 import { useUsersActions } from '../hooks/useUsersActions';
 import { downloadFile } from '../lib/exportRules';
+import { toCsv } from '../lib/csv';
+import { DangerConfirmDialog } from '../components/ui/ConfirmDialog';
+import { Modal } from '../components/ui/Modal';
 
 const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
   const styles = {
@@ -88,6 +91,16 @@ const UsersView = () => {
     }
   };
 
+  const closeEditModal = () => {
+    if (saving) return;
+    setShowEditModal(false);
+  };
+
+  const closeNewModal = () => {
+    if (saving) return;
+    setShowNewModal(false);
+  };
+
   const handleCreateUserSubmit = async () => {
     const result = await handleCreateUser({
       name: newName,
@@ -126,9 +139,8 @@ const UsersView = () => {
       user.roles.join('|'),
       user.status,
     ]);
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
-      .join('\n');
+
+    const csvContent = toCsv([headers, ...rows]);
 
     downloadFile(csvContent, 'usuarios.csv', 'text/csv;charset=utf-8');
 
@@ -340,223 +352,174 @@ const UsersView = () => {
 
       {/* Modal: Editar Usuario */}
       {showEditModal && selectedUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Editar Usuario</h3>
+        <Modal isOpen onClose={closeEditModal} title="Editar Usuario" className="max-w-md">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+              <input
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Roles</label>
+              <div className="flex flex-wrap gap-2">
+                {[UserRole.ADMIN, UserRole.TEACHER].map((role) => (
+                  <label
+                    key={role}
+                    className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-lg text-sm cursor-pointer hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={editRoles.includes(role)}
+                      onChange={() => toggleRole(role)}
+                      className="rounded"
+                    />
+                    {role === UserRole.ADMIN ? 'Administrador' : 'Profesor'}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setShowEditModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Roles</label>
-                <div className="flex flex-wrap gap-2">
-                  {[UserRole.ADMIN, UserRole.TEACHER].map((role) => (
-                    <label
-                      key={role}
-                      className="flex items-center gap-2 px-3 py-1.5 border border-slate-200 rounded-lg text-sm cursor-pointer hover:bg-slate-50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={editRoles.includes(role)}
-                        onChange={() => toggleRole(role)}
-                        className="rounded"
-                      />
-                      {role === UserRole.ADMIN ? 'Administrador' : 'Profesor'}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => void handleSaveEditSubmit()}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {saving && <Loader2 size={16} className="animate-spin" />}
-                  Guardar Cambios
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Nuevo Usuario */}
-      {showNewModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Nuevo Usuario</h3>
-              <button
-                onClick={() => setShowNewModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
-                <input
-                  type="text"
-                  placeholder="Nombre completo"
-                  value={newName}
-                  onChange={(e) => {
-                    setNewName(e.target.value);
-                    if (createError) setCreateError('');
-                  }}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  placeholder="usuario@dominio.com"
-                  value={newEmail}
-                  onChange={(e) => {
-                    setNewEmail(e.target.value);
-                    if (createError) setCreateError('');
-                  }}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
-                <input
-                  type="password"
-                  placeholder="Mínimo 8 caracteres"
-                  value={newPassword}
-                  onChange={(e) => {
-                    setNewPassword(e.target.value);
-                    if (createError) setCreateError('');
-                  }}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Rol</label>
-                <select
-                  value={newRole}
-                  onChange={(e) => {
-                    setNewRole(e.target.value as CreateUserRole);
-                    if (createError) setCreateError('');
-                  }}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                  <option value="teacher">Profesor</option>
-                  <option value="admin">Administrador</option>
-                </select>
-              </div>
-              {createError && (
-                <p className="text-red-500 text-xs flex items-center gap-1">
-                  <AlertCircle size={12} /> {createError}
-                </p>
-              )}
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setShowNewModal(false);
-                    setNewName('');
-                    setNewEmail('');
-                    setNewPassword('');
-                    setNewRole(DEFAULT_CREATE_USER_ROLE);
-                    setCreateError('');
-                  }}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => void handleCreateUserSubmit()}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {saving && <Loader2 size={16} className="animate-spin" />}
-                  Crear Usuario
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Confirmar Eliminacion */}
-      {deleteTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Eliminar Usuario</h3>
-              <button
-                onClick={clearDeleteState}
-                className="text-slate-400 hover:text-slate-600"
-                aria-label="Cerrar confirmación de eliminación"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <p className="text-sm text-slate-600">
-              ¿Estás seguro de que quieres eliminar a{' '}
-              <span className="font-semibold text-slate-800">{deleteTarget.name}</span>?
-            </p>
-            <p className="text-xs text-slate-500 mt-1">Esta acción no se puede deshacer.</p>
-
-            {deleteError && (
-              <p className="text-red-500 text-xs flex items-center gap-1 mt-3">
-                <AlertCircle size={12} /> {deleteError}
-              </p>
-            )}
-
-            <div className="flex gap-3 pt-5">
-              <button
-                onClick={clearDeleteState}
-                disabled={deleting}
+                onClick={closeEditModal}
+                disabled={saving}
                 className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
-                onClick={() => void handleConfirmDeleteUser()}
-                disabled={deleting}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                onClick={() => void handleSaveEditSubmit()}
+                disabled={saving}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {deleting && <Loader2 size={16} className="animate-spin" />}
-                Eliminar usuario
+                {saving && <Loader2 size={16} className="animate-spin" />}
+                Guardar Cambios
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
+      )}
+
+      {/* Modal: Nuevo Usuario */}
+      {showNewModal && (
+        <Modal isOpen onClose={closeNewModal} title="Nuevo Usuario" className="max-w-md">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+              <input
+                type="text"
+                placeholder="Nombre completo"
+                value={newName}
+                onChange={(e) => {
+                  setNewName(e.target.value);
+                  if (createError) setCreateError('');
+                }}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+              <input
+                type="email"
+                placeholder="usuario@dominio.com"
+                value={newEmail}
+                onChange={(e) => {
+                  setNewEmail(e.target.value);
+                  if (createError) setCreateError('');
+                }}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+              <input
+                type="password"
+                placeholder="Mínimo 8 caracteres"
+                value={newPassword}
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  if (createError) setCreateError('');
+                }}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Rol</label>
+              <select
+                value={newRole}
+                onChange={(e) => {
+                  setNewRole(e.target.value as CreateUserRole);
+                  if (createError) setCreateError('');
+                }}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="teacher">Profesor</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </div>
+            {createError && (
+              <p className="text-red-500 text-xs flex items-center gap-1">
+                <AlertCircle size={12} /> {createError}
+              </p>
+            )}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => {
+                  closeNewModal();
+                  setNewName('');
+                  setNewEmail('');
+                  setNewPassword('');
+                  setNewRole(DEFAULT_CREATE_USER_ROLE);
+                  setCreateError('');
+                }}
+                disabled={saving}
+                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void handleCreateUserSubmit()}
+                disabled={saving}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving && <Loader2 size={16} className="animate-spin" />}
+                Crear Usuario
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: Confirmar Eliminacion */}
+      {deleteTarget && (
+        <DangerConfirmDialog
+          isOpen
+          title="Eliminar Usuario"
+          confirmLabel="Eliminar usuario"
+          cancelLabel="Cancelar"
+          isLoading={deleting}
+          errorMessage={deleteError}
+          onClose={clearDeleteState}
+          onConfirm={() => void handleConfirmDeleteUser()}
+        >
+          <p className="text-sm text-slate-600">
+            ¿Estás seguro de que quieres eliminar a{' '}
+            <span className="font-semibold text-slate-800">{deleteTarget.name}</span>?
+          </p>
+          <p className="text-xs text-slate-500">Esta acción no se puede deshacer.</p>
+        </DangerConfirmDialog>
       )}
     </div>
   );

@@ -163,7 +163,7 @@ describe('Users View', () => {
   });
 
   it('shows specific message when email format is invalid', async () => {
-    mockCreateUser.mockRejectedValueOnce(new Error('Invalid email'));
+    mockCreateUser.mockRejectedValueOnce({ data: { code: 'BAD_REQUEST' } });
 
     renderUsersView();
 
@@ -184,7 +184,7 @@ describe('Users View', () => {
   });
 
   it('shows duplicate-email message when backend reports conflict', async () => {
-    mockCreateUser.mockRejectedValueOnce(new Error('User already exists'));
+    mockCreateUser.mockRejectedValueOnce({ data: { code: 'CONFLICT' } });
 
     renderUsersView();
 

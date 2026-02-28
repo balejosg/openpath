@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 
 import type { User } from '../types';
 import type { CreateUserRole } from '../lib/roles';
-import { resolveErrorMessage } from '../lib/error-utils';
+import { resolveTrpcErrorMessage } from '../lib/error-utils';
 import { trpc } from '../lib/trpc';
 import { mapUnknownApiUserToUser, USERS_QUERY_KEY } from './useUsersList';
 
@@ -151,20 +151,13 @@ export const useUsersActions = () => {
       } catch (err) {
         console.error('Failed to create user:', err);
         setCreateError(
-          resolveErrorMessage(
-            err,
-            [
-              {
-                message: 'El email no es válido',
-                patterns: ['invalid email', 'email inválido'],
-              },
-              {
-                message: 'Ya existe un usuario con ese email',
-                patterns: ['already exists', 'already in use', 'duplicate'],
-              },
-            ],
-            'Error al crear usuario. Intenta nuevamente.'
-          )
+          resolveTrpcErrorMessage(err, {
+            badRequest: 'El email no es válido',
+            conflict: 'Ya existe un usuario con ese email',
+            forbidden: 'No tienes permisos para crear usuarios',
+            unauthorized: 'No tienes permisos para crear usuarios',
+            fallback: 'Error al crear usuario. Intenta nuevamente.',
+          })
         );
         return { ok: false };
       }

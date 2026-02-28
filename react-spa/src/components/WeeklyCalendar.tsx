@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 import type { ScheduleWithPermissions } from '../types';
+import { parseTimeOfDayToMinutes } from '../lib/time-of-day';
 import { resolveGroupDisplayName } from './groups/GroupLabel';
 
 const DAYS = [
@@ -82,15 +83,6 @@ interface WeeklyCalendarProps {
   onAddClick: (dayOfWeek: number, startTime: string) => void;
   onEditClick: (schedule: ScheduleWithPermissions) => void;
   onDeleteClick: (schedule: ScheduleWithPermissions) => void;
-}
-
-function timeToMinutes(t: string): number {
-  const [hRaw, mRaw] = t.split(':');
-  const h = Number(hRaw);
-  const m = Number(mRaw);
-  const hours = Number.isFinite(h) ? h : 0;
-  const minutes = Number.isFinite(m) ? m : 0;
-  return hours * 60 + minutes;
 }
 
 function minutesToPx(minutes: number, rowHeight: number): number {
@@ -197,8 +189,12 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
 
               {/* Schedule blocks */}
               {daySchedules.map((s) => {
-                const startMin = timeToMinutes(s.startTime) - START_HOUR * 60;
-                const durationMin = timeToMinutes(s.endTime) - timeToMinutes(s.startTime);
+                const startAbs = parseTimeOfDayToMinutes(s.startTime);
+                const endAbs = parseTimeOfDayToMinutes(s.endTime);
+                if (startAbs === null || endAbs === null) return null;
+
+                const startMin = startAbs - START_HOUR * 60;
+                const durationMin = endAbs - startAbs;
                 if (durationMin <= 0) return null;
                 const top = minutesToPx(startMin, ROW_HEIGHT);
                 const height = minutesToPx(durationMin, ROW_HEIGHT);

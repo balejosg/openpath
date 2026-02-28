@@ -70,7 +70,7 @@ describe('useUsersActions', () => {
   });
 
   it('maps duplicate-user errors into actionable create message', async () => {
-    mockUsersCreateMutate.mockRejectedValueOnce(new Error('User already exists'));
+    mockUsersCreateMutate.mockRejectedValueOnce({ data: { code: 'CONFLICT' } });
     const { result } = renderUseUsersActions();
 
     await act(async () => {

@@ -70,6 +70,32 @@ export const resolveErrorMessage = (
 };
 
 export const isDuplicateError = (err: unknown): boolean => {
+  const code = getTrpcErrorCode(err);
+  if (code === 'CONFLICT') return true;
+
   const normalized = normalizeErrorMessage(err);
   return DUPLICATE_PATTERNS.some((pattern) => normalized.includes(pattern));
 };
+
+export function resolveTrpcErrorMessage(
+  err: unknown,
+  messages: {
+    badRequest?: string;
+    conflict?: string;
+    forbidden?: string;
+    unauthorized?: string;
+    notFound?: string;
+    fallback: string;
+  }
+): string {
+  const code = getTrpcErrorCode(err);
+  if (!code) return messages.fallback;
+
+  if (code === 'BAD_REQUEST' && messages.badRequest) return messages.badRequest;
+  if (code === 'CONFLICT' && messages.conflict) return messages.conflict;
+  if (code === 'FORBIDDEN' && messages.forbidden) return messages.forbidden;
+  if (code === 'UNAUTHORIZED' && messages.unauthorized) return messages.unauthorized;
+  if (code === 'NOT_FOUND' && messages.notFound) return messages.notFound;
+
+  return messages.fallback;
+}

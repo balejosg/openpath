@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { GroupLabel, inferGroupSource } from '../components/groups/GroupLabel';
+import { useIntervalRefetch, useRefetchOnFocus } from '../hooks/useLiveRefetch';
 
 interface StatsData {
   groupCount: number;
@@ -168,30 +169,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
     }
   }, []);
 
+  const shouldPoll = import.meta.env.MODE !== 'test';
+
   useEffect(() => {
     void fetchStats();
     void fetchClassrooms();
-
-    const statsInterval = window.setInterval(() => {
-      void fetchStats();
-    }, 10000);
-
-    const classroomsInterval = window.setInterval(() => {
-      void fetchClassrooms();
-    }, 30000);
-
-    const onFocus = () => {
-      void fetchStats();
-      void fetchClassrooms();
-    };
-
-    window.addEventListener('focus', onFocus);
-    return () => {
-      window.clearInterval(statsInterval);
-      window.clearInterval(classroomsInterval);
-      window.removeEventListener('focus', onFocus);
-    };
   }, [fetchStats, fetchClassrooms]);
+
+  const refetchDashboard = useCallback(() => {
+    void fetchStats();
+    void fetchClassrooms();
+  }, [fetchStats, fetchClassrooms]);
+
+  useIntervalRefetch(fetchStats, 10000, { enabled: shouldPoll });
+  useIntervalRefetch(fetchClassrooms, 30000, { enabled: shouldPoll });
+  useRefetchOnFocus(refetchDashboard);
 
   // Fetch groups for quick access
   useEffect(() => {

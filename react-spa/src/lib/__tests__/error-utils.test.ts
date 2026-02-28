@@ -4,6 +4,7 @@ import {
   isDuplicateError,
   normalizeErrorMessage,
   resolveErrorMessage,
+  resolveTrpcErrorMessage,
 } from '../error-utils';
 
 describe('error-utils', () => {
@@ -53,5 +54,23 @@ describe('error-utils', () => {
     expect(getTrpcErrorCode({ error: { data: { code: 'NOT_FOUND' } } })).toBe('NOT_FOUND');
     expect(getTrpcErrorCode(new Error('oops'))).toBeNull();
     expect(getTrpcErrorCode('nope')).toBeNull();
+  });
+
+  it('maps tRPC codes to provided messages', () => {
+    expect(
+      resolveTrpcErrorMessage(
+        { data: { code: 'BAD_REQUEST' } },
+        { badRequest: 'Datos invalidos', fallback: 'Fallback' }
+      )
+    ).toBe('Datos invalidos');
+
+    expect(
+      resolveTrpcErrorMessage(
+        { shape: { code: 'CONFLICT' } },
+        { conflict: 'Conflicto', fallback: 'Fallback' }
+      )
+    ).toBe('Conflicto');
+
+    expect(resolveTrpcErrorMessage(new Error('oops'), { fallback: 'Fallback' })).toBe('Fallback');
   });
 });

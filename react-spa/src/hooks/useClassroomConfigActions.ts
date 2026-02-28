@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Classroom } from '../types';
 import { trpc } from '../lib/trpc';
-import { resolveErrorMessage } from '../lib/error-utils';
+import { resolveTrpcErrorMessage } from '../lib/error-utils';
 
 interface UseClassroomConfigActionsParams {
   selectedClassroom: Classroom | null;
@@ -21,21 +21,13 @@ export const useClassroomConfigActions = ({
   }, [selectedClassroom?.id]);
 
   const handleGroupChange = useCallback(
-    async (groupId: string) => {
+    async (groupId: string | null) => {
       if (!selectedClassroom) return;
 
       try {
         setClassroomConfigError('');
 
-        const currentActiveGroupId = selectedClassroom.activeGroup ?? null;
-        const nextGroupId = groupId || null;
-
-        if (currentActiveGroupId && currentActiveGroupId !== nextGroupId) {
-          const ok = window.confirm(
-            'Este aula ya tiene un grupo aplicado manualmente.\n\nSi continuas, se reemplazara el grupo activo.'
-          );
-          if (!ok) return;
-        }
+        const nextGroupId = groupId === '' ? null : groupId;
 
         await trpc.classrooms.setActiveGroup.mutate({
           id: selectedClassroom.id,
@@ -70,20 +62,19 @@ export const useClassroomConfigActions = ({
         }
       } catch (err) {
         console.error('Failed to update default group:', err);
+        const fallback =
+          groupId === ''
+            ? 'No puedes dejar el aula sin grupo por defecto mientras no exista un grupo activo válido.'
+            : 'No se pudo actualizar el grupo por defecto. Intenta nuevamente.';
+
         setClassroomConfigError(
-          resolveErrorMessage(
-            err,
-            [
-              {
-                message:
-                  'No puedes dejar el aula sin grupo por defecto mientras no exista un grupo activo válido.',
-                patterns: ['default', 'required', '400'],
-              },
-            ],
-            groupId === ''
-              ? 'No puedes dejar el aula sin grupo por defecto mientras no exista un grupo activo válido.'
-              : 'No se pudo actualizar el grupo por defecto. Intenta nuevamente.'
-          )
+          resolveTrpcErrorMessage(err, {
+            badRequest:
+              'No puedes dejar el aula sin grupo por defecto mientras no exista un grupo activo válido.',
+            forbidden: fallback,
+            unauthorized: fallback,
+            fallback,
+          })
         );
       }
     },

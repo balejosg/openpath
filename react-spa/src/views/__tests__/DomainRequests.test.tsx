@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query';
 import DomainRequests from '../DomainRequests';
 
@@ -150,33 +150,43 @@ describe('DomainRequests - Original group approval', () => {
   });
 
   it('asks confirmation before bulk approve', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-
     renderDomainRequests();
 
     await screen.findByText('example.com');
     fireEvent.click(screen.getByLabelText('Seleccionar example.com'));
     fireEvent.click(screen.getByRole('button', { name: 'Aprobar seleccionadas' }));
 
-    expect(confirmSpy).toHaveBeenCalled();
     expect(mockApprove).not.toHaveBeenCalled();
 
-    confirmSpy.mockRestore();
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByRole('heading', { name: 'Aprobar solicitudes' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+
+    expect(screen.queryByRole('heading', { name: 'Aprobar solicitudes' })).not.toBeInTheDocument();
+    expect(mockApprove).not.toHaveBeenCalled();
   });
 
   it('asks confirmation before bulk reject', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-
     renderDomainRequests();
 
     await screen.findByText('example.com');
     fireEvent.click(screen.getByLabelText('Seleccionar example.com'));
     fireEvent.click(screen.getByRole('button', { name: 'Rechazar seleccionadas' }));
 
-    expect(confirmSpy).toHaveBeenCalled();
     expect(mockReject).not.toHaveBeenCalled();
 
-    confirmSpy.mockRestore();
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByRole('heading', { name: 'Rechazar solicitudes' })
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+
+    expect(screen.queryByRole('heading', { name: 'Rechazar solicitudes' })).not.toBeInTheDocument();
+    expect(mockReject).not.toHaveBeenCalled();
   });
 
   it('clears search and restores the table when using clear button', async () => {

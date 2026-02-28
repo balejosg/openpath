@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { DomainRequest, RequestStatus } from '@openpath/api';
 import { trpc } from '../lib/trpc';
 import { normalizeSearchTerm, useNormalizedSearch } from '../hooks/useNormalizedSearch';
+import { ConfirmDialog, DangerConfirmDialog } from '../components/ui/ConfirmDialog';
 import {
   PRIORITY_COLORS,
   PRIORITY_LABELS,
@@ -114,6 +115,11 @@ export default function DomainRequests() {
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [bulkFailedIds, setBulkFailedIds] = useState<string[]>([]);
   const [bulkFailedMode, setBulkFailedMode] = useState<'approve' | 'reject' | null>(null);
+  const [bulkConfirm, setBulkConfirm] = useState<{
+    mode: 'approve' | 'reject';
+    requestIds: string[];
+    rejectReason?: string;
+  } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const {
@@ -328,34 +334,48 @@ export default function DomainRequests() {
     setSelectedRequestIds((prev) => Array.from(new Set([...prev, ...pendingIdsInPage])));
   };
 
-  const handleBulkApprove = async () => {
+  const openBulkApproveConfirm = () => {
     if (selectedPendingRequests.length === 0) return;
-    const confirmed = window.confirm(
-      `¿Aprobar ${selectedPendingRequests.length} solicitudes seleccionadas?`
-    );
-    if (!confirmed) return;
+    setBulkConfirm({
+      mode: 'approve',
+      requestIds: selectedPendingRequests.map((r) => r.id),
+    });
+  };
+
+  const openBulkRejectConfirm = () => {
+    if (selectedPendingRequests.length === 0) return;
+    const reason = bulkRejectReason.trim();
+    setBulkConfirm({
+      mode: 'reject',
+      requestIds: selectedPendingRequests.map((r) => r.id),
+      rejectReason: reason ? reason : undefined,
+    });
+  };
+
+  const runBulkApprove = async (requestIds: string[]) => {
+    if (requestIds.length === 0) return;
 
     setBulkMessage(null);
     setBulkLoading(true);
-    setBulkProgress({ mode: 'approve', done: 0, total: selectedPendingRequests.length });
+    setBulkProgress({ mode: 'approve', done: 0, total: requestIds.length });
     let successCount = 0;
     let failedCount = 0;
     let processedCount = 0;
     const failedIds: string[] = [];
 
-    for (const req of selectedPendingRequests) {
+    for (const id of requestIds) {
       try {
-        await trpc.requests.approve.mutate({ id: req.id });
+        await trpc.requests.approve.mutate({ id });
         successCount++;
       } catch {
         failedCount++;
-        failedIds.push(req.id);
+        failedIds.push(id);
       }
       processedCount++;
       setBulkProgress({
         mode: 'approve',
         done: processedCount,
-        total: selectedPendingRequests.length,
+        total: requestIds.length,
       });
     }
 
@@ -375,34 +395,30 @@ export default function DomainRequests() {
     setBulkLoading(false);
   };
 
-  const handleBulkReject = async () => {
-    if (selectedPendingRequests.length === 0) return;
-    const confirmed = window.confirm(
-      `¿Rechazar ${selectedPendingRequests.length} solicitudes seleccionadas?`
-    );
-    if (!confirmed) return;
+  const runBulkReject = async (requestIds: string[], reason?: string) => {
+    if (requestIds.length === 0) return;
 
     setBulkMessage(null);
     setBulkLoading(true);
-    setBulkProgress({ mode: 'reject', done: 0, total: selectedPendingRequests.length });
+    setBulkProgress({ mode: 'reject', done: 0, total: requestIds.length });
     let successCount = 0;
     let failedCount = 0;
     let processedCount = 0;
     const failedIds: string[] = [];
 
-    for (const req of selectedPendingRequests) {
+    for (const id of requestIds) {
       try {
-        await trpc.requests.reject.mutate({ id: req.id, reason: bulkRejectReason || undefined });
+        await trpc.requests.reject.mutate({ id, reason });
         successCount++;
       } catch {
         failedCount++;
-        failedIds.push(req.id);
+        failedIds.push(id);
       }
       processedCount++;
       setBulkProgress({
         mode: 'reject',
         done: processedCount,
-        total: selectedPendingRequests.length,
+        total: requestIds.length,
       });
     }
 
@@ -423,7 +439,7 @@ export default function DomainRequests() {
     setBulkLoading(false);
   };
 
-  const handleRetryFailed = async () => {
+  const handleRetryFailed = () => {
     if (bulkFailedIds.length === 0 || !bulkFailedMode) return;
 
     const retryCandidates = requests.filter(
@@ -439,11 +455,16 @@ export default function DomainRequests() {
     setSelectedRequestIds(retryCandidates.map((r) => r.id));
 
     if (bulkFailedMode === 'approve') {
-      await handleBulkApprove();
+      setBulkConfirm({ mode: 'approve', requestIds: retryCandidates.map((r) => r.id) });
       return;
     }
 
-    await handleBulkReject();
+    const reason = bulkRejectReason.trim();
+    setBulkConfirm({
+      mode: 'reject',
+      requestIds: retryCandidates.map((r) => r.id),
+      rejectReason: reason ? reason : undefined,
+    });
   };
 
   const clearSearch = () => {
@@ -574,7 +595,7 @@ export default function DomainRequests() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                void handleBulkApprove();
+                openBulkApproveConfirm();
               }}
               disabled={bulkLoading}
               className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg disabled:opacity-50"
@@ -583,7 +604,7 @@ export default function DomainRequests() {
             </button>
             <button
               onClick={() => {
-                void handleBulkReject();
+                openBulkRejectConfirm();
               }}
               disabled={bulkLoading}
               className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg disabled:opacity-50"
@@ -637,7 +658,7 @@ export default function DomainRequests() {
               </button>
               <button
                 onClick={() => {
-                  void handleRetryFailed();
+                  handleRetryFailed();
                 }}
                 disabled={bulkLoading}
                 className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded disabled:opacity-50"
@@ -871,142 +892,136 @@ export default function DomainRequests() {
         </div>
       )}
 
+      {bulkConfirm
+        ? (() => {
+            const snapshot = bulkConfirm;
+            const count = snapshot.requestIds.length;
+
+            if (snapshot.mode === 'approve') {
+              return (
+                <ConfirmDialog
+                  isOpen
+                  title="Aprobar solicitudes"
+                  confirmLabel="Aprobar"
+                  cancelLabel="Cancelar"
+                  disableConfirm={count === 0}
+                  onClose={() => setBulkConfirm(null)}
+                  onConfirm={() => {
+                    setBulkConfirm(null);
+                    void runBulkApprove(snapshot.requestIds);
+                  }}
+                >
+                  <p className="text-sm text-slate-600">
+                    ¿Aprobar {count} solicitudes seleccionadas?
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Las solicitudes se aprobarán en sus grupos originales.
+                  </p>
+                </ConfirmDialog>
+              );
+            }
+
+            return (
+              <DangerConfirmDialog
+                isOpen
+                title="Rechazar solicitudes"
+                confirmLabel="Rechazar"
+                cancelLabel="Cancelar"
+                disableConfirm={count === 0}
+                onClose={() => setBulkConfirm(null)}
+                onConfirm={() => {
+                  setBulkConfirm(null);
+                  void runBulkReject(snapshot.requestIds, snapshot.rejectReason);
+                }}
+              >
+                <p className="text-sm text-slate-600">
+                  ¿Rechazar {count} solicitudes seleccionadas?
+                </p>
+                {snapshot.rejectReason ? (
+                  <p className="text-xs text-slate-500 break-words">
+                    Motivo (opcional): <span className="font-medium">{snapshot.rejectReason}</span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500">Motivo (opcional): (sin motivo)</p>
+                )}
+              </DangerConfirmDialog>
+            );
+          })()
+        : null}
+
       {/* Approve Modal */}
       {approveModal.open && approveModal.request && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-800">Aprobar Solicitud</h3>
-              <button
-                onClick={() => setApproveModal({ open: false, request: null })}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <XCircle size={20} />
-              </button>
-            </div>
-
-            <p className="text-sm text-slate-600 mb-4">
-              Aprobar acceso a <strong>{approveModal.request.domain}</strong> solicitado por{' '}
-              <strong>{approveModal.request.requesterEmail}</strong>
-            </p>
-
-            <p className="text-sm text-slate-600 mb-4">
-              La solicitud se aprobara en el grupo original:{' '}
-              <strong>{getGroupName(approveModal.request.groupId)}</strong>
-            </p>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setApproveModal({ open: false, request: null })}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  void handleApprove();
-                }}
-                disabled={actionsLoading}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {actionsLoading ? 'Aprobando...' : 'Aprobar'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConfirmDialog
+          isOpen
+          title="Aprobar Solicitud"
+          confirmLabel="Aprobar"
+          cancelLabel="Cancelar"
+          isLoading={actionsLoading}
+          onClose={() => setApproveModal({ open: false, request: null })}
+          onConfirm={handleApprove}
+        >
+          <p className="text-sm text-slate-600">
+            Aprobar acceso a <strong>{approveModal.request.domain}</strong> solicitado por{' '}
+            <strong>{approveModal.request.requesterEmail}</strong>
+          </p>
+          <p className="text-sm text-slate-600">
+            La solicitud se aprobara en el grupo original:{' '}
+            <strong>{getGroupName(approveModal.request.groupId)}</strong>
+          </p>
+        </ConfirmDialog>
       )}
 
       {/* Reject Modal */}
       {rejectModal.open && rejectModal.request && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-800">Rechazar Solicitud</h3>
-              <button
-                onClick={() => setRejectModal({ open: false, request: null })}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <XCircle size={20} />
-              </button>
-            </div>
+        <DangerConfirmDialog
+          isOpen
+          title="Rechazar Solicitud"
+          confirmLabel="Rechazar"
+          cancelLabel="Cancelar"
+          isLoading={actionsLoading}
+          onClose={() => {
+            setRejectModal({ open: false, request: null });
+            setRejectionReason('');
+          }}
+          onConfirm={handleReject}
+        >
+          <p className="text-sm text-slate-600">
+            Rechazar acceso a <strong>{rejectModal.request.domain}</strong> solicitado por{' '}
+            <strong>{rejectModal.request.requesterEmail}</strong>
+          </p>
 
-            <p className="text-sm text-slate-600 mb-4">
-              Rechazar acceso a <strong>{rejectModal.request.domain}</strong> solicitado por{' '}
-              <strong>{rejectModal.request.requesterEmail}</strong>
-            </p>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Motivo del rechazo (opcional)
-              </label>
-              <textarea
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                placeholder="Explica por qué se rechaza esta solicitud..."
-                rows={3}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              />
-            </div>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setRejectModal({ open: false, request: null })}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  void handleReject();
-                }}
-                disabled={actionsLoading}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
-              >
-                {actionsLoading ? 'Rechazando...' : 'Rechazar'}
-              </button>
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Motivo del rechazo (opcional)
+            </label>
+            <textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Explica por qué se rechaza esta solicitud..."
+              rows={3}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            />
           </div>
-        </div>
+        </DangerConfirmDialog>
       )}
 
       {/* Delete Modal */}
       {deleteModal.open && deleteModal.request && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-800">Eliminar Solicitud</h3>
-              <button
-                onClick={() => setDeleteModal({ open: false, request: null })}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <XCircle size={20} />
-              </button>
-            </div>
-
-            <p className="text-sm text-slate-600 mb-4">
-              ¿Estás seguro de que deseas eliminar la solicitud de acceso a{' '}
-              <strong>{deleteModal.request.domain}</strong>? Esta acción no se puede deshacer.
-            </p>
-
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteModal({ open: false, request: null })}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  void handleDelete();
-                }}
-                disabled={actionsLoading}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
-              >
-                {actionsLoading ? 'Eliminando...' : 'Eliminar'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <DangerConfirmDialog
+          isOpen
+          title="Eliminar Solicitud"
+          confirmLabel="Eliminar"
+          cancelLabel="Cancelar"
+          isLoading={actionsLoading}
+          onClose={() => setDeleteModal({ open: false, request: null })}
+          onConfirm={handleDelete}
+        >
+          <p className="text-sm text-slate-600">
+            ¿Estás seguro de que deseas eliminar la solicitud de acceso a{' '}
+            <strong>{deleteModal.request.domain}</strong>?
+          </p>
+          <p className="text-xs text-slate-500">Esta acción no se puede deshacer.</p>
+        </DangerConfirmDialog>
       )}
     </div>
   );
