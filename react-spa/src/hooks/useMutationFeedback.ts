@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { resolveErrorMessage } from '../lib/error-utils';
+import { getTrpcErrorCode, resolveErrorMessage } from '../lib/error-utils';
 
 export interface MutationFeedbackMessages {
   badRequest: string;
@@ -8,8 +8,22 @@ export interface MutationFeedbackMessages {
   fallback: string;
 }
 
-export const resolveMutationFeedback = (err: unknown, messages: MutationFeedbackMessages): string =>
-  resolveErrorMessage(
+export const resolveMutationFeedback = (
+  err: unknown,
+  messages: MutationFeedbackMessages
+): string => {
+  const code = getTrpcErrorCode(err);
+  if (code === 'BAD_REQUEST') {
+    return messages.badRequest;
+  }
+  if (code === 'CONFLICT') {
+    return messages.conflict;
+  }
+  if (code === 'FORBIDDEN' || code === 'UNAUTHORIZED') {
+    return messages.forbidden ?? messages.fallback;
+  }
+
+  return resolveErrorMessage(
     err,
     [
       { message: messages.badRequest, patterns: ['bad_request', '400', 'invalid', 'validation'] },
@@ -21,6 +35,7 @@ export const resolveMutationFeedback = (err: unknown, messages: MutationFeedback
     ],
     messages.fallback
   );
+};
 
 export const useMutationFeedback = (defaultMessages: MutationFeedbackMessages) => {
   const [error, setError] = useState('');

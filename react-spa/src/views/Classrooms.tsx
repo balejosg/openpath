@@ -20,10 +20,12 @@ import { getAuthTokenForHeader } from '../lib/auth-storage';
 import { useAllowedGroups } from '../hooks/useAllowedGroups';
 import { useClassroomConfigActions } from '../hooks/useClassroomConfigActions';
 import { useClassroomSchedules } from '../hooks/useClassroomSchedules';
+import { useClipboard } from '../hooks/useClipboard';
 import { useListDetailSelection } from '../hooks/useListDetailSelection';
 import { normalizeSearchTerm, useNormalizedSearch } from '../hooks/useNormalizedSearch';
 import WeeklyCalendar from '../components/WeeklyCalendar';
 import ScheduleFormModal from '../components/ScheduleFormModal';
+import { Modal } from '../components/ui/Modal';
 
 const Classrooms = () => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
@@ -61,9 +63,19 @@ const Classrooms = () => {
   // Enrollment state
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [enrollToken, setEnrollToken] = useState<string | null>(null);
-  const [enrollCopied, setEnrollCopied] = useState(false);
   const [enrollPlatform, setEnrollPlatform] = useState<'linux' | 'windows'>('linux');
   const [loadingToken, setLoadingToken] = useState(false);
+
+  const {
+    copy: copyEnrollCommand,
+    isCopied: isEnrollCommandCopied,
+    clearCopied: clearEnrollCommandCopied,
+  } = useClipboard();
+
+  const closeEnrollModal = () => {
+    clearEnrollCommandCopied();
+    setShowEnrollModal(false);
+  };
 
   // New classroom form state
   const [newName, setNewName] = useState('');
@@ -837,86 +849,73 @@ const Classrooms = () => {
 
       {/* Modal: Instalar Equipos */}
       {showEnrollModal && enrollToken && selectedClassroom && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Instalar Equipos</h3>
-              <button
-                onClick={() => setShowEnrollModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <p className="text-sm text-slate-600 mb-3">
-              Selecciona plataforma y ejecuta el comando en cada equipo del aula{' '}
-              <strong>{selectedClassroom.displayName}</strong> para instalar y registrar el agente:
-            </p>
-            <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-              <button
-                onClick={() => setEnrollPlatform('linux')}
-                className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
-                  enrollPlatform === 'linux'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-800'
-                }`}
-              >
-                Linux (Debian/Ubuntu)
-              </button>
-              <button
-                onClick={() => setEnrollPlatform('windows')}
-                className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
-                  enrollPlatform === 'windows'
-                    ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-800'
-                }`}
-              >
-                Windows
-              </button>
-            </div>
-            <div className="bg-slate-900 text-green-400 rounded-lg p-4 font-mono text-xs overflow-x-auto relative">
-              <button
-                onClick={() => {
-                  void navigator.clipboard.writeText(enrollCommand);
-                  setEnrollCopied(true);
-                  setTimeout(() => setEnrollCopied(false), 2000);
-                }}
-                className="absolute top-2 right-2 inline-flex items-center gap-1 text-slate-400 hover:text-white"
-                title={enrollCopied ? 'Copiado' : 'Copiar al portapapeles'}
-                aria-label={enrollCopied ? 'Copiado' : 'Copiar al portapapeles'}
-              >
-                {enrollCopied ? (
-                  <>
-                    <Check size={16} className="text-green-400" />
-                    <span className="text-[10px] font-semibold text-green-400">Copiado</span>
-                  </>
-                ) : (
-                  <Copy size={16} />
-                )}
-              </button>
-              <pre className="whitespace-pre-wrap pr-8">{enrollCommand}</pre>
-            </div>
-            {enrollPlatform === 'linux' ? (
-              <p className="text-xs text-slate-500 mt-3">
-                El agente se auto-actualizará automáticamente vía APT. Asegúrate de tener conexión a
-                internet en el equipo durante la instalación.
-              </p>
-            ) : (
-              <p className="text-xs text-slate-500 mt-3">
-                Ejecuta PowerShell como Administrador. El instalador registra el equipo con token de
-                aula y configura actualizaciones silenciosas diarias del agente.
-              </p>
-            )}
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={() => setShowEnrollModal(false)}
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
-              >
-                Cerrar
-              </button>
-            </div>
+        <Modal isOpen={showEnrollModal} onClose={closeEnrollModal} title="Instalar Equipos">
+          <p className="text-sm text-slate-600 mb-3">
+            Selecciona plataforma y ejecuta el comando en cada equipo del aula{' '}
+            <strong>{selectedClassroom.displayName}</strong> para instalar y registrar el agente:
+          </p>
+          <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <button
+              onClick={() => setEnrollPlatform('linux')}
+              className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+                enrollPlatform === 'linux'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-800'
+              }`}
+            >
+              Linux (Debian/Ubuntu)
+            </button>
+            <button
+              onClick={() => setEnrollPlatform('windows')}
+              className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+                enrollPlatform === 'windows'
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-800'
+              }`}
+            >
+              Windows
+            </button>
           </div>
-        </div>
+          <div className="bg-slate-900 text-green-400 rounded-lg p-4 font-mono text-xs overflow-x-auto relative">
+            <button
+              onClick={() => void copyEnrollCommand(enrollCommand, 'enroll-command')}
+              className="absolute top-2 right-2 inline-flex items-center gap-1 text-slate-400 hover:text-white"
+              title={isEnrollCommandCopied('enroll-command') ? 'Copiado' : 'Copiar al portapapeles'}
+              aria-label={
+                isEnrollCommandCopied('enroll-command') ? 'Copiado' : 'Copiar al portapapeles'
+              }
+            >
+              {isEnrollCommandCopied('enroll-command') ? (
+                <>
+                  <Check size={16} className="text-green-400" />
+                  <span className="text-[10px] font-semibold text-green-400">Copiado</span>
+                </>
+              ) : (
+                <Copy size={16} />
+              )}
+            </button>
+            <pre className="whitespace-pre-wrap pr-8">{enrollCommand}</pre>
+          </div>
+          {enrollPlatform === 'linux' ? (
+            <p className="text-xs text-slate-500 mt-3">
+              El agente se auto-actualizará automáticamente vía APT. Asegúrate de tener conexión a
+              internet en el equipo durante la instalación.
+            </p>
+          ) : (
+            <p className="text-xs text-slate-500 mt-3">
+              Ejecuta PowerShell como Administrador. El instalador registra el equipo con token de
+              aula y configura actualizaciones silenciosas diarias del agente.
+            </p>
+          )}
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={closeEnrollModal}
+              className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+            >
+              Cerrar
+            </button>
+          </div>
+        </Modal>
       )}
     </div>
   );

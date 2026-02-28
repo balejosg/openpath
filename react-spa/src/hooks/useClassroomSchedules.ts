@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ScheduleWithPermissions } from '../types';
 import { trpc } from '../lib/trpc';
-import { resolveErrorMessage } from '../lib/error-utils';
+import { getTrpcErrorCode, resolveErrorMessage } from '../lib/error-utils';
 
 function formatScheduleError(err: unknown, fallback: string): string {
+  const code = getTrpcErrorCode(err);
+  if (code === 'CONFLICT') {
+    return 'Ese tramo horario ya est\u00e1 reservado';
+  }
+
   const raw = err instanceof Error ? err.message : '';
   return resolveErrorMessage(
     err,

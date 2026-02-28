@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isDuplicateError, normalizeErrorMessage, resolveErrorMessage } from '../error-utils';
+import {
+  getTrpcErrorCode,
+  isDuplicateError,
+  normalizeErrorMessage,
+  resolveErrorMessage,
+} from '../error-utils';
 
 describe('error-utils', () => {
   it('normalizes Error messages to lowercase', () => {
@@ -39,5 +44,14 @@ describe('error-utils', () => {
     expect(isDuplicateError(new Error('Duplicate key'))).toBe(true);
     expect(isDuplicateError(new Error('Ya existe'))).toBe(true);
     expect(isDuplicateError(new Error('Some other error'))).toBe(false);
+  });
+
+  it('extracts tRPC error codes from common shapes', () => {
+    expect(getTrpcErrorCode({ data: { code: 'CONFLICT' } })).toBe('CONFLICT');
+    expect(getTrpcErrorCode({ shape: { code: 'BAD_REQUEST' } })).toBe('BAD_REQUEST');
+    expect(getTrpcErrorCode({ shape: { data: { code: 'FORBIDDEN' } } })).toBe('FORBIDDEN');
+    expect(getTrpcErrorCode({ error: { data: { code: 'NOT_FOUND' } } })).toBe('NOT_FOUND');
+    expect(getTrpcErrorCode(new Error('oops'))).toBeNull();
+    expect(getTrpcErrorCode('nope')).toBeNull();
   });
 });

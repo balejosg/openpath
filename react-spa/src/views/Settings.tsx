@@ -16,6 +16,7 @@ import {
   Check,
 } from 'lucide-react';
 import { trpc } from '../lib/trpc';
+import { useClipboard } from '../hooks/useClipboard';
 import { usePersistentNotificationPrefs } from '../hooks/usePersistentNotificationPrefs';
 
 interface SystemInfo {
@@ -78,7 +79,12 @@ const Settings: React.FC = () => {
   const [createdToken, setCreatedToken] = useState<NewTokenResponse | null>(null);
   const [tokenError, setTokenError] = useState('');
   const [tokenActionLoading, setTokenActionLoading] = useState<string | null>(null);
-  const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
+
+  const {
+    copy: copyTokenToClipboard,
+    isCopied: isTokenCopied,
+    clearCopied: clearTokenCopied,
+  } = useClipboard();
 
   const passwordResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -258,23 +264,14 @@ const Settings: React.FC = () => {
     }
   };
 
-  const copyToClipboard = async (text: string, tokenId: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedTokenId(tokenId);
-      setTimeout(() => setCopiedTokenId(null), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
-    }
-  };
-
   const closeTokenModal = useCallback(() => {
+    clearTokenCopied();
     setShowCreateTokenModal(false);
     setNewTokenName('');
     setNewTokenExpiry(null);
     setCreatedToken(null);
     setTokenError('');
-  }, []);
+  }, [clearTokenCopied]);
 
   useEffect(() => {
     if (!showCreateTokenModal) {
@@ -659,11 +656,11 @@ const Settings: React.FC = () => {
                       {createdToken.token}
                     </code>
                     <button
-                      onClick={() => void copyToClipboard(createdToken.token, createdToken.id)}
+                      onClick={() => void copyTokenToClipboard(createdToken.token, createdToken.id)}
                       className="p-2 text-slate-500 hover:text-blue-600 transition-colors"
                       title="Copiar token"
                     >
-                      {copiedTokenId === createdToken.id ? (
+                      {isTokenCopied(createdToken.id) ? (
                         <Check size={18} className="text-green-600" />
                       ) : (
                         <Copy size={18} />

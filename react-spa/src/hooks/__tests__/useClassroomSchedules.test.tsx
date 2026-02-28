@@ -125,6 +125,36 @@ describe('useClassroomSchedules', () => {
     expect(result.current.scheduleError).toBe('');
   });
 
+  it('translates schedule conflict errors using tRPC code', async () => {
+    mockCreateMutate.mockRejectedValueOnce({
+      data: { code: 'CONFLICT' },
+      message: 'This time slot is already reserved',
+    });
+
+    const { result } = renderHook(() =>
+      useClassroomSchedules({ selectedClassroomId: 'classroom-1' })
+    );
+
+    await waitFor(() => {
+      expect(result.current.loadingSchedules).toBe(false);
+    });
+
+    act(() => {
+      result.current.openScheduleCreate(2, '10:00');
+    });
+
+    await act(async () => {
+      await result.current.handleScheduleSave({
+        dayOfWeek: 2,
+        startTime: '10:00',
+        endTime: '11:00',
+        groupId: 'group-2',
+      });
+    });
+
+    expect(result.current.scheduleError).toBe('Ese tramo horario ya está reservado');
+  });
+
   it('updates existing schedule when editing', async () => {
     const schedule = makeSchedule({ id: 'schedule-edit', dayOfWeek: 4, startTime: '12:00' });
     const { result } = renderHook(() =>

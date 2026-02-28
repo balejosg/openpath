@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   MoreHorizontal,
@@ -7,13 +7,13 @@ import {
   ArrowRight,
   Copy,
   BookOpen,
-  X,
   AlertCircle,
   Loader2,
 } from 'lucide-react';
 import type { GroupVisibility } from '@openpath/shared';
 import { trpc } from '../lib/trpc';
 import { isAdmin, isTeacher, isTeacherGroupsFeatureEnabled } from '../lib/auth';
+import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAllowedGroups } from '../hooks/useAllowedGroups';
 import { useMutationFeedback } from '../hooks/useMutationFeedback';
@@ -173,19 +173,20 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
     setShowConfigModal(true);
   };
 
-  useEffect(() => {
-    if (!showConfigModal) return;
+  const closeNewModal = () => {
+    setShowNewModal(false);
+  };
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      clearConfigError();
-      setShowConfigModal(false);
-    };
+  const closeConfigModal = () => {
+    clearConfigError();
+    setShowConfigModal(false);
+  };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showConfigModal, clearConfigError]);
+  const closeCloneModal = () => {
+    setShowCloneModal(false);
+    setCloneSource(null);
+    setCloneError('');
+  };
 
   const openCloneModal = (groupId: string) => {
     const g = libraryGroups.find((x) => x.id === groupId);
@@ -412,280 +413,227 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
       </div>
 
       {/* Modal: Nuevo Grupo - OUTSIDE the map loop */}
-      {showNewModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Nuevo Grupo</h3>
-              <button
-                onClick={() => setShowNewModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
-                <input
-                  type="text"
-                  placeholder="Ej: grupo-primaria"
-                  value={newGroupName}
-                  onChange={(e) => {
-                    setNewGroupName(e.target.value);
-                    if (newGroupError) setNewGroupError('');
-                  }}
-                  className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${newGroupError ? 'border-red-300' : 'border-slate-300'}`}
-                />
-                {newGroupError && (
-                  <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                    <AlertCircle size={12} /> {newGroupError}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
-                <textarea
-                  placeholder="Descripción del grupo..."
-                  value={newGroupDescription}
-                  onChange={(e) => setNewGroupDescription(e.target.value)}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none h-20 resize-none"
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => setShowNewModal(false)}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => void handleCreateGroup()}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {saving && <Loader2 size={16} className="animate-spin" />}
-                  Crear Grupo
-                </button>
-              </div>
-            </div>
+      <Modal isOpen={showNewModal} onClose={closeNewModal} title="Nuevo Grupo" className="max-w-md">
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+            <input
+              type="text"
+              placeholder="Ej: grupo-primaria"
+              value={newGroupName}
+              onChange={(e) => {
+                setNewGroupName(e.target.value);
+                if (newGroupError) setNewGroupError('');
+              }}
+              className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${newGroupError ? 'border-red-300' : 'border-slate-300'}`}
+            />
+            {newGroupError && (
+              <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+                <AlertCircle size={12} /> {newGroupError}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
+            <textarea
+              placeholder="Descripción del grupo..."
+              value={newGroupDescription}
+              onChange={(e) => setNewGroupDescription(e.target.value)}
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none h-20 resize-none"
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={closeNewModal}
+              disabled={saving}
+              className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => void handleCreateGroup()}
+              disabled={saving}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {saving && <Loader2 size={16} className="animate-spin" />}
+              Crear Grupo
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Modal: Configurar Grupo - OUTSIDE the map loop */}
-      {showConfigModal && selectedGroup && (
-        <div className="fixed inset-0 z-[70] bg-black/50 overflow-y-auto">
-          <div className="min-h-full flex items-start justify-center p-4">
-            <div className="bg-white rounded-xl p-6 w-full max-w-lg shadow-xl">
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800">
-                    Configurar: {selectedGroup.displayName || selectedGroup.name}
-                  </h3>
-                  {selectedGroup.displayName && (
-                    <p className="text-xs text-slate-500 mt-0.5">Slug: {selectedGroup.name}</p>
-                  )}
-                </div>
+      {selectedGroup && (
+        <Modal
+          isOpen={showConfigModal}
+          onClose={closeConfigModal}
+          title={`Configurar: ${selectedGroup.displayName || selectedGroup.name}`}
+        >
+          <div className="space-y-4">
+            {selectedGroup.displayName && (
+              <p className="text-xs text-slate-500">Slug: {selectedGroup.name}</p>
+            )}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
+              <textarea
+                value={configDescription}
+                onChange={(e) => setConfigDescription(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none h-20 resize-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Estado</label>
+              <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    clearConfigError();
-                    setShowConfigModal(false);
-                  }}
-                  className="text-slate-400 hover:text-slate-600"
+                  onClick={() => setConfigStatus('Active')}
+                  className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${configStatus === 'Active' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                 >
-                  <X size={20} />
+                  Activo
+                </button>
+                <button
+                  onClick={() => setConfigStatus('Inactive')}
+                  className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${configStatus === 'Inactive' ? 'bg-slate-100 border-slate-300 text-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                >
+                  Inactivo
                 </button>
               </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Descripción
-                  </label>
-                  <textarea
-                    value={configDescription}
-                    onChange={(e) => setConfigDescription(e.target.value)}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none h-20 resize-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Estado</label>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setConfigStatus('Active')}
-                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${configStatus === 'Active' ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      Activo
-                    </button>
-                    <button
-                      onClick={() => setConfigStatus('Inactive')}
-                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${configStatus === 'Inactive' ? 'bg-slate-100 border-slate-300 text-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      Inactivo
-                    </button>
-                  </div>
-                </div>
+            </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Visibilidad
-                  </label>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setConfigVisibility('private')}
-                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${configVisibility === 'private' ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      Privado
-                    </button>
-                    <button
-                      onClick={() => setConfigVisibility('instance_public')}
-                      className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${configVisibility === 'instance_public' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                    >
-                      Público
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-2">
-                    Público: otros profesores pueden verlo en la biblioteca y clonarlo.
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">
-                    Dominios Permitidos
-                  </label>
-                  <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 text-sm text-slate-600">
-                    {selectedGroup.whitelistCount +
-                      selectedGroup.blockedSubdomainCount +
-                      selectedGroup.blockedPathCount}{' '}
-                    dominios configurados
-                    <button
-                      onClick={() => {
-                        setShowConfigModal(false);
-                        onNavigateToRules({
-                          id: selectedGroup.id,
-                          name: selectedGroup.displayName || selectedGroup.name,
-                        });
-                      }}
-                      className="ml-2 text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Gestionar
-                    </button>
-                  </div>
-                </div>
-                {configError && (
-                  <p className="text-sm text-red-600 flex items-start gap-2">
-                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
-                    <span>{configError}</span>
-                  </p>
-                )}
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => {
-                      clearConfigError();
-                      setShowConfigModal(false);
-                    }}
-                    disabled={saving}
-                    className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={() => void handleSaveConfig()}
-                    disabled={saving}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {saving && <Loader2 size={16} className="animate-spin" />}
-                    Guardar Cambios
-                  </button>
-                </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Visibilidad</label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfigVisibility('private')}
+                  className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${configVisibility === 'private' ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                >
+                  Privado
+                </button>
+                <button
+                  onClick={() => setConfigVisibility('instance_public')}
+                  className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${configVisibility === 'instance_public' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                >
+                  Público
+                </button>
+              </div>
+              <p className="text-xs text-slate-500 mt-2">
+                Público: otros profesores pueden verlo en la biblioteca y clonarlo.
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Dominios Permitidos
+              </label>
+              <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 text-sm text-slate-600">
+                {selectedGroup.whitelistCount +
+                  selectedGroup.blockedSubdomainCount +
+                  selectedGroup.blockedPathCount}{' '}
+                dominios configurados
+                <button
+                  onClick={() => {
+                    closeConfigModal();
+                    onNavigateToRules({
+                      id: selectedGroup.id,
+                      name: selectedGroup.displayName || selectedGroup.name,
+                    });
+                  }}
+                  className="ml-2 text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Gestionar
+                </button>
               </div>
             </div>
+            {configError && (
+              <p className="text-sm text-red-600 flex items-start gap-2">
+                <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                <span>{configError}</span>
+              </p>
+            )}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={closeConfigModal}
+                disabled={saving}
+                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void handleSaveConfig()}
+                disabled={saving}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving && <Loader2 size={16} className="animate-spin" />}
+                Guardar Cambios
+              </button>
+            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Modal: Clonar Grupo (Biblioteca) */}
-      {showCloneModal && cloneSource && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-800">
-                Clonar: {cloneSource.displayName || cloneSource.name}
-              </h3>
-              <button
-                onClick={() => {
-                  setShowCloneModal(false);
-                  setCloneSource(null);
-                  setCloneError('');
+      {cloneSource && (
+        <Modal
+          isOpen={showCloneModal}
+          onClose={closeCloneModal}
+          title={`Clonar: ${cloneSource.displayName || cloneSource.name}`}
+          className="max-w-md"
+        >
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+              <input
+                type="text"
+                placeholder="Ej: politica-primaria"
+                value={cloneName}
+                onChange={(e) => {
+                  setCloneName(e.target.value);
+                  if (cloneError) setCloneError('');
                 }}
-                className="text-slate-400 hover:text-slate-600"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Se usa como slug (debe ser único en la instancia).
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
+              <textarea
+                placeholder="Descripción de la política..."
+                value={cloneDisplayName}
+                onChange={(e) => {
+                  setCloneDisplayName(e.target.value);
+                  if (cloneError) setCloneError('');
+                }}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none h-20 resize-none"
+              />
+            </div>
+
+            {cloneError && (
+              <p className="text-sm text-red-600 flex items-start gap-2">
+                <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                <span>{cloneError}</span>
+              </p>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={closeCloneModal}
+                disabled={saving}
+                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
-                <X size={20} />
+                Cancelar
+              </button>
+              <button
+                onClick={() => void handleCloneGroup()}
+                disabled={saving}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving && <Loader2 size={16} className="animate-spin" />}
+                Clonar
               </button>
             </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
-                <input
-                  type="text"
-                  placeholder="Ej: politica-primaria"
-                  value={cloneName}
-                  onChange={(e) => {
-                    setCloneName(e.target.value);
-                    if (cloneError) setCloneError('');
-                  }}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  Se usa como slug (debe ser único en la instancia).
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
-                <textarea
-                  placeholder="Descripción de la política..."
-                  value={cloneDisplayName}
-                  onChange={(e) => {
-                    setCloneDisplayName(e.target.value);
-                    if (cloneError) setCloneError('');
-                  }}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none h-20 resize-none"
-                />
-              </div>
-
-              {cloneError && (
-                <p className="text-sm text-red-600 flex items-start gap-2">
-                  <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
-                  <span>{cloneError}</span>
-                </p>
-              )}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    setShowCloneModal(false);
-                    setCloneSource(null);
-                    setCloneError('');
-                  }}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => void handleCloneGroup()}
-                  disabled={saving}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {saving && <Loader2 size={16} className="animate-spin" />}
-                  Clonar
-                </button>
-              </div>
-            </div>
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* Toast notifications */}
