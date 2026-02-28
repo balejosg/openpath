@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './views/Dashboard';
@@ -23,24 +23,169 @@ interface SelectedGroup {
   readOnly?: boolean;
 }
 
-const App: React.FC = () => {
-  const [isAuth, setIsAuth] = useState(isAuthenticated());
-  const [authView, setAuthView] = useState<AuthView>('login');
+function normalizePathname(pathname: string): string {
+  const trimmed = pathname.replace(/\/+$/, '');
+  return trimmed.length === 0 ? '/' : trimmed;
+}
 
-  const [activeTab, setActiveTab] = useState('dashboard');
+function getTabFromPathname(pathname: string): string {
+  const normalized = normalizePathname(pathname);
+
+  if (normalized === '/' || normalized.startsWith('/dashboard')) return 'dashboard';
+  if (normalized.startsWith('/aulas')) return 'classrooms';
+  if (normalized.startsWith('/politicas') || normalized.startsWith('/grupos')) return 'groups';
+  if (normalized.startsWith('/reglas')) return 'rules';
+  if (normalized.startsWith('/usuarios')) return 'users';
+  if (normalized.startsWith('/dominios')) return 'domains';
+  if (normalized.startsWith('/configuracion') || normalized.startsWith('/settings'))
+    return 'settings';
+
+  return 'dashboard';
+}
+
+function getAuthViewFromPathname(pathname: string): AuthView {
+  const normalized = normalizePathname(pathname);
+
+  if (normalized.startsWith('/register')) return 'register';
+  if (normalized.startsWith('/forgot-password')) return 'forgot-password';
+  if (normalized.startsWith('/reset-password')) return 'reset-password';
+  if (normalized.startsWith('/login') || normalized === '/') return 'login';
+
+  // Unknown path while unauthenticated: show login but keep URL (deep-link intent).
+  return 'login';
+}
+
+function isAuthPath(pathname: string): boolean {
+  const normalized = normalizePathname(pathname);
+  return (
+    normalized === '/' ||
+    normalized.startsWith('/login') ||
+    normalized.startsWith('/register') ||
+    normalized.startsWith('/forgot-password') ||
+    normalized.startsWith('/reset-password')
+  );
+}
+
+function getPathForTab(tab: string): string {
+  switch (tab) {
+    case 'dashboard':
+      return '/';
+    case 'classrooms':
+      return '/aulas';
+    case 'groups':
+      return '/politicas';
+    case 'rules':
+      return '/reglas';
+    case 'users':
+      return '/usuarios';
+    case 'domains':
+      return '/dominios';
+    case 'settings':
+      return '/configuracion';
+    default:
+      return '/';
+  }
+}
+
+function getPathForAuthView(view: AuthView): string {
+  switch (view) {
+    case 'register':
+      return '/register';
+    case 'forgot-password':
+      return '/forgot-password';
+    case 'reset-password':
+      return '/reset-password';
+    case 'login':
+    default:
+      return '/login';
+  }
+}
+
+const App: React.FC = () => {
+  const initialPathname = typeof window !== 'undefined' ? window.location.pathname : '/';
+  const initialIsAuth = isAuthenticated();
+
+  const [isAuth, setIsAuth] = useState(initialIsAuth);
+  const [authView, setAuthView] = useState<AuthView>(() =>
+    getAuthViewFromPathname(initialPathname)
+  );
+
+  const [activeTab, setActiveTab] = useState(() => getTabFromPathname(initialPathname));
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isAuthRef = useRef(isAuth);
+
+  useEffect(() => {
+    isAuthRef.current = isAuth;
+  }, [isAuth]);
 
   // State for rules manager navigation
   const [selectedGroup, setSelectedGroup] = useState<SelectedGroup | null>(null);
 
   useEffect(() => {
     return onAuthChange(() => {
-      setIsAuth(isAuthenticated());
+      const authed = isAuthenticated();
+      setIsAuth(authed);
+
+      if (typeof window !== 'undefined') {
+        const pathname = window.location.pathname;
+        if (authed) {
+          setActiveTab(getTabFromPathname(pathname));
+        } else {
+          setAuthView(getAuthViewFromPathname(pathname));
+        }
+      }
     });
   }, []);
 
-  const handleLogin = () => setIsAuth(true);
-  const handleRegister = () => setIsAuth(true);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handlePopState = () => {
+      const pathname = window.location.pathname;
+      if (isAuthRef.current) {
+        setActiveTab(getTabFromPathname(pathname));
+      } else {
+        setAuthView(getAuthViewFromPathname(pathname));
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (isAuth) {
+      const nextPath = getPathForTab(activeTab);
+      if (window.location.pathname !== nextPath) {
+        window.history.pushState(null, '', nextPath);
+      }
+      return;
+    }
+
+    // If the user deep-linked to a non-auth URL while logged out, preserve the URL.
+    // Only update the URL for explicit auth routes (or when user navigates within auth views).
+    if (authView !== 'login' || isAuthPath(window.location.pathname)) {
+      const nextPath = getPathForAuthView(authView);
+      if (window.location.pathname !== nextPath) {
+        window.history.pushState(null, '', nextPath);
+      }
+    }
+  }, [isAuth, activeTab, authView]);
+
+  const handleLogin = () => {
+    setIsAuth(true);
+    if (typeof window !== 'undefined') {
+      setActiveTab(getTabFromPathname(window.location.pathname));
+    }
+  };
+  const handleRegister = () => {
+    setIsAuth(true);
+    if (typeof window !== 'undefined') {
+      setActiveTab(getTabFromPathname(window.location.pathname));
+    }
+  };
 
   // Handle navigation to rules manager
   const handleNavigateToRules = (group: SelectedGroup) => {

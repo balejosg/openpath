@@ -12,6 +12,19 @@ export interface AllowedGroupOption {
   label: string;
 }
 
+function isGroupEnabled(group: AllowedGroup): boolean {
+  const maybe = group as AllowedGroup & { enabled?: boolean | number; status?: string };
+  const enabledValue = maybe.enabled;
+
+  if (typeof enabledValue === 'boolean') return enabledValue;
+  if (typeof enabledValue === 'number') return enabledValue === 1;
+
+  if (maybe.status === 'Active' || maybe.status === 'active') return true;
+  if (maybe.status === 'Inactive' || maybe.status === 'inactive') return false;
+
+  return true;
+}
+
 export function useAllowedGroups() {
   const query = useQuery({
     queryKey: ['groups.list'],
@@ -25,7 +38,7 @@ export function useAllowedGroups() {
   }, [groups]);
 
   const options = useMemo<AllowedGroupOption[]>(() => {
-    return groups.map((g) => ({
+    return groups.filter(isGroupEnabled).map((g) => ({
       value: g.id,
       label: g.displayName || g.name,
     }));

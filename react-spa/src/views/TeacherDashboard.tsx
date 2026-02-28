@@ -88,7 +88,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
 
         const group = groupById.get(groupId);
         const classroomName = c.displayName || c.name;
-        const groupName = group ? group.displayName || group.name : groupId;
 
         const inferredSource = (() => {
           if (c.currentGroupSource) return c.currentGroupSource;
@@ -96,6 +95,14 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
           if (!c.currentGroupId) return 'none';
           if (c.defaultGroupId && c.currentGroupId === c.defaultGroupId) return 'default';
           return 'schedule';
+        })();
+
+        const groupName = (() => {
+          if (group) return group.displayName || group.name;
+          if (inferredSource === 'manual') return 'Aplicado por otro profesor';
+          if (inferredSource === 'default') return 'Asignado por admin';
+          if (inferredSource === 'schedule') return 'Reservado por otro profesor';
+          return 'Grupo no disponible';
         })();
 
         const badgeVariant =
@@ -143,9 +150,31 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
     if (!selectedClassroomForControl) return;
     setControlLoading(true);
     try {
+      const current = classrooms.find((c) => c.id === selectedClassroomForControl);
+      const currentActiveGroupId = current?.activeGroupId ?? null;
+      const nextGroupId = selectedGroupForControl || null;
+
+      if (currentActiveGroupId && currentActiveGroupId !== nextGroupId) {
+        const currentGroup = groupById.get(currentActiveGroupId);
+        const nextGroup = nextGroupId ? groupById.get(nextGroupId) : null;
+        const currentName = currentGroup
+          ? currentGroup.displayName || currentGroup.name
+          : currentActiveGroupId;
+        const nextName = nextGroupId
+          ? nextGroup
+            ? nextGroup.displayName || nextGroup.name
+            : nextGroupId
+          : 'Sin grupo';
+
+        const ok = window.confirm(
+          `El aula ya tiene una politica aplicada manualmente (${currentName}).\n\nReemplazar por: ${nextName}?`
+        );
+        if (!ok) return;
+      }
+
       await trpc.classrooms.setActiveGroup.mutate({
         id: selectedClassroomForControl,
-        groupId: selectedGroupForControl || null,
+        groupId: nextGroupId,
       });
       await fetchClassrooms();
       setSelectedClassroomForControl('');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeErrorMessage, resolveErrorMessage } from '../error-utils';
+import { isDuplicateError, normalizeErrorMessage, resolveErrorMessage } from '../error-utils';
 
 describe('error-utils', () => {
   it('normalizes Error messages to lowercase', () => {
@@ -31,5 +31,13 @@ describe('error-utils', () => {
     );
 
     expect(result).toBe('Error genérico');
+  });
+
+  it('detects duplicate/conflict-like errors', () => {
+    expect(isDuplicateError(new Error('CONFLICT'))).toBe(true);
+    expect(isDuplicateError(new Error('Rule already exists'))).toBe(true);
+    expect(isDuplicateError(new Error('Duplicate key'))).toBe(true);
+    expect(isDuplicateError(new Error('Ya existe'))).toBe(true);
+    expect(isDuplicateError(new Error('Some other error'))).toBe(false);
   });
 });

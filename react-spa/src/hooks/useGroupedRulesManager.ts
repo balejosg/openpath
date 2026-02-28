@@ -1,6 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { trpc } from '../lib/trpc';
-import { detectRuleType, getRuleTypeBadge } from '../lib/ruleDetection';
+import {
+  addRuleWithDetection,
+  bulkCreateRulesAction,
+  bulkDeleteRulesWithUndoAction,
+  deleteRuleWithUndoAction,
+  updateRuleAction,
+} from '../lib/rules-actions';
 import { createLatestGuard } from '../lib/latest';
 import { getRootDomain } from '../../../shared/src/domain';
 import type { Rule } from '../components/RulesTable';
@@ -314,38 +320,7 @@ export function useGroupedRulesManager({
   // Add rule
   const addRule = useCallback(
     async (value: string): Promise<boolean> => {
-      const trimmed = value.trim();
-      if (!trimmed) return false;
-
-      // Get existing whitelist for detection
-      const existingWhitelist = await trpc.groups.listRules.query({
-        groupId,
-        type: 'whitelist',
-      });
-      const whitelistDomains = existingWhitelist.map((r) => r.value);
-
-      // Detect type
-      const detected = detectRuleType(trimmed, whitelistDomains);
-
-      try {
-        await trpc.groups.createRule.mutate({
-          groupId,
-          type: detected.type,
-          value: detected.cleanedValue,
-        });
-
-        onToast(
-          `"${detected.cleanedValue}" añadido como ${getRuleTypeBadge(detected.type)}`,
-          'success'
-        );
-        await fetchRules();
-        await fetchCounts();
-        return true;
-      } catch (err) {
-        console.error('Failed to add rule:', err);
-        onToast('Error al añadir regla', 'error');
-        return false;
-      }
+      return addRuleWithDetection(value, { groupId, onToast, fetchRules, fetchCounts });
     },
     [groupId, fetchRules, fetchCounts, onToast]
   );
@@ -353,34 +328,7 @@ export function useGroupedRulesManager({
   // Delete rule with undo
   const deleteRule = useCallback(
     async (rule: Rule): Promise<void> => {
-      try {
-        await trpc.groups.deleteRule.mutate({ id: rule.id, groupId: rule.groupId });
-
-        onToast(`"${rule.value}" eliminado`, 'success', () => {
-          void (async () => {
-            try {
-              await trpc.groups.createRule.mutate({
-                groupId: rule.groupId,
-                type: rule.type,
-                value: rule.value,
-                comment: rule.comment ?? undefined,
-              });
-              await fetchRules();
-              await fetchCounts();
-              onToast(`"${rule.value}" restaurado`, 'success');
-            } catch (err) {
-              console.error('Failed to undo delete:', err);
-              onToast('Error al restaurar regla', 'error');
-            }
-          })();
-        });
-
-        await fetchRules();
-        await fetchCounts();
-      } catch (err) {
-        console.error('Failed to delete rule:', err);
-        onToast('Error al eliminar regla', 'error');
-      }
+      await deleteRuleWithUndoAction(rule, { onToast, fetchRules, fetchCounts });
     },
     [fetchRules, fetchCounts, onToast]
   );
@@ -388,22 +336,7 @@ export function useGroupedRulesManager({
   // Update rule
   const updateRule = useCallback(
     async (id: string, data: { value?: string; comment?: string | null }): Promise<boolean> => {
-      try {
-        await trpc.groups.updateRule.mutate({
-          id,
-          groupId,
-          value: data.value,
-          comment: data.comment,
-        });
-
-        onToast('Regla actualizada', 'success');
-        await fetchRules();
-        return true;
-      } catch (err) {
-        console.error('Failed to update rule:', err);
-        onToast('Error al actualizar regla', 'error');
-        return false;
-      }
+      return updateRuleAction(id, data, { groupId, onToast, fetchRules });
     },
     [groupId, fetchRules, onToast]
   );
@@ -414,42 +347,13 @@ export function useGroupedRulesManager({
 
     const idsToDelete = Array.from(selectedIds);
 
-    try {
-      const result = await trpc.groups.bulkDeleteRules.mutate({ ids: idsToDelete });
-
-      const deletedRules = result.rules;
-      const count = result.deleted;
-
-      clearSelection();
-
-      onToast(`${String(count)} reglas eliminadas`, 'success', () => {
-        void (async () => {
-          try {
-            // Restore all deleted rules
-            for (const rule of deletedRules) {
-              await trpc.groups.createRule.mutate({
-                groupId: rule.groupId,
-                type: rule.type,
-                value: rule.value,
-                comment: rule.comment ?? undefined,
-              });
-            }
-            await fetchRules();
-            await fetchCounts();
-            onToast(`${String(deletedRules.length)} reglas restauradas`, 'success');
-          } catch (err) {
-            console.error('Failed to undo bulk delete:', err);
-            onToast('Error al restaurar reglas', 'error');
-          }
-        })();
-      });
-
-      await fetchRules();
-      await fetchCounts();
-    } catch (err) {
-      console.error('Failed to bulk delete rules:', err);
-      onToast('Error al eliminar reglas', 'error');
-    }
+    await bulkDeleteRulesWithUndoAction({
+      ids: idsToDelete,
+      clearSelection,
+      onToast,
+      fetchRules,
+      fetchCounts,
+    });
   }, [selectedIds, clearSelection, fetchRules, fetchCounts, onToast]);
 
   // Bulk create rules
@@ -460,35 +364,7 @@ export function useGroupedRulesManager({
     ): Promise<{ created: number; total: number }> => {
       if (values.length === 0) return { created: 0, total: 0 };
 
-      try {
-        const result = await trpc.groups.bulkCreateRules.mutate({
-          groupId,
-          type,
-          values,
-        });
-
-        const created = result.count;
-        const total = values.length;
-
-        if (created > 0) {
-          onToast(
-            created === total
-              ? `${String(created)} reglas importadas`
-              : `${String(created)} de ${String(total)} reglas importadas (${String(total - created)} duplicadas)`,
-            'success'
-          );
-          await fetchRules();
-          await fetchCounts();
-        } else {
-          onToast('Todas las reglas ya existen', 'error');
-        }
-
-        return { created, total };
-      } catch (err) {
-        console.error('Failed to bulk create rules:', err);
-        onToast('Error al importar reglas', 'error');
-        return { created: 0, total: values.length };
-      }
+      return bulkCreateRulesAction(values, type, { groupId, onToast, fetchRules, fetchCounts });
     },
     [groupId, fetchRules, fetchCounts, onToast]
   );

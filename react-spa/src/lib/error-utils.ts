@@ -3,6 +3,8 @@ export interface ErrorRule {
   patterns: string[];
 }
 
+const DUPLICATE_PATTERNS = ['conflict', 'already exists', 'duplicate', 'ya existe'] as const;
+
 export const normalizeErrorMessage = (err: unknown): string => {
   if (err instanceof Error) {
     return err.message.toLowerCase();
@@ -23,4 +25,9 @@ export const resolveErrorMessage = (
   );
 
   return matchedRule?.message ?? fallbackMessage;
+};
+
+export const isDuplicateError = (err: unknown): boolean => {
+  const normalized = normalizeErrorMessage(err);
+  return DUPLICATE_PATTERNS.some((pattern) => normalized.includes(pattern));
 };

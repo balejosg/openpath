@@ -207,7 +207,8 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                   ? (GROUP_COLORS[colorIdx] ?? GROUP_COLORS[0])
                   : RESERVED_COLOR;
                 const knownGroupName = groupNameMap.get(s.groupId);
-                const groupName = knownGroupName ?? (canEdit ? s.groupId : 'Reservado');
+                const groupName =
+                  knownGroupName ?? (canEdit ? s.groupId : 'Reservado por otro profesor');
 
                 return (
                   <div

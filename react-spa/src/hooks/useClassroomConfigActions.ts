@@ -26,9 +26,20 @@ export const useClassroomConfigActions = ({
 
       try {
         setClassroomConfigError('');
+
+        const currentActiveGroupId = selectedClassroom.activeGroup ?? null;
+        const nextGroupId = groupId || null;
+
+        if (currentActiveGroupId && currentActiveGroupId !== nextGroupId) {
+          const ok = window.confirm(
+            'Este aula ya tiene un grupo aplicado manualmente.\n\nSi continuas, se reemplazara el grupo activo.'
+          );
+          if (!ok) return;
+        }
+
         await trpc.classrooms.setActiveGroup.mutate({
           id: selectedClassroom.id,
-          groupId: groupId || null,
+          groupId: nextGroupId,
         });
         const updatedClassrooms = await refetchClassrooms();
         const updated = updatedClassrooms.find((c) => c.id === selectedClassroom.id);

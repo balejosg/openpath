@@ -107,7 +107,7 @@ describe('WeeklyCalendar Component', () => {
     );
 
     const block = screen.getByTestId('schedule-block-s2');
-    expect(block).toHaveTextContent('Reservado');
+    expect(block).toHaveTextContent('Reservado por otro profesor');
 
     fireEvent.click(block);
     expect(onEditClick).not.toHaveBeenCalled();

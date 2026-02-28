@@ -63,6 +63,58 @@ describe('ScheduleFormModal Component', () => {
     expect(saved.groupId).toBe('g1');
   });
 
+  it('requires selecting a day when creating without a default day', () => {
+    const onSave = vi.fn();
+    render(
+      <ScheduleFormModal
+        schedule={null}
+        groups={groups}
+        saving={false}
+        error=""
+        onSave={onSave}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /crear horario/i }));
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByText('Selecciona un dia')).toBeInTheDocument();
+  });
+
+  it('accepts numeric dayOfWeek even if returned as a string', () => {
+    const onSave = vi.fn();
+    const schedule = {
+      id: 's1',
+      classroomId: 'c1',
+      dayOfWeek: '2',
+      startTime: '08:00',
+      endTime: '09:00',
+      groupId: 'g2',
+      teacherId: 't1',
+      recurrence: 'weekly',
+      createdAt: new Date().toISOString(),
+      updatedAt: undefined,
+      isMine: true,
+      canEdit: true,
+    } as unknown as ScheduleWithPermissions;
+
+    render(
+      <ScheduleFormModal
+        schedule={schedule}
+        groups={groups}
+        saving={false}
+        error=""
+        onSave={onSave}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cambios/i }));
+    expect(onSave).toHaveBeenCalled();
+    const saved = onSave.mock.calls[0]?.[0] as { dayOfWeek: number };
+    expect(saved.dayOfWeek).toBe(2);
+  });
+
   it('renders edit mode when schedule is provided', () => {
     const schedule: ScheduleWithPermissions = {
       id: 's1',

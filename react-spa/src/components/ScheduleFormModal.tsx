@@ -35,6 +35,13 @@ function timeOptions(): string[] {
 
 const TIME_OPTIONS = timeOptions();
 
+function normalizeDayOfWeek(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  if (!Number.isInteger(n)) return null;
+  if (n < 1 || n > 5) return null;
+  return n;
+}
+
 interface GroupInfo {
   id: string;
   displayName: string;
@@ -71,7 +78,9 @@ const ScheduleFormModal: React.FC<ScheduleFormModalProps> = ({
 }) => {
   const isEdit = schedule !== null;
 
-  const [dayOfWeek, setDayOfWeek] = useState<number>(schedule?.dayOfWeek ?? defaultDay ?? 1);
+  const [dayOfWeek, setDayOfWeek] = useState<number | null>(
+    normalizeDayOfWeek(schedule?.dayOfWeek) ?? normalizeDayOfWeek(defaultDay) ?? null
+  );
   const [startTime, setStartTime] = useState<string>(
     schedule?.startTime ?? (defaultStartTime ? roundTo15(defaultStartTime) : '08:00')
   );
@@ -95,6 +104,10 @@ const ScheduleFormModal: React.FC<ScheduleFormModalProps> = ({
 
   const handleSubmit = () => {
     setLocalError('');
+    if (!dayOfWeek) {
+      setLocalError('Selecciona un dia');
+      return;
+    }
     if (!groupId) {
       setLocalError('Selecciona un grupo');
       return;

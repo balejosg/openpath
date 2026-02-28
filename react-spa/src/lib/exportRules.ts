@@ -110,6 +110,41 @@ export function downloadFile(content: string, filename: string, mimeType: string
   URL.revokeObjectURL(url);
 }
 
+function sanitizeExportBasename(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+
+  // Remove accents/diacritics and normalize to a safe, ASCII-ish filename.
+  const withoutDiacritics = trimmed.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+
+  const lowered = withoutDiacritics.toLowerCase();
+  const replaced = lowered
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '');
+
+  return replaced;
+}
+
+export function buildExportFilename(params: {
+  format: 'csv' | 'json' | 'txt';
+  filename?: string;
+  dateStamp?: string;
+}): string {
+  const extension = params.format;
+  const timestamp = params.dateStamp ?? new Date().toISOString().split('T')[0];
+  const defaultBasename = `rules-${timestamp}`;
+
+  const rawInput = params.filename ?? defaultBasename;
+  const rawInputLower = rawInput.toLowerCase();
+  const withoutExtension = rawInputLower.endsWith(`.${extension}`)
+    ? rawInput.slice(0, -(extension.length + 1))
+    : rawInput;
+
+  const safeBase = sanitizeExportBasename(withoutExtension) || defaultBasename;
+  return `${safeBase}.${extension}`;
+}
+
 /**
  * Export rules to a file and trigger download.
  */
@@ -118,32 +153,25 @@ export function exportRules(
   format: 'csv' | 'json' | 'txt',
   filename?: string
 ): void {
-  const timestamp = new Date().toISOString().split('T')[0];
-  const defaultFilename = `rules-${timestamp}`;
-
   let content: string;
   let mimeType: string;
-  let extension: string;
 
   switch (format) {
     case 'csv':
       content = rulesToCSV(rules);
       mimeType = 'text/csv;charset=utf-8';
-      extension = 'csv';
       break;
     case 'json':
       content = rulesToJSON(rules);
       mimeType = 'application/json;charset=utf-8';
-      extension = 'json';
       break;
     case 'txt':
       content = rulesToText(rules, true);
       mimeType = 'text/plain;charset=utf-8';
-      extension = 'txt';
       break;
   }
 
-  downloadFile(content, filename ?? `${defaultFilename}.${extension}`, mimeType);
+  downloadFile(content, buildExportFilename({ format, filename }), mimeType);
 }
 
 export type ExportFormat = 'csv' | 'json' | 'txt';

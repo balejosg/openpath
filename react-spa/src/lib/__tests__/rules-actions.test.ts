@@ -1,0 +1,244 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { waitFor } from '@testing-library/react';
+import {
+  addRuleWithDetection,
+  bulkCreateRulesAction,
+  bulkDeleteRulesWithUndoAction,
+  deleteRuleWithUndoAction,
+  updateRuleAction,
+} from '../rules-actions';
+
+vi.mock('../trpc', () => ({
+  trpc: {
+    groups: {
+      listRules: {
+        query: vi.fn(),
+      },
+      createRule: {
+        mutate: vi.fn(),
+      },
+      bulkCreateRules: {
+        mutate: vi.fn(),
+      },
+      bulkDeleteRules: {
+        mutate: vi.fn(),
+      },
+      deleteRule: {
+        mutate: vi.fn(),
+      },
+      updateRule: {
+        mutate: vi.fn(),
+      },
+    },
+  },
+}));
+
+import { trpc } from '../trpc';
+
+const mockListRules = trpc.groups.listRules.query as unknown as ReturnType<typeof vi.fn>;
+const mockCreateRule = trpc.groups.createRule.mutate as unknown as ReturnType<typeof vi.fn>;
+const mockBulkCreateRules = trpc.groups.bulkCreateRules.mutate as unknown as ReturnType<
+  typeof vi.fn
+>;
+const mockBulkDeleteRules = trpc.groups.bulkDeleteRules.mutate as unknown as ReturnType<
+  typeof vi.fn
+>;
+const mockDeleteRule = trpc.groups.deleteRule.mutate as unknown as ReturnType<typeof vi.fn>;
+const mockUpdateRule = trpc.groups.updateRule.mutate as unknown as ReturnType<typeof vi.fn>;
+
+describe('rules-actions', () => {
+  type OnToastFn = (message: string, type: 'success' | 'error', undoAction?: () => void) => void;
+
+  const onToast = vi.fn<OnToastFn>();
+  const fetchRules = vi.fn().mockResolvedValue(undefined);
+  const fetchCounts = vi.fn().mockResolvedValue(undefined);
+
+  const params = {
+    groupId: 'g1',
+    onToast,
+    fetchRules,
+    fetchCounts,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListRules.mockResolvedValue([]);
+  });
+
+  it('returns false for empty/whitespace input', async () => {
+    await expect(addRuleWithDetection('   ', params)).resolves.toBe(false);
+    expect(mockListRules).not.toHaveBeenCalled();
+    expect(mockCreateRule).not.toHaveBeenCalled();
+  });
+
+  it('toasts duplicate when API returns created:false', async () => {
+    mockCreateRule.mockResolvedValue({ created: false });
+
+    await expect(addRuleWithDetection('example.com', params)).resolves.toBe(false);
+    expect(onToast).toHaveBeenCalledWith('"example.com" ya existe como Permitido', 'error');
+    expect(fetchRules).not.toHaveBeenCalled();
+    expect(fetchCounts).not.toHaveBeenCalled();
+  });
+
+  it('toasts duplicate when API throws conflict-like error', async () => {
+    mockCreateRule.mockRejectedValue(new Error('CONFLICT'));
+
+    await expect(addRuleWithDetection('example.com', params)).resolves.toBe(false);
+    expect(onToast).toHaveBeenCalledWith('"example.com" ya existe como Permitido', 'error');
+  });
+
+  it('toasts success and refetches on success', async () => {
+    mockCreateRule.mockResolvedValue({ id: 'r1' });
+
+    await expect(addRuleWithDetection('example.com', params)).resolves.toBe(true);
+    expect(onToast).toHaveBeenCalledWith('"example.com" añadido como Permitido', 'success');
+    expect(fetchRules).toHaveBeenCalledTimes(1);
+    expect(fetchCounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('bulkCreateRulesAction: toasts success and refetches', async () => {
+    mockBulkCreateRules.mockResolvedValue({ count: 2 });
+
+    await expect(
+      bulkCreateRulesAction(['a.com', 'b.com'], 'whitelist', {
+        groupId: 'g1',
+        onToast,
+        fetchRules,
+        fetchCounts,
+      })
+    ).resolves.toEqual({ created: 2, total: 2 });
+
+    expect(onToast).toHaveBeenCalledWith('2 reglas importadas', 'success');
+    expect(fetchRules).toHaveBeenCalled();
+    expect(fetchCounts).toHaveBeenCalled();
+  });
+
+  it('bulkCreateRulesAction: toasts when everything is duplicate', async () => {
+    mockBulkCreateRules.mockResolvedValue({ count: 0 });
+
+    await expect(
+      bulkCreateRulesAction(['a.com'], 'whitelist', {
+        groupId: 'g1',
+        onToast,
+        fetchRules,
+        fetchCounts,
+      })
+    ).resolves.toEqual({ created: 0, total: 1 });
+
+    expect(onToast).toHaveBeenCalledWith('Todas las reglas ya existen', 'error');
+    expect(fetchRules).not.toHaveBeenCalled();
+    expect(fetchCounts).not.toHaveBeenCalled();
+  });
+
+  it('updateRuleAction: toasts success and refetches', async () => {
+    mockUpdateRule.mockResolvedValue({ id: 'r1' });
+
+    await expect(
+      updateRuleAction('r1', { value: 'example.com' }, { groupId: 'g1', onToast, fetchRules })
+    ).resolves.toBe(true);
+
+    expect(onToast).toHaveBeenCalledWith('Regla actualizada', 'success');
+    expect(fetchRules).toHaveBeenCalledTimes(1);
+  });
+
+  it('updateRuleAction: toasts error on failure', async () => {
+    mockUpdateRule.mockRejectedValue(new Error('backend failure'));
+
+    await expect(
+      updateRuleAction('r1', { value: 'example.com' }, { groupId: 'g1', onToast, fetchRules })
+    ).resolves.toBe(false);
+
+    expect(onToast).toHaveBeenCalledWith('Error al actualizar regla', 'error');
+    expect(fetchRules).not.toHaveBeenCalled();
+  });
+
+  it('deleteRuleWithUndoAction: deletes and exposes undo action', async () => {
+    mockDeleteRule.mockResolvedValue({ deleted: true });
+    mockCreateRule.mockResolvedValue({ id: 'restored' });
+
+    await deleteRuleWithUndoAction(
+      {
+        id: 'r1',
+        groupId: 'g1',
+        type: 'whitelist',
+        value: 'example.com',
+        comment: null,
+      },
+      { onToast, fetchRules, fetchCounts }
+    );
+
+    expect(mockDeleteRule).toHaveBeenCalledWith({ id: 'r1', groupId: 'g1' });
+    expect(fetchRules).toHaveBeenCalledTimes(1);
+    expect(fetchCounts).toHaveBeenCalledTimes(1);
+
+    const undo = onToast.mock.calls.find((call) => call[0] === '"example.com" eliminado')?.[2];
+    expect(typeof undo).toBe('function');
+
+    (undo as () => void)();
+
+    await waitFor(() => {
+      expect(mockCreateRule).toHaveBeenCalledWith({
+        groupId: 'g1',
+        type: 'whitelist',
+        value: 'example.com',
+        comment: undefined,
+      });
+    });
+
+    await waitFor(() => {
+      expect(onToast).toHaveBeenCalledWith('"example.com" restaurado', 'success');
+    });
+  });
+
+  it('bulkDeleteRulesWithUndoAction: clears selection, toasts, and supports undo', async () => {
+    mockBulkDeleteRules.mockResolvedValue({
+      deleted: 2,
+      rules: [
+        {
+          id: 'r1',
+          groupId: 'g1',
+          type: 'whitelist',
+          value: 'a.com',
+          comment: null,
+          createdAt: '2024-01-01',
+        },
+        {
+          id: 'r2',
+          groupId: 'g1',
+          type: 'whitelist',
+          value: 'b.com',
+          comment: null,
+          createdAt: '2024-01-01',
+        },
+      ],
+    });
+    mockCreateRule.mockResolvedValue({ id: 'restored' });
+
+    const clearSelection = vi.fn();
+
+    await bulkDeleteRulesWithUndoAction({
+      ids: ['r1', 'r2'],
+      clearSelection,
+      onToast,
+      fetchRules,
+      fetchCounts,
+    });
+
+    expect(clearSelection).toHaveBeenCalledTimes(1);
+    expect(fetchRules).toHaveBeenCalledTimes(1);
+    expect(fetchCounts).toHaveBeenCalledTimes(1);
+
+    const undo = onToast.mock.calls.find((call) => call[0] === '2 reglas eliminadas')?.[2];
+    expect(typeof undo).toBe('function');
+
+    (undo as () => void)();
+
+    await waitFor(() => {
+      expect(mockCreateRule).toHaveBeenCalledTimes(2);
+    });
+
+    await waitFor(() => {
+      expect(onToast).toHaveBeenCalledWith('2 reglas restauradas', 'success');
+    });
+  });
+});

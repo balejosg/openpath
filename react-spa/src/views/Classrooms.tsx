@@ -36,6 +36,7 @@ const Classrooms = () => {
   const admin = isAdmin();
 
   const {
+    groups: allowedGroups,
     groupById,
     options: groupOptions,
     isLoading: groupsLoading,
@@ -47,7 +48,12 @@ const Classrooms = () => {
   const isInitialLoading = loading || groupsLoading;
   const loadError = error ?? allowedGroupsError;
 
-  const calendarGroups = useMemo(
+  const calendarGroupsForDisplay = useMemo(
+    () => allowedGroups.map((g) => ({ id: g.id, displayName: g.displayName || g.name })),
+    [allowedGroups]
+  );
+
+  const calendarGroupsForSelect = useMemo(
     () => groupOptions.map((g) => ({ id: g.value, displayName: g.label })),
     [groupOptions]
   );
@@ -335,12 +341,6 @@ const Classrooms = () => {
           ) : (
             filteredClassrooms.map((room) => {
               const displayGroupId = room.currentGroupId;
-              const displayGroupName = (() => {
-                if (!displayGroupId) return 'Sin grupo';
-                const group = groupById.get(displayGroupId);
-                if (!group) return displayGroupId;
-                return group.displayName || group.name;
-              })();
               const inferredSource = (() => {
                 if (room.currentGroupSource) return room.currentGroupSource;
                 if (room.activeGroup) return 'manual';
@@ -348,6 +348,18 @@ const Classrooms = () => {
                 if (room.defaultGroupId && room.currentGroupId === room.defaultGroupId)
                   return 'default';
                 return 'schedule';
+              })();
+
+              const displayGroupName = (() => {
+                if (!displayGroupId) return 'Sin grupo';
+                const group = groupById.get(displayGroupId);
+                if (group) return group.displayName || group.name;
+                if (admin) return displayGroupId;
+
+                if (inferredSource === 'manual') return 'Aplicado por otro profesor';
+                if (inferredSource === 'default') return 'Asignado por admin';
+                if (inferredSource === 'schedule') return 'Reservado por otro profesor';
+                return 'Grupo no disponible';
               })();
 
               const badgeVariant =
@@ -461,6 +473,13 @@ const Classrooms = () => {
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
                   >
                     <option value="">Sin grupo activo</option>
+                    {!admin &&
+                      selectedClassroom.activeGroup &&
+                      !groupById.get(selectedClassroom.activeGroup) && (
+                        <option value={selectedClassroom.activeGroup} disabled>
+                          Aplicado por otro profesor
+                        </option>
+                      )}
                     {groupOptions.map((g) => (
                       <option key={g.value} value={g.value}>
                         {g.label}
@@ -473,8 +492,19 @@ const Classrooms = () => {
                       <span className="font-semibold text-slate-700">
                         {(() => {
                           const group = groupById.get(selectedClassroom.currentGroupId);
-                          if (!group) return selectedClassroom.currentGroupId;
-                          return group.displayName || group.name;
+                          if (group) return group.displayName || group.name;
+                          if (admin) return selectedClassroom.currentGroupId;
+
+                          const source =
+                            selectedClassroom.currentGroupSource ??
+                            (selectedClassroom.defaultGroupId !== null &&
+                            selectedClassroom.currentGroupId === selectedClassroom.defaultGroupId
+                              ? 'default'
+                              : 'schedule');
+
+                          if (source === 'default') return 'Asignado por admin';
+                          if (source === 'schedule') return 'Reservado por otro profesor';
+                          return 'Grupo no disponible';
                         })()}
                       </span>{' '}
                       {(() => {
@@ -507,6 +537,11 @@ const Classrooms = () => {
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm disabled:bg-slate-50 disabled:text-slate-500"
                   >
                     <option value="">Sin grupo por defecto</option>
+                    {!admin &&
+                      selectedClassroom.defaultGroupId &&
+                      !groupById.get(selectedClassroom.defaultGroupId) && (
+                        <option value={selectedClassroom.defaultGroupId}>Asignado por admin</option>
+                      )}
                     {groupOptions.map((g) => (
                       <option key={g.value} value={g.value}>
                         {g.label}
@@ -600,7 +635,7 @@ const Classrooms = () => {
                   Horario del Aula
                 </h3>
                 <button
-                  onClick={() => openScheduleCreate(1, '08:00')}
+                  onClick={() => openScheduleCreate(undefined, '08:00')}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium"
                 >
                   <Plus size={16} /> Nuevo
@@ -622,7 +657,7 @@ const Classrooms = () => {
                   )}
                   <WeeklyCalendar
                     schedules={schedules}
-                    groups={calendarGroups}
+                    groups={calendarGroupsForDisplay}
                     onAddClick={(dayOfWeek, startTime) => openScheduleCreate(dayOfWeek, startTime)}
                     onEditClick={(s) => openScheduleEdit(s)}
                     onDeleteClick={(s) => requestScheduleDelete(s)}
@@ -717,7 +752,7 @@ const Classrooms = () => {
           schedule={editingSchedule}
           defaultDay={scheduleFormDay}
           defaultStartTime={scheduleFormStartTime}
-          groups={calendarGroups}
+          groups={calendarGroupsForSelect}
           saving={scheduleSaving}
           error={scheduleError}
           onSave={(data) => void handleScheduleSave(data)}

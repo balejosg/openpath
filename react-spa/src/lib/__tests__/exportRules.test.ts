@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rulesToCSV, rulesToJSON, rulesToText } from '../exportRules';
+import { rulesToCSV, rulesToJSON, rulesToText, buildExportFilename } from '../exportRules';
 import type { Rule } from '../../components/RulesTable';
 
 const mockRules: Rule[] = [
@@ -173,6 +173,38 @@ describe('exportRules utilities', () => {
     it('handles empty array', () => {
       const text = rulesToText([], false);
       expect(text).toBe('');
+    });
+  });
+
+  describe('buildExportFilename', () => {
+    it('appends the correct extension and sanitizes the basename', () => {
+      const filename = buildExportFilename({
+        format: 'csv',
+        filename: 'Grupo de prueba admin para validar flujo Aulas/Políticas.-rules',
+        dateStamp: '2026-02-27',
+      });
+
+      expect(filename).toBe('grupo-de-prueba-admin-para-validar-flujo-aulas-politicas-rules.csv');
+    });
+
+    it('does not duplicate the extension if it is already present', () => {
+      const filename = buildExportFilename({
+        format: 'json',
+        filename: 'mis-reglas.json',
+        dateStamp: '2026-02-27',
+      });
+
+      expect(filename).toBe('mis-reglas.json');
+    });
+
+    it('falls back to default filename when basename is empty after sanitization', () => {
+      const filename = buildExportFilename({
+        format: 'txt',
+        filename: '!!!',
+        dateStamp: '2026-02-27',
+      });
+
+      expect(filename).toBe('rules-2026-02-27.txt');
     });
   });
 });
