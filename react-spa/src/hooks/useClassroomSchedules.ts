@@ -1,6 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ScheduleWithPermissions } from '../types';
 import { trpc } from '../lib/trpc';
+import { resolveErrorMessage } from '../lib/error-utils';
+
+function formatScheduleError(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : '';
+  return resolveErrorMessage(
+    err,
+    [
+      {
+        message: 'Ese tramo horario ya est\u00e1 reservado',
+        patterns: ['time slot is already reserved', 'already reserved'],
+      },
+    ],
+    raw || fallback
+  );
+}
 
 interface ScheduleFormData {
   dayOfWeek: number;
@@ -107,8 +122,7 @@ export const useClassroomSchedules = ({ selectedClassroomId }: UseClassroomSched
         setScheduleFormStartTime(undefined);
       } catch (err: unknown) {
         console.error('Failed to save schedule:', err);
-        const message = err instanceof Error ? err.message : 'Error al guardar horario';
-        setScheduleError(message);
+        setScheduleError(formatScheduleError(err, 'Error al guardar horario'));
       } finally {
         setScheduleSaving(false);
       }
@@ -138,8 +152,7 @@ export const useClassroomSchedules = ({ selectedClassroomId }: UseClassroomSched
       setScheduleDeleteTarget(null);
     } catch (err: unknown) {
       console.error('Failed to delete schedule:', err);
-      const message = err instanceof Error ? err.message : 'Error al eliminar horario';
-      setScheduleError(message);
+      setScheduleError(formatScheduleError(err, 'Error al eliminar horario'));
     } finally {
       setScheduleSaving(false);
     }

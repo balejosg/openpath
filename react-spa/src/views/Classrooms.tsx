@@ -861,7 +861,7 @@ const Classrooms = () => {
                     : 'text-slate-600 hover:text-slate-800'
                 }`}
               >
-                Linux (MAX)
+                Linux (Debian/Ubuntu)
               </button>
               <button
                 onClick={() => setEnrollPlatform('windows')}
@@ -881,10 +881,18 @@ const Classrooms = () => {
                   setEnrollCopied(true);
                   setTimeout(() => setEnrollCopied(false), 2000);
                 }}
-                className="absolute top-2 right-2 text-slate-400 hover:text-white"
-                title="Copiar al portapapeles"
+                className="absolute top-2 right-2 inline-flex items-center gap-1 text-slate-400 hover:text-white"
+                title={enrollCopied ? 'Copiado' : 'Copiar al portapapeles'}
+                aria-label={enrollCopied ? 'Copiado' : 'Copiar al portapapeles'}
               >
-                {enrollCopied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
+                {enrollCopied ? (
+                  <>
+                    <Check size={16} className="text-green-400" />
+                    <span className="text-[10px] font-semibold text-green-400">Copiado</span>
+                  </>
+                ) : (
+                  <Copy size={16} />
+                )}
               </button>
               <pre className="whitespace-pre-wrap pr-8">{enrollCommand}</pre>
             </div>
