@@ -3,6 +3,11 @@ export type CsvRow = CsvCell[];
 
 export function escapeCsvCell(cell: CsvCell): string {
   const value = cell === null || cell === undefined ? '' : String(cell);
+
+  const shouldQuote =
+    value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r');
+  if (!shouldQuote) return value;
+
   return `"${value.replace(/"/g, '""')}"`;
 }
 

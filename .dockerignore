@@ -1,0 +1,29 @@
+# Dependencies
+**/node_modules
+
+# Build output
+**/dist
+**/coverage
+**/.turbo
+**/.vite
+**/.eslintcache
+**/*.tsbuildinfo
+
+# Test artifacts
+**/test-results
+**/playwright-report
+
+# Local env / secrets
+.env*
+!**/.env.example
+
+# VCS
+.git
+.gitignore
+.gitattributes
+
+# Logs
+**/*.log
+
+# OS
+.DS_Store

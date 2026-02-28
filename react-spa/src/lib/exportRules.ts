@@ -4,6 +4,7 @@
  */
 
 import type { Rule } from '../components/RulesTable';
+import { toCsv } from './csv';
 
 /** Rule type labels for export */
 const RULE_TYPE_LABELS: Record<string, string> = {
@@ -17,16 +18,14 @@ const RULE_TYPE_LABELS: Record<string, string> = {
  * Columns: value, type, type_label, created_at
  */
 export function rulesToCSV(rules: Rule[]): string {
-  const header = 'value,type,type_label,created_at';
+  const header = ['value', 'type', 'type_label', 'created_at'];
   const rows = rules.map((rule) => {
-    const value = escapeCSVField(rule.value);
-    const type = rule.type;
     const typeLabel = RULE_TYPE_LABELS[rule.type] || rule.type;
     const createdAt = rule.createdAt || '';
-    return `${value},${type},${typeLabel},${createdAt}`;
+    return [rule.value, rule.type, typeLabel, createdAt];
   });
 
-  return [header, ...rows].join('\n');
+  return toCsv([header, ...rows]);
 }
 
 /**
@@ -78,17 +77,6 @@ export function rulesToText(rules: Rule[], grouped = false): string {
   }
 
   return sections.join('\n').trim();
-}
-
-/**
- * Escape a field for CSV format.
- * Wraps in quotes if contains comma, quote, or newline.
- */
-function escapeCSVField(field: string): string {
-  if (field.includes(',') || field.includes('"') || field.includes('\n')) {
-    return `"${field.replace(/"/g, '""')}"`;
-  }
-  return field;
 }
 
 /**
