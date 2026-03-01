@@ -78,7 +78,7 @@
     "google-auth-library": "^9.14.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
-    "pg": "8.13.1",
+    "pg": "8.19.0",
     "redis": "^4.7.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
