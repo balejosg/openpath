@@ -13,6 +13,12 @@
 **/test-results
 **/playwright-report
 
+# Dev/test sources (not needed for image builds)
+**/tests
+**/e2e
+.github
+.vscode
+
 # Local env / secrets
 .env*
 !**/.env.example
