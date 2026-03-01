@@ -22,6 +22,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),
+      '@openpath/shared/domain': path.resolve(__dirname, '../shared/src/domain.ts'),
+      '@openpath/shared/rules-validation': path.resolve(
+        __dirname,
+        '../shared/src/rules-validation.ts'
+      ),
     },
   },
   build: {

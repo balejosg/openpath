@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getRuleTypeBadge } from '../lib/ruleDetection';
-import { getRootDomain } from '../../../shared/src/domain';
+import { getRootDomain } from '@openpath/shared/domain';
 import type { Rule } from './RulesTable';
 
 // =============================================================================
@@ -28,9 +28,6 @@ export interface DomainGroup {
   rules: Rule[];
   status: 'allowed' | 'blocked' | 'mixed';
 }
-
-// Re-export getRootDomain for backward compatibility
-export { getRootDomain };
 
 interface HierarchicalRulesTableProps {
   /** Individual rules to be grouped client-side (legacy mode) */

@@ -8,7 +8,7 @@ import {
   updateRuleAction,
 } from '../lib/rules-actions';
 import { createLatestGuard } from '../lib/latest';
-import { getRootDomain } from '../../../shared/src/domain';
+import { getRootDomain } from '@openpath/shared/domain';
 import type { Rule } from '../components/RulesTable';
 
 const PAGE_SIZE = 20; // Number of domain groups per page

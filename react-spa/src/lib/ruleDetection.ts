@@ -2,6 +2,16 @@
  * Rule Detection - Automatically detect rule type based on input pattern
  */
 
+import { getRootDomain } from '@openpath/shared/domain';
+import {
+  cleanRuleValue as cleanRuleValueShared,
+  validateRuleValue as validateRuleValueShared,
+} from '@openpath/shared/rules-validation';
+import type {
+  RuleValidationCode,
+  RuleValidationResult as SharedRuleValidationResult,
+} from '@openpath/shared/rules-validation';
+
 export type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
 
 export interface DetectionResult {
@@ -16,35 +26,12 @@ export interface ValidationResult {
   error?: string;
 }
 
-// Domain validation: each label 1-63 chars (alphanumeric + hyphens, not at start/end),
-// TLD 2-63 chars letters only. Does NOT allow wildcard prefix.
-const DOMAIN_REGEX = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/;
-
-// Same as DOMAIN_REGEX but optionally allows a "*." prefix for wildcard patterns
-const SUBDOMAIN_REGEX =
-  /^(?:\*\.)?(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$/;
-
-// Path characters: anything allowed after domain/ except whitespace and control chars
-const PATH_SEGMENT_REGEX = /^[^\s]+$/;
-
 /**
  * Clean and normalize a rule value.
  * Strips protocol, trailing slashes (for domains), and lowercases.
  */
 export function cleanRuleValue(value: string, preservePath = false): string {
-  let cleaned = value.trim().toLowerCase();
-
-  // Remove protocol
-  cleaned = cleaned.replace(/^https?:\/\//, '');
-  cleaned = cleaned.replace(/^\*:\/\//, '');
-
-  // Remove trailing slash if it's just a domain (no path content after /)
-  if (!preservePath) {
-    // If ends with just "/" and nothing after, remove it
-    cleaned = cleaned.replace(/\/$/, '');
-  }
-
-  return cleaned;
+  return cleanRuleValueShared(value, preservePath);
 }
 
 /**
@@ -53,16 +40,7 @@ export function cleanRuleValue(value: string, preservePath = false): string {
  *       "*.tracking.example.com" -> "example.com"
  */
 export function extractRootDomain(domain: string): string {
-  // Remove wildcard prefix
-  const cleanDomain = domain.replace(/^\*\./, '');
-
-  // Split and take last 2 parts
-  const parts = cleanDomain.split('.');
-  if (parts.length <= 2) {
-    return cleanDomain;
-  }
-
-  return parts.slice(-2).join('.');
+  return getRootDomain(domain);
 }
 
 /**
@@ -147,132 +125,61 @@ export function detectRuleType(
   };
 }
 
-/**
- * Validate that a domain string is well-formed.
- * Checks: length 4-253, no consecutive dots, each label <= 63 chars, matches DOMAIN_REGEX.
- */
-function validateDomain(domain: string): ValidationResult {
-  if (domain.length < 4) {
-    return { valid: false, error: 'El dominio es demasiado corto (mínimo 4 caracteres)' };
-  }
-  if (domain.length > 253) {
-    return { valid: false, error: 'El dominio excede los 253 caracteres permitidos' };
-  }
-  if (domain.includes('..')) {
-    return { valid: false, error: 'El dominio no puede contener puntos consecutivos (..)' };
-  }
-  if (!DOMAIN_REGEX.test(domain)) {
-    return {
-      valid: false,
-      error: 'Formato de dominio inválido. Ejemplo válido: example.com',
-    };
-  }
-  // Validate each label length
-  const labels = domain.split('.');
-  for (const label of labels) {
-    if (label.length > 63) {
-      return { valid: false, error: 'Cada parte del dominio debe tener como máximo 63 caracteres' };
-    }
-  }
-  return { valid: true };
-}
+// =============================================================================
+// Validation (canonical logic in @openpath/shared, UI messages in Spanish)
+// =============================================================================
 
-/**
- * Validate that a subdomain pattern is well-formed.
- * Accepts: domain.tld, sub.domain.tld, *.domain.tld
- */
-function validateSubdomain(value: string): ValidationResult {
-  if (value.length < 4) {
-    return { valid: false, error: 'El subdominio es demasiado corto (mínimo 4 caracteres)' };
-  }
-  if (value.length > 253) {
-    return { valid: false, error: 'El subdominio excede los 253 caracteres permitidos' };
-  }
-  if (value.includes('..')) {
-    return { valid: false, error: 'El subdominio no puede contener puntos consecutivos (..)' };
-  }
-  if (!SUBDOMAIN_REGEX.test(value)) {
-    return {
-      valid: false,
-      error: 'Formato de subdominio inválido. Ejemplo válido: sub.example.com o *.example.com',
-    };
-  }
-  // Validate each label length (skip wildcard)
-  const labels = value.replace(/^\*\./, '').split('.');
-  for (const label of labels) {
-    if (label.length > 63) {
-      return {
-        valid: false,
-        error: 'Cada parte del subdominio debe tener como máximo 63 caracteres',
-      };
-    }
-  }
-  return { valid: true };
-}
+const SPANISH_VALIDATION_MESSAGES: Partial<Record<RuleValidationCode, string>> = {
+  EMPTY: 'El valor no puede estar vacío',
 
-/**
- * Validate that a blocked path is well-formed.
- * Must be domain/path where domain is valid and path is non-empty.
- */
-function validatePath(value: string): ValidationResult {
-  const slashIndex = value.indexOf('/');
-  if (slashIndex === -1) {
-    return {
-      valid: false,
-      error: 'La ruta debe contener una barra (/). Ejemplo: example.com/path',
-    };
+  DOMAIN_TOO_SHORT: 'El dominio es demasiado corto (mínimo 4 caracteres)',
+  DOMAIN_TOO_LONG: 'El dominio excede los 253 caracteres permitidos',
+  DOMAIN_CONSECUTIVE_DOTS: 'El dominio no puede contener puntos consecutivos (..)',
+  DOMAIN_INVALID_FORMAT: 'Formato de dominio inválido. Ejemplo válido: example.com',
+  DOMAIN_LABEL_TOO_LONG: 'Cada parte del dominio debe tener como máximo 63 caracteres',
+
+  SUBDOMAIN_TOO_SHORT: 'El subdominio es demasiado corto (mínimo 4 caracteres)',
+  SUBDOMAIN_TOO_LONG: 'El subdominio excede los 253 caracteres permitidos',
+  SUBDOMAIN_CONSECUTIVE_DOTS: 'El subdominio no puede contener puntos consecutivos (..)',
+  SUBDOMAIN_INVALID_FORMAT:
+    'Formato de subdominio inválido. Ejemplo válido: sub.example.com o *.example.com',
+  SUBDOMAIN_LABEL_TOO_LONG: 'Cada parte del subdominio debe tener como máximo 63 caracteres',
+
+  PATH_MISSING_SLASH: 'La ruta debe contener una barra (/). Ejemplo: example.com/path',
+  PATH_EMPTY: 'La ruta después del dominio no puede estar vacía',
+  PATH_INVALID_CHARS: 'La ruta contiene caracteres no permitidos (espacios)',
+};
+
+function toSpanishRuleValidationError(result: SharedRuleValidationResult): string {
+  if (result.code === 'PATH_INVALID_DOMAIN') {
+    const domainCode = result.details?.domainCode;
+    const domainError =
+      (domainCode !== undefined ? SPANISH_VALIDATION_MESSAGES[domainCode] : undefined) ??
+      result.details?.domainError ??
+      '';
+    return `Dominio inválido en la ruta: ${domainError}`;
   }
 
-  const domainPart = value.substring(0, slashIndex);
-  const pathPart = value.substring(slashIndex + 1);
-
-  // Allow global wildcard paths like */ads/*
-  if (domainPart !== '*') {
-    // Validate domain part
-    const domainResult = validateDomain(domainPart);
-    if (!domainResult.valid) {
-      return {
-        valid: false,
-        error: `Dominio inválido en la ruta: ${domainResult.error ?? ''}`,
-      };
+  if (result.code !== undefined) {
+    const message = SPANISH_VALIDATION_MESSAGES[result.code];
+    if (message) {
+      return message;
     }
   }
 
-  if (!pathPart) {
-    return { valid: false, error: 'La ruta después del dominio no puede estar vacía' };
-  }
-
-  if (!PATH_SEGMENT_REGEX.test(pathPart)) {
-    return { valid: false, error: 'La ruta contiene caracteres no permitidos (espacios)' };
-  }
-
-  return { valid: true };
+  return result.error ?? 'Formato inválido';
 }
 
 /**
  * Validate a rule value based on its detected type.
  * Applies format validation for domains, subdomains, and paths.
- *
- * @param value - The raw input value
- * @param type - The detected rule type
- * @returns Validation result with optional error message
  */
 export function validateRuleValue(value: string, type: RuleType): ValidationResult {
-  const cleaned =
-    type === 'blocked_path' ? cleanRuleValue(value, true) : cleanRuleValue(value, false);
-
-  if (!cleaned) {
-    return { valid: false, error: 'El valor no puede estar vacío' };
+  const result = validateRuleValueShared(value, type);
+  if (result.valid) {
+    return { valid: true };
   }
-
-  switch (type) {
-    case 'whitelist':
-      return validateDomain(cleaned);
-    case 'blocked_subdomain':
-      return validateSubdomain(cleaned);
-    case 'blocked_path':
-      return validatePath(cleaned);
-  }
+  return { valid: false, error: toSpanishRuleValidationError(result) };
 }
 
 /**

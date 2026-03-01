@@ -55,13 +55,13 @@ describe('validateRuleValue - whitelist (domain)', () => {
   it('rejects too short', () => {
     const result = validateRuleValue('a.b', type);
     assert.strictEqual(result.valid, false);
-    assert.ok(result.error?.includes('too short'));
+    assert.strictEqual(result.code, 'DOMAIN_TOO_SHORT');
   });
 
   it('rejects consecutive dots', () => {
     const result = validateRuleValue('example..com', type);
     assert.strictEqual(result.valid, false);
-    assert.ok(result.error?.includes('consecutive dots'));
+    assert.strictEqual(result.code, 'DOMAIN_CONSECUTIVE_DOTS');
   });
 
   it('rejects invalid format - starts with hyphen', () => {
@@ -97,14 +97,14 @@ describe('validateRuleValue - whitelist (domain)', () => {
   it('rejects empty after cleaning', () => {
     const result = validateRuleValue('   ', type);
     assert.strictEqual(result.valid, false);
-    assert.ok(result.error?.includes('empty'));
+    assert.strictEqual(result.code, 'EMPTY');
   });
 
   it('rejects label longer than 63 chars', () => {
     const longLabel = 'a'.repeat(64);
     const result = validateRuleValue(`${longLabel}.com`, type);
     assert.strictEqual(result.valid, false);
-    assert.ok(result.error, 'Expected an error message');
+    assert.ok(result.code, 'Expected an error code');
   });
 
   it('rejects domain exceeding 253 chars', () => {
@@ -117,7 +117,7 @@ describe('validateRuleValue - whitelist (domain)', () => {
     assert.ok(longDomain.length > 253);
     const result = validateRuleValue(longDomain, type);
     assert.strictEqual(result.valid, false);
-    assert.ok(result.error?.includes('253'));
+    assert.strictEqual(result.code, 'DOMAIN_TOO_LONG');
   });
 });
 
@@ -192,7 +192,7 @@ describe('validateRuleValue - blocked_path', () => {
   it('rejects missing slash', () => {
     const result = validateRuleValue('example.com', type);
     assert.strictEqual(result.valid, false);
-    assert.ok(result.error?.includes('slash'));
+    assert.strictEqual(result.code, 'PATH_MISSING_SLASH');
   });
 
   it('rejects empty path after slash', () => {
@@ -200,13 +200,14 @@ describe('validateRuleValue - blocked_path', () => {
     // But the path "" after the slash is empty
     const result = validateRuleValue('example.com/', type);
     assert.strictEqual(result.valid, false);
-    assert.ok(result.error?.includes('empty'));
+    assert.strictEqual(result.code, 'PATH_EMPTY');
   });
 
   it('rejects invalid domain part', () => {
     const result = validateRuleValue('-bad-.com/path', type);
     assert.strictEqual(result.valid, false);
-    assert.ok(result.error?.includes('domain'));
+    assert.strictEqual(result.code, 'PATH_INVALID_DOMAIN');
+    assert.ok(result.details?.domainCode, 'Expected domainCode details');
   });
 
   it('accepts wildcard domain part', () => {
@@ -217,7 +218,7 @@ describe('validateRuleValue - blocked_path', () => {
   it('rejects path with spaces', () => {
     const result = validateRuleValue('example.com/bad path', type);
     assert.strictEqual(result.valid, false);
-    assert.ok(result.error?.includes('whitespace'));
+    assert.strictEqual(result.code, 'PATH_INVALID_CHARS');
   });
 
   it('strips protocol before validating', () => {

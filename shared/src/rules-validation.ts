@@ -12,10 +12,32 @@
 /** The three rule types supported by whitelist groups. */
 export type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
 
+export type RuleValidationCode =
+  | 'EMPTY'
+  | 'DOMAIN_TOO_SHORT'
+  | 'DOMAIN_TOO_LONG'
+  | 'DOMAIN_CONSECUTIVE_DOTS'
+  | 'DOMAIN_INVALID_FORMAT'
+  | 'DOMAIN_LABEL_TOO_LONG'
+  | 'SUBDOMAIN_TOO_SHORT'
+  | 'SUBDOMAIN_TOO_LONG'
+  | 'SUBDOMAIN_CONSECUTIVE_DOTS'
+  | 'SUBDOMAIN_INVALID_FORMAT'
+  | 'SUBDOMAIN_LABEL_TOO_LONG'
+  | 'PATH_MISSING_SLASH'
+  | 'PATH_INVALID_DOMAIN'
+  | 'PATH_EMPTY'
+  | 'PATH_INVALID_CHARS';
+
 /** Result of validating a rule value. */
 export interface RuleValidationResult {
   valid: boolean;
+  code?: RuleValidationCode;
   error?: string;
+  details?: {
+    domainCode?: RuleValidationCode;
+    domainError?: string;
+  };
 }
 
 // =============================================================================
@@ -66,17 +88,30 @@ export function cleanRuleValue(value: string, preservePath = false): string {
  */
 function validateDomain(domain: string): RuleValidationResult {
   if (domain.length < 4) {
-    return { valid: false, error: 'Domain too short (minimum 4 characters)' };
+    return {
+      valid: false,
+      code: 'DOMAIN_TOO_SHORT',
+      error: 'Domain too short (minimum 4 characters)',
+    };
   }
   if (domain.length > 253) {
-    return { valid: false, error: 'Domain exceeds maximum length of 253 characters' };
+    return {
+      valid: false,
+      code: 'DOMAIN_TOO_LONG',
+      error: 'Domain exceeds maximum length of 253 characters',
+    };
   }
   if (domain.includes('..')) {
-    return { valid: false, error: 'Domain cannot contain consecutive dots (..)' };
+    return {
+      valid: false,
+      code: 'DOMAIN_CONSECUTIVE_DOTS',
+      error: 'Domain cannot contain consecutive dots (..)',
+    };
   }
   if (!DOMAIN_REGEX.test(domain)) {
     return {
       valid: false,
+      code: 'DOMAIN_INVALID_FORMAT',
       error: 'Invalid domain format. Example: example.com',
     };
   }
@@ -84,7 +119,11 @@ function validateDomain(domain: string): RuleValidationResult {
   const labels = domain.split('.');
   for (const label of labels) {
     if (label.length > 63) {
-      return { valid: false, error: 'Each domain label must be 63 characters or less' };
+      return {
+        valid: false,
+        code: 'DOMAIN_LABEL_TOO_LONG',
+        error: 'Each domain label must be 63 characters or less',
+      };
     }
   }
   return { valid: true };
@@ -96,17 +135,30 @@ function validateDomain(domain: string): RuleValidationResult {
  */
 function validateSubdomain(value: string): RuleValidationResult {
   if (value.length < 4) {
-    return { valid: false, error: 'Subdomain too short (minimum 4 characters)' };
+    return {
+      valid: false,
+      code: 'SUBDOMAIN_TOO_SHORT',
+      error: 'Subdomain too short (minimum 4 characters)',
+    };
   }
   if (value.length > 253) {
-    return { valid: false, error: 'Subdomain exceeds maximum length of 253 characters' };
+    return {
+      valid: false,
+      code: 'SUBDOMAIN_TOO_LONG',
+      error: 'Subdomain exceeds maximum length of 253 characters',
+    };
   }
   if (value.includes('..')) {
-    return { valid: false, error: 'Subdomain cannot contain consecutive dots (..)' };
+    return {
+      valid: false,
+      code: 'SUBDOMAIN_CONSECUTIVE_DOTS',
+      error: 'Subdomain cannot contain consecutive dots (..)',
+    };
   }
   if (!SUBDOMAIN_REGEX.test(value)) {
     return {
       valid: false,
+      code: 'SUBDOMAIN_INVALID_FORMAT',
       error: 'Invalid subdomain format. Example: sub.example.com or *.example.com',
     };
   }
@@ -116,6 +168,7 @@ function validateSubdomain(value: string): RuleValidationResult {
     if (label.length > 63) {
       return {
         valid: false,
+        code: 'SUBDOMAIN_LABEL_TOO_LONG',
         error: 'Each subdomain label must be 63 characters or less',
       };
     }
@@ -132,6 +185,7 @@ function validatePath(value: string): RuleValidationResult {
   if (slashIndex === -1) {
     return {
       valid: false,
+      code: 'PATH_MISSING_SLASH',
       error: 'Path must contain a slash (/). Example: example.com/path',
     };
   }
@@ -144,19 +198,32 @@ function validatePath(value: string): RuleValidationResult {
     // Validate domain part
     const domainResult = validateDomain(domainPart);
     if (!domainResult.valid) {
+      const details: RuleValidationResult['details'] = {};
+      if (domainResult.code !== undefined) {
+        details.domainCode = domainResult.code;
+      }
+      if (domainResult.error !== undefined) {
+        details.domainError = domainResult.error;
+      }
       return {
         valid: false,
+        code: 'PATH_INVALID_DOMAIN',
         error: `Invalid domain in path: ${domainResult.error ?? ''}`,
+        details,
       };
     }
   }
 
   if (!pathPart) {
-    return { valid: false, error: 'Path after domain cannot be empty' };
+    return { valid: false, code: 'PATH_EMPTY', error: 'Path after domain cannot be empty' };
   }
 
   if (!PATH_SEGMENT_REGEX.test(pathPart)) {
-    return { valid: false, error: 'Path contains invalid characters (whitespace)' };
+    return {
+      valid: false,
+      code: 'PATH_INVALID_CHARS',
+      error: 'Path contains invalid characters (whitespace)',
+    };
   }
 
   return { valid: true };
@@ -179,7 +246,7 @@ export function validateRuleValue(value: string, type: RuleType): RuleValidation
     type === 'blocked_path' ? cleanRuleValue(value, true) : cleanRuleValue(value, false);
 
   if (!cleaned) {
-    return { valid: false, error: 'Value cannot be empty' };
+    return { valid: false, code: 'EMPTY', error: 'Value cannot be empty' };
   }
 
   switch (type) {

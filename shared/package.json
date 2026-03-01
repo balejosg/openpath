@@ -9,6 +9,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./domain": {
+      "types": "./dist/domain.d.ts",
+      "import": "./dist/domain.js"
+    },
+    "./rules-validation": {
+      "types": "./dist/rules-validation.d.ts",
+      "import": "./dist/rules-validation.js"
     }
   },
   "scripts": {

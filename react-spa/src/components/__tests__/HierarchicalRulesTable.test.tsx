@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { HierarchicalRulesTable, getRootDomain } from '../HierarchicalRulesTable';
+import { getRootDomain } from '@openpath/shared/domain';
+import { HierarchicalRulesTable } from '../HierarchicalRulesTable';
 import type { DomainGroup } from '../HierarchicalRulesTable';
 import type { Rule } from '../RulesTable';
 
