@@ -33,3 +33,13 @@
 
 # OS
 .DS_Store
+
+# Required for Linux E2E Docker image (tests/e2e/Dockerfile)
+!tests/
+tests/**
+!tests/e2e/
+!tests/e2e/**
+
+# Linux E2E validates release artifacts for the Firefox extension
+!firefox-extension/dist/
+!firefox-extension/dist/**
