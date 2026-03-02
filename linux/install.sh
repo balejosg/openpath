@@ -267,7 +267,7 @@ step_install_dependencies() {
 
     apt-get update -qq
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        iptables iptables-persistent ipset curl \
+        iptables iptables-persistent ipset curl iproute2 \
         libcap2-bin dnsutils conntrack python3 >/dev/null
 
     RUNLEVEL=1 apt-get install -y dnsmasq >/dev/null

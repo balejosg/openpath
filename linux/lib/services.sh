@@ -227,6 +227,7 @@ remove_services() {
 
 # Configure logrotate
 create_logrotate_config() {
+    mkdir -p /etc/logrotate.d
     cat > /etc/logrotate.d/openpath-dnsmasq << 'EOF'
 /var/log/openpath.log
 /var/log/captive-portal-detector.log
@@ -245,6 +246,7 @@ EOF
 
 # Configure tmpfiles (to create directory in /run)
 create_tmpfiles_config() {
+    mkdir -p /etc/tmpfiles.d
     cat > /etc/tmpfiles.d/openpath-dnsmasq.conf << 'EOF'
 d /run/dnsmasq 0755 root root -
 EOF

@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     # DNS and networking
     dnsmasq \
     iptables \
+    iproute2 \
     ipset \
     dnsutils \
     conntrack \

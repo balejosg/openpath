@@ -6,7 +6,7 @@
 # control over the system, including port 53 (no systemd-resolved conflict).
 ################################################################################
 
-set -e
+set -euo pipefail
 
 # Colors
 RED='\033[0;31m'
@@ -42,7 +42,27 @@ echo -e "${BLUE}[2/6]${NC} Running pre-installation validation..."
 # Step 3: Run installation
 echo ""
 echo -e "${BLUE}[3/6]${NC} Running installation..."
-./linux/install.sh --unattended --skip-firefox-setup 2>&1 | tail -20
+install_log="/tmp/openpath-install.log"
+set +e
+./linux/install.sh --unattended --no-extension >"$install_log" 2>&1
+install_rc=$?
+set -e
+
+if [ "$install_rc" -ne 0 ]; then
+    echo -e "${RED}✗${NC} Installation failed (exit code: $install_rc)"
+    echo ""
+    echo "Last 200 lines of install output:"
+    tail -200 "$install_log" || true
+    exit "$install_rc"
+fi
+
+if [ ! -f /etc/dnsmasq.d/openpath.conf ]; then
+    echo -e "${RED}✗${NC} /etc/dnsmasq.d/openpath.conf missing after install"
+    echo ""
+    echo "Last 200 lines of install output:"
+    tail -200 "$install_log" || true
+    exit 1
+fi
 
 # Step 4: Verify dnsmasq is running
 echo ""
