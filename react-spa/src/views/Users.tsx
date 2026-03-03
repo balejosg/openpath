@@ -5,8 +5,9 @@ import type { CreateUserRole } from '../lib/roles';
 import { DEFAULT_CREATE_USER_ROLE, USER_ROLE_LABELS } from '../lib/roles';
 import { useUsersList } from '../hooks/useUsersList';
 import { useUsersActions } from '../hooks/useUsersActions';
-import { downloadFile } from '../lib/exportRules';
-import { toCsv } from '../lib/csv';
+import { downloadFile } from '../lib/download';
+import { buildUsersCsvExport } from '../lib/exportUsers';
+import { getEsActiveInactiveLabel } from '../lib/status';
 import { DangerConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Modal } from '../components/ui/Modal';
 
@@ -132,17 +133,8 @@ const UsersView = () => {
       return;
     }
 
-    const headers = ['Nombre', 'Email', 'Roles', 'Estado'];
-    const rows = filteredUsers.map((user) => [
-      user.name,
-      user.email,
-      user.roles.map((role) => USER_ROLE_LABELS[role]).join('|'),
-      user.status === 'Active' ? 'Activo' : 'Inactivo',
-    ]);
-
-    const csvContent = toCsv([headers, ...rows]);
-
-    downloadFile(csvContent, 'usuarios.csv', 'text/csv;charset=utf-8');
+    const exportData = buildUsersCsvExport(filteredUsers);
+    downloadFile(exportData.content, exportData.filename, exportData.mimeType);
 
     setExportMessage('Exportación iniciada');
   };
@@ -278,7 +270,7 @@ const UsersView = () => {
                         <div
                           className={`w-1.5 h-1.5 rounded-full ${user.status === 'Active' ? 'bg-green-500' : 'bg-slate-400'}`}
                         ></div>
-                        {user.status === 'Active' ? 'Activo' : 'Inactivo'}
+                        {getEsActiveInactiveLabel(user.status)}
                       </div>
                     </td>
                     <td className="px-6 py-3 text-right">

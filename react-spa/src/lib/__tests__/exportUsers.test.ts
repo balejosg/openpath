@@ -1,0 +1,53 @@
+import { describe, expect, it } from 'vitest';
+
+import { UserRole, type User } from '../../types';
+import {
+  buildUsersCsvExport,
+  USERS_CSV_EXPORT_FILENAME,
+  USERS_CSV_EXPORT_MIME_TYPE,
+} from '../exportUsers';
+
+describe('buildUsersCsvExport', () => {
+  const users: User[] = [
+    {
+      id: 'user-1',
+      name: 'Admin QA',
+      email: 'admin@example.com',
+      roles: [UserRole.ADMIN],
+      status: 'Active',
+    },
+    {
+      id: 'user-2',
+      name: 'Teacher QA',
+      email: 'teacher@example.com',
+      roles: [UserRole.TEACHER],
+      status: 'Inactive',
+    },
+  ];
+
+  it('builds a localized CSV with code columns by default', () => {
+    const result = buildUsersCsvExport(users);
+
+    expect(result.filename).toBe(USERS_CSV_EXPORT_FILENAME);
+    expect(result.mimeType).toBe(USERS_CSV_EXPORT_MIME_TYPE);
+    expect(result.content).toBe(
+      [
+        'Nombre,Email,Roles,Estado,Roles_codigo,Estado_codigo',
+        'Admin QA,admin@example.com,Administrador,Activo,admin,Active',
+        'Teacher QA,teacher@example.com,Profesor,Inactivo,teacher,Inactive',
+      ].join('\n')
+    );
+  });
+
+  it('can omit code columns when requested', () => {
+    const result = buildUsersCsvExport(users, { includeCodeColumns: false });
+
+    expect(result.content).toBe(
+      [
+        'Nombre,Email,Roles,Estado',
+        'Admin QA,admin@example.com,Administrador,Activo',
+        'Teacher QA,teacher@example.com,Profesor,Inactivo',
+      ].join('\n')
+    );
+  });
+});

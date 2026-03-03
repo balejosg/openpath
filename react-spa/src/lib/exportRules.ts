@@ -5,6 +5,7 @@
 
 import type { Rule } from '../components/RulesTable';
 import { toCsv } from './csv';
+import { downloadFile } from './download';
 
 /** Rule type labels for export */
 const RULE_TYPE_LABELS: Record<string, string> = {
@@ -77,25 +78,6 @@ export function rulesToText(rules: Rule[], grouped = false): string {
   }
 
   return sections.join('\n').trim();
-}
-
-/**
- * Trigger a file download in the browser.
- */
-export function downloadFile(content: string, filename: string, mimeType: string): void {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.style.display = 'none';
-
-  document.body.appendChild(link);
-  link.click();
-
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
 }
 
 function sanitizeExportBasename(input: string): string {

@@ -13,6 +13,7 @@ import {
 import type { GroupVisibility } from '@openpath/shared';
 import { trpc } from '../lib/trpc';
 import { isAdmin, isTeacher, isTeacherGroupsFeatureEnabled } from '../lib/auth';
+import { getEsActiveInactiveLabel } from '../lib/status';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { useAllowedGroups } from '../hooks/useAllowedGroups';
@@ -59,15 +60,19 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
   const visibleGroups = activeView === 'library' ? libraryGroups : allowedGroups;
 
   const groups = useMemo(() => {
-    return visibleGroups.map((g) => ({
-      id: g.id,
-      name: g.name,
-      displayName: g.displayName || g.name,
-      description: g.displayName || g.name,
-      domainCount: g.whitelistCount + g.blockedSubdomainCount + g.blockedPathCount,
-      status: g.enabled ? 'Active' : 'Inactive',
-      visibility: (g.visibility as GroupVisibility | undefined) ?? 'private',
-    }));
+    return visibleGroups.map((g) => {
+      const status: 'Active' | 'Inactive' = g.enabled ? 'Active' : 'Inactive';
+
+      return {
+        id: g.id,
+        name: g.name,
+        displayName: g.displayName || g.name,
+        description: g.displayName || g.name,
+        domainCount: g.whitelistCount + g.blockedSubdomainCount + g.blockedPathCount,
+        status,
+        visibility: (g.visibility as GroupVisibility | undefined) ?? 'private',
+      };
+    });
   }, [visibleGroups]);
 
   const loading = activeView === 'library' ? libraryLoading : isLoading;
@@ -360,7 +365,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full border font-medium ${group.status === 'Active' ? 'border-green-200 bg-green-50 text-green-700' : 'border-slate-200 bg-slate-100 text-slate-500'}`}
                     >
-                      {group.status === 'Active' ? 'Activo' : 'Inactivo'}
+                      {getEsActiveInactiveLabel(group.status)}
                     </span>
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full border font-medium ${group.visibility === 'instance_public' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-slate-100 text-slate-600'}`}

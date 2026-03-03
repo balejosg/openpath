@@ -60,14 +60,9 @@ vi.mock('../../lib/trpc', () => ({
   },
 }));
 
-vi.mock('../../lib/exportRules', async () => {
-  const actual =
-    await vi.importActual<typeof import('../../lib/exportRules')>('../../lib/exportRules');
-  return {
-    ...actual,
-    downloadFile: mockDownloadFile,
-  };
-});
+vi.mock('../../lib/download', () => ({
+  downloadFile: mockDownloadFile,
+}));
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;

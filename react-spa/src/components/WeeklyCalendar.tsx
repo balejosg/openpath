@@ -126,7 +126,9 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
   return (
     <div className="border border-slate-200 rounded-lg bg-white overflow-hidden shadow-sm">
       <div className="grid grid-cols-[60px_repeat(5,1fr)] border-b border-slate-200 bg-slate-50">
-        <div className="p-2 text-xs font-semibold text-slate-400 text-center flex items-center justify-center">Hora</div>
+        <div className="p-2 text-xs font-semibold text-slate-400 text-center flex items-center justify-center">
+          Hora
+        </div>
         {DAYS.map((d) => (
           <div
             key={d.key}
@@ -216,8 +218,9 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                 return (
                   <div
                     key={s.id}
-                    className={`absolute inset-x-1 rounded-md border ${color.bg} ${color.border} ${color.hover} overflow-hidden z-10 transition-colors group/block ${canEdit ? 'cursor-pointer' : 'cursor-default opacity-90'
-                      }`}
+                    className={`absolute inset-x-1 rounded-md border ${color.bg} ${color.border} ${color.hover} overflow-hidden z-10 transition-colors group/block ${
+                      canEdit ? 'cursor-pointer' : 'cursor-default opacity-90'
+                    }`}
                     style={{ top, height: Math.max(height, 20) }}
                     onClick={(e) => {
                       e.stopPropagation();
