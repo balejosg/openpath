@@ -44,7 +44,7 @@ echo ""
 echo -e "${BLUE}[3/6]${NC} Running installation..."
 install_log="/tmp/openpath-install.log"
 set +e
-./linux/install.sh --unattended --no-extension >"$install_log" 2>&1
+./linux/install.sh --unattended --no-extension --skip-firefox >"$install_log" 2>&1
 install_rc=$?
 set -e
 

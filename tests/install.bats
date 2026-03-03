@@ -18,6 +18,11 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "install.sh supports --skip-firefox option" {
+    run grep -n -- "--skip-firefox" "$PROJECT_DIR/linux/install.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "install.sh hardens sensitive config permissions" {
     run grep -n "chmod 640 \"\$WHITELIST_URL_CONF\"" "$PROJECT_DIR/linux/install.sh"
     [ "$status" -eq 0 ]

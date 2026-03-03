@@ -27,6 +27,7 @@
 #   sudo ./install.sh --whitelist-url "https://tu-url.com/whitelist.txt"
 #   sudo ./install.sh --unattended  (modo desatendido)
 #   sudo ./install.sh --no-extension  (sin extensión Firefox)
+#   sudo ./install.sh --skip-firefox  (omitir instalación de Firefox)
 #   sudo ./install.sh --with-native-host  (incluir native messaging)
 #   sudo ./install.sh --skip-preflight  (omitir validación previa)
 #
@@ -49,6 +50,7 @@ DEFAULT_WHITELIST_URL=""
 WHITELIST_URL="$DEFAULT_WHITELIST_URL"
 UNATTENDED=false
 INSTALL_EXTENSION=true
+INSTALL_FIREFOX=true
 INSTALL_NATIVE_HOST=false
 SKIP_PREFLIGHT=false
 HEALTH_API_URL=""
@@ -78,6 +80,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-extension)
             INSTALL_EXTENSION=false
+            shift
+            ;;
+        --skip-firefox)
+            INSTALL_FIREFOX=false
             shift
             ;;
         --with-native-host)
@@ -151,6 +157,7 @@ echo "======================================================"
 echo ""
 echo "URL Whitelist: $WHITELIST_URL"
 echo "Extensión Firefox: $INSTALL_EXTENSION"
+echo "Firefox: $INSTALL_FIREFOX"
 if [ -n "$CLASSROOM_NAME" ]; then
     echo "Modo Aula: $CLASSROOM_NAME"
     echo "API URL: $API_URL"
@@ -460,6 +467,11 @@ EOF
 step_install_firefox() {
     echo ""
     echo "[10/13] Instalando Firefox ESR..."
+
+    if [ "$INSTALL_FIREFOX" = false ]; then
+        echo "⊘ Firefox omitido (--skip-firefox)"
+        return 0
+    fi
 
     install_firefox_esr
     echo "✓ Firefox ESR instalado"
