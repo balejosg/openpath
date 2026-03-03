@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Lock, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
 import { login, loginWithGoogle } from '../lib/auth';
+import { reportError } from '../lib/reportError';
 import GoogleLoginButton from '../components/GoogleLoginButton';
 
 interface LoginProps {
@@ -25,7 +26,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
       onLogin();
     } catch (err) {
       setError('Credenciales inválidas o error de conexión');
-      console.error(err);
+      reportError('Failed to login:', err);
     } finally {
       setIsLoading(false);
     }
@@ -40,7 +41,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onNavigateToRegister, onNavigate
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al iniciar sesión con Google';
       setError(message);
-      console.error(err);
+      reportError('Failed to login with Google:', err);
     } finally {
       setIsLoading(false);
     }

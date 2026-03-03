@@ -3,6 +3,7 @@ import { Mail, Lock, User, ArrowRight, Loader2, Shield, Briefcase } from 'lucide
 import { loginWithGoogle } from '../lib/auth';
 import GoogleLoginButton from '../components/GoogleLoginButton';
 import { trpc } from '../lib/trpc';
+import { reportError } from '../lib/reportError';
 
 interface RegisterProps {
   onRegister: () => void;
@@ -67,6 +68,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onNavigateToLogin }) =>
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al registrar la cuenta';
       setError(message);
+      reportError('Failed to register user:', err);
       setIsLoading(false);
     }
   };
@@ -80,7 +82,7 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onNavigateToLogin }) =>
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Error al registrarse con Google';
       setError(message);
-      console.error(err);
+      reportError('Failed to register with Google:', err);
     } finally {
       setIsLoading(false);
     }

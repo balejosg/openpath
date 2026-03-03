@@ -54,6 +54,9 @@ vi.mock('../../lib/trpc', () => ({
   },
 }));
 
+// Import the mocked module
+import { trpc } from '../../lib/trpc';
+
 describe('useRulesManager Hook', () => {
   const mockOnToast = vi.fn();
   const defaultOptions = {
@@ -65,10 +68,15 @@ describe('useRulesManager Hook', () => {
     vi.clearAllMocks();
   });
 
-  it('initializes with loading state', () => {
+  it('initializes with loading state', async () => {
     const { result } = renderHook(() => useRulesManager(defaultOptions));
 
     expect(result.current.loading).toBe(true);
+
+    // Allow async effects to settle to avoid act warnings.
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
   });
 
   it('fetches rules on mount', async () => {
@@ -85,6 +93,8 @@ describe('useRulesManager Hook', () => {
   it('provides filter state and setter', async () => {
     const { result } = renderHook(() => useRulesManager(defaultOptions));
 
+    const queryMock = vi.mocked(trpc.groups.listRulesPaginated.query);
+
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
@@ -95,11 +105,29 @@ describe('useRulesManager Hook', () => {
       result.current.setFilter('allowed');
     });
 
-    expect(result.current.filter).toBe('allowed');
+    await waitFor(() => {
+      expect(queryMock).toHaveBeenCalledTimes(2);
+    });
+
+    expect(queryMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'whitelist',
+      })
+    );
+
+    // Ensure the in-flight fetch resolves before the test ends (prevents act warnings).
+    await (queryMock.mock.results[1]?.value ?? Promise.resolve());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.filter).toBe('allowed');
+    });
   });
 
   it('provides search state and setter', async () => {
     const { result } = renderHook(() => useRulesManager(defaultOptions));
+
+    const queryMock = vi.mocked(trpc.groups.listRulesPaginated.query);
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
@@ -111,7 +139,23 @@ describe('useRulesManager Hook', () => {
       result.current.setSearch('google');
     });
 
-    expect(result.current.search).toBe('google');
+    await waitFor(() => {
+      expect(queryMock).toHaveBeenCalledTimes(2);
+    });
+
+    expect(queryMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        search: 'google',
+      })
+    );
+
+    // Ensure the in-flight fetch resolves before the test ends (prevents act warnings).
+    await (queryMock.mock.results[1]?.value ?? Promise.resolve());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.search).toBe('google');
+    });
   });
 
   it('provides pagination state', async () => {

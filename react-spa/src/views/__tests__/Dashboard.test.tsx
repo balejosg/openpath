@@ -331,7 +331,7 @@ describe('Dashboard', () => {
     });
   });
 
-  it('shows loading state for groups', () => {
+  it('shows loading state for groups', async () => {
     // Never resolve the promise
     mockGroupsListQuery.mockImplementation(
       () =>
@@ -345,6 +345,12 @@ describe('Dashboard', () => {
     render(<Dashboard onNavigateToRules={onNavigateToRules} />);
 
     expect(screen.getByText('Cargando grupos...')).toBeInTheDocument();
+
+    // Flush other async effects (stats/classrooms) to avoid act warnings.
+    await waitFor(() => {
+      expect(screen.queryByText('Cargando estadísticas...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Cargando aulas...')).not.toBeInTheDocument();
+    });
   });
 
   it('refreshes pending requests count when the window regains focus', async () => {
@@ -374,6 +380,12 @@ describe('Dashboard', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Error al cargar grupos')).toBeInTheDocument();
+    });
+
+    // Flush other async effects (stats/classrooms) to avoid act warnings.
+    await waitFor(() => {
+      expect(screen.queryByText('Cargando estadísticas...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Cargando aulas...')).not.toBeInTheDocument();
     });
   });
 

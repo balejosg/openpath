@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import type { GoogleCredentialResponse } from '../types/google.d';
+import { reportError } from '../lib/reportError';
 
 interface ConfigResponse {
   googleClientId?: string;
@@ -19,7 +20,7 @@ export const useGoogleAuth = () => {
           setGoogleClientId(config.googleClientId);
         }
       } catch (error) {
-        console.error('Error fetching googleClientId:', error);
+        reportError('Error fetching googleClientId:', error);
       }
     };
 

@@ -287,7 +287,7 @@ describe('useGroupedRulesManager', () => {
 
   describe('filtering', () => {
     it('should pass filter type to API query', async () => {
-      const { result, rerender } = renderHook(() =>
+      const { result } = renderHook(() =>
         useGroupedRulesManager({
           groupId: 'test-group',
           onToast: mockToast,
@@ -299,15 +299,27 @@ describe('useGroupedRulesManager', () => {
       });
 
       // Change filter to 'allowed'
-      result.current.setFilter('allowed');
-      rerender();
+      act(() => {
+        result.current.setFilter('allowed');
+      });
+
+      const queryMock = vi.mocked(trpc.groups.listRulesGrouped.query);
 
       await waitFor(() => {
-        expect(trpc.groups.listRulesGrouped.query).toHaveBeenCalledWith(
-          expect.objectContaining({
-            type: 'whitelist',
-          })
-        );
+        expect(queryMock).toHaveBeenCalledTimes(2);
+      });
+
+      expect(queryMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          type: 'whitelist',
+        })
+      );
+
+      // Ensure the in-flight fetch resolves before the test ends (prevents act warnings).
+      await (queryMock.mock.results[1]?.value ?? Promise.resolve());
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
       });
     });
   });

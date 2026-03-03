@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { trpc } from '../lib/trpc';
 import { getPrimaryRole, getRoleDisplayLabel as getRoleDisplayLabelFromLib } from '../lib/roles';
+import { reportError } from '../lib/reportError';
 
 export interface CurrentUser {
   id: string;
@@ -56,7 +57,7 @@ export function useCurrentUser(): UseCurrentUserResult {
         primaryRole,
       });
     } catch (err) {
-      console.error('Failed to fetch current user:', err);
+      reportError('Failed to fetch current user:', err);
       setError('Error al cargar perfil de usuario');
       setUser(null);
     } finally {
