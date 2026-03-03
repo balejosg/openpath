@@ -367,6 +367,11 @@ step_configure_sudoers() {
     echo ""
     echo "[6/13] Configurando permisos sudo..."
 
+    if [[ ! -d /etc/sudoers.d ]]; then
+        mkdir -p /etc/sudoers.d
+        chmod 755 /etc/sudoers.d
+    fi
+
     cat > /etc/sudoers.d/openpath << 'EOF'
 # Permitir a todos los usuarios ejecutar comandos de LECTURA sin contraseña
 # Estos son seguros: no modifican configuración ni desactivan protecciones
