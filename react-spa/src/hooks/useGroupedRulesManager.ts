@@ -9,7 +9,7 @@ import {
 } from '../lib/rules-actions';
 import { createLatestGuard } from '../lib/latest';
 import { getRootDomain } from '@openpath/shared/domain';
-import type { Rule } from '../components/RulesTable';
+import type { Rule, RuleType } from '../lib/rules';
 
 const PAGE_SIZE = 20; // Number of domain groups per page
 
@@ -66,7 +66,7 @@ interface UseGroupedRulesManagerReturn {
   bulkDeleteRules: () => Promise<void>;
   bulkCreateRules: (
     values: string[],
-    type: 'whitelist' | 'blocked_subdomain' | 'blocked_path'
+    type: RuleType
   ) => Promise<{ created: number; total: number }>;
   updateRule: (id: string, data: { value?: string; comment?: string | null }) => Promise<boolean>;
   refetch: () => Promise<void>;
@@ -358,10 +358,7 @@ export function useGroupedRulesManager({
 
   // Bulk create rules
   const bulkCreateRules = useCallback(
-    async (
-      values: string[],
-      type: 'whitelist' | 'blocked_subdomain' | 'blocked_path'
-    ): Promise<{ created: number; total: number }> => {
+    async (values: string[], type: RuleType): Promise<{ created: number; total: number }> => {
       if (values.length === 0) return { created: 0, total: 0 };
 
       return bulkCreateRulesAction(values, type, { groupId, onToast, fetchRules, fetchCounts });

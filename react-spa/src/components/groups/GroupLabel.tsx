@@ -1,6 +1,7 @@
 import React from 'react';
 import type { CurrentGroupSource } from '../../types';
 import { cn } from '../../lib/utils';
+import { isGroupEnabledLike } from '../../lib/groups';
 
 export interface GroupLike {
   id: string;
@@ -11,15 +12,7 @@ export interface GroupLike {
 }
 
 export function isGroupEnabled(group: GroupLike): boolean {
-  const enabledValue = group.enabled;
-
-  if (typeof enabledValue === 'boolean') return enabledValue;
-  if (typeof enabledValue === 'number') return enabledValue === 1;
-
-  if (group.status === 'Active' || group.status === 'active') return true;
-  if (group.status === 'Inactive' || group.status === 'inactive') return false;
-
-  return true;
+  return isGroupEnabledLike(group);
 }
 
 export function inferGroupSource(input: {

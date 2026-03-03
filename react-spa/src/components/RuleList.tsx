@@ -4,6 +4,7 @@ import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
 import { trpc } from '../lib/trpc';
 import { getRuleTypeBadge } from '../lib/ruleDetection';
+import type { Rule, RuleType } from '../lib/rules';
 
 // Domain validation regex (exact domain)
 const DOMAIN_REGEX =
@@ -13,16 +14,7 @@ const DOMAIN_REGEX =
 const SUBDOMAIN_REGEX =
   /^(?:\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$/;
 
-export type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
-
-interface Rule {
-  id: string;
-  groupId: string;
-  type: RuleType;
-  value: string;
-  comment: string | null;
-  createdAt: string;
-}
+export type { RuleType };
 
 interface RuleListProps {
   groupId: string;

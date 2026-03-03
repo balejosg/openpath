@@ -8,11 +8,13 @@ import {
   validateRuleValue as validateRuleValueShared,
 } from '@openpath/shared/rules-validation';
 import type {
+  RuleType,
   RuleValidationCode,
   RuleValidationResult as SharedRuleValidationResult,
 } from '@openpath/shared/rules-validation';
+import { categorizeRuleType } from './rules';
 
-export type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
+export { getRuleTypeBadge, getRuleTypeLabel } from './rules';
 
 export interface DetectionResult {
   type: RuleType;
@@ -183,36 +185,8 @@ export function validateRuleValue(value: string, type: RuleType): ValidationResu
 }
 
 /**
- * Get a human-readable label for a rule type.
- */
-export function getRuleTypeLabel(type: RuleType): string {
-  switch (type) {
-    case 'whitelist':
-      return 'Dominio permitido';
-    case 'blocked_subdomain':
-      return 'Subdominio bloqueado';
-    case 'blocked_path':
-      return 'Ruta bloqueada';
-  }
-}
-
-/**
- * Get a short badge label for a rule type.
- */
-export function getRuleTypeBadge(type: RuleType): string {
-  switch (type) {
-    case 'whitelist':
-      return 'Permitido';
-    case 'blocked_subdomain':
-      return 'Sub. bloq.';
-    case 'blocked_path':
-      return 'Ruta bloq.';
-  }
-}
-
-/**
  * Categorize a rule as 'allowed' or 'blocked' for filtering.
  */
 export function categorizeRule(type: RuleType): 'allowed' | 'blocked' {
-  return type === 'whitelist' ? 'allowed' : 'blocked';
+  return categorizeRuleType(type);
 }

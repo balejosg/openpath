@@ -1,6 +1,7 @@
 import { trpc } from './trpc';
-import { detectRuleType, getRuleTypeBadge } from './ruleDetection';
+import { detectRuleType } from './ruleDetection';
 import { isDuplicateError } from './error-utils';
+import { getRuleTypeBadge, type RuleType } from './rules';
 
 export type ToastFn = (message: string, type: 'success' | 'error', undoAction?: () => void) => void;
 
@@ -41,7 +42,7 @@ export interface BulkDeleteRulesParams {
 export interface RuleForUndo {
   id: string;
   groupId: string;
-  type: 'whitelist' | 'blocked_subdomain' | 'blocked_path';
+  type: RuleType;
   value: string;
   comment: string | null | undefined;
 }
@@ -110,7 +111,7 @@ export async function addRuleWithDetection(
 
 export async function bulkCreateRulesAction(
   values: string[],
-  type: 'whitelist' | 'blocked_subdomain' | 'blocked_path',
+  type: RuleType,
   params: BulkCreateRulesParams
 ): Promise<{ created: number; total: number }> {
   if (values.length === 0) return { created: 0, total: 0 };

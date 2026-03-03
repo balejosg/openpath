@@ -17,8 +17,9 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getRuleTypeBadge } from '../lib/ruleDetection';
+import type { Rule, RuleType } from '../lib/rules';
 
-export type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
+export type { Rule, RuleType };
 
 export type SortField = 'value' | 'type' | 'createdAt';
 export type SortDirection = 'asc' | 'desc';
@@ -26,16 +27,6 @@ export type SortDirection = 'asc' | 'desc';
 export interface SortConfig {
   field: SortField;
   direction: SortDirection;
-}
-
-export interface Rule {
-  id: string;
-  groupId: string;
-  type: RuleType;
-  value: string;
-  source?: 'manual' | 'auto_extension';
-  comment: string | null;
-  createdAt: string;
 }
 
 interface RulesTableProps {

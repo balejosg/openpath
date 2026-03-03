@@ -17,7 +17,7 @@ import {
 import { cn } from '../lib/utils';
 import { getRuleTypeBadge } from '../lib/ruleDetection';
 import { getRootDomain } from '@openpath/shared/domain';
-import type { Rule } from './RulesTable';
+import type { Rule } from '../lib/rules';
 
 // =============================================================================
 // Types

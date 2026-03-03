@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trpc } from '../lib/trpc';
+import { isGroupEnabledLike } from '../lib/groups';
 
 type GroupsListOutput = Awaited<ReturnType<typeof trpc.groups.list.query>>;
 type AllowedGroup = GroupsListOutput[number];
@@ -13,16 +14,11 @@ export interface AllowedGroupOption {
 }
 
 function isGroupEnabled(group: AllowedGroup): boolean {
-  const maybe = group as AllowedGroup & { enabled?: boolean | number; status?: string };
-  const enabledValue = maybe.enabled;
-
-  if (typeof enabledValue === 'boolean') return enabledValue;
-  if (typeof enabledValue === 'number') return enabledValue === 1;
-
-  if (maybe.status === 'Active' || maybe.status === 'active') return true;
-  if (maybe.status === 'Inactive' || maybe.status === 'inactive') return false;
-
-  return true;
+  const maybe = group as AllowedGroup & {
+    enabled?: boolean | number | null;
+    status?: string | null;
+  };
+  return isGroupEnabledLike(maybe);
 }
 
 export function useAllowedGroups() {

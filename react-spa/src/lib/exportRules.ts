@@ -3,16 +3,9 @@
  * Supports CSV and JSON formats with download functionality.
  */
 
-import type { Rule } from '../components/RulesTable';
+import { getRuleTypeExportLabel, type Rule } from './rules';
 import { toCsv } from './csv';
 import { downloadFile } from './download';
-
-/** Rule type labels for export */
-const RULE_TYPE_LABELS: Record<string, string> = {
-  whitelist: 'Permitido',
-  blocked_subdomain: 'Subdominio bloqueado',
-  blocked_path: 'Ruta bloqueada',
-};
 
 /**
  * Convert rules to CSV format.
@@ -21,7 +14,7 @@ const RULE_TYPE_LABELS: Record<string, string> = {
 export function rulesToCSV(rules: Rule[]): string {
   const header = ['value', 'type', 'type_label', 'created_at'];
   const rows = rules.map((rule) => {
-    const typeLabel = RULE_TYPE_LABELS[rule.type] || rule.type;
+    const typeLabel = getRuleTypeExportLabel(rule.type);
     const createdAt = rule.createdAt || '';
     return [rule.value, rule.type, typeLabel, createdAt];
   });
@@ -37,7 +30,7 @@ export function rulesToJSON(rules: Rule[]): string {
   const exportData = rules.map((rule) => ({
     value: rule.value,
     type: rule.type,
-    typeLabel: RULE_TYPE_LABELS[rule.type] || rule.type,
+    typeLabel: getRuleTypeExportLabel(rule.type),
     createdAt: rule.createdAt || null,
   }));
 

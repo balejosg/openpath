@@ -1,12 +1,11 @@
 import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { Upload, FileText, AlertCircle, FileUp, Table, Info } from 'lucide-react';
+import type { RuleType } from '@openpath/shared/rules-validation';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
 import { parseCSV, type CSVParseResult } from '../lib/csv-parser';
 import { validateRuleValue } from '../lib/ruleDetection';
-
-type RuleType = 'whitelist' | 'blocked_subdomain' | 'blocked_path';
 
 interface BulkImportModalProps {
   isOpen: boolean;
