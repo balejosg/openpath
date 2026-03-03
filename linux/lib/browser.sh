@@ -310,12 +310,29 @@ force_browser_close() {
 # FIREFOX ESR INSTALLATION
 # ============================================================================
 
+browser_dpkg_is_installed() {
+    local pkg="$1"
+    dpkg-query -W -f='${Status}\n' "$pkg" 2>/dev/null | grep -q '^install ok installed$'
+}
+
+browser_apt_candidate_version() {
+    local pkg="$1"
+    apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}'
+}
+
+browser_apt_has_candidate() {
+    local pkg="$1"
+    local candidate
+    candidate="$(browser_apt_candidate_version "$pkg")"
+    [ -n "$candidate" ] && [ "$candidate" != "(none)" ]
+}
+
 # Install Firefox ESR, removing Snap Firefox if present
 install_firefox_esr() {
     log "Verificando instalación de Firefox..."
     
     # Check if Snap Firefox is installed
-    if snap list firefox &>/dev/null 2>&1; then
+    if command -v snap &>/dev/null 2>&1 && snap list firefox &>/dev/null 2>&1; then
         log "⚠ Firefox Snap detected - removing..."
         
         # Close any running Firefox first
@@ -334,26 +351,39 @@ install_firefox_esr() {
     fi
     
     # Check if Firefox ESR is already installed via APT
-    if dpkg -l firefox-esr &>/dev/null 2>&1; then
+    if browser_dpkg_is_installed firefox-esr; then
         log "✓ Firefox ESR already installed"
         return 0
     fi
     
     # Check if regular Firefox (non-snap) is installed
-    if dpkg -l firefox &>/dev/null 2>&1 && ! snap list firefox &>/dev/null 2>&1; then
-        log "✓ Firefox (APT) already installed"
-        return 0
+    if browser_dpkg_is_installed firefox; then
+        if command -v snap &>/dev/null 2>&1 && snap list firefox &>/dev/null 2>&1; then
+            :
+        else
+            log "✓ Firefox (APT) already installed"
+            return 0
+        fi
     fi
     
-    log "Installing Firefox ESR..."
+    log "Installing Firefox..."
+
+    local os_id=""
+    if [ -r /etc/os-release ]; then
+        os_id=$(awk -F= '$1=="ID" {gsub(/\"/, "", $2); print $2; exit}' /etc/os-release 2>/dev/null || true)
+    fi
     
-    # Add Mozilla team PPA for Ubuntu (provides firefox-esr)
-    if command -v add-apt-repository &>/dev/null; then
-        # For Ubuntu: use Mozilla PPA
-        add-apt-repository -y ppa:mozillateam/ppa 2>/dev/null || true
-        
-        # Set Firefox ESR as priority over Snap
-        cat > /etc/apt/preferences.d/mozilla-firefox << 'EOF'
+    # Add Mozilla team PPA for Ubuntu (avoids Snap)
+    if [ "$os_id" = "ubuntu" ]; then
+        if ! command -v add-apt-repository &>/dev/null 2>&1; then
+            DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common >/dev/null 2>&1 || true
+        fi
+
+        if command -v add-apt-repository &>/dev/null 2>&1; then
+            add-apt-repository -y ppa:mozillateam/ppa 2>/dev/null || true
+
+            # Prefer PPA packages and disable the snap wrapper package
+            cat > /etc/apt/preferences.d/mozilla-firefox << 'EOF'
 Package: *
 Pin: release o=LP-PPA-mozillateam
 Pin-Priority: 1001
@@ -362,18 +392,39 @@ Package: firefox
 Pin: version 1:1snap*
 Pin-Priority: -1
 EOF
+        else
+            log "⚠ add-apt-repository not available; skipping PPA setup"
+        fi
     fi
     
     apt-get update -qq
     
-    # Try firefox-esr first (Debian), then firefox (Ubuntu with PPA)
-    if apt-cache show firefox-esr &>/dev/null 2>&1; then
-        DEBIAN_FRONTEND=noninteractive apt-get install -y firefox-esr
-        log "✓ Firefox ESR installed"
-    else
-        DEBIAN_FRONTEND=noninteractive apt-get install -y firefox
-        log "✓ Firefox installed from PPA"
+    # Try firefox-esr first (Debian/PPAs), then firefox.
+    if browser_apt_has_candidate firefox-esr; then
+        if DEBIAN_FRONTEND=noninteractive apt-get install -y firefox-esr; then
+            log "✓ Firefox ESR installed"
+            return 0
+        fi
+        log "⚠ Failed to install firefox-esr (will try firefox)"
     fi
+
+    if browser_apt_has_candidate firefox; then
+        local firefox_candidate
+        firefox_candidate="$(browser_apt_candidate_version firefox)"
+        if [ "$os_id" = "ubuntu" ] && printf '%s' "$firefox_candidate" | grep -qi 'snap'; then
+            log "⚠ Firefox candidate appears to be snap wrapper ($firefox_candidate); skipping"
+            return 1
+        fi
+
+        if DEBIAN_FRONTEND=noninteractive apt-get install -y firefox; then
+            log "✓ Firefox installed"
+            return 0
+        fi
+        log "⚠ Failed to install firefox"
+    fi
+
+    log "⚠ No installable Firefox packages found; skipping"
+    return 1
 }
 
 # Detect Firefox installation directory

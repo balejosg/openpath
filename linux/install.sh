@@ -466,15 +466,18 @@ EOF
 
 step_install_firefox() {
     echo ""
-    echo "[10/13] Instalando Firefox ESR..."
+    echo "[10/13] Instalando Firefox..."
 
     if [ "$INSTALL_FIREFOX" = false ]; then
         echo "⊘ Firefox omitido (--skip-firefox)"
         return 0
     fi
 
-    install_firefox_esr
-    echo "✓ Firefox ESR instalado"
+    if install_firefox_esr; then
+        echo "✓ Firefox instalado"
+    else
+        echo "⚠ Firefox no pudo instalarse (continuando)"
+    fi
 }
 
 step_apply_policies() {
