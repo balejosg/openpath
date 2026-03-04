@@ -8,6 +8,15 @@
 import * as classroomStorage from '../lib/classroom-storage.js';
 import * as scheduleStorage from '../lib/schedule-storage.js';
 
+import {
+  calculateClassroomMachineStatus as calculateMachineStatus,
+  calculateClassroomStatus,
+  resolveCurrentGroup,
+  type ClassroomMachineStatus as SharedMachineStatus,
+  type ClassroomStatus as SharedClassroomStatus,
+  type CurrentGroupSource as SharedCurrentGroupSource,
+} from '@openpath/shared';
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -19,47 +28,14 @@ export interface RegisterMachineInput {
   version?: string | undefined;
 }
 
-export type MachineStatus = 'online' | 'stale' | 'offline';
-export type ClassroomStatus = 'operational' | 'degraded' | 'offline';
+export type MachineStatus = SharedMachineStatus;
+export type ClassroomStatus = SharedClassroomStatus;
 
 export interface MachineInfo {
   id: string;
   hostname: string;
   lastSeen: string | null;
   status: MachineStatus;
-}
-
-// Thresholds for machine status (in minutes)
-const ONLINE_THRESHOLD_MINUTES = 5;
-const STALE_THRESHOLD_MINUTES = 15;
-
-/**
- * Calculate machine status based on lastSeen timestamp
- */
-function calculateMachineStatus(lastSeen: Date | null): MachineStatus {
-  if (!lastSeen) return 'offline';
-
-  const now = new Date();
-  const diffMs = now.getTime() - lastSeen.getTime();
-  const diffMinutes = diffMs / (1000 * 60);
-
-  if (diffMinutes <= ONLINE_THRESHOLD_MINUTES) return 'online';
-  if (diffMinutes <= STALE_THRESHOLD_MINUTES) return 'stale';
-  return 'offline';
-}
-
-/**
- * Calculate classroom status based on machine statuses
- */
-function calculateClassroomStatus(machines: MachineInfo[]): ClassroomStatus {
-  if (machines.length === 0) return 'operational'; // No machines = operational by default
-
-  const onlineCount = machines.filter((m) => m.status === 'online').length;
-  const offlineCount = machines.filter((m) => m.status === 'offline').length;
-
-  if (onlineCount === machines.length) return 'operational';
-  if (offlineCount === machines.length) return 'offline';
-  return 'degraded';
 }
 
 export interface MachineRegistrationResult {
@@ -70,24 +46,7 @@ export interface MachineRegistrationResult {
   lastSeen: string;
 }
 
-export type CurrentGroupSource = 'manual' | 'schedule' | 'default' | 'none';
-
-function resolveCurrentGroup(params: {
-  activeGroupId: string | null;
-  scheduleGroupId: string | null;
-  defaultGroupId: string | null;
-}): { id: string | null; source: CurrentGroupSource } {
-  if (params.activeGroupId) {
-    return { id: params.activeGroupId, source: 'manual' };
-  }
-  if (params.scheduleGroupId) {
-    return { id: params.scheduleGroupId, source: 'schedule' };
-  }
-  if (params.defaultGroupId) {
-    return { id: params.defaultGroupId, source: 'default' };
-  }
-  return { id: null, source: 'none' };
-}
+export type CurrentGroupSource = SharedCurrentGroupSource;
 
 export interface ClassroomWithMachines {
   id: string;
