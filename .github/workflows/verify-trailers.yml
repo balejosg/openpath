@@ -19,7 +19,7 @@ jobs:
           set -euo pipefail
 
           base_ref="origin/${{ github.base_ref }}"
-          git fetch origin "${{ github.base_ref }}" --depth=1
+          git fetch origin "${{ github.base_ref }}"
           commits=$(git rev-list --no-merges "$base_ref"..HEAD)
 
           if [ -z "$commits" ]; then

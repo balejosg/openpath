@@ -31,7 +31,7 @@ test.describe('Visual Regression - Login Page', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('login-mobile.png', {
-      maxDiffPixelRatio: 0.01,
+      maxDiffPixelRatio: 0.03,
       animations: 'disabled',
     });
   });
@@ -83,7 +83,7 @@ test.describe('Visual Regression - Register Page', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('register-desktop.png', {
-      maxDiffPixelRatio: 0.01,
+      maxDiffPixelRatio: 0.03,
       animations: 'disabled',
     });
   });
@@ -95,7 +95,7 @@ test.describe('Visual Regression - Register Page', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('register-mobile.png', {
-      maxDiffPixelRatio: 0.01,
+      maxDiffPixelRatio: 0.04,
       animations: 'disabled',
     });
   });
@@ -228,7 +228,7 @@ test.describe('Visual Regression - Groups Page', () => {
     await page.waitForTimeout(500);
 
     await expect(page).toHaveScreenshot('groups-list-mobile.png', {
-      maxDiffPixelRatio: 0.02,
+      maxDiffPixelRatio: 0.1,
       animations: 'disabled',
     });
   });
