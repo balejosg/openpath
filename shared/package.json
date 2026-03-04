@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./classroom-status": {
+      "types": "./dist/classroom-status.d.ts",
+      "import": "./dist/classroom-status.js"
+    },
     "./domain": {
       "types": "./dist/domain.d.ts",
       "import": "./dist/domain.js"
