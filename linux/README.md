@@ -47,11 +47,13 @@ sudo ./quick-install.sh --url "http://your-api-server:3000/export/group.txt"
 
 ## Configuration
 
-Configuration is stored in `/etc/openpath/config.default` (or your custom config path).
+Configuration is stored in `/etc/openpath/` (preserved on upgrade).
 
-- `WHITELIST_URL`: The URL to fetch the domain list from.
-- `UPDATE_INTERVAL`: How often to sync the whitelist (in minutes).
-- `ENABLE_FIREWALL`: Whether to enable iptables filtering.
+- `/etc/openpath/whitelist-url.conf`: URL to fetch the whitelist from
+- `/etc/openpath/health-api-url.conf`: API base URL for health reporting (optional)
+- `/etc/openpath/health-api-secret.conf`: shared secret for health reporting (optional)
+
+State/cache is stored in `/var/lib/openpath/` and can be regenerated.
 
 ## Testing
 

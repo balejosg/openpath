@@ -2,7 +2,13 @@
 
 ## Status
 
-Accepted
+Superseded (still supported as an option)
+
+### Update (v4.x)
+
+The default OpenPath deployment uses PostgreSQL as the source of truth and serves whitelist exports via the API (for example `GET /export/:name.txt` or tokenized `GET /w/:machineToken/whitelist.txt`).
+
+Hosting a `whitelist.txt` as a static file (including GitHub raw content URLs) remains supported by pointing endpoint agents at that URL.
 
 ## Context
 

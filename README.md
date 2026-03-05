@@ -3,222 +3,113 @@
 [![CI](https://github.com/balejosg/openpath/actions/workflows/ci.yml/badge.svg)](https://github.com/balejosg/openpath/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/balejosg/openpath/branch/main/graph/badge.svg)](https://codecov.io/gh/balejosg/openpath)
 
-**Strict Internet Access Control. Zero Administration Headaches.**
+Strict internet access control for classrooms, labs, and shared environments.
 
-OpenPath is a robust, "default-deny" internet access control system designed for classrooms, laboratories, and corporate environments. It blocks everything by default, allowing only explicitly approved domains.
+OpenPath is a "default-deny" system: if a domain isn't explicitly allowed, it effectively doesn't exist for clients.
 
-Unlike traditional firewalls that require manual rule updates and complex VPNs, OpenPath decentralizes enforcement to the endpoints while centralizing control in a modern web dashboard.
+## What You Get
 
-## Why OpenPath?
+- Endpoint enforcement (Linux Bash agent + Windows PowerShell agent)
+- Multi-layer filtering: DNS sinkhole + firewall + browser policies
+- Central control plane: Express + tRPC API backed by PostgreSQL
+- Web dashboard: Vite + React SPA
+- Whitelist distribution as a plain text format fetched over HTTP
+- Optional Firefox extension for blocked-domain detection and request submission
 
-- **🚫 Default Deny Security**: If it's not whitelisted, it doesn't exist. Eliminate distractions and security risks at the DNS level.
-- **🧠 GitOps Logic**: Your whitelist is just a text file in a GitHub repository. Every change is a commit. You get version history, audit logs, and instant rollbacks for free.
-- **⚡ Self-Service Workflow**: Users hitting a block page can request access instantly. Admins approve requests in a dashboard, and the system handles the rest.
-- **🛡️ Resilient Architecture**: Endpoints download and cache rules locally. If your central server or internet connection goes down, the filtering rules remain active.
-- **🔋 Batteries Included**: Comes with DNS sinkholing (dnsmasq), firewall rules (iptables), and browser policies (Firefox/Chrome) out of the box.
+## Repository Layout
 
----
+- `linux/` - Linux endpoint agent (dnsmasq + firewall + systemd)
+- `windows/` - Windows endpoint agent (Acrylic DNS Proxy + firewall)
+- `api/` - Express + tRPC API (PostgreSQL/Drizzle)
+- `react-spa/` - Web UI (Vite + React)
+- `shared/` - Shared schemas/types
+- `firefox-extension/` - Firefox extension
+- `dashboard/` - Legacy REST proxy service (tRPC client)
 
-## How It Works
+## Quick Start (Local Dev)
 
-1. **The User** tries to access `blocked-site.com`. Access is denied.
-2. **The Request**: User submits an unblock request via the portal.
-3. **The Decision**: Admin reviews the request in the Dashboard and clicks "Approve".
-4. **The Magic**: The system commits the change to the GitHub repository.
-5. **The Sync**: All connected endpoints pull the new whitelist within minutes.
+Prerequisites:
 
-## Installation
+- Node.js >= 20
+- Docker (recommended for PostgreSQL)
 
-### Central Server (Required for Classroom Deployment)
-
-For classroom or multi-PC deployments, you need a central server to manage users, schedules, and PC registration.
-
-#### 1. Deploy the API Server
+From the repo root:
 
 ```bash
-# Clone the repository
-git clone https://github.com/balejosg/openpath.git
-cd openpath/api
-
-# Install dependencies
 npm install
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your settings (JWT_SECRET, PORT, etc.)
+cp api/.env.example api/.env
+docker compose -f api/docker-compose.yml up -d db
+npm run db:push --workspace=@openpath/api
 
-# Build and start
-npm run build
-npm start
+# Terminal 1
+npm run dev --workspace=@openpath/api
+
+# Terminal 2
+npm run dev --workspace=@openpath/react-spa
 ```
 
-The server will start on port 3000 by default.
+- API health: `http://localhost:3000/health`
+- SPA dev server: `http://localhost:3001` (proxies `/trpc` + `/api` to `:3000`)
 
-#### 2. Create the First Admin
+## Deploying Endpoints
 
-Navigate to `http://your-server-ip:3000/` in your browser. On first run, the setup wizard will appear automatically:
-
-1. Enter your administrator email and password
-2. Copy the **Registration Token** shown after creation
-3. Keep this token secure - you'll need it to register client PCs
-
-**Important:** The registration token is required for all client PC installations in classroom mode. You can retrieve or regenerate it later from the dashboard.
-
-### Client PC Installation
-
-#### Linux (Classroom Mode - Recommended)
-
-One-liner installation via APT + guided classroom linking. This is the simplest path for non-technical users.
+### Linux (Recommended: APT bootstrap)
 
 ```bash
 curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash
 ```
 
-The installer asks for:
-
-1. API URL (central server)
-2. Classroom name
-3. Registration token
-
-After setup, the PC is registered in the central server and can be managed remotely.
-
-#### Linux (Advanced / Manual)
-
-If you prefer manual steps:
+### Linux (Manual / Source)
 
 ```bash
-curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh | sudo bash
-sudo apt install openpath-dnsmasq
-sudo openpath setup
+git clone https://github.com/balejosg/openpath.git
+cd openpath/linux
+
+# Point the agent at any URL that serves the whitelist format
+sudo ./install.sh --whitelist-url "https://your-server.example/export/group.txt"
+```
+
+### Linux (Classroom enrollment)
+
+```bash
+cd openpath/linux
+sudo ./install.sh \
+  --classroom "Aula101" \
+  --api-url "https://your-server.example" \
+  --registration-token "YOUR_REGISTRATION_TOKEN"
 ```
 
 ### Windows
 
-PowerShell-based installation using Acrylic DNS Proxy.
+See `OpenPath/windows/README.md`.
 
-```powershell
-./windows/Install-OpenPath.ps1
-```
+## Whitelist Format
 
-## Technologies
-
-- **Backend**: Node.js, TypeScript, Express.js, tRPC, Zod
-- **Frontend**: TypeScript, Vanilla CSS, HTML (No framework, ES Modules)
-- **Infrastructure**: Linux, Docker, Systemd, Git
-- **Testing**: Playwright (E2E), Node.js Test Runner, BATS (Bash)
-
-## System Architecture
-
-The ecosystem consists of four main pillars:
-
-1. **Request API**: Node.js backend that handles user requests and telemetry.
-2. **Dashboard**: Web interface for visualizing requests, managing domain groups, and monitoring endpoint health.
-3. **Endpoint Agents**: Lightweight scripts (Bash/PowerShell) running on client machines. They enforce rules via `dnsmasq` or `Acrylic`.
-4. **Git Storage**: The single source of truth. All rules live in `whitelist.txt` in your repo.
-
-## Configuration
-
-### Required Environment Variables (API Server)
-
-The API server requires these environment variables in production:
-
-| Variable       | Required | Description                                                              |
-| -------------- | -------- | ------------------------------------------------------------------------ |
-| `JWT_SECRET`   | **Yes**  | Secret for signing JWT tokens (64+ chars recommended)                    |
-| `CORS_ORIGINS` | **Yes**  | Comma-separated list of allowed origins (e.g., `https://yourdomain.com`) |
-| `GITHUB_OWNER` | **Yes**  | GitHub username/org owning your whitelist repo                           |
-| `GITHUB_REPO`  | **Yes**  | Repository name for whitelists                                           |
-| `GITHUB_TOKEN` | **Yes**  | GitHub PAT with repo write access                                        |
-| `DATABASE_URL` | **Yes**  | PostgreSQL connection string                                             |
-
-Optional but recommended:
-
-| Variable            | Default | Description            |
-| ------------------- | ------- | ---------------------- |
-| `PORT`              | `3000`  | Server port            |
-| `VAPID_PUBLIC_KEY`  | -       | For push notifications |
-| `VAPID_PRIVATE_KEY` | -       | For push notifications |
-
-See `api/.env.example` for a complete list.
-
-### Changing the Whitelist URL
-
-Point your agents to your own repository:
-
-```bash
-echo "https://your-repo.com/whitelist.txt" | sudo tee /etc/openpath/whitelist-url.conf
-sudo openpath update
-```
-
-### Whitelist Format
-
-Simple, readable text format.
+The agents consume a simple, readable text format:
 
 ```ini
 ## WHITELIST
 google.com
 github.com
-# Comments are allowed
 
 ## BLOCKED-SUBDOMAINS
-# Allow domain.com but block ads.domain.com
-ads.domain.com
+ads.example.com
 
 ## BLOCKED-PATHS
-# Browser-level blocking (advanced)
-facebook.com/gaming
+*/tracking/*
 ```
 
-### Registration Token Management
+## Emergency Disable (Fail-Open)
 
-For classroom deployments, the registration token controls which PCs can register with the central server.
+Add `#DESACTIVADO` to the start of the remote whitelist file. Endpoints will switch to permissive mode automatically.
 
-**View Current Token:**
+## Docs
 
-After logging in to the dashboard, navigate to Settings to view the current registration token.
+- `OpenPath/api/README.md`
+- `OpenPath/react-spa/README.md`
+- `OpenPath/linux/README.md`
+- `OpenPath/windows/README.md`
+- `OpenPath/firefox-extension/README.md`
 
-**Via API (requires admin authentication):**
-
-```bash
-curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  http://your-server:3000/api/setup/registration-token
-```
-
-**Regenerate Token:**
-
-If your token is compromised, regenerate it via the dashboard or API:
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  http://your-server:3000/api/setup/regenerate-token
-```
-
-After regeneration, the old token becomes invalid. You'll need to use the new token for future PC installations.
-
-**Security Notes:**
-
-- Keep the registration token secure - anyone with it can register PCs to your server
-- Regenerate the token if you suspect it has been compromised
-- The token is stored in the `settings` table in PostgreSQL
-
-## Troubleshooting
-
-### Check Status
-
-```bash
-openpath status
-```
-
-### Force Update
-
-```bash
-openpath update
-```
-
-**Emergency Disable**
-Add `#DESACTIVADO` to the start of your remote whitelist file. Endpoints will pick it up and fail-open (disable all blocking) automatically.
-
----
-
-**License**: [AGPL-3.0](LICENSE) (Open Source). See [LICENSING.md](LICENSING.md) for details.
+**License**: [AGPL-3.0](LICENSE) (Open Source). See `OpenPath/LICENSING.md` for details.

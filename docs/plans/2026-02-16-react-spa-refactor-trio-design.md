@@ -1,6 +1,6 @@
 # React SPA Refactor Trio Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> Note: This is an implementation plan; update it as the code evolves.
 
 **Goal:** Implement three reusable refactors in OpenPath React SPA: normalized search, list-detail selection consistency, and standardized mutation feedback.
 

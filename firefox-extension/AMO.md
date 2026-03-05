@@ -7,9 +7,9 @@ This document contains information for submitting the extension to [addons.mozil
 ## Extension Details
 
 - **Name:** Monitor de Bloqueos de Red
-- **Version:** 1.1.0
+- **Version:** 2.0.0
 - **Category:** Privacy & Security
-- **License:** MIT (or specify your license)
+- **License:** AGPL-3.0-or-later
 
 ---
 

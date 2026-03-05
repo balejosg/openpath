@@ -26,11 +26,11 @@ We will migrate **ALL** persistence to PostgreSQL. No state shall be stored in l
 ### Negative
 
 - **Dependency**: API now strictly requires a running Postgres instance.
-- **Complexity**: Dev environment requires Docker/Postgres (added to docker-compose.dev.yml).
+- **Complexity**: Dev environment requires Docker/Postgres (see `api/docker-compose.yml`).
 
 ## Implementation Refinement
 
 - `push.ts` migrated to use `push_subscriptions` table.
 - `health-reports.ts` migrated to use `health_reports` table.
-- `docker-compose.dev.yml` upgraded to include a db service.
+- `api/docker-compose.yml` provides a local db service for development.
 - `README.md` updated to reflect the new architecture.

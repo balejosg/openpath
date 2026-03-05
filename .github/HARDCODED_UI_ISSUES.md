@@ -137,6 +137,6 @@
 ## Notes
 
 - Each item should be committed separately for clean git history
-- Run `npm run verify:full` before each commit
+- Commit normally; the pre-commit hook runs `npm run verify:full` automatically
 - Update this file's checkboxes as items are completed
 - Items #3, #6, #7, #8 require significant backend work and are deferred

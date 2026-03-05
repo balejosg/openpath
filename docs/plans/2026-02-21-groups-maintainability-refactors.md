@@ -1,6 +1,6 @@
 # Groups Maintainability Refactors Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> Note: This is an implementation plan; update it as the code evolves.
 
 **Goal:** Improve maintainability of Groups RBAC enforcement (API) and teacher UX (SPA) by centralizing group-scoped authorization, removing UI-only gating helpers, and optimizing bulk storage operations, without changing external contracts.
 

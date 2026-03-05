@@ -28,6 +28,7 @@ OpenPath is designed for educational environments where restricting internet acc
 ### Use Unattended Mode for Consistent Deployments
 
 ```bash
+cd openpath/linux
 sudo ./install.sh --unattended --whitelist-url "https://your-url/whitelist.txt"
 ```
 
@@ -38,8 +39,12 @@ This ensures consistent configuration across multiple machines.
 If using Classroom mode:
 
 ```bash
-# Generate secret during install
-sudo ./install.sh --classroom-name "Room 101" --api-url "https://api.example.com"
+# Enroll during install (installer generates /etc/openpath/api-secret.conf if needed)
+cd openpath/linux
+sudo ./install.sh \
+  --classroom "Room 101" \
+  --api-url "https://api.example.com" \
+  --registration-token "YOUR_REGISTRATION_TOKEN"
 
 # Backup the secret securely
 sudo cat /etc/openpath/api-secret.conf > /secure/backup/location/api-secret-room101.txt
@@ -320,7 +325,7 @@ If the system appears compromised:
 
 For security issues with OpenPath:
 
-- Report vulnerabilities: https://github.com/LasEncinasIT/openpath/security
-- General issues: https://github.com/LasEncinasIT/openpath/issues
+- Report vulnerabilities: https://github.com/balejosg/openpath/security
+- General issues: https://github.com/balejosg/openpath/issues
 
 Please practice responsible disclosure for security vulnerabilities.

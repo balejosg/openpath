@@ -22,9 +22,8 @@ Thank you for your interest in contributing to OpenPath! This document provides 
 ### API Development
 
 ```bash
-cd api
 npm install
-npm run dev
+npm run dev --workspace=@openpath/api
 ```
 
 ### Linux Client
@@ -153,7 +152,7 @@ npm run test:all      # All test suites
 Dashboard tests require a running PostgreSQL. You can start it with the repo compose DB service:
 
 ```bash
-docker-compose up -d db
+docker compose -f api/docker-compose.yml up -d db
 ```
 
 By default the compose DB uses:
@@ -192,16 +191,16 @@ Invoke-Pester -Output Detailed                  # Verbose output
 E2E tests are split into **smoke** (fast) and **comprehensive** (full) suites:
 
 ```bash
-cd spa
+cd react-spa
 
-# Smoke tests only (14 tests, ~2-3 min) - runs in CI on every PR
+# Smoke tests only (quick local sanity check)
 npx playwright test --grep @smoke --project=chromium
 
 # All E2E tests (279+ tests, ~15-20 min)
 npm run test:e2e
 
-# With browser UI
-npm run test:e2e:headed
+# With Playwright UI
+npm run test:e2e:ui
 
 # Single spec file
 npx playwright test e2e/auth.spec.ts
@@ -212,12 +211,12 @@ npx playwright test --grep "login"
 
 #### CI Workflows
 
-| Workflow                | Tests                  | Trigger                                  |
-| ----------------------- | ---------------------- | ---------------------------------------- |
-| `ci.yml`                | @smoke only (14 tests) | Every PR/push                            |
-| `e2e-comprehensive.yml` | All tests (279+)       | Push to main, nightly, `e2e` label on PR |
+| Workflow        | Tests                       | Trigger                    |
+| --------------- | --------------------------- | -------------------------- |
+| `ci.yml`        | Linux BATS + Windows Pester | PR/push (agent tests only) |
+| `e2e-tests.yml` | Agent E2E (Linux + Windows) | PR/push + manual           |
 
-To run full E2E on a PR, add the `e2e` or `full-test` label.
+Playwright UI E2E runs locally via `react-spa/` scripts and is enforced by the local pre-commit verification workflow.
 
 #### Adding Smoke Tests
 

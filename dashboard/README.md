@@ -143,7 +143,8 @@ If upgrading from the old architecture:
 1. **Migrate dashboard users to API**:
 
    ```bash
-   npm run db:migrate-dashboard-users --workspace=@openpath/api
+   # From the OpenPath repo root
+   npx tsx api/scripts/migrate-dashboard-users.ts
    ```
 
 2. **Update environment variables**:

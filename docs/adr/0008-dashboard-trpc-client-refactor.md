@@ -167,7 +167,7 @@ This refactor aligns with:
 
 ## Migration Path
 
-1. **Run migration script**: `npm run db:migrate-dashboard-users --workspace=@openpath/api`
+1. **Run migration script**: `npx tsx api/scripts/migrate-dashboard-users.ts`
 2. **Update Dashboard env**: Set `API_URL` and `COOKIE_SECRET`
 3. **Remove Dashboard env**: Delete `DATABASE_URL`, `SESSION_SECRET`, `ADMIN_PASSWORD`
 4. **Restart services**: API first, then Dashboard

@@ -163,7 +163,7 @@ Unit tests:
 
 Playwright E2E (split into smoke/comprehensive):
 
-- Smoke only (14 tests, fast CI):
+- Smoke only (quick sanity check):
   - `cd react-spa && npx playwright test --grep @smoke --project=chromium`
 - All tests (279+ tests):
   - `cd react-spa && npm run test:e2e`
@@ -172,12 +172,12 @@ Playwright E2E (split into smoke/comprehensive):
 - Single spec:
   - `cd react-spa && npx playwright test e2e/blocked-domain.spec.ts`
 
-CI runs `@smoke` tests on every PR. Full suite runs on main/nightly/`e2e` label.
+GitHub Actions CI does not run Playwright. Playwright E2E is enforced locally via the pre-commit verification workflow.
 
 #### Linux Agent E2E (`tests/e2e/`)
 
 - All: `bats tests/e2e/agent-integration.bats`
-- Runs in `e2e-comprehensive.yml` workflow
+- Runs in `e2e-tests.yml` workflow
 
 #### Firefox Extension (`firefox-extension/`)
 

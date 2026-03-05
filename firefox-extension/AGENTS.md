@@ -7,64 +7,42 @@ WebExtension for detecting DNS/firewall blocks and submitting domain requests.
 ```
 firefox-extension/
 ├── src/
-│   ├── background.ts   # Service worker entry
-│   ├── content.ts      # Content script (injected)
-│   ├── popup/          # Browser action popup
+│   ├── background.ts   # Background script entry (compiled to dist/background.js)
+│   ├── popup.ts        # Popup logic (compiled to dist/popup.js)
 │   └── lib/            # Shared utilities
-├── native/             # Native messaging host
-│   ├── openpath-native-host.py
-│   └── install-native-host.sh
-├── manifest.json       # Extension manifest (MV2)
+├── popup/              # popup.html + popup.css (loads dist/popup.js)
+├── dist/               # Build output
+├── native/             # Native messaging host (optional)
+├── manifest.json       # Manifest V3
 └── tests/              # Unit tests
 ```
 
-## Key Components
-
-| Component       | Purpose                                             |
-| --------------- | --------------------------------------------------- |
-| `background.ts` | webRequest interception, badge updates              |
-| `content.ts`    | Page-level block detection                          |
-| `native/`       | Local whitelist verification via native messaging   |
-| `popup/`        | UI for viewing blocked domains, submitting requests |
-
 ## Manifest
 
-- **Manifest Version**: 2 (Firefox compatibility)
-- **Permissions**: `webRequest`, `webRequestBlocking`, `tabs`, `storage`, `nativeMessaging`
-- **Content scripts**: Injected on all URLs
+- Manifest version: 3
+- Background: module script (`dist/background.js`)
+- Popup: `popup/popup.html` (loads `dist/popup.js`)
 
 ## Native Messaging
 
-Python host for local whitelist verification:
+Optional Python host for local whitelist verification.
 
 ```bash
-./native/install-native-host.sh  # Installs host manifest
+cd native
+./install-native-host.sh
 ```
-
-Host location: `~/.mozilla/native-messaging-hosts/`
-
-## Conventions
-
-- **Logging**: Use `lib/logger.ts`, not raw `console.*`
-- **Storage**: `browser.storage.local` for persistence
-- **Errors**: Graceful degradation if native host unavailable
 
 ## Testing
 
 ```bash
-npm test                                    # All tests
-npx tsx --test tests/background.test.ts    # Single file
+npm test
+npm run lint
+npm run typecheck
 ```
 
 ## Build
 
 ```bash
-npm run build      # Compile TS → dist/
-./build-xpi.sh     # Create .xpi package
+npm run build
+./build-xpi.sh
 ```
-
-## Anti-Patterns
-
-- Using Manifest V3 features (Firefox support incomplete)
-- Blocking requests without user feedback
-- Storing sensitive data in `storage.sync`

@@ -1,26 +1,27 @@
 # Release Checklist
 
-Use this checklist before releasing changes to student machines.
+Use this checklist before releasing changes that affect endpoint machines.
 
 ## Pre-Release
 
-- [ ] All CI checks pass (BATS, E2E, lint)
-- [ ] E2E tests pass on real hardware (not just CI VMs)
-- [ ] Tested on Ubuntu 22.04 LTS
-- [ ] Tested on Ubuntu 24.04 LTS
+- [ ] Changes are committed locally (pre-commit verification passed)
+- [ ] Relevant local validation done (agent smoke tests where applicable)
+- [ ] GitHub Actions checks are green for agent changes:
+  - `ci.yml` (Linux BATS + Windows Pester)
+  - `e2e-tests.yml` (agent E2E)
 
 ## Upgrade Testing
 
 - [ ] Fresh install works
-- [ ] Upgrade from previous version works
-- [ ] Rollback procedure tested
+- [ ] Upgrade path works (APT upgrade or reinstall)
+- [ ] Uninstall/rollback procedure tested
 
 ## Documentation
 
-- [ ] Release notes written
+- [ ] Release notes / changelog updated
 - [ ] Breaking changes documented
 
 ## Post-Release Monitoring
 
-- [ ] Monitor `/api/health-reports` for FAIL_OPEN or CRITICAL statuses
-- [ ] Check for stale hosts (not reporting for >10 minutes)
+- [ ] Monitor endpoint health reporting in the dashboard / API
+- [ ] Check for stale hosts (not reporting recently)

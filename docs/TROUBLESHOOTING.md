@@ -341,7 +341,7 @@ If you can't resolve an issue:
    sudo iptables -L OUTPUT -n -v > firewall-rules.txt
    ```
 
-2. Open an issue at: https://github.com/LasEncinasIT/openpath/issues
+2. Open an issue at: https://github.com/balejosg/openpath/issues
 
 Include:
 

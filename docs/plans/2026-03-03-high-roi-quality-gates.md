@@ -1,6 +1,6 @@
 # High-ROI Quality Gates Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> Note: This is an implementation plan; update it as the code evolves.
 
 **Goal:** Make coverage enforcement real in ClassroomPath, prevent `console.*` regressions in both SPAs, and remove the explicit `underscore` workaround while keeping `npm audit --audit-level=high` passing.
 
