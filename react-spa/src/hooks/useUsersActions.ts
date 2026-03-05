@@ -82,6 +82,9 @@ export const useUsersActions = () => {
         return;
       }
 
+      // Cancel any in-flight list query synchronously so its stale response
+      // cannot overwrite the optimistic data we are about to set.
+      void queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
       queryClient.setQueryData<User[]>(USERS_QUERY_KEY, (prev) => {
         const prevUsers = Array.isArray(prev) ? prev : [];
         return [mapped, ...prevUsers.filter((u) => u.id !== mapped.id)];
@@ -100,6 +103,7 @@ export const useUsersActions = () => {
         return;
       }
 
+      void queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
       queryClient.setQueryData<User[]>(USERS_QUERY_KEY, (prev) => {
         const prevUsers = Array.isArray(prev) ? prev : [];
         const idx = prevUsers.findIndex((u) => u.id === mapped.id);
@@ -187,6 +191,7 @@ export const useUsersActions = () => {
       setDeleteError('');
       await deleteMutation.mutateAsync({ id: deleteTarget.id });
 
+      void queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
       queryClient.setQueryData<User[]>(USERS_QUERY_KEY, (prev) => {
         const prevUsers = Array.isArray(prev) ? prev : [];
         return prevUsers.filter((u) => u.id !== deleteTarget.id);
