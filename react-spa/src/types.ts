@@ -1,5 +1,11 @@
 import React from 'react';
 
+import type {
+  ClassroomMachineStatus as SharedMachineStatus,
+  ClassroomStatus as SharedClassroomStatus,
+  CurrentGroupSource as SharedCurrentGroupSource,
+} from '@openpath/shared';
+
 export enum UserRole {
   ADMIN = 'admin',
   TEACHER = 'teacher',
@@ -15,11 +21,11 @@ export interface User {
   status: 'Active' | 'Inactive';
 }
 
-export type ClassroomStatus = 'operational' | 'degraded' | 'offline';
+export type ClassroomStatus = SharedClassroomStatus;
 
-export type MachineStatus = 'online' | 'stale' | 'offline';
+export type MachineStatus = SharedMachineStatus;
 
-export type CurrentGroupSource = 'manual' | 'schedule' | 'default' | 'none';
+export type CurrentGroupSource = SharedCurrentGroupSource;
 
 export interface Classroom {
   id: string;

@@ -1,5 +1,10 @@
-export type ClassroomMachineStatus = 'online' | 'stale' | 'offline';
-export type ClassroomStatus = 'operational' | 'degraded' | 'offline';
+import { z } from 'zod';
+
+export const ClassroomMachineStatus = z.enum(['online', 'stale', 'offline']);
+export type ClassroomMachineStatus = z.infer<typeof ClassroomMachineStatus>;
+
+export const ClassroomStatus = z.enum(['operational', 'degraded', 'offline']);
+export type ClassroomStatus = z.infer<typeof ClassroomStatus>;
 
 export const CLASSROOM_MACHINE_ONLINE_THRESHOLD_MINUTES = 5;
 export const CLASSROOM_MACHINE_STALE_THRESHOLD_MINUTES = 15;
@@ -31,7 +36,8 @@ export function calculateClassroomStatus(
   return 'degraded';
 }
 
-export type CurrentGroupSource = 'manual' | 'schedule' | 'default' | 'none';
+export const CurrentGroupSource = z.enum(['manual', 'schedule', 'default', 'none']);
+export type CurrentGroupSource = z.infer<typeof CurrentGroupSource>;
 
 export function resolveCurrentGroup(params: {
   activeGroupId: string | null;
