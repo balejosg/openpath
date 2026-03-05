@@ -123,21 +123,69 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
     return map;
   }, [schedules]);
 
+  // Compute the dates for the current week (Monday–Friday)
+  const weekDates = useMemo(() => {
+    const today = new Date();
+    const dow = today.getDay(); // 0=Sun … 6=Sat
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayOffset);
+    return DAYS.map((_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d.getDate();
+    });
+  }, []);
+
+  // Month label (handles week spanning two months)
+  const weekMonthLabel = useMemo(() => {
+    const today = new Date();
+    const dow = today.getDay();
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + mondayOffset);
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    const fmt = new Intl.DateTimeFormat('es-ES', { month: 'long' });
+    const mon = fmt.format(monday);
+    const fri = fmt.format(friday);
+    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+    return mon === fri ? cap(mon) : `${cap(mon)} – ${cap(fri)}`;
+  }, []);
+
+  // Which column is "today"? (1=Mon … 5=Fri, null if weekend)
+  const todayKey = useMemo(() => {
+    const d = new Date().getDay();
+    return d >= 1 && d <= 5 ? d : null;
+  }, []);
+
   return (
     <div className="border border-slate-200 rounded-lg bg-white overflow-hidden shadow-sm">
+      {/* Month label */}
+      <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+        {weekMonthLabel}
+      </div>
       <div className="grid grid-cols-[60px_repeat(5,1fr)] border-b border-slate-200 bg-slate-50">
         <div className="p-2 text-xs font-semibold text-slate-400 text-center flex items-center justify-center">
           Hora
         </div>
-        {DAYS.map((d) => (
-          <div
-            key={d.key}
-            className="p-2 text-center text-xs font-semibold text-slate-700 border-l border-slate-200 flex items-center justify-center"
-          >
-            <span className="hidden md:inline">{d.full}</span>
-            <span className="md:hidden">{d.short}</span>
-          </div>
-        ))}
+        {DAYS.map((d, i) => {
+          const isToday = todayKey === d.key;
+          return (
+            <div
+              key={d.key}
+              className={`p-2 text-center border-l border-slate-200 flex flex-col items-center justify-center gap-0.5 ${isToday ? 'bg-blue-50' : ''}`}
+            >
+              <span className={`text-[10px] font-semibold uppercase tracking-wider ${isToday ? 'text-blue-600' : 'text-slate-500'}`}>
+                <span className="hidden md:inline">{d.full}</span>
+                <span className="md:hidden">{d.short}</span>
+              </span>
+              <span className={`text-lg font-bold leading-tight ${isToday ? 'text-white bg-blue-600 w-8 h-8 rounded-full flex items-center justify-center' : 'text-slate-800'}`}>
+                {weekDates[i]}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Time grid body */}
@@ -223,9 +271,8 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                   return (
                     <div
                       key={s.id}
-                      className={`absolute inset-x-1 rounded-md border ${color.bg} ${color.border} ${color.hover} overflow-hidden z-10 transition-colors group/block ${
-                        canEdit ? 'cursor-pointer' : 'cursor-default opacity-90'
-                      }`}
+                      className={`absolute inset-x-1 rounded-md border ${color.bg} ${color.border} ${color.hover} overflow-hidden z-10 transition-colors group/block ${canEdit ? 'cursor-pointer' : 'cursor-default opacity-90'
+                        }`}
                       style={{ top, height: Math.max(height, 20) }}
                       onClick={(e) => {
                         e.stopPropagation();
