@@ -9,6 +9,12 @@ import crypto from 'node:crypto';
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import { db, schedules } from '../db/index.js';
 import { logger } from './logger.js';
+import {
+  assertQuarterHourInstant,
+  assertQuarterHourTime,
+  normalizeTimeHHMM,
+  parseTimeToMinutes,
+} from '@openpath/shared';
 
 // =============================================================================
 // Types
@@ -59,34 +65,7 @@ function weeklyRecurrenceWhereClause(): ReturnType<typeof or> {
 // =============================================================================
 
 export function timeToMinutes(time: string): number {
-  const parts = time.split(':').map(Number);
-  const hours = parts[0] ?? 0;
-  const minutes = parts[1] ?? 0;
-  return hours * 60 + minutes;
-}
-
-function parseTimeParts(time: string): { hours: number; minutes: number; seconds: number } {
-  // Accept HH:MM or HH:MM:SS (DB may return seconds)
-  const match = /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.exec(time);
-  if (!match) {
-    throw new Error('Invalid time format. Use HH:MM (24h)');
-  }
-
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  const seconds = Number(match[3] ?? '0');
-
-  return { hours, minutes, seconds };
-}
-
-function assertQuarterHour(time: string): void {
-  const { minutes, seconds } = parseTimeParts(time);
-  if (seconds !== 0) {
-    throw new Error('Time must not include seconds');
-  }
-  if (minutes % 15 !== 0) {
-    throw new Error('Time must be in 15-minute increments');
-  }
+  return parseTimeToMinutes(normalizeTimeHHMM(time));
 }
 
 function assertValidScheduleValues(input: {
@@ -101,25 +80,11 @@ function assertValidScheduleValues(input: {
   }
 
   // Format + 15-minute granularity
-  assertQuarterHour(startTime);
-  assertQuarterHour(endTime);
+  assertQuarterHourTime(startTime);
+  assertQuarterHourTime(endTime);
 
   if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
     throw new Error('startTime must be before endTime');
-  }
-}
-
-function assertQuarterHourInstant(date: Date): void {
-  if (!Number.isFinite(date.getTime())) {
-    throw new Error('Invalid date');
-  }
-
-  if (date.getUTCSeconds() !== 0 || date.getUTCMilliseconds() !== 0) {
-    throw new Error('Time must not include seconds');
-  }
-
-  if (date.getUTCMinutes() % 15 !== 0) {
-    throw new Error('Time must be in 15-minute increments');
   }
 }
 
