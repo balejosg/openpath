@@ -74,6 +74,7 @@ Un agente hizo commit con `--no-verify`, causando:
 
 Primary docs:
 
+- `docs/INDEX.md` (task index)
 - `CLAUDE.md` (project overview + ops)
 - `CONTRIBUTING.md` (conventions + tests)
 

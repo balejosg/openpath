@@ -1,91 +1,91 @@
-# Monitor de Bloqueos de Red - Firefox Extension
+# Monitor de Bloqueos de Red (Firefox Extension)
 
-Extensión de Firefox para detectar y listar dominios bloqueados por sistemas de whitelist DNS y firewalls.
+> Status: maintained
+> Applies to: `firefox-extension/`
+> Last verified: 2026-03-05
+> Source of truth: `firefox-extension/README.md`
 
-## Características
+Firefox extension that detects and lists domains blocked by DNS whitelists or firewalls.
 
-- Detección automática de dominios bloqueados (errores DNS / firewall)
-- Contador por pestaña (badge)
-- Copiar lista al portapapeles
-- Solicitud de dominio (envío al servidor cuando está configurado)
-- Native Messaging (opcional) para verificar dominios contra el sistema local
+## What It Does
 
-## Desarrollo
+- Detects blocked requests (DNS/firewall-like failures) and aggregates blocked domains
+- Shows a per-tab badge counter
+- Lets you copy the blocked domain list
+- Optional: submit domain requests to an API endpoint (when configured)
+- Optional: Native Messaging host to verify domains against the local OpenPath CLI
+
+## Development
+
+From the OpenPath repo root (recommended):
 
 ```bash
 npm install
-npm run dev
+npm run dev --workspace=@openpath/firefox-extension
 ```
 
-En Firefox:
+Load into Firefox (temporary add-on):
 
-1. `about:debugging`
-2. "This Firefox" → "Load Temporary Add-on..."
-3. Selecciona `manifest.json`
+1. Open `about:debugging`
+2. "This Firefox" -> "Load Temporary Add-on..."
+3. Select `firefox-extension/manifest.json`
 
 ## Build / XPI
 
 ```bash
-npm run build
+npm run build --workspace=@openpath/firefox-extension
+cd firefox-extension
 ./build-xpi.sh
 ```
 
-## Uso
+## Using It
 
-1. Navega a cualquier web.
-2. Si hay recursos bloqueados, el icono muestra un contador.
-3. Abre el popup para ver la lista y copiarla.
+1. Browse normally.
+2. When resources are blocked, the action badge shows a count.
+3. Open the popup to view and copy the list.
 
-Ejemplo (verificar desde Linux con OpenPath instalado):
+Example: verify domains on Linux (with OpenPath installed):
 
 ```bash
-cat << 'EOF' | while read domain; do
-  sudo openpath check "$domain"
-done
-cdn.ejemplo.com
-api.terceros.com
-EOF
+sudo openpath check github.com
+sudo openpath check api.somevendor.com
 ```
 
-## Native Messaging (Opcional)
+## Native Messaging (Optional)
 
-Permite verificar dominios directamente contra el sistema local.
-
-Instalación:
+Install the native host:
 
 ```bash
-cd native
+cd firefox-extension/native
 ./install-native-host.sh
 ```
 
-Requisitos:
+Requirements:
 
 - Python 3
-- OpenPath Linux agent instalado (proporciona `/usr/local/bin/openpath`)
+- OpenPath Linux agent installed (provides the `openpath` CLI)
 
-## Estructura
+## Layout
 
-```
+```text
 firefox-extension/
-├── manifest.json      # Manifest V3 (Firefox)
-├── src/               # TypeScript sources
-│   ├── background.ts
-│   ├── popup.ts
-│   └── lib/
-├── dist/              # Build output (JS)
-├── popup/             # popup.html + popup.css
-├── icons/
-├── native/            # Native messaging host
-├── tests/
-├── build-xpi.sh
-└── README.md
+  manifest.json
+  src/
+  dist/
+  popup/
+  icons/
+  native/
+  tests/
+  build-xpi.sh
+  README.md
 ```
 
-## Permisos
+## Permissions
 
-- `webRequest` / `webRequestBlocking`: detectar errores de red
-- `webNavigation`: limpiar estado al navegar
-- `tabs`: badge por pestaña
-- `clipboardWrite`: copiar lista
-- `nativeMessaging`: verificación local (opcional)
-- `<all_urls>` (host permissions): observar recursos de terceros
+- `webRequest` / `webRequestBlocking`: detect network errors that indicate blocks
+- `webNavigation`: clear tab state on navigation
+- `tabs`: per-tab badge counter
+- `clipboardWrite`: copy blocked domains
+- `storage`: local preferences/state
+- `nativeMessaging`: optional local verification
+- `<all_urls>`: observe blocked third-party resources on any site

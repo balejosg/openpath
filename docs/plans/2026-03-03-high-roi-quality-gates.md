@@ -14,13 +14,13 @@
 
 ---
 
-## OpenPath (repo: `OpenPath/`)
+## OpenPath
 
 ### Task OP1: Ensure OpenPath SPA is linted by `verify:full`
 
 **Files:**
 
-- Modify: `OpenPath/react-spa/package.json`
+- Modify: `react-spa/package.json`
 
 **Step 1: Add a `lint` script to the SPA workspace**
 
@@ -37,7 +37,7 @@ Add scripts (keep them using the monorepo root config):
 
 **Step 2: Verify Turbo now picks up SPA lint**
 
-Run: `cd OpenPath && npm run verify:static`
+Run: `npm run verify:static`
 
 Expected: Turbo runs `@openpath/react-spa:lint` (no “missing task” for react-spa).
 
@@ -46,7 +46,6 @@ Expected: Turbo runs `@openpath/react-spa:lint` (no “missing task” for react
 Run:
 
 ```bash
-cd OpenPath
 git add react-spa/package.json
 git commit -m "chore(spa): add eslint lint script"
 ```
@@ -57,15 +56,15 @@ git commit -m "chore(spa): add eslint lint script"
 
 **Files:**
 
-- Modify: `OpenPath/eslint.config.js`
+- Modify: `eslint.config.js`
 
 **Step 1: Write the lint expectation (quick manual check)**
 
-Create a temporary local change (do not commit) that introduces a `console.log` in `OpenPath/react-spa/src/...` and confirm lint would fail once the rule is in place.
+Create a temporary local change (do not commit) that introduces a `console.log` in `react-spa/src/...` and confirm lint would fail once the rule is in place.
 
 **Step 2: Implement scoped ESLint overrides**
 
-Update `OpenPath/eslint.config.js` to:
+Update `eslint.config.js` to:
 
 - Keep global `no-console: 'off'` (don’t break scripts/tooling)
 - Add a `files: ['react-spa/src/**/*.{ts,tsx}']` override with `no-console: 'error'`
@@ -80,7 +79,7 @@ Example rule payload for `reportError.ts`:
 
 **Step 3: Run lint for SPA only**
 
-Run: `cd OpenPath/react-spa && npm run lint`
+Run: `cd react-spa && npm run lint`
 
 Expected: PASS (only `reportError.ts` uses console).
 
@@ -89,7 +88,6 @@ Expected: PASS (only `reportError.ts` uses console).
 Run:
 
 ```bash
-cd OpenPath
 git add eslint.config.js
 git commit -m "chore(spa): ban console outside reportError"
 ```
@@ -100,18 +98,18 @@ git commit -m "chore(spa): ban console outside reportError"
 
 **Files:**
 
-- Modify: `OpenPath/package.json`
-- Modify: `OpenPath/package-lock.json`
+- Modify: `package.json`
+- Modify: `package-lock.json`
 
 **Step 1: Confirm current dependency chain**
 
-Run: `cd OpenPath && npm ls underscore`
+Run: `npm ls underscore`
 
 Expected: `underscore@1.13.8` present; chain includes `@stryker-mutator/core -> typed-rest-client -> underscore`.
 
 **Step 2: Remove the root pin**
 
-Edit `OpenPath/package.json` and remove:
+Edit `package.json` and remove:
 
 ```json
 "underscore": "1.13.8"
@@ -119,14 +117,14 @@ Edit `OpenPath/package.json` and remove:
 
 **Step 3: Update lockfile (minimize churn)**
 
-Run: `cd OpenPath && npm install --package-lock-only`
+Run: `npm install --package-lock-only`
 
 **Step 4: Verify audit and resolved version**
 
 Run:
 
-- `cd OpenPath && npm audit --audit-level=high`
-- `cd OpenPath && npm ls underscore`
+- `npm audit --audit-level=high`
+- `npm ls underscore`
 
 Expected:
 
@@ -138,7 +136,6 @@ Expected:
 Run:
 
 ```bash
-cd OpenPath
 git add package.json package-lock.json
 git commit -m "chore(security): drop underscore root pin"
 ```
@@ -357,7 +354,7 @@ git commit -m "chore: sync openpath submodule"
 
 **Step 1: Push OpenPath**
 
-Run: `cd OpenPath && git push origin main`
+Run: `git push origin main`
 
 **Step 2: Push ClassroomPath**
 

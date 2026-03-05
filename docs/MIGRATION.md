@@ -36,7 +36,7 @@ If debugging a broken upgrade, a safe first step is to keep `/etc/openpath/` and
 
 ## Windows Agent Upgrades
 
-Follow the Windows agent README and installer scripts in `OpenPath/windows/`.
+Follow the Windows agent README and installer scripts in `windows/`.
 
 ## API / Web UI Upgrades
 

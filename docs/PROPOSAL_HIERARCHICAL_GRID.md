@@ -106,8 +106,9 @@ El botón `[+]` en cada grupo está preparado pero requiere:
 
 ```bash
 # Ejecutar tests del componente
-cd OpenPath/react-spa
+cd react-spa
 npm run test -- --run src/components/__tests__/HierarchicalRulesTable.test.tsx
+
 
 # Resultado: 46 tests passing
 ```

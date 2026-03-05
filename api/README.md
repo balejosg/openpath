@@ -77,4 +77,4 @@ npm run test:setup --workspace=@openpath/api
 npm run test:e2e --workspace=@openpath/api
 ```
 
-For the full local verification workflow, see `OpenPath/AGENTS.md`.
+For the full local verification workflow, see `../AGENTS.md`.

@@ -114,7 +114,7 @@ sudo tail -f /var/log/openpath.log
 
 ### Temporarily Disable (Fail-open)
 
-Add `# DESACTIVADO` as the first line of your remote whitelist file.
+Add `#DESACTIVADO` as the first line of your remote whitelist file.
 The system will automatically enter fail-open mode.
 
 ---

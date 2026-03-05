@@ -2,27 +2,28 @@
 
 OpenPath ADRs live in `docs/adr/`.
 
-This file is an index and a pointer to the current, maintained docs for each component.
+Start here for the current, maintained operational docs: [`docs/INDEX.md`](INDEX.md).
 
 ## Current docs (start here)
 
-- Core overview: `OpenPath/README.md`
-- API (Express + tRPC, PostgreSQL): `OpenPath/api/README.md`
-- Web UI (Vite + React): `OpenPath/react-spa/README.md`
-- Linux agent (dnsmasq + firewall): `OpenPath/linux/README.md`
-- Windows agent (PowerShell): `OpenPath/windows/README.md`
-- Firefox extension (blocked-domain detection): `OpenPath/firefox-extension/README.md`
+- Core overview: [`README.md`](../README.md)
+- Agent/dev workflow: [`AGENTS.md`](../AGENTS.md)
+- API (Express + tRPC, PostgreSQL): [`api/README.md`](../api/README.md)
+- Web UI (Vite + React): [`react-spa/README.md`](../react-spa/README.md)
+- Linux agent (dnsmasq + firewall): [`linux/README.md`](../linux/README.md)
+- Windows agent (PowerShell): [`windows/README.md`](../windows/README.md)
+- Firefox extension (blocked-domain detection): [`firefox-extension/README.md`](../firefox-extension/README.md)
 
 ## ADR index
 
-- `docs/adr/0001-dns-sinkhole-architecture.md`
-- `docs/adr/0001-use-dnsmasq-for-dns-filtering.md`
-- `docs/adr/0002-jwt-authentication.md`
-- `docs/adr/0003-github-as-source-of-truth.md`
-- `docs/adr/0003-multi-platform-design.md`
-- `docs/adr/0005-full-postgres-persistence.md`
-- `docs/adr/0008-dashboard-trpc-client-refactor.md`
-- `docs/adr/template.md`
+- [`docs/adr/0001-dns-sinkhole-architecture.md`](adr/0001-dns-sinkhole-architecture.md)
+- [`docs/adr/0001-use-dnsmasq-for-dns-filtering.md`](adr/0001-use-dnsmasq-for-dns-filtering.md)
+- [`docs/adr/0002-jwt-authentication.md`](adr/0002-jwt-authentication.md)
+- [`docs/adr/0003-github-as-source-of-truth.md`](adr/0003-github-as-source-of-truth.md)
+- [`docs/adr/0003-multi-platform-design.md`](adr/0003-multi-platform-design.md)
+- [`docs/adr/0005-full-postgres-persistence.md`](adr/0005-full-postgres-persistence.md)
+- [`docs/adr/0008-dashboard-trpc-client-refactor.md`](adr/0008-dashboard-trpc-client-refactor.md)
+- [`docs/adr/template.md`](adr/template.md)
 
 ## Notes
 

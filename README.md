@@ -75,14 +75,14 @@ sudo ./install.sh --whitelist-url "https://your-server.example/export/group.txt"
 ```bash
 cd openpath/linux
 sudo ./install.sh \
-  --classroom "Aula101" \
+  --classroom "Room-101" \
   --api-url "https://your-server.example" \
   --registration-token "YOUR_REGISTRATION_TOKEN"
 ```
 
 ### Windows
 
-See `OpenPath/windows/README.md`.
+See `windows/README.md`.
 
 ## Whitelist Format
 
@@ -106,10 +106,12 @@ Add `#DESACTIVADO` to the start of the remote whitelist file. Endpoints will swi
 
 ## Docs
 
-- `OpenPath/api/README.md`
-- `OpenPath/react-spa/README.md`
-- `OpenPath/linux/README.md`
-- `OpenPath/windows/README.md`
-- `OpenPath/firefox-extension/README.md`
+- `docs/INDEX.md`
+- `AGENTS.md`
+- `api/README.md`
+- `react-spa/README.md`
+- `linux/README.md`
+- `windows/README.md`
+- `firefox-extension/README.md`
 
-**License**: [AGPL-3.0](LICENSE) (Open Source). See `OpenPath/LICENSING.md` for details.
+**License**: [AGPL-3.0](LICENSE) (Open Source). See `LICENSING.md` for details.
