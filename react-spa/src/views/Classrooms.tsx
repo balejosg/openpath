@@ -171,6 +171,41 @@ const Classrooms = () => {
   const { selectedItem: selectedClassroom, setSelectedId: setSelectedClassroomId } =
     useListDetailSelection(filteredClassrooms);
 
+  const selectedClassroomSource = selectedClassroom
+    ? inferGroupSource({
+        currentGroupSource: selectedClassroom.currentGroupSource ?? null,
+        activeGroupId: selectedClassroom.activeGroup,
+        currentGroupId: selectedClassroom.currentGroupId,
+        defaultGroupId: selectedClassroom.defaultGroupId,
+      })
+    : 'none';
+
+  const activeGroupSelectValue = (() => {
+    if (!selectedClassroom) return '';
+    if (selectedClassroom.activeGroup) return selectedClassroom.activeGroup;
+
+    // Some backends may hide activeGroupId when the active group isn't visible to the user.
+    // Keep the selector consistent by reflecting the inferred current manual group.
+    if (!admin && selectedClassroomSource === 'manual' && selectedClassroom.currentGroupId) {
+      return selectedClassroom.currentGroupId;
+    }
+
+    return '';
+  })();
+
+  const defaultGroupSelectValue = (() => {
+    if (!selectedClassroom) return '';
+    if (selectedClassroom.defaultGroupId) return selectedClassroom.defaultGroupId;
+
+    // Some backends may hide defaultGroupId when the default group isn't visible to the user.
+    // Keep the selector consistent by reflecting the inferred current default group.
+    if (!admin && selectedClassroomSource === 'default' && selectedClassroom.currentGroupId) {
+      return selectedClassroom.currentGroupId;
+    }
+
+    return '';
+  })();
+
   const handleCreateClassroom = async () => {
     if (!newName.trim()) {
       setNewError('El nombre del aula es obligatorio');
@@ -238,7 +273,9 @@ const Classrooms = () => {
   const resolveGroupName = (groupId: string | null) => {
     if (!groupId) return 'Sin grupo activo';
     const group = groupById.get(groupId);
-    return group?.displayName ?? group?.name ?? groupId;
+    if (group) return group.displayName || group.name;
+    if (admin) return groupId;
+    return 'Aplicado por otro profesor';
   };
 
   const requestActiveGroupChange = useCallback(
@@ -655,33 +692,24 @@ const Classrooms = () => {
                   </label>
                   <GroupSelect
                     id="classroom-active-group"
-                    value={selectedClassroom.activeGroup ?? ''}
+                    value={activeGroupSelectValue}
                     onChange={requestActiveGroupChange}
                     groups={allowedGroups}
                     includeNoneOption
                     noneLabel="Sin grupo activo"
                     inactiveBehavior="hide"
                     unknownValueLabel={
-                      !admin &&
-                      selectedClassroom.activeGroup &&
-                      !groupById.get(selectedClassroom.activeGroup)
+                      !admin && activeGroupSelectValue && !groupById.get(activeGroupSelectValue)
                         ? 'Aplicado por otro profesor'
                         : undefined
                     }
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
                   />
-                  {!selectedClassroom.activeGroup && selectedClassroom.currentGroupId && (
+                  {!activeGroupSelectValue && selectedClassroom.currentGroupId && (
                     <p className="mt-2 text-xs text-slate-500 italic">
                       Actualmente usando{' '}
                       {(() => {
-                        const source = inferGroupSource({
-                          currentGroupSource: selectedClassroom.currentGroupSource ?? null,
-                          activeGroupId: selectedClassroom.activeGroup,
-                          currentGroupId: selectedClassroom.currentGroupId,
-                          defaultGroupId: selectedClassroom.defaultGroupId,
-                        });
-
-                        const phrase = getGroupSourcePhrase(source);
+                        const phrase = getGroupSourcePhrase(selectedClassroomSource);
 
                         return (
                           <>
@@ -694,7 +722,7 @@ const Classrooms = () => {
                                   ? groupById.get(selectedClassroom.currentGroupId)
                                   : null
                               }
-                              source={source}
+                              source={selectedClassroomSource}
                               revealUnknownId={admin}
                               showSourceTag={false}
                             />
@@ -714,7 +742,7 @@ const Classrooms = () => {
                   </label>
                   <GroupSelect
                     id="classroom-default-group"
-                    value={selectedClassroom.defaultGroupId ?? ''}
+                    value={defaultGroupSelectValue}
                     onChange={(next) => void handleDefaultGroupChange(next)}
                     disabled={!admin}
                     groups={allowedGroups}
@@ -722,9 +750,7 @@ const Classrooms = () => {
                     noneLabel="Sin grupo por defecto"
                     inactiveBehavior="disable"
                     unknownValueLabel={
-                      !admin &&
-                      selectedClassroom.defaultGroupId &&
-                      !groupById.get(selectedClassroom.defaultGroupId)
+                      !admin && defaultGroupSelectValue && !groupById.get(defaultGroupSelectValue)
                         ? 'Asignado por admin'
                         : undefined
                     }

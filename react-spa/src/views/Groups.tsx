@@ -14,6 +14,7 @@ import type { GroupVisibility } from '@openpath/shared';
 import { sanitizeSlug } from '@openpath/shared/slug';
 import { trpc } from '../lib/trpc';
 import { isAdmin, isTeacher, isTeacherGroupsFeatureEnabled } from '../lib/auth';
+import { isDuplicateError, resolveTrpcErrorMessage } from '../lib/error-utils';
 import { getEsActiveInactiveLabel } from '../lib/status';
 import { reportError } from '../lib/reportError';
 import { Modal } from '../components/ui/Modal';
@@ -139,7 +140,20 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
       setShowNewModal(false);
     } catch (err) {
       reportError('Failed to create group:', err);
-      setNewGroupError('Error al crear grupo. El nombre puede ya existir.');
+      if (isDuplicateError(err)) {
+        setNewGroupError(
+          `Ya existe un grupo con ese identificador (slug): "${slug}". Prueba con "${slug}-2".`
+        );
+        return;
+      }
+
+      setNewGroupError(
+        resolveTrpcErrorMessage(err, {
+          badRequest: 'Revisa el nombre del grupo (slug) antes de crear.',
+          forbidden: 'No tienes permisos para crear grupos.',
+          fallback: 'Error al crear grupo. Intenta nuevamente.',
+        })
+      );
     } finally {
       setSaving(false);
     }
@@ -247,7 +261,13 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
       });
     } catch (err) {
       reportError('Failed to clone group:', err);
-      setCloneError('No se pudo clonar el grupo. Intenta nuevamente.');
+      setCloneError(
+        resolveTrpcErrorMessage(err, {
+          conflict: 'No se puede clonar un grupo inactivo.',
+          forbidden: 'No tienes permisos para clonar este grupo.',
+          fallback: 'No se pudo clonar el grupo. Intenta nuevamente.',
+        })
+      );
     } finally {
       setSaving(false);
     }
@@ -414,8 +434,17 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
                       </button>
                       <button
                         onClick={() => openCloneModal(group.id)}
-                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
-                        title="Clonar para editar"
+                        disabled={group.status !== 'Active'}
+                        className={`text-xs flex items-center gap-1 font-medium ${
+                          group.status === 'Active'
+                            ? 'text-blue-600 hover:text-blue-800'
+                            : 'text-slate-400 cursor-not-allowed'
+                        }`}
+                        title={
+                          group.status === 'Active'
+                            ? 'Clonar para editar'
+                            : 'No se puede clonar un grupo inactivo'
+                        }
                       >
                         <Copy size={12} /> Clonar
                       </button>
@@ -439,7 +468,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
       <Modal isOpen={showNewModal} onClose={closeNewModal} title="Nuevo Grupo" className="max-w-md">
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre (slug)</label>
             <input
               type="text"
               placeholder="Ej: grupo-primaria"
@@ -450,6 +479,9 @@ const Groups: React.FC<GroupsProps> = ({ onNavigateToRules }) => {
               }}
               className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none ${newGroupError ? 'border-red-300' : 'border-slate-300'}`}
             />
+            <p className="text-xs text-slate-500 mt-1">
+              Se usa como identificador (slug) del grupo.
+            </p>
             {newGroupError && (
               <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
                 <AlertCircle size={12} /> {newGroupError}
