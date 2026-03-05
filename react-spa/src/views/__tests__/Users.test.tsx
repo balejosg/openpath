@@ -368,6 +368,74 @@ describe('Users View', () => {
     expect(await screen.findByText('Usuario Creado')).toBeInTheDocument();
   });
 
+  it('keeps grid data visible when post-create background refetch fails', async () => {
+    const initialList = createDeferred<unknown[]>();
+    mockUsersList.mockImplementationOnce(() => initialList.promise);
+
+    // The create response must be mappable so the optimistic insert works.
+    mockCreateUser.mockResolvedValueOnce({
+      id: 'user-new',
+      name: 'New User',
+      email: 'new@example.com',
+      isActive: true,
+      roles: [{ role: 'teacher' }],
+    });
+
+    renderUsersView();
+
+    // Resolve initial list with one existing user
+    initialList.resolve([
+      {
+        id: 'user-existing',
+        name: 'Existing User',
+        email: 'existing@example.com',
+        isActive: true,
+        roles: [{ role: 'teacher' }],
+      },
+    ]);
+
+    await screen.findByText('Existing User');
+
+    // Post-create refetch will fail
+    mockUsersList.mockRejectedValueOnce(new Error('network error'));
+
+    fireEvent.click(screen.getByRole('button', { name: '+ Nuevo Usuario' }));
+    fireEvent.change(await screen.findByPlaceholderText('Nombre completo'), {
+      target: { value: 'New User' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('usuario@dominio.com'), {
+      target: { value: 'new@example.com' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Mínimo 8 caracteres'), {
+      target: { value: 'SecurePass123!' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Crear Usuario' }));
+
+    // The optimistic insert should show the new user immediately
+    expect(await screen.findByText('New User')).toBeInTheDocument();
+
+    // The existing user must still be visible (grid must NOT go blank)
+    expect(screen.getByText('Existing User')).toBeInTheDocument();
+
+    // Wait for the failed refetch to settle
+    await waitFor(() => {
+      expect(mockUsersList).toHaveBeenCalledTimes(2);
+    });
+
+    // The view should surface the failure as a non-blocking inline warning.
+    expect(await screen.findByText(/Error al actualizar/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+
+    // After the failed refetch, BOTH users must still be visible
+    expect(screen.getByText('New User')).toBeInTheDocument();
+    expect(screen.getByText('Existing User')).toBeInTheDocument();
+
+    // The grid must NOT show the full-page error or loading state
+    expect(screen.queryByText('Cargando usuarios...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Error al cargar usuarios')).not.toBeInTheDocument();
+  });
+
   it('opens delete confirmation modal and deletes user on confirm', async () => {
     mockUsersList.mockResolvedValue([
       {

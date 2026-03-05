@@ -37,11 +37,14 @@ export const useUsersActions = () => {
     void queryClient.invalidateQueries({ queryKey: USERS_QUERY_KEY });
   }, [queryClient]);
 
-  const refreshUsersList = useCallback(async () => {
-    // Cancelling first prevents in-flight list responses from overwriting newer state.
-    await queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
-    invalidateUsersList();
-  }, [invalidateUsersList, queryClient]);
+  const deferredInvalidate = useCallback(() => {
+    // Yield to let React render the optimistic data before triggering
+    // a background refetch. If the refetch fails, the rendering logic
+    // now shows data independently of error state, so the grid survives.
+    void Promise.resolve().then(() => {
+      invalidateUsersList();
+    });
+  }, [invalidateUsersList]);
 
   const [createError, setCreateError] = useState('');
   const [deleteError, setDeleteError] = useState('');
@@ -72,30 +75,31 @@ export const useUsersActions = () => {
     async (apiUser: unknown) => {
       const mapped = mapUnknownApiUserToUser(apiUser);
       if (!mapped) {
-        // If we can't safely map the create response, still force a refresh.
-        await refreshUsersList();
+        // Can't map the response — cancel any in-flight list query so we can
+        // force a fresh refetch that will include the newly created user.
+        await queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
+        invalidateUsersList();
         return;
       }
 
-      await queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
       queryClient.setQueryData<User[]>(USERS_QUERY_KEY, (prev) => {
         const prevUsers = Array.isArray(prev) ? prev : [];
         return [mapped, ...prevUsers.filter((u) => u.id !== mapped.id)];
       });
-      invalidateUsersList();
+      deferredInvalidate();
     },
-    [invalidateUsersList, queryClient, refreshUsersList]
+    [deferredInvalidate, invalidateUsersList, queryClient]
   );
 
   const updateUserInCache = useCallback(
     async (apiUser: unknown) => {
       const mapped = mapUnknownApiUserToUser(apiUser);
       if (!mapped) {
-        await refreshUsersList();
+        await queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
+        invalidateUsersList();
         return;
       }
 
-      await queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
       queryClient.setQueryData<User[]>(USERS_QUERY_KEY, (prev) => {
         const prevUsers = Array.isArray(prev) ? prev : [];
         const idx = prevUsers.findIndex((u) => u.id === mapped.id);
@@ -104,16 +108,16 @@ export const useUsersActions = () => {
         next[idx] = mapped;
         return next;
       });
-      invalidateUsersList();
+      deferredInvalidate();
     },
-    [invalidateUsersList, queryClient, refreshUsersList]
+    [deferredInvalidate, invalidateUsersList, queryClient]
   );
 
   const handleSaveEdit = useCallback(
     async (input: UpdateUserInput): Promise<boolean> => {
       try {
         const updated = await updateMutation.mutateAsync(input);
-        await updateUserInCache(updated);
+        void updateUserInCache(updated);
         return true;
       } catch (err) {
         reportError('Failed to update user:', err);
@@ -147,7 +151,7 @@ export const useUsersActions = () => {
           role: input.role,
         });
 
-        await upsertUserInCache(user);
+        void upsertUserInCache(user);
         return { ok: true, user };
       } catch (err) {
         reportError('Failed to create user:', err);
@@ -183,12 +187,11 @@ export const useUsersActions = () => {
       setDeleteError('');
       await deleteMutation.mutateAsync({ id: deleteTarget.id });
 
-      await queryClient.cancelQueries({ queryKey: USERS_QUERY_KEY });
       queryClient.setQueryData<User[]>(USERS_QUERY_KEY, (prev) => {
         const prevUsers = Array.isArray(prev) ? prev : [];
         return prevUsers.filter((u) => u.id !== deleteTarget.id);
       });
-      invalidateUsersList();
+      deferredInvalidate();
 
       setDeleteTarget(null);
       return true;
@@ -197,7 +200,7 @@ export const useUsersActions = () => {
       setDeleteError('No se pudo eliminar usuario. Intenta nuevamente.');
       return false;
     }
-  }, [deleteTarget, deleteMutation, invalidateUsersList, queryClient]);
+  }, [deleteTarget, deleteMutation, deferredInvalidate, queryClient]);
 
   return {
     saving,

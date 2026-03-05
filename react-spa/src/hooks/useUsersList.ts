@@ -75,6 +75,7 @@ function mapApiUsersToUsers(apiUsers: unknown): User[] {
 
 export function useUsersList(): {
   users: User[];
+  hasData: boolean;
   loading: boolean;
   fetching: boolean;
   error: string | null;
@@ -92,10 +93,11 @@ export function useUsersList(): {
     await query.refetch();
   }, [query.refetch]);
 
+  const hasData = query.data !== undefined;
   const users = query.data ?? [];
   const loading = query.status === 'pending';
   const fetching = query.fetchStatus === 'fetching';
-  const error = query.status === 'error' ? 'Error al cargar usuarios' : null;
+  const error = query.error ? 'Error al cargar usuarios' : null;
 
-  return { users, loading, fetching, error, fetchUsers };
+  return { users, hasData, loading, fetching, error, fetchUsers };
 }

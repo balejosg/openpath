@@ -29,7 +29,7 @@ const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
 };
 
 const UsersView = () => {
-  const { users, loading, fetching, error, fetchUsers } = useUsersList();
+  const { users, hasData, loading, fetching, error, fetchUsers } = useUsersList();
   const [showEditModal, setShowEditModal] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -143,7 +143,7 @@ const UsersView = () => {
   const totalCount = users.length;
   const rangeStart = visibleCount === 0 ? 0 : 1;
   const rangeEnd = visibleCount === 0 ? 0 : visibleCount;
-  const showInitialLoading = loading && users.length === 0;
+  const showInitialLoading = loading && !hasData;
 
   return (
     <div className="space-y-6">
@@ -210,7 +210,14 @@ const UsersView = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {error ? (
+              {showInitialLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center">
+                    <Loader2 className="w-6 h-6 animate-spin text-slate-400 mx-auto" />
+                    <span className="text-slate-500 text-sm mt-2 block">Cargando usuarios...</span>
+                  </td>
+                </tr>
+              ) : error && !hasData ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center">
                     <AlertCircle className="w-6 h-6 text-red-400 mx-auto" />
@@ -221,13 +228,6 @@ const UsersView = () => {
                     >
                       Reintentar
                     </button>
-                  </td>
-                </tr>
-              ) : showInitialLoading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center">
-                    <Loader2 className="w-6 h-6 animate-spin text-slate-400 mx-auto" />
-                    <span className="text-slate-500 text-sm mt-2 block">Cargando usuarios...</span>
                   </td>
                 </tr>
               ) : filteredUsers.length === 0 ? (
@@ -322,6 +322,18 @@ const UsersView = () => {
               >
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 Actualizando...
+              </span>
+            )}
+            {error && hasData && !fetching && (
+              <span className="inline-flex items-center gap-1 text-amber-600">
+                <AlertCircle className="w-3.5 h-3.5" />
+                Error al actualizar ·{' '}
+                <button
+                  onClick={() => void fetchUsers()}
+                  className="underline hover:text-amber-800"
+                >
+                  Reintentar
+                </button>
               </span>
             )}
           </div>
