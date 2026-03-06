@@ -1,17 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Folder, Loader2, ShieldCheck, ShieldOff, MonitorPlay, Calendar } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { isTeacherGroupsFeatureEnabled } from '../lib/auth';
-import { toClassroomControlStates, type ClassroomControlState } from '../lib/classrooms';
+import { toActiveClassroomRows } from '../lib/classrooms';
 import { reportError } from '../lib/reportError';
 import { useAllowedGroups } from '../hooks/useAllowedGroups';
-import { useIntervalRefetch, useRefetchOnFocus } from '../hooks/useLiveRefetch';
-import {
-  GroupLabel,
-  inferGroupSource,
-  resolveGroupDisplayName,
-  resolveGroupLike,
-} from '../components/groups/GroupLabel';
+import { useClassroomControlStatesQuery } from '../hooks/useClassroomsList';
+import { GroupLabel, resolveGroupDisplayName } from '../components/groups/GroupLabel';
 import { GroupSelect } from '../components/groups/GroupSelect';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
@@ -21,9 +16,16 @@ interface TeacherDashboardProps {
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }) => {
   const teacherGroupsEnabled = isTeacherGroupsFeatureEnabled();
-  const [classrooms, setClassrooms] = useState<ClassroomControlState[]>([]);
-  const [classroomsLoading, setClassroomsLoading] = useState(true);
-  const [classroomsError, setClassroomsError] = useState<string | null>(null);
+  const shouldPoll = import.meta.env.MODE !== 'test';
+  const {
+    data: classrooms,
+    loading: classroomsLoading,
+    error: classroomsError,
+    refetchClassrooms,
+  } = useClassroomControlStatesQuery({
+    refetchIntervalMs: shouldPoll ? 30000 : false,
+    refetchOnWindowFocus: shouldPoll,
+  });
 
   const {
     groups,
@@ -45,60 +47,8 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
     nextName: string;
   } | null>(null);
 
-  const fetchClassrooms = useCallback(async () => {
-    try {
-      setClassroomsLoading(true);
-      const apiClassrooms = await trpc.classrooms.list.query();
-      setClassrooms(toClassroomControlStates(apiClassrooms));
-      setClassroomsError(null);
-    } catch (err) {
-      reportError('Failed to fetch classrooms:', err);
-      setClassroomsError('Error al cargar aulas');
-    } finally {
-      setClassroomsLoading(false);
-    }
-  }, []);
-
-  const shouldPoll = import.meta.env.MODE !== 'test';
-
-  useEffect(() => {
-    void fetchClassrooms();
-  }, [fetchClassrooms]);
-
-  useIntervalRefetch(fetchClassrooms, 30000, { enabled: shouldPoll });
-  useRefetchOnFocus(fetchClassrooms);
-
   const activeGroupsByClassroom = useMemo(() => {
-    return classrooms
-      .map((c) => {
-        const groupId = c.currentGroupId;
-        if (!groupId) return null;
-
-        const group = resolveGroupLike({
-          groupId,
-          groupById,
-          displayName: c.currentGroupDisplayName,
-        });
-        const classroomName = c.displayName || c.name;
-
-        const source = inferGroupSource({
-          currentGroupSource: c.currentGroupSource,
-          activeGroupId: c.activeGroupId,
-          currentGroupId: c.currentGroupId,
-          defaultGroupId: c.defaultGroupId,
-        });
-
-        return {
-          classroomId: c.id,
-          classroomName,
-          groupId,
-          group,
-          source,
-          hasManualOverride: !!c.activeGroupId,
-        };
-      })
-      .filter((row): row is NonNullable<typeof row> => row !== null)
-      .sort((a, b) => a.classroomName.localeCompare(b.classroomName));
+    return toActiveClassroomRows(classrooms, groupById);
   }, [classrooms, groupById]);
 
   const activeClassrooms = activeGroupsByClassroom;
@@ -112,7 +62,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
           id: classroomId,
           groupId: nextGroupId,
         });
-        await fetchClassrooms();
+        await refetchClassrooms();
         setSelectedClassroomForControl('');
         setSelectedGroupForControl('');
         return true;
@@ -124,7 +74,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
         setControlLoading(false);
       }
     },
-    [fetchClassrooms]
+    [refetchClassrooms]
   );
 
   const handleTakeControl = () => {
@@ -170,7 +120,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
         id: classroomId,
         groupId: null,
       });
-      await fetchClassrooms();
+      await refetchClassrooms();
     } catch (e) {
       reportError('Failed to release classroom:', e);
     }
@@ -213,7 +163,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
               {classroomsError}{' '}
               <button
                 type="button"
-                onClick={() => void fetchClassrooms()}
+                onClick={() => void refetchClassrooms()}
                 className="underline hover:text-red-800"
               >
                 Reintentar

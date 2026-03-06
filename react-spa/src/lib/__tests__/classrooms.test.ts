@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   readClassroomListMetadata,
+  toActiveClassroomRows,
   toClassroom,
+  toClassroomFromModel,
+  toClassroomListModel,
   toClassroomControlState,
+  toClassroomControlStateFromModel,
   toClassrooms,
   type ClassroomListItem,
 } from '../classrooms';
@@ -58,6 +62,9 @@ describe('classrooms adapter', () => {
       onlineMachineCount: 10,
       machines: [],
     });
+
+    const model = toClassroomListModel(listItem);
+    expect(toClassroomFromModel(model)).toEqual(classroom);
   });
 
   it('normalizes missing readable metadata to null without a cast', () => {
@@ -99,6 +106,7 @@ describe('classrooms adapter', () => {
     };
 
     const controlState = toClassroomControlState(listItem);
+    const model = toClassroomListModel(listItem);
 
     expect(toClassrooms([listItem])).toHaveLength(1);
     expect(controlState).toEqual({
@@ -112,5 +120,50 @@ describe('classrooms adapter', () => {
       currentGroupDisplayName: 'Plan Aula 3',
       currentGroupSource: 'default',
     });
+    expect(toClassroomControlStateFromModel(model)).toEqual(controlState);
+  });
+
+  it('derives active classroom rows from the shared control-state selector', () => {
+    const controlStates = [
+      {
+        id: 'classroom-4',
+        name: 'Lab Manual',
+        displayName: 'Laboratorio Manual',
+        defaultGroupId: 'group-default',
+        defaultGroupDisplayName: 'Grupo Base',
+        activeGroupId: 'group-manual',
+        currentGroupId: 'group-manual',
+        currentGroupDisplayName: 'Grupo Manual',
+        currentGroupSource: null,
+      },
+    ];
+
+    const groupById = new Map([
+      [
+        'group-manual',
+        {
+          id: 'group-manual',
+          name: 'grupo-manual',
+          displayName: 'Grupo Manual',
+          enabled: true,
+        },
+      ],
+    ]);
+
+    expect(toActiveClassroomRows(controlStates, groupById)).toEqual([
+      {
+        classroomId: 'classroom-4',
+        classroomName: 'Laboratorio Manual',
+        groupId: 'group-manual',
+        group: {
+          id: 'group-manual',
+          name: 'grupo-manual',
+          displayName: 'Grupo Manual',
+          enabled: true,
+        },
+        source: 'manual',
+        hasManualOverride: true,
+      },
+    ]);
   });
 });

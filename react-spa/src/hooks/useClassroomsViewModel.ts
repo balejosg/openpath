@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { Classroom } from '../types';
 import { isAdmin } from '../lib/auth';
-import { toClassrooms } from '../lib/classrooms';
 import { trpc } from '../lib/trpc';
 import { reportError } from '../lib/reportError';
 import { useAllowedGroups } from './useAllowedGroups';
+import { useClassroomsQuery } from './useClassroomsList';
 import { useListDetailSelection } from './useListDetailSelection';
 import { normalizeSearchTerm, useNormalizedSearch } from './useNormalizedSearch';
 
@@ -26,9 +26,6 @@ export function filterClassroomsBySearch(
 }
 
 export function useClassroomsViewModel() {
-  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewModal, setShowNewModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -40,6 +37,7 @@ export function useClassroomsViewModel() {
 
   const normalizedSearchQuery = useNormalizedSearch(searchQuery);
   const admin = isAdmin();
+  const classroomsQuery = useClassroomsQuery();
 
   const {
     groups: allowedGroups,
@@ -49,27 +47,8 @@ export function useClassroomsViewModel() {
     error: groupsQueryError,
     refetch: refetchGroups,
   } = useAllowedGroups();
-
-  const fetchClassrooms = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const apiClassrooms = await trpc.classrooms.list.query();
-      const mappedClassrooms = toClassrooms(apiClassrooms);
-      setClassrooms(mappedClassrooms);
-      return mappedClassrooms;
-    } catch (err) {
-      reportError('Failed to fetch classrooms:', err);
-      setError('Error al cargar aulas');
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void fetchClassrooms();
-  }, [fetchClassrooms]);
+  const classrooms = classroomsQuery.data;
+  const loadingError = classroomsQuery.error;
 
   const filteredClassrooms = useMemo(
     () => filterClassroomsBySearch(classrooms, normalizedSearchQuery),
@@ -83,8 +62,8 @@ export function useClassroomsViewModel() {
   } = useListDetailSelection(filteredClassrooms);
 
   const allowedGroupsError = groupsQueryError ? 'Error al cargar aulas' : null;
-  const isInitialLoading = loading || groupsLoading;
-  const loadError = error ?? allowedGroupsError;
+  const isInitialLoading = classroomsQuery.loading || groupsLoading;
+  const loadError = loadingError ?? allowedGroupsError;
 
   const calendarGroupsForDisplay = useMemo(
     () =>
@@ -95,22 +74,12 @@ export function useClassroomsViewModel() {
     [allowedGroups]
   );
 
-  const refetchClassrooms = useCallback(async () => {
-    try {
-      const apiClassrooms = await trpc.classrooms.list.query();
-      const mappedClassrooms = toClassrooms(apiClassrooms);
-      setClassrooms(mappedClassrooms);
-      return mappedClassrooms;
-    } catch (err) {
-      reportError('Failed to refetch classrooms:', err);
-      return [];
-    }
-  }, []);
+  const refetchClassrooms = classroomsQuery.refetchClassrooms;
 
   const retryLoad = useCallback(() => {
     void refetchGroups();
-    void fetchClassrooms();
-  }, [refetchGroups, fetchClassrooms]);
+    void refetchClassrooms();
+  }, [refetchClassrooms, refetchGroups]);
 
   const openNewModal = useCallback(() => {
     setNewName('');

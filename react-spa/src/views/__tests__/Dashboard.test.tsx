@@ -1,6 +1,31 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Dashboard from '../Dashboard';
+
+let queryClient: QueryClient | null = null;
+
+function renderDashboard(props?: React.ComponentProps<typeof Dashboard>) {
+  queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: 0,
+      },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Dashboard {...props} />
+    </QueryClientProvider>
+  );
+}
+
+afterEach(() => {
+  queryClient?.clear();
+  queryClient = null;
+});
 
 // Mock trpc
 const mockStatsQuery = vi.fn();
@@ -110,7 +135,7 @@ describe('Dashboard', () => {
   });
 
   it('renders stats cards', async () => {
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText('Grupos Activos')).toBeInTheDocument();
@@ -121,7 +146,7 @@ describe('Dashboard', () => {
   });
 
   it('renders system status banner', async () => {
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText('Estado del Sistema: Seguro')).toBeInTheDocument();
@@ -136,7 +161,7 @@ describe('Dashboard', () => {
       pausedGroups: 3,
     });
 
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText('Estado del Sistema: Sin grupos habilitados')).toBeInTheDocument();
@@ -144,7 +169,7 @@ describe('Dashboard', () => {
   });
 
   it('renders active groups by classroom in the banner', async () => {
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText('Grupo vigente por aula')).toBeInTheDocument();
@@ -156,7 +181,7 @@ describe('Dashboard', () => {
   it('renders quick access section when onNavigateToRules is provided', async () => {
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       expect(screen.getByText('Acceso Rápido')).toBeInTheDocument();
@@ -164,7 +189,7 @@ describe('Dashboard', () => {
   });
 
   it('does not render quick access section when onNavigateToRules is not provided', async () => {
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText('Grupos Activos')).toBeInTheDocument();
@@ -176,7 +201,7 @@ describe('Dashboard', () => {
   it('renders group cards in quick access section', async () => {
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       expect(screen.getByText('Grupo Primaria')).toBeInTheDocument();
@@ -188,7 +213,7 @@ describe('Dashboard', () => {
   it('shows allowed and blocked counts for each group', async () => {
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       // Group 1: 45 allowed, 8 blocked (5+3)
@@ -200,7 +225,7 @@ describe('Dashboard', () => {
   it('calls onNavigateToRules when manage button is clicked', async () => {
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       expect(screen.getByTestId('manage-rules-group-1')).toBeInTheDocument();
@@ -217,7 +242,7 @@ describe('Dashboard', () => {
   it('shows inactive groups with opacity styling', async () => {
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       const inactiveCard = screen.getByTestId('group-card-group-3');
@@ -228,7 +253,7 @@ describe('Dashboard', () => {
   it('shows active groups without opacity styling', async () => {
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       const activeCard = screen.getByTestId('group-card-group-1');
@@ -239,7 +264,7 @@ describe('Dashboard', () => {
   it('shows Activo badge for enabled groups', async () => {
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       const activeBadges = screen.getAllByText('Activo');
@@ -250,7 +275,7 @@ describe('Dashboard', () => {
   it('shows Inactivo badge for disabled groups', async () => {
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       expect(screen.getByText('Inactivo')).toBeInTheDocument();
@@ -274,7 +299,7 @@ describe('Dashboard', () => {
 
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       const grid = screen.getByTestId('quick-access-grid');
@@ -300,7 +325,7 @@ describe('Dashboard', () => {
 
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       expect(screen.getByText(/Mostrando 6 de 10 grupos/)).toBeInTheDocument();
@@ -310,7 +335,7 @@ describe('Dashboard', () => {
   it('does not show "view all" message when there are 6 or fewer groups', async () => {
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       expect(screen.getByText('Grupo Primaria')).toBeInTheDocument();
@@ -324,7 +349,7 @@ describe('Dashboard', () => {
 
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       expect(screen.getByText('No hay grupos configurados.')).toBeInTheDocument();
@@ -342,7 +367,7 @@ describe('Dashboard', () => {
 
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     expect(screen.getByText('Cargando grupos...')).toBeInTheDocument();
 
@@ -358,7 +383,7 @@ describe('Dashboard', () => {
       .mockResolvedValueOnce({ pending: 5 })
       .mockResolvedValueOnce({ pending: 7 });
 
-    render(<Dashboard />);
+    renderDashboard();
 
     await waitFor(() => {
       expect(screen.getByText('5')).toBeInTheDocument();
@@ -376,7 +401,7 @@ describe('Dashboard', () => {
 
     const onNavigateToRules = vi.fn();
 
-    render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+    renderDashboard({ onNavigateToRules });
 
     await waitFor(() => {
       expect(screen.getByText('Error al cargar grupos')).toBeInTheDocument();
@@ -393,7 +418,7 @@ describe('Dashboard', () => {
     it('renders sort dropdown button', async () => {
       const onNavigateToRules = vi.fn();
 
-      render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+      renderDashboard({ onNavigateToRules });
 
       await waitFor(() => {
         expect(screen.getByTestId('sort-dropdown-button')).toBeInTheDocument();
@@ -403,7 +428,7 @@ describe('Dashboard', () => {
     it('shows sort options when dropdown is clicked', async () => {
       const onNavigateToRules = vi.fn();
 
-      render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+      renderDashboard({ onNavigateToRules });
 
       await waitFor(() => {
         expect(screen.getByTestId('sort-dropdown-button')).toBeInTheDocument();
@@ -420,7 +445,7 @@ describe('Dashboard', () => {
     it('sorts by name (A-Z) by default', async () => {
       const onNavigateToRules = vi.fn();
 
-      render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+      renderDashboard({ onNavigateToRules });
 
       await waitFor(() => {
         expect(screen.getByText(/Nombre \(A-Z\)/)).toBeInTheDocument();
@@ -430,7 +455,7 @@ describe('Dashboard', () => {
     it('changes sort order when option is selected', async () => {
       const onNavigateToRules = vi.fn();
 
-      render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+      renderDashboard({ onNavigateToRules });
 
       await waitFor(() => {
         expect(screen.getByTestId('sort-dropdown-button')).toBeInTheDocument();
@@ -447,7 +472,7 @@ describe('Dashboard', () => {
     it('sorts by rules count descending when "Más reglas" is selected', async () => {
       const onNavigateToRules = vi.fn();
 
-      render(<Dashboard onNavigateToRules={onNavigateToRules} />);
+      renderDashboard({ onNavigateToRules });
 
       await waitFor(() => {
         expect(screen.getByTestId('sort-dropdown-button')).toBeInTheDocument();

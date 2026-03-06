@@ -12,10 +12,11 @@ import {
   ArrowRight,
   ChevronDown,
 } from 'lucide-react';
-import { toClassroomControlStates, type ClassroomControlState } from '../lib/classrooms';
 import { trpc } from '../lib/trpc';
 import { reportError } from '../lib/reportError';
-import { GroupLabel, inferGroupSource, resolveGroupLike } from '../components/groups/GroupLabel';
+import { GroupLabel } from '../components/groups/GroupLabel';
+import { toActiveClassroomRows } from '../lib/classrooms';
+import { useClassroomControlStatesQuery } from '../hooks/useClassroomsList';
 import { useIntervalRefetch, useRefetchOnFocus } from '../hooks/useLiveRefetch';
 
 interface StatsData {
@@ -96,11 +97,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Classrooms state (used for "active groups by classroom" banner)
-  const [classrooms, setClassrooms] = useState<ClassroomControlState[]>([]);
-  const [classroomsLoading, setClassroomsLoading] = useState(true);
-  const [classroomsError, setClassroomsError] = useState<string | null>(null);
-
   // Groups state
   const [groups, setGroups] = useState<GroupFromAPI[]>([]);
   const [groupsLoading, setGroupsLoading] = useState(true);
@@ -137,34 +133,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
     }
   }, []);
 
-  const fetchClassrooms = useCallback(async () => {
-    try {
-      setClassroomsLoading(true);
-      const apiClassrooms = await trpc.classrooms.list.query();
-      setClassrooms(toClassroomControlStates(apiClassrooms));
-      setClassroomsError(null);
-    } catch (err) {
-      reportError('Failed to fetch classrooms:', err);
-      setClassroomsError('Error al cargar aulas');
-    } finally {
-      setClassroomsLoading(false);
-    }
-  }, []);
-
   const shouldPoll = import.meta.env.MODE !== 'test';
+  const {
+    data: classrooms,
+    loading: classroomsLoading,
+    error: classroomsError,
+    refetchClassrooms,
+  } = useClassroomControlStatesQuery({
+    refetchIntervalMs: shouldPoll ? 30000 : false,
+    refetchOnWindowFocus: shouldPoll,
+  });
 
   useEffect(() => {
     void fetchStats();
-    void fetchClassrooms();
-  }, [fetchStats, fetchClassrooms]);
+  }, [fetchStats]);
 
   const refetchDashboard = useCallback(() => {
     void fetchStats();
-    void fetchClassrooms();
-  }, [fetchStats, fetchClassrooms]);
+    void refetchClassrooms();
+  }, [fetchStats, refetchClassrooms]);
 
   useIntervalRefetch(fetchStats, 10000, { enabled: shouldPoll });
-  useIntervalRefetch(fetchClassrooms, 30000, { enabled: shouldPoll });
   useRefetchOnFocus(refetchDashboard);
 
   // Fetch groups for quick access
@@ -216,35 +205,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
   }, [groups]);
 
   const activeGroupsByClassroom = useMemo(() => {
-    return classrooms
-      .map((c) => {
-        const groupId = c.currentGroupId;
-        if (!groupId) return null;
-
-        const classroomName = c.displayName || c.name;
-        const group = resolveGroupLike({
-          groupId,
-          groupById,
-          displayName: c.currentGroupDisplayName,
-        });
-
-        const source = inferGroupSource({
-          currentGroupSource: c.currentGroupSource,
-          activeGroupId: c.activeGroupId,
-          currentGroupId: c.currentGroupId,
-          defaultGroupId: c.defaultGroupId,
-        });
-
-        return {
-          classroomId: c.id,
-          classroomName,
-          groupId,
-          group,
-          source,
-        };
-      })
-      .filter((row): row is NonNullable<typeof row> => row !== null)
-      .sort((a, b) => a.classroomName.localeCompare(b.classroomName));
+    return toActiveClassroomRows(classrooms, groupById);
   }, [classrooms, groupById]);
 
   // Close dropdown when clicking outside
