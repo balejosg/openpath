@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertCircle, Clock, Download, Loader2, Monitor, Plus, Trash2 } from 'lucide-react';
 import type {
   Classroom,
+  ClassroomExemption,
   CurrentGroupSource,
   OneOffScheduleWithPermissions,
   ScheduleWithPermissions,
@@ -9,17 +10,6 @@ import type {
 import WeeklyCalendar from '../WeeklyCalendar';
 import { GroupLabel, getGroupSourcePhrase, type GroupLike } from '../groups/GroupLabel';
 import { GroupSelect } from '../groups/GroupSelect';
-
-interface ClassroomExemptionLike {
-  id: string;
-  machineId: string;
-  machineHostname: string;
-  classroomId: string;
-  scheduleId: string;
-  createdBy: string | null;
-  createdAt: string | null;
-  expiresAt: string;
-}
 
 interface CalendarGroupDisplay {
   id: string;
@@ -41,7 +31,7 @@ interface ClassroomDetailPaneProps {
   loadingSchedules: boolean;
   scheduleError: string;
   activeSchedule: ScheduleWithPermissions | OneOffScheduleWithPermissions | null;
-  exemptionByMachineId: ReadonlyMap<string, ClassroomExemptionLike>;
+  exemptionByMachineId: ReadonlyMap<string, ClassroomExemption>;
   exemptionMutating: Partial<Record<string, boolean>>;
   exemptionsError: string | null;
   loadingExemptions: boolean;

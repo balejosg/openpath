@@ -46,6 +46,17 @@ export interface Classroom {
   }[];
 }
 
+export interface ClassroomExemption {
+  id: string;
+  machineId: string;
+  machineHostname: string;
+  classroomId: string;
+  scheduleId: string;
+  createdBy: string | null;
+  createdAt: string | null;
+  expiresAt: string;
+}
+
 export interface Group {
   id: string;
   name: string;
