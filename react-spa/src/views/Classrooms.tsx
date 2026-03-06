@@ -31,10 +31,34 @@ import {
   GroupLabel,
   inferGroupSource,
   getGroupSourcePhrase,
+  resolveClassroomGroupSelectState,
+  resolveGroupDisplayName,
 } from '../components/groups/GroupLabel';
 import { GroupSelect } from '../components/groups/GroupSelect';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog, DangerConfirmDialog } from '../components/ui/ConfirmDialog';
+
+type ClassroomListItem = Awaited<ReturnType<typeof trpc.classrooms.list.query>>[number];
+
+function mapApiClassroom(item: ClassroomListItem): Classroom {
+  return {
+    id: item.id,
+    name: item.name,
+    displayName: item.displayName,
+    defaultGroupId: item.defaultGroupId ?? null,
+    computerCount: item.machineCount,
+    activeGroup: item.activeGroupId ?? null,
+    currentGroupId: item.currentGroupId ?? null,
+    currentGroupSource: item.currentGroupSource,
+    status: item.status,
+    onlineMachineCount: item.onlineMachineCount,
+    machines: item.machines,
+  };
+}
+
+function mapApiClassrooms(items: readonly ClassroomListItem[]): Classroom[] {
+  return items.map(mapApiClassroom);
+}
 
 const Classrooms = () => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
@@ -103,21 +127,7 @@ const Classrooms = () => {
       setError(null);
       const apiClassrooms = await trpc.classrooms.list.query();
 
-      // Map classrooms
-      const mappedClassrooms = apiClassrooms.map((c) => ({
-        id: c.id,
-        name: c.name,
-        displayName: c.displayName,
-        defaultGroupId: c.defaultGroupId ?? null,
-        computerCount: c.machineCount,
-        activeGroup: c.activeGroupId ?? null,
-        currentGroupId: c.currentGroupId ?? null,
-        currentGroupSource: c.currentGroupSource,
-        status: c.status,
-        onlineMachineCount: c.onlineMachineCount,
-        machines: c.machines,
-      })) as Classroom[];
-
+      const mappedClassrooms = mapApiClassrooms(apiClassrooms);
       setClassrooms(mappedClassrooms);
     } catch (err) {
       reportError('Failed to fetch classrooms:', err);
@@ -135,19 +145,7 @@ const Classrooms = () => {
   const refetchClassrooms = useCallback(async () => {
     try {
       const apiClassrooms = await trpc.classrooms.list.query();
-      const mappedClassrooms = apiClassrooms.map((c) => ({
-        id: c.id,
-        name: c.name,
-        displayName: c.displayName,
-        defaultGroupId: c.defaultGroupId ?? null,
-        computerCount: c.machineCount,
-        activeGroup: c.activeGroupId ?? null,
-        currentGroupId: c.currentGroupId ?? null,
-        currentGroupSource: c.currentGroupSource,
-        status: c.status,
-        onlineMachineCount: c.onlineMachineCount,
-        machines: c.machines,
-      })) as Classroom[];
+      const mappedClassrooms = mapApiClassrooms(apiClassrooms);
       setClassrooms(mappedClassrooms);
       return mappedClassrooms;
     } catch (err) {
@@ -171,40 +169,18 @@ const Classrooms = () => {
   const { selectedItem: selectedClassroom, setSelectedId: setSelectedClassroomId } =
     useListDetailSelection(filteredClassrooms);
 
-  const selectedClassroomSource = selectedClassroom
-    ? inferGroupSource({
-        currentGroupSource: selectedClassroom.currentGroupSource ?? null,
-        activeGroupId: selectedClassroom.activeGroup,
-        currentGroupId: selectedClassroom.currentGroupId,
-        defaultGroupId: selectedClassroom.defaultGroupId,
-      })
-    : 'none';
-
-  const activeGroupSelectValue = (() => {
-    if (!selectedClassroom) return '';
-    if (selectedClassroom.activeGroup) return selectedClassroom.activeGroup;
-
-    // Some backends may hide activeGroupId when the active group isn't visible to the user.
-    // Keep the selector consistent by reflecting the inferred current manual group.
-    if (!admin && selectedClassroomSource === 'manual' && selectedClassroom.currentGroupId) {
-      return selectedClassroom.currentGroupId;
-    }
-
-    return '';
-  })();
-
-  const defaultGroupSelectValue = (() => {
-    if (!selectedClassroom) return '';
-    if (selectedClassroom.defaultGroupId) return selectedClassroom.defaultGroupId;
-
-    // Some backends may hide defaultGroupId when the default group isn't visible to the user.
-    // Keep the selector consistent by reflecting the inferred current default group.
-    if (!admin && selectedClassroomSource === 'default' && selectedClassroom.currentGroupId) {
-      return selectedClassroom.currentGroupId;
-    }
-
-    return '';
-  })();
+  const {
+    source: selectedClassroomSource,
+    activeGroupValue: activeGroupSelectValue,
+    defaultGroupValue: defaultGroupSelectValue,
+  } = useMemo(
+    () =>
+      resolveClassroomGroupSelectState({
+        classroom: selectedClassroom ?? null,
+        admin,
+      }),
+    [selectedClassroom, admin]
+  );
 
   const handleCreateClassroom = async () => {
     if (!newName.trim()) {
@@ -270,13 +246,17 @@ const Classrooms = () => {
     setShowNewModal(false);
   };
 
-  const resolveGroupName = (groupId: string | null) => {
-    if (!groupId) return 'Sin grupo activo';
-    const group = groupById.get(groupId);
-    if (group) return group.displayName || group.name;
-    if (admin) return groupId;
-    return 'Aplicado por otro profesor';
-  };
+  const resolveGroupName = useCallback(
+    (groupId: string | null) =>
+      resolveGroupDisplayName({
+        groupId,
+        group: groupId ? (groupById.get(groupId) ?? null) : null,
+        source: groupId ? 'manual' : 'none',
+        revealUnknownId: admin,
+        noneLabel: 'Sin grupo activo',
+      }),
+    [admin, groupById]
+  );
 
   const requestActiveGroupChange = useCallback(
     (next: string) => {

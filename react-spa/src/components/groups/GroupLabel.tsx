@@ -28,6 +28,57 @@ export function inferGroupSource(input: {
   return 'schedule';
 }
 
+export interface ClassroomGroupSelectInput {
+  activeGroup: string | null;
+  currentGroupId: string | null;
+  currentGroupSource?: CurrentGroupSource;
+  defaultGroupId: string | null;
+}
+
+export interface ClassroomGroupSelectState {
+  source: CurrentGroupSource;
+  activeGroupValue: string;
+  defaultGroupValue: string;
+}
+
+export function resolveClassroomGroupSelectState(params: {
+  classroom: ClassroomGroupSelectInput | null;
+  admin: boolean;
+}): ClassroomGroupSelectState {
+  const { classroom, admin } = params;
+
+  if (!classroom) {
+    return {
+      source: 'none',
+      activeGroupValue: '',
+      defaultGroupValue: '',
+    };
+  }
+
+  const source = inferGroupSource({
+    currentGroupSource: classroom.currentGroupSource ?? null,
+    activeGroupId: classroom.activeGroup,
+    currentGroupId: classroom.currentGroupId,
+    defaultGroupId: classroom.defaultGroupId,
+  });
+
+  let activeGroupValue = classroom.activeGroup ?? '';
+  if (!activeGroupValue && !admin && source === 'manual' && classroom.currentGroupId) {
+    activeGroupValue = classroom.currentGroupId;
+  }
+
+  let defaultGroupValue = classroom.defaultGroupId ?? '';
+  if (!defaultGroupValue && !admin && source === 'default' && classroom.currentGroupId) {
+    defaultGroupValue = classroom.currentGroupId;
+  }
+
+  return {
+    source,
+    activeGroupValue,
+    defaultGroupValue,
+  };
+}
+
 export function getGroupSourceTag(source: CurrentGroupSource): string {
   if (source === 'manual') return 'manual';
   if (source === 'schedule') return 'horario';

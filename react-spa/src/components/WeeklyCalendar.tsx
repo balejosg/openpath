@@ -176,11 +176,15 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
               key={d.key}
               className={`p-2 text-center border-l border-slate-200 flex flex-col items-center justify-center gap-0.5 ${isToday ? 'bg-blue-50' : ''}`}
             >
-              <span className={`text-[10px] font-semibold uppercase tracking-wider ${isToday ? 'text-blue-600' : 'text-slate-500'}`}>
+              <span
+                className={`text-[10px] font-semibold uppercase tracking-wider ${isToday ? 'text-blue-600' : 'text-slate-500'}`}
+              >
                 <span className="hidden md:inline">{d.full}</span>
                 <span className="md:hidden">{d.short}</span>
               </span>
-              <span className={`text-lg font-bold leading-tight ${isToday ? 'text-white bg-blue-600 w-8 h-8 rounded-full flex items-center justify-center' : 'text-slate-800'}`}>
+              <span
+                className={`text-lg font-bold leading-tight ${isToday ? 'text-white bg-blue-600 w-8 h-8 rounded-full flex items-center justify-center' : 'text-slate-800'}`}
+              >
                 {weekDates[i]}
               </span>
             </div>
@@ -271,8 +275,9 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                   return (
                     <div
                       key={s.id}
-                      className={`absolute inset-x-1 rounded-md border ${color.bg} ${color.border} ${color.hover} overflow-hidden z-10 transition-colors group/block ${canEdit ? 'cursor-pointer' : 'cursor-default opacity-90'
-                        }`}
+                      className={`absolute inset-x-1 rounded-md border ${color.bg} ${color.border} ${color.hover} overflow-hidden z-10 transition-colors group/block ${
+                        canEdit ? 'cursor-pointer' : 'cursor-default opacity-90'
+                      }`}
                       style={{ top, height: Math.max(height, 20) }}
                       onClick={(e) => {
                         e.stopPropagation();
