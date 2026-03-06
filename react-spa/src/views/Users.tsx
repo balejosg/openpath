@@ -145,11 +145,6 @@ const UsersView = () => {
   const rangeEnd = visibleCount === 0 ? 0 : visibleCount;
   const showInitialLoading = loading && !hasData;
 
-  // ── DIAGNOSTIC ──
-  console.error(
-    `[UsersView] render: users=${users.length} filtered=${filteredUsers.length} showNewModal=${showNewModal} showEditModal=${showEditModal} loading=${loading} hasData=${hasData} fetching=${fetching} error=${error}`
-  );
-  // ── END DIAGNOSTIC ──
 
   return (
     <div className="space-y-6">
@@ -203,7 +198,7 @@ const UsersView = () => {
       )}
 
       {/* Table */}
-      <div className="bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-lg overflow-clip shadow-sm">
         <div className="overflow-x-auto">
           <table data-testid="users-table" className="w-full text-left border-collapse">
             <thead>
