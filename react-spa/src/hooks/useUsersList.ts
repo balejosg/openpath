@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import type { User } from '../types';
 import { trpc } from '../lib/trpc';
@@ -88,6 +88,21 @@ export function useUsersList(): {
       return mapApiUsersToUsers(apiUsers);
     },
   });
+
+  // ── DIAGNOSTIC: track every data change ──
+  const prevLenRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    const len = query.data?.length;
+    const ids = query.data?.map((u) => u.id).join(',') ?? '(undefined)';
+    if (prevLenRef.current !== len) {
+      console.warn(
+        `[useUsersList] data changed: ${prevLenRef.current} → ${len} | status=${query.status} fetchStatus=${query.fetchStatus} | ids=${ids}`
+      );
+      console.trace('[useUsersList] data change trace');
+      prevLenRef.current = len;
+    }
+  });
+  // ── END DIAGNOSTIC ──
 
   const fetchUsers = useCallback(async () => {
     await query.refetch();

@@ -24,10 +24,14 @@ export function QueryProvider({ children }: Props) {
   useEffect(() => {
     focusManager.setEventListener((handleFocus) => {
       const onVisibilityChange = () => {
-        handleFocus(document.visibilityState === 'visible');
+        const focused = document.visibilityState === 'visible';
+        console.warn(`[QueryProvider] visibilitychange → handleFocus(${focused})`);
+        handleFocus(focused);
       };
 
       const onFocus = () => {
+        console.warn('[QueryProvider] window focus → handleFocus(true)');
+        console.trace('[QueryProvider] focus trace');
         handleFocus(true);
       };
 

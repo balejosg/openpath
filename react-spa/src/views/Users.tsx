@@ -145,6 +145,12 @@ const UsersView = () => {
   const rangeEnd = visibleCount === 0 ? 0 : visibleCount;
   const showInitialLoading = loading && !hasData;
 
+  // ── DIAGNOSTIC ──
+  console.warn(
+    `[UsersView] render: users=${users.length} filtered=${filteredUsers.length} showNewModal=${showNewModal} showEditModal=${showEditModal} loading=${loading} hasData=${hasData} fetching=${fetching} error=${error}`
+  );
+  // ── END DIAGNOSTIC ──
+
   return (
     <div className="space-y-6">
       {/* Toolbar */}
