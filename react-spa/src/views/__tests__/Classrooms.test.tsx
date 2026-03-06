@@ -129,6 +129,32 @@ describe('Classrooms', () => {
     });
   });
 
+  it('shows readable current group name from API metadata when the teacher cannot load that group locally', async () => {
+    mockGroupsListQuery.mockResolvedValue([]);
+    mockClassroomsListQuery.mockResolvedValue([
+      {
+        id: 'classroom-1',
+        name: 'Aula 1',
+        displayName: 'Aula 1',
+        defaultGroupId: null,
+        defaultGroupDisplayName: null,
+        activeGroupId: null,
+        currentGroupId: 'group-hidden-schedule',
+        currentGroupDisplayName: 'Plan Teacher B',
+        currentGroupSource: 'schedule',
+        status: 'operational',
+        machineCount: 0,
+        onlineMachineCount: 0,
+      },
+    ]);
+
+    renderClassrooms();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Plan Teacher B/i)).toBeInTheDocument();
+    });
+  });
+
   it('updates default group when user changes "Grupo por defecto" selector', async () => {
     mockClassroomsListQuery.mockResolvedValue([
       {

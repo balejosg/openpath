@@ -114,4 +114,37 @@ describe('WeeklyCalendar Component', () => {
 
     expect(block.querySelectorAll('button')).toHaveLength(0);
   });
+
+  it('renders readable schedule details from API metadata for non-editable blocks', () => {
+    const schedule: ScheduleWithPermissions = {
+      id: 's3',
+      classroomId: 'c1',
+      dayOfWeek: 3,
+      startTime: '10:00',
+      endTime: '11:00',
+      groupId: 'g-hidden',
+      groupDisplayName: 'Plan Teacher B',
+      teacherId: 't-hidden',
+      teacherName: 'Teacher B',
+      recurrence: 'weekly',
+      createdAt: new Date().toISOString(),
+      updatedAt: undefined,
+      isMine: false,
+      canEdit: false,
+    };
+
+    render(
+      <WeeklyCalendar
+        schedules={[schedule]}
+        groups={groups}
+        onAddClick={vi.fn()}
+        onEditClick={vi.fn()}
+        onDeleteClick={vi.fn()}
+      />
+    );
+
+    const block = screen.getByTestId('schedule-block-s3');
+    expect(block).toHaveTextContent('Plan Teacher B');
+    expect(block).toHaveAttribute('title', expect.stringContaining('Teacher B'));
+  });
 });

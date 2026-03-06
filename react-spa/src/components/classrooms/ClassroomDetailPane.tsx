@@ -90,6 +90,18 @@ function renderClassroomStatus(classroom: Classroom) {
   );
 }
 
+function toSyntheticGroup(
+  groupId: string | null | undefined,
+  displayName?: string | null
+): GroupLike | null {
+  if (!groupId || !displayName) return null;
+  return {
+    id: groupId,
+    name: displayName,
+    displayName,
+  };
+}
+
 export default function ClassroomDetailPane({
   admin,
   allowedGroups,
@@ -184,7 +196,7 @@ export default function ClassroomDetailPane({
               inactiveBehavior="hide"
               unknownValueLabel={
                 !admin && activeGroupSelectValue && !groupById.get(activeGroupSelectValue)
-                  ? 'Aplicado por otro profesor'
+                  ? (selectedClassroom.currentGroupDisplayName ?? 'Aplicado por otro profesor')
                   : undefined
               }
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm"
@@ -198,7 +210,11 @@ export default function ClassroomDetailPane({
                   groupId={selectedClassroom.currentGroupId}
                   group={
                     selectedClassroom.currentGroupId
-                      ? groupById.get(selectedClassroom.currentGroupId)
+                      ? (groupById.get(selectedClassroom.currentGroupId) ??
+                        toSyntheticGroup(
+                          selectedClassroom.currentGroupId,
+                          selectedClassroom.currentGroupDisplayName
+                        ))
                       : null
                   }
                   source={selectedClassroomSource}
@@ -231,7 +247,7 @@ export default function ClassroomDetailPane({
               inactiveBehavior="disable"
               unknownValueLabel={
                 !admin && defaultGroupSelectValue && !groupById.get(defaultGroupSelectValue)
-                  ? 'Asignado por admin'
+                  ? (selectedClassroom.defaultGroupDisplayName ?? 'Asignado por admin')
                   : undefined
               }
               className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-900 focus:border-blue-500 outline-none shadow-sm disabled:bg-slate-50 disabled:text-slate-500"
@@ -450,12 +466,16 @@ export default function ClassroomDetailPane({
               ) : (
                 <div className="space-y-2">
                   {sortedOneOffSchedules.map((schedule) => {
-                    const group = groupById.get(schedule.groupId);
+                    const group =
+                      groupById.get(schedule.groupId) ??
+                      toSyntheticGroup(schedule.groupId, schedule.groupDisplayName);
                     const groupName = group
                       ? (group.displayName ?? group.name)
                       : schedule.canEdit || admin
                         ? schedule.groupId
-                        : 'Reservado por otro profesor';
+                        : schedule.teacherName
+                          ? `Reservado por ${schedule.teacherName}`
+                          : 'Reservado por otro profesor';
 
                     return (
                       <div
@@ -469,6 +489,7 @@ export default function ClassroomDetailPane({
                           <p className="text-xs text-slate-500 truncate">
                             {formatOneOffDateLabel(schedule.startAt)} –{' '}
                             {formatOneOffDateLabel(schedule.endAt)}
+                            {schedule.teacherName ? ` · ${schedule.teacherName}` : ''}
                           </p>
                         </div>
 

@@ -46,12 +46,22 @@ export function useClassroomGroupControls(params: {
     (groupId: string | null) =>
       resolveGroupDisplayName({
         groupId,
-        group: groupId ? (groupById.get(groupId) ?? null) : null,
+        group: groupId
+          ? (groupById.get(groupId) ??
+            (selectedClassroom?.currentGroupId === groupId &&
+            selectedClassroom.currentGroupDisplayName
+              ? {
+                  id: groupId,
+                  name: selectedClassroom.currentGroupDisplayName,
+                  displayName: selectedClassroom.currentGroupDisplayName,
+                }
+              : null))
+          : null,
         source: groupId ? 'manual' : 'none',
         revealUnknownId: admin,
         noneLabel: 'Sin grupo activo',
       }),
-    [admin, groupById]
+    [admin, groupById, selectedClassroom]
   );
 
   const requestActiveGroupChange = useCallback(

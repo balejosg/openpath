@@ -261,7 +261,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                   const color = canEdit
                     ? (GROUP_COLORS[colorIdx] ?? GROUP_COLORS[0])
                     : RESERVED_COLOR;
-                  const knownGroupName = groupNameMap.get(s.groupId);
+                  const knownGroupName = groupNameMap.get(s.groupId) ?? s.groupDisplayName ?? null;
                   const group = knownGroupName
                     ? { id: s.groupId, name: knownGroupName, displayName: knownGroupName }
                     : null;
@@ -275,8 +275,9 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                   return (
                     <div
                       key={s.id}
-                      className={`absolute inset-x-1 rounded-md border ${color.bg} ${color.border} ${color.hover} overflow-hidden z-10 transition-colors group/block ${canEdit ? 'cursor-pointer' : 'cursor-default opacity-90'
-                        }`}
+                      className={`absolute inset-x-1 rounded-md border ${color.bg} ${color.border} ${color.hover} overflow-hidden z-10 transition-colors group/block ${
+                        canEdit ? 'cursor-pointer' : 'cursor-default opacity-90'
+                      }`}
                       style={{ top, height: Math.max(height, 20) }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -297,7 +298,7 @@ const WeeklyCalendar: React.FC<WeeklyCalendarProps> = ({
                           : `${groupName} ${s.startTime}-${s.endTime}`
                       }
                       data-testid={`schedule-block-${s.id}`}
-                      title={`${groupName}\n${s.startTime} – ${s.endTime}`}
+                      title={`${groupName}\n${s.startTime} – ${s.endTime}${s.teacherName ? `\n${s.teacherName}` : ''}`}
                     >
                       <div className="px-1.5 py-0.5 h-full flex flex-col justify-between">
                         <div className="flex items-start justify-between gap-0.5">

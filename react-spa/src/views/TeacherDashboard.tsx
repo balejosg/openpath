@@ -18,10 +18,19 @@ interface ClassroomFromAPI {
   name: string;
   displayName: string;
   defaultGroupId: string | null;
+  defaultGroupDisplayName?: string | null;
   activeGroupId: string | null;
   currentGroupId: string | null;
+  currentGroupDisplayName?: string | null;
   currentGroupSource: 'manual' | 'schedule' | 'default' | 'none' | null;
 }
+
+type ClassroomListItemWithMetadata = Awaited<
+  ReturnType<typeof trpc.classrooms.list.query>
+>[number] & {
+  defaultGroupDisplayName?: string | null;
+  currentGroupDisplayName?: string | null;
+};
 
 interface TeacherDashboardProps {
   onNavigateToRules?: (group: { id: string; name: string }) => void;
@@ -56,15 +65,17 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
   const fetchClassrooms = useCallback(async () => {
     try {
       setClassroomsLoading(true);
-      const apiClassrooms = await trpc.classrooms.list.query();
+      const apiClassrooms = (await trpc.classrooms.list.query()) as ClassroomListItemWithMetadata[];
       setClassrooms(
         apiClassrooms.map((c) => ({
           id: c.id,
           name: c.name,
           displayName: c.displayName,
           defaultGroupId: c.defaultGroupId ?? null,
+          defaultGroupDisplayName: c.defaultGroupDisplayName ?? null,
           activeGroupId: c.activeGroupId ?? null,
           currentGroupId: c.currentGroupId ?? null,
+          currentGroupDisplayName: c.currentGroupDisplayName ?? null,
           currentGroupSource: c.currentGroupSource,
         }))
       );
@@ -92,7 +103,15 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
         const groupId = c.currentGroupId;
         if (!groupId) return null;
 
-        const group = groupById.get(groupId) ?? null;
+        const group =
+          groupById.get(groupId) ??
+          (c.currentGroupDisplayName
+            ? {
+                id: groupId,
+                name: c.currentGroupDisplayName,
+                displayName: c.currentGroupDisplayName,
+              }
+            : null);
         const classroomName = c.displayName || c.name;
 
         const source = inferGroupSource({
@@ -115,11 +134,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
       .sort((a, b) => a.classroomName.localeCompare(b.classroomName));
   }, [classrooms, groupById]);
 
-  const myActiveClasses = useMemo(() => {
-    if (groups.length === 0) return [];
-    const allowedGroupIds = new Set(groups.map((g) => g.id));
-    return activeGroupsByClassroom.filter((c) => allowedGroupIds.has(c.groupId));
-  }, [activeGroupsByClassroom, groups]);
+  const activeClassrooms = activeGroupsByClassroom;
 
   const applyControlChange = useCallback(
     async (classroomId: string, nextGroupId: string | null) => {
@@ -210,18 +225,18 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
               <Loader2 size={14} className="animate-spin text-slate-400" />
               Verificando estado...
             </div>
-          ) : myActiveClasses.length > 0 ? (
+          ) : activeClassrooms.length > 0 ? (
             <div className="flex items-center gap-2 text-green-700 bg-green-50 px-3 py-2 rounded-lg border border-green-200 w-fit">
               <ShieldCheck size={20} />
               <span className="font-medium text-sm">
-                Tienes {myActiveClasses.length} aula(s) con tus políticas aplicadas.
+                Hay {activeClassrooms.length} aula(s) con grupo vigente en este momento.
               </span>
             </div>
           ) : (
             <div className="flex items-center gap-2 text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 w-fit">
               <ShieldOff size={20} />
               <span className="font-medium text-sm">
-                No tienes políticas aplicadas activamente en este momento.
+                No hay aulas con grupo vigente en este momento.
               </span>
             </div>
           )}
@@ -328,7 +343,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
         <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex flex-col">
           <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
             <Calendar className="text-indigo-500" size={20} />
-            Mis Clases Activas
+            Aulas con Grupo Vigente
           </h3>
 
           <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
@@ -336,13 +351,13 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
               </div>
-            ) : myActiveClasses.length === 0 ? (
+            ) : activeClassrooms.length === 0 ? (
               <div className="text-center py-8">
                 <Folder className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 text-sm">No tienes clases en curso.</p>
+                <p className="text-slate-500 text-sm">No hay aulas activas en este momento.</p>
               </div>
             ) : (
-              myActiveClasses.map((c) => (
+              activeClassrooms.map((c) => (
                 <div
                   key={c.classroomId}
                   className="border border-slate-200 rounded-lg p-4 bg-slate-50 flex items-center justify-between"
@@ -360,7 +375,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
                       />
                     </p>
                   </div>
-                  {c.hasManualOverride && c.source === 'manual' && (
+                  {c.hasManualOverride && c.source === 'manual' && groupById.has(c.groupId) && (
                     <button
                       onClick={() => void handleReleaseClass(c.classroomId)}
                       className="text-xs bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg transition-colors font-medium shadow-sm"
