@@ -8,16 +8,22 @@ import { useListDetailSelection } from './useListDetailSelection';
 import { normalizeSearchTerm, useNormalizedSearch } from './useNormalizedSearch';
 
 type ClassroomListItem = Awaited<ReturnType<typeof trpc.classrooms.list.query>>[number];
+type ClassroomListItemWithMetadata = ClassroomListItem & {
+  defaultGroupDisplayName?: string | null;
+  currentGroupDisplayName?: string | null;
+};
 
-export function mapApiClassroom(item: ClassroomListItem): Classroom {
+export function mapApiClassroom(item: ClassroomListItemWithMetadata): Classroom {
   return {
     id: item.id,
     name: item.name,
     displayName: item.displayName,
     defaultGroupId: item.defaultGroupId ?? null,
+    defaultGroupDisplayName: item.defaultGroupDisplayName ?? null,
     computerCount: item.machineCount,
     activeGroup: item.activeGroupId ?? null,
     currentGroupId: item.currentGroupId ?? null,
+    currentGroupDisplayName: item.currentGroupDisplayName ?? null,
     currentGroupSource: item.currentGroupSource,
     status: item.status,
     onlineMachineCount: item.onlineMachineCount,

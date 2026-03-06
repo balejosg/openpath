@@ -90,6 +90,14 @@ const ClassroomListPane: React.FC<ClassroomListPaneProps> = ({
               currentGroupId: room.currentGroupId,
               defaultGroupId: room.defaultGroupId,
             });
+            const currentGroup =
+              room.currentGroupId && room.currentGroupDisplayName
+                ? {
+                    id: room.currentGroupId,
+                    name: room.currentGroupDisplayName,
+                    displayName: room.currentGroupDisplayName,
+                  }
+                : null;
 
             return (
               <div
@@ -119,7 +127,11 @@ const ClassroomListPane: React.FC<ClassroomListPaneProps> = ({
                   </span>
                   <GroupLabel
                     groupId={room.currentGroupId}
-                    group={room.currentGroupId ? groupById.get(room.currentGroupId) : null}
+                    group={
+                      room.currentGroupId
+                        ? (groupById.get(room.currentGroupId) ?? currentGroup)
+                        : null
+                    }
                     source={inferredSource}
                     revealUnknownId={admin}
                     showSourceTag={inferredSource !== 'none'}

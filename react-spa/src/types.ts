@@ -32,9 +32,11 @@ export interface Classroom {
   name: string;
   displayName: string;
   defaultGroupId: string | null;
+  defaultGroupDisplayName?: string | null;
   computerCount: number;
   activeGroup: string | null;
   currentGroupId: string | null;
+  currentGroupDisplayName?: string | null;
   currentGroupSource?: CurrentGroupSource;
   status: ClassroomStatus;
   onlineMachineCount: number;
@@ -79,7 +81,9 @@ export interface Schedule {
   startTime: string; // "HH:MM"
   endTime: string;
   groupId: string;
+  groupDisplayName?: string | null;
   teacherId: string;
+  teacherName?: string | null;
   recurrence?: string;
   createdAt: string;
   updatedAt?: string;
@@ -91,7 +95,9 @@ export interface OneOffSchedule {
   startAt: string; // ISO
   endAt: string; // ISO
   groupId: string;
+  groupDisplayName?: string | null;
   teacherId: string;
+  teacherName?: string | null;
   recurrence?: 'one_off';
   createdAt: string;
   updatedAt?: string;

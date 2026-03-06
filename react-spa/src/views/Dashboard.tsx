@@ -63,10 +63,19 @@ interface ClassroomFromAPI {
   name: string;
   displayName: string;
   defaultGroupId: string | null;
+  defaultGroupDisplayName?: string | null;
   activeGroupId: string | null;
   currentGroupId: string | null;
+  currentGroupDisplayName?: string | null;
   currentGroupSource: 'manual' | 'schedule' | 'default' | 'none' | null;
 }
+
+type ClassroomListItemWithMetadata = Awaited<
+  ReturnType<typeof trpc.classrooms.list.query>
+>[number] & {
+  defaultGroupDisplayName?: string | null;
+  currentGroupDisplayName?: string | null;
+};
 
 interface DashboardProps {
   onNavigateToRules?: (group: { id: string; name: string }) => void;
@@ -149,15 +158,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
   const fetchClassrooms = useCallback(async () => {
     try {
       setClassroomsLoading(true);
-      const apiClassrooms = await trpc.classrooms.list.query();
+      const apiClassrooms = (await trpc.classrooms.list.query()) as ClassroomListItemWithMetadata[];
       setClassrooms(
         apiClassrooms.map((c) => ({
           id: c.id,
           name: c.name,
           displayName: c.displayName,
           defaultGroupId: c.defaultGroupId ?? null,
+          defaultGroupDisplayName: c.defaultGroupDisplayName ?? null,
           activeGroupId: c.activeGroupId ?? null,
           currentGroupId: c.currentGroupId ?? null,
+          currentGroupDisplayName: c.currentGroupDisplayName ?? null,
           currentGroupSource: c.currentGroupSource,
         }))
       );
@@ -241,7 +252,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
         if (!groupId) return null;
 
         const classroomName = c.displayName || c.name;
-        const group = groupById.get(groupId) ?? null;
+        const group =
+          groupById.get(groupId) ??
+          (c.currentGroupDisplayName
+            ? {
+                id: groupId,
+                name: c.currentGroupDisplayName,
+                displayName: c.currentGroupDisplayName,
+              }
+            : null);
 
         const source = inferGroupSource({
           currentGroupSource: c.currentGroupSource,
