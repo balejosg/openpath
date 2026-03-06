@@ -33,6 +33,7 @@ import {
   getGroupSourcePhrase,
   resolveClassroomGroupSelectState,
   resolveGroupDisplayName,
+  type GroupLike,
 } from '../components/groups/GroupLabel';
 import { GroupSelect } from '../components/groups/GroupSelect';
 import { Modal } from '../components/ui/Modal';
@@ -59,6 +60,310 @@ function mapApiClassroom(item: ClassroomListItem): Classroom {
 function mapApiClassrooms(items: readonly ClassroomListItem[]): Classroom[] {
   return items.map(mapApiClassroom);
 }
+
+interface GroupOption {
+  value: string;
+  label: string;
+}
+
+interface ClassroomListPaneProps {
+  admin: boolean;
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
+  onOpenNewModal: () => void;
+  isInitialLoading: boolean;
+  loadError: string | null;
+  filteredClassrooms: Classroom[];
+  selectedClassroomId: string | null;
+  onSelectClassroom: (id: string) => void;
+  groupById: ReadonlyMap<string, GroupLike>;
+  onRetry: () => void;
+}
+
+const ClassroomListPane: React.FC<ClassroomListPaneProps> = ({
+  admin,
+  searchQuery,
+  onSearchChange,
+  onOpenNewModal,
+  isInitialLoading,
+  loadError,
+  filteredClassrooms,
+  selectedClassroomId,
+  onSelectClassroom,
+  groupById,
+  onRetry,
+}) => {
+  return (
+    <div className="w-full md:w-1/3 flex flex-col gap-4">
+      <div className="flex justify-between items-center px-1">
+        <h2 className="text-lg font-bold text-slate-800">Aulas</h2>
+        {admin && (
+          <button
+            onClick={onOpenNewModal}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium"
+            data-testid="classrooms-new-button"
+          >
+            <Plus size={16} /> Nueva Aula
+          </button>
+        )}
+      </div>
+
+      <div className="relative">
+        <Search size={16} className="absolute left-3 top-3 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Buscar aula..."
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="w-full bg-white border border-slate-200 rounded-lg py-2.5 pl-9 pr-4 text-sm text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none shadow-sm transition-all"
+        />
+      </div>
+
+      <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+        {isInitialLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+            <span className="ml-2 text-slate-500 text-sm">Cargando aulas...</span>
+          </div>
+        ) : loadError ? (
+          <div className="text-center py-8">
+            <AlertCircle className="w-6 h-6 text-red-400 mx-auto" />
+            <span className="text-red-500 text-sm mt-2 block">{loadError}</span>
+            <button onClick={onRetry} className="text-blue-600 hover:text-blue-800 text-sm mt-2">
+              Reintentar
+            </button>
+          </div>
+        ) : filteredClassrooms.length === 0 ? (
+          <div className="text-center py-8 text-slate-500 text-sm">No se encontraron aulas</div>
+        ) : (
+          filteredClassrooms.map((room) => {
+            const inferredSource = inferGroupSource({
+              currentGroupSource: room.currentGroupSource ?? null,
+              activeGroupId: room.activeGroup,
+              currentGroupId: room.currentGroupId,
+              defaultGroupId: room.defaultGroupId,
+            });
+
+            return (
+              <div
+                key={room.id}
+                onClick={() => onSelectClassroom(room.id)}
+                className={`p-4 rounded-lg border cursor-pointer transition-all ${
+                  selectedClassroomId === room.id
+                    ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200 shadow-sm'
+                    : 'bg-white border-slate-200 hover:border-blue-200 hover:shadow-sm'
+                }`}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <h3
+                    className={`font-semibold text-sm ${
+                      selectedClassroomId === room.id ? 'text-blue-800' : 'text-slate-800'
+                    }`}
+                  >
+                    {room.name}
+                  </h3>
+                  {selectedClassroomId === room.id && (
+                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  )}
+                </div>
+                <div className="flex items-center gap-4 text-xs text-slate-500">
+                  <span className="flex items-center gap-1">
+                    <Laptop size={12} /> {room.computerCount} Equipos
+                  </span>
+                  <GroupLabel
+                    groupId={room.currentGroupId}
+                    group={room.currentGroupId ? groupById.get(room.currentGroupId) : null}
+                    source={inferredSource}
+                    revealUnknownId={admin}
+                    showSourceTag={inferredSource !== 'none'}
+                  />
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface NewClassroomModalProps {
+  isOpen: boolean;
+  saving: boolean;
+  newName: string;
+  newGroup: string;
+  newError: string;
+  groupOptions: GroupOption[];
+  onClose: () => void;
+  onNameChange: (value: string) => void;
+  onGroupChange: (value: string) => void;
+  onCreate: () => void;
+}
+
+const NewClassroomModal: React.FC<NewClassroomModalProps> = ({
+  isOpen,
+  saving,
+  newName,
+  newGroup,
+  newError,
+  groupOptions,
+  onClose,
+  onNameChange,
+  onGroupChange,
+  onCreate,
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen onClose={onClose} title="Nueva Aula" className="max-w-md">
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del Aula</label>
+          <input
+            type="text"
+            placeholder="Ej: Laboratorio C"
+            value={newName}
+            onChange={(e) => onNameChange(e.target.value)}
+            className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+              newError ? 'border-red-300' : 'border-slate-300'
+            }`}
+          />
+          {newError && (
+            <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
+              <AlertCircle size={12} /> {newError}
+            </p>
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Grupo Inicial</label>
+          <select
+            value={newGroup}
+            onChange={(e) => onGroupChange(e.target.value)}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          >
+            <option value="">Sin grupo</option>
+            {groupOptions.map((g) => (
+              <option key={g.value} value={g.value}>
+                {g.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onCreate}
+            disabled={saving}
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving && <Loader2 size={16} className="animate-spin" />}
+            Crear Aula
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+interface EnrollClassroomModalProps {
+  isOpen: boolean;
+  enrollToken: string | null;
+  selectedClassroom: Classroom | null;
+  enrollPlatform: 'linux' | 'windows';
+  enrollCommand: string;
+  onClose: () => void;
+  onSelectPlatform: (platform: 'linux' | 'windows') => void;
+  onCopy: () => void;
+  isCopied: boolean;
+}
+
+const EnrollClassroomModal: React.FC<EnrollClassroomModalProps> = ({
+  isOpen,
+  enrollToken,
+  selectedClassroom,
+  enrollPlatform,
+  enrollCommand,
+  onClose,
+  onSelectPlatform,
+  onCopy,
+  isCopied,
+}) => {
+  if (!isOpen || !enrollToken || !selectedClassroom) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Instalar Equipos">
+      <p className="text-sm text-slate-600 mb-3">
+        Selecciona plataforma y ejecuta el comando en cada equipo del aula{' '}
+        <strong>{selectedClassroom.displayName}</strong> para instalar y registrar el agente:
+      </p>
+      <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+        <button
+          onClick={() => onSelectPlatform('linux')}
+          className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+            enrollPlatform === 'linux'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-600 hover:text-slate-800'
+          }`}
+        >
+          Linux (Debian/Ubuntu)
+        </button>
+        <button
+          onClick={() => onSelectPlatform('windows')}
+          className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
+            enrollPlatform === 'windows'
+              ? 'bg-white text-slate-900 shadow-sm'
+              : 'text-slate-600 hover:text-slate-800'
+          }`}
+        >
+          Windows
+        </button>
+      </div>
+      <div className="bg-slate-900 text-green-400 rounded-lg p-4 font-mono text-xs overflow-x-auto relative">
+        <button
+          onClick={onCopy}
+          className="absolute top-2 right-2 inline-flex items-center gap-1 text-slate-400 hover:text-white"
+          title={isCopied ? 'Copiado' : 'Copiar al portapapeles'}
+          aria-label={isCopied ? 'Copiado' : 'Copiar al portapapeles'}
+        >
+          {isCopied ? (
+            <>
+              <Check size={16} className="text-green-400" />
+              <span className="text-[10px] font-semibold text-green-400">Copiado</span>
+            </>
+          ) : (
+            <Copy size={16} />
+          )}
+        </button>
+        <pre className="whitespace-pre-wrap pr-8">{enrollCommand}</pre>
+      </div>
+      {enrollPlatform === 'linux' ? (
+        <p className="text-xs text-slate-500 mt-3">
+          El agente se auto-actualizará automáticamente vía APT. Asegúrate de tener conexión a
+          internet en el equipo durante la instalación.
+        </p>
+      ) : (
+        <p className="text-xs text-slate-500 mt-3">
+          Ejecuta PowerShell como Administrador. El instalador registra el equipo con token de aula
+          y configura actualizaciones silenciosas diarias del agente.
+        </p>
+      )}
+      <div className="mt-6 flex justify-end">
+        <button
+          onClick={onClose}
+          className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+        >
+          Cerrar
+        </button>
+      </div>
+    </Modal>
+  );
+};
 
 const Classrooms = () => {
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
@@ -523,101 +828,22 @@ const Classrooms = () => {
 
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-6">
-      {/* List Column */}
-      <div className="w-full md:w-1/3 flex flex-col gap-4">
-        <div className="flex justify-between items-center px-1">
-          <h2 className="text-lg font-bold text-slate-800">Aulas</h2>
-          {admin && (
-            <button
-              onClick={openNewModal}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors shadow-sm font-medium"
-              data-testid="classrooms-new-button"
-            >
-              <Plus size={16} /> Nueva Aula
-            </button>
-          )}
-        </div>
-
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-3 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Buscar aula..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-slate-200 rounded-lg py-2.5 pl-9 pr-4 text-sm text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none shadow-sm transition-all"
-          />
-        </div>
-
-        <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-          {isInitialLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-              <span className="ml-2 text-slate-500 text-sm">Cargando aulas...</span>
-            </div>
-          ) : loadError ? (
-            <div className="text-center py-8">
-              <AlertCircle className="w-6 h-6 text-red-400 mx-auto" />
-              <span className="text-red-500 text-sm mt-2 block">{loadError}</span>
-              <button
-                onClick={() => {
-                  void refetchGroups();
-                  void fetchData();
-                }}
-                className="text-blue-600 hover:text-blue-800 text-sm mt-2"
-              >
-                Reintentar
-              </button>
-            </div>
-          ) : filteredClassrooms.length === 0 ? (
-            <div className="text-center py-8 text-slate-500 text-sm">No se encontraron aulas</div>
-          ) : (
-            filteredClassrooms.map((room) => {
-              const inferredSource = inferGroupSource({
-                currentGroupSource: room.currentGroupSource ?? null,
-                activeGroupId: room.activeGroup,
-                currentGroupId: room.currentGroupId,
-                defaultGroupId: room.defaultGroupId,
-              });
-
-              return (
-                <div
-                  key={room.id}
-                  onClick={() => setSelectedClassroomId(room.id)}
-                  className={`p-4 rounded-lg border cursor-pointer transition-all ${
-                    selectedClassroom?.id === room.id
-                      ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200 shadow-sm'
-                      : 'bg-white border-slate-200 hover:border-blue-200 hover:shadow-sm'
-                  }`}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h3
-                      className={`font-semibold text-sm ${selectedClassroom?.id === room.id ? 'text-blue-800' : 'text-slate-800'}`}
-                    >
-                      {room.name}
-                    </h3>
-                    {selectedClassroom?.id === room.id && (
-                      <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-slate-500">
-                    <span className="flex items-center gap-1">
-                      <Laptop size={12} /> {room.computerCount} Equipos
-                    </span>
-                    <GroupLabel
-                      groupId={room.currentGroupId}
-                      group={room.currentGroupId ? groupById.get(room.currentGroupId) : null}
-                      source={inferredSource}
-                      revealUnknownId={admin}
-                      showSourceTag={inferredSource !== 'none'}
-                    />
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
+      <ClassroomListPane
+        admin={admin}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onOpenNewModal={openNewModal}
+        isInitialLoading={isInitialLoading}
+        loadError={loadError}
+        filteredClassrooms={filteredClassrooms}
+        selectedClassroomId={selectedClassroom?.id ?? null}
+        onSelectClassroom={setSelectedClassroomId}
+        groupById={groupById}
+        onRetry={() => {
+          void refetchGroups();
+          void fetchData();
+        }}
+      />
 
       {/* Detail Column */}
       <div className="flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar">
@@ -1042,65 +1268,25 @@ const Classrooms = () => {
         )}
       </div>
 
-      {/* Modal: Nueva Aula */}
-      {showNewModal && (
-        <Modal isOpen onClose={closeNewModal} title="Nueva Aula" className="max-w-md">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Nombre del Aula
-              </label>
-              <input
-                type="text"
-                placeholder="Ej: Laboratorio C"
-                value={newName}
-                onChange={(e) => {
-                  setNewName(e.target.value);
-                  if (newError) setNewError('');
-                }}
-                className={`w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${newError ? 'border-red-300' : 'border-slate-300'}`}
-              />
-              {newError && (
-                <p className="text-red-500 text-xs mt-1 flex items-center gap-1">
-                  <AlertCircle size={12} /> {newError}
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Grupo Inicial</label>
-              <select
-                value={newGroup}
-                onChange={(e) => setNewGroup(e.target.value)}
-                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-              >
-                <option value="">Sin grupo</option>
-                {groupOptions.map((g) => (
-                  <option key={g.value} value={g.value}>
-                    {g.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={closeNewModal}
-                disabled={saving}
-                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => void handleCreateClassroom()}
-                disabled={saving}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {saving && <Loader2 size={16} className="animate-spin" />}
-                Crear Aula
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      <NewClassroomModal
+        isOpen={showNewModal}
+        saving={saving}
+        newName={newName}
+        newGroup={newGroup}
+        newError={newError}
+        groupOptions={groupOptions}
+        onClose={closeNewModal}
+        onNameChange={(value) => {
+          setNewName(value);
+          if (newError) {
+            setNewError('');
+          }
+        }}
+        onGroupChange={setNewGroup}
+        onCreate={() => {
+          void handleCreateClassroom();
+        }}
+      />
 
       <ConfirmDialog
         isOpen={activeGroupOverwriteConfirm !== null}
@@ -1211,76 +1397,19 @@ const Classrooms = () => {
         </DangerConfirmDialog>
       )}
 
-      {/* Modal: Instalar Equipos */}
-      {showEnrollModal && enrollToken && selectedClassroom && (
-        <Modal isOpen={showEnrollModal} onClose={closeEnrollModal} title="Instalar Equipos">
-          <p className="text-sm text-slate-600 mb-3">
-            Selecciona plataforma y ejecuta el comando en cada equipo del aula{' '}
-            <strong>{selectedClassroom.displayName}</strong> para instalar y registrar el agente:
-          </p>
-          <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-            <button
-              onClick={() => setEnrollPlatform('linux')}
-              className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
-                enrollPlatform === 'linux'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-800'
-              }`}
-            >
-              Linux (Debian/Ubuntu)
-            </button>
-            <button
-              onClick={() => setEnrollPlatform('windows')}
-              className={`px-3 py-1.5 text-xs rounded-md transition-colors font-medium ${
-                enrollPlatform === 'windows'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-800'
-              }`}
-            >
-              Windows
-            </button>
-          </div>
-          <div className="bg-slate-900 text-green-400 rounded-lg p-4 font-mono text-xs overflow-x-auto relative">
-            <button
-              onClick={() => void copyEnrollCommand(enrollCommand, 'enroll-command')}
-              className="absolute top-2 right-2 inline-flex items-center gap-1 text-slate-400 hover:text-white"
-              title={isEnrollCommandCopied('enroll-command') ? 'Copiado' : 'Copiar al portapapeles'}
-              aria-label={
-                isEnrollCommandCopied('enroll-command') ? 'Copiado' : 'Copiar al portapapeles'
-              }
-            >
-              {isEnrollCommandCopied('enroll-command') ? (
-                <>
-                  <Check size={16} className="text-green-400" />
-                  <span className="text-[10px] font-semibold text-green-400">Copiado</span>
-                </>
-              ) : (
-                <Copy size={16} />
-              )}
-            </button>
-            <pre className="whitespace-pre-wrap pr-8">{enrollCommand}</pre>
-          </div>
-          {enrollPlatform === 'linux' ? (
-            <p className="text-xs text-slate-500 mt-3">
-              El agente se auto-actualizará automáticamente vía APT. Asegúrate de tener conexión a
-              internet en el equipo durante la instalación.
-            </p>
-          ) : (
-            <p className="text-xs text-slate-500 mt-3">
-              Ejecuta PowerShell como Administrador. El instalador registra el equipo con token de
-              aula y configura actualizaciones silenciosas diarias del agente.
-            </p>
-          )}
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={closeEnrollModal}
-              className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium"
-            >
-              Cerrar
-            </button>
-          </div>
-        </Modal>
-      )}
+      <EnrollClassroomModal
+        isOpen={showEnrollModal}
+        enrollToken={enrollToken}
+        selectedClassroom={selectedClassroom}
+        enrollPlatform={enrollPlatform}
+        enrollCommand={enrollCommand}
+        onClose={closeEnrollModal}
+        onSelectPlatform={setEnrollPlatform}
+        onCopy={() => {
+          void copyEnrollCommand(enrollCommand, 'enroll-command');
+        }}
+        isCopied={isEnrollCommandCopied('enroll-command')}
+      />
     </div>
   );
 };
