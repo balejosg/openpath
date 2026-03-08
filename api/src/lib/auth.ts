@@ -10,6 +10,7 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { getTokenStore } from './token-store.js';
 import { logger } from './logger.js';
+import { config } from '../config.js';
 import type { User, JWTPayload, RoleInfo } from '../types/index.js';
 import { normalizeUserRoleString } from '@openpath/shared/roles';
 
@@ -61,8 +62,8 @@ if (process.env.JWT_SECRET !== undefined && process.env.JWT_SECRET !== '') {
   });
 }
 
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '24h';
-const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN ?? '7d';
+const JWT_ACCESS_EXPIRES_IN = config.jwtAccessExpiry;
+const JWT_REFRESH_EXPIRES_IN = config.jwtRefreshExpiry;
 
 // Use object literal directly in jwt.sign() to avoid exactOptionalPropertyTypes issues
 
@@ -89,7 +90,7 @@ export function generateAccessToken(user: User, roles: RoleInfo[] = []): string 
   };
 
   return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
+    expiresIn: JWT_ACCESS_EXPIRES_IN,
     issuer: 'openpath-api',
     // Prevent identical token strings when multiple logins happen in the same second.
     // This avoids cross-test invalidation when tokens are blacklisted on logout.
@@ -120,7 +121,7 @@ export function generateTokens(user: User, roles: RoleInfo[] = []): TokensResult
   return {
     accessToken: generateAccessToken(user, roles),
     refreshToken: generateRefreshToken(user),
-    expiresIn: JWT_EXPIRES_IN,
+    expiresIn: JWT_ACCESS_EXPIRES_IN,
     tokenType: 'Bearer',
   };
 }
@@ -308,4 +309,4 @@ export function createLegacyAdminPayload(): LegacyAdminPayload {
 // Exports
 // =============================================================================
 
-export { JWT_SECRET, JWT_EXPIRES_IN };
+export { JWT_SECRET, JWT_ACCESS_EXPIRES_IN as JWT_EXPIRES_IN };

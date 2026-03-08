@@ -122,10 +122,10 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET ?? 'openpath-dev-secret-change-in-production',
 
   /** JWT access token expiration */
-  jwtAccessExpiry: process.env.JWT_ACCESS_EXPIRY ?? '15m',
+  jwtAccessExpiry: process.env.JWT_ACCESS_EXPIRY ?? process.env.JWT_EXPIRES_IN ?? '15m',
 
   /** JWT refresh token expiration */
-  jwtRefreshExpiry: process.env.JWT_REFRESH_EXPIRY ?? '7d',
+  jwtRefreshExpiry: process.env.JWT_REFRESH_EXPIRY ?? process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
 
   // ==========================================================================
   // Google OAuth Configuration
