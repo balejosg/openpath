@@ -40,6 +40,7 @@ param(
 $ErrorActionPreference = "Stop"
 $OpenPathRoot = "C:\OpenPath"
 $ConfigPath = "$OpenPathRoot\data\config.json"
+$CommonModulePath = "$OpenPathRoot\lib\Common.psm1"
 
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "  OpenPath - Token Rotation" -ForegroundColor Cyan
@@ -53,7 +54,15 @@ if (-not (Test-Path $ConfigPath)) {
     exit 1
 }
 
-$config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+if (-not (Test-Path $CommonModulePath)) {
+    Write-Host "ERROR: Common module not found" -ForegroundColor Red
+    Write-Host "  Expected: $CommonModulePath" -ForegroundColor Yellow
+    exit 1
+}
+
+Import-Module $CommonModulePath -Force
+
+$config = Get-OpenPathConfig
 
 if (-not $config.apiUrl -or -not $config.classroom) {
     Write-Host "ERROR: Classroom mode not configured" -ForegroundColor Red
@@ -87,8 +96,8 @@ try {
     
     if ($response.success) {
         if ($response.whitelistUrl) {
-            $config.whitelistUrl = $response.whitelistUrl
-            $config | ConvertTo-Json -Depth 10 | Set-Content $ConfigPath -Encoding UTF8
+            Set-OpenPathConfigValue -Config $config -Name 'whitelistUrl' -Value ([string]$response.whitelistUrl)
+            Set-OpenPathConfig -Config $config | Out-Null
             
             Write-Host "Token rotated successfully" -ForegroundColor Green
             Write-Host "  New whitelist URL saved to config" -ForegroundColor Green

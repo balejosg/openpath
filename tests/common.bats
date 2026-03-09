@@ -225,6 +225,45 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
+@test "normalize_machine_name_value canonicalizes machine identifiers" {
+    source "$PROJECT_DIR/linux/lib/common.sh"
+
+    run normalize_machine_name_value "PC 01__Lab"
+    [ "$status" -eq 0 ]
+    [ "$output" = "pc-01-lab" ]
+}
+
+@test "compute_scoped_machine_name returns deterministic classroom-scoped names" {
+    source "$PROJECT_DIR/linux/lib/common.sh"
+
+    run compute_scoped_machine_name "PC 01__Lab" "classroom-123"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ ^pc-01-lab-[a-f0-9]{8}$ ]]
+    [ "${#output}" -le 63 ]
+}
+
+@test "persist_machine_name stores the canonicalized machine name" {
+    source "$PROJECT_DIR/linux/lib/common.sh"
+    ETC_CONFIG_DIR="$TEST_TMP_DIR/etc"
+    MACHINE_NAME_CONF="$ETC_CONFIG_DIR/machine-name.conf"
+
+    persist_machine_name "PC 01__Lab"
+
+    [ -f "$MACHINE_NAME_CONF" ]
+    [ "$(cat "$MACHINE_NAME_CONF")" = "pc-01-lab" ]
+}
+
+@test "parse_machine_registration_response extracts shared registration fields" {
+    source "$PROJECT_DIR/linux/lib/common.sh"
+
+    parse_machine_registration_response '{"success":true,"whitelistUrl":"https://api.example.com/w/token/whitelist.txt","classroomName":"Room 101","classroomId":"cls_123","machineHostname":"pc-01-abcd1234"}'
+
+    [ "$TOKENIZED_URL" = "https://api.example.com/w/token/whitelist.txt" ]
+    [ "$REGISTERED_CLASSROOM_NAME" = "Room 101" ]
+    [ "$REGISTERED_CLASSROOM_ID" = "cls_123" ]
+    [ "$REGISTERED_MACHINE_NAME" = "pc-01-abcd1234" ]
+}
+
 # ============== Tests de init_directories ==============
 
 @test "init_directories creates CONFIG_DIR" {

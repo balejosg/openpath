@@ -137,28 +137,6 @@ else {
     [string](Get-OpenPathMachineName)
 }
 
-function Set-ConfigValue {
-    param(
-        [Parameter(Mandatory = $true)]
-        [PSCustomObject]$Config,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Name,
-
-        [Parameter(Mandatory = $true)]
-        [AllowNull()]
-        [AllowEmptyString()]
-        [object]$Value
-    )
-
-    if ($Config.PSObject.Properties[$Name]) {
-        $Config.$Name = $Value
-    }
-    else {
-        $Config | Add-Member -MemberType NoteProperty -Name $Name -Value $Value -Force
-    }
-}
-
 Write-Host "Registering machine in classroom..." -ForegroundColor Yellow
 Write-Host "  Machine name: $machineName"
 if ($Classroom) {
@@ -170,20 +148,11 @@ if ($ClassroomId) {
 Write-Host "  API URL: $apiBaseUrl"
 Write-Host "  Auth mode: $(if ($EnrollmentToken) { 'enrollment token' } else { 'registration token' })"
 
-$registerBody = [ordered]@{
-    hostname = $machineName
-    version = $version
-}
-
-if ($EnrollmentToken) {
-    if ($ClassroomId) {
-        $registerBody.classroomId = $ClassroomId
-    }
-}
-else {
-    $registerBody.classroomName = $Classroom
-}
-
+$registerBody = New-OpenPathMachineRegistrationBody `
+    -MachineName $machineName `
+    -Version $version `
+    -Classroom $Classroom `
+    -ClassroomId $ClassroomId
 $registerBodyJson = $registerBody | ConvertTo-Json
 
 $headers = @{
@@ -194,50 +163,21 @@ $headers = @{
 $registerResponse = Invoke-RestMethod -Uri "$apiBaseUrl/api/machines/register" `
     -Method Post -Body $registerBodyJson -Headers $headers -ErrorAction Stop
 
-if (-not $registerResponse.success) {
-    throw "Machine registration failed: $($registerResponse | ConvertTo-Json -Compress)"
-}
+$registration = Resolve-OpenPathMachineRegistration `
+    -Response $registerResponse `
+    -MachineName $machineName `
+    -Classroom $Classroom `
+    -ClassroomId $ClassroomId
 
-if (-not $registerResponse.whitelistUrl) {
-    throw 'Registration succeeded but no tokenized whitelist URL was returned'
+if ($registration.Classroom) {
+    Set-OpenPathConfigValue -Config $config -Name 'classroom' -Value $registration.Classroom
 }
-
-$resolvedClassroom = if ($registerResponse.PSObject.Properties['classroomName'] -and $registerResponse.classroomName) {
-    [string]$registerResponse.classroomName
+if ($registration.ClassroomId) {
+    Set-OpenPathConfigValue -Config $config -Name 'classroomId' -Value $registration.ClassroomId
 }
-elseif ($Classroom) {
-    $Classroom
-}
-else {
-    ''
-}
-
-$resolvedClassroomId = if ($registerResponse.PSObject.Properties['classroomId'] -and $registerResponse.classroomId) {
-    [string]$registerResponse.classroomId
-}
-elseif ($ClassroomId) {
-    $ClassroomId
-}
-else {
-    ''
-}
-
-$resolvedMachineName = if ($registerResponse.PSObject.Properties['machineHostname'] -and $registerResponse.machineHostname) {
-    [string]$registerResponse.machineHostname
-}
-else {
-    $machineName
-}
-
-if ($resolvedClassroom) {
-    Set-ConfigValue -Config $config -Name 'classroom' -Value $resolvedClassroom
-}
-if ($resolvedClassroomId) {
-    Set-ConfigValue -Config $config -Name 'classroomId' -Value $resolvedClassroomId
-}
-Set-OpenPathMachineName -Config $config -MachineName $resolvedMachineName | Out-Null
-Set-ConfigValue -Config $config -Name 'apiUrl' -Value $apiBaseUrl
-Set-ConfigValue -Config $config -Name 'whitelistUrl' -Value ([string]$registerResponse.whitelistUrl)
+Set-OpenPathMachineName -Config $config -MachineName $registration.MachineName | Out-Null
+Set-OpenPathConfigValue -Config $config -Name 'apiUrl' -Value $apiBaseUrl
+Set-OpenPathConfigValue -Config $config -Name 'whitelistUrl' -Value $registration.WhitelistUrl
 
 Set-OpenPathConfig -Config $config | Out-Null
 
@@ -246,9 +186,9 @@ Write-Host "  Tokenized whitelist URL saved" -ForegroundColor Green
 
 [PSCustomObject]@{
     Success = $true
-    Hostname = $resolvedMachineName
-    MachineName = $resolvedMachineName
-    Classroom = $resolvedClassroom
-    ClassroomId = $resolvedClassroomId
-    WhitelistUrl = [string]$registerResponse.whitelistUrl
+    Hostname = $registration.MachineName
+    MachineName = $registration.MachineName
+    Classroom = $registration.Classroom
+    ClassroomId = $registration.ClassroomId
+    WhitelistUrl = $registration.WhitelistUrl
 }

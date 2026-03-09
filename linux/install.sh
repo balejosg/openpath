@@ -549,7 +549,7 @@ run_classroom_registration() {
         echo ""
         echo "Registrando máquina en aula..."
 
-        if register_machine "$(hostname)" "$CLASSROOM_NAME" "$VERSION" "$API_URL" "$REGISTRATION_TOKEN"; then
+        if register_machine "$(hostname)" "$CLASSROOM_NAME" "" "$VERSION" "$API_URL" "$REGISTRATION_TOKEN"; then
             MACHINE_REGISTERED="REGISTERED"
             if [ -n "$TOKENIZED_URL" ]; then
                 echo "$TOKENIZED_URL" > "$WHITELIST_URL_CONF"

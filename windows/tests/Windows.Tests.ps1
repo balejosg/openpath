@@ -154,6 +154,45 @@ Describe "Common Module" {
         }
     }
 
+    Context "Machine identity helpers" {
+        It "Canonicalizes machine names" {
+            (ConvertTo-OpenPathMachineName -Value 'PC 01__Lab') | Should -Be 'pc-01-lab'
+        }
+
+        It "Builds classroom-scoped machine names" {
+            $scoped = New-OpenPathScopedMachineName -Hostname 'PC 01__Lab' -ClassroomId 'classroom-123'
+            $scoped | Should -Match '^pc-01-lab-[a-f0-9]{8}$'
+            $scoped.Length | Should -BeLessOrEqual 63
+        }
+
+        It "Builds canonical registration payloads" {
+            $body = New-OpenPathMachineRegistrationBody -MachineName 'pc-01-abcd1234' -Version '4.1.0' -ClassroomId 'classroom-123'
+            $body.hostname | Should -Be 'pc-01-abcd1234'
+            $body.version | Should -Be '4.1.0'
+            $body.classroomId | Should -Be 'classroom-123'
+            $body.PSObject.Properties.Name | Should -Not -Contain 'classroomName'
+        }
+
+        It "Resolves registration responses with server-issued machine names" {
+            $registration = Resolve-OpenPathMachineRegistration `
+                -Response ([PSCustomObject]@{
+                    success = $true
+                    whitelistUrl = 'https://api.example.com/w/token/whitelist.txt'
+                    classroomName = 'Room 101'
+                    classroomId = 'classroom-123'
+                    machineHostname = 'pc-01-abcd1234'
+                }) `
+                -MachineName 'pc-01-lab' `
+                -Classroom 'Room Local' `
+                -ClassroomId 'fallback-id'
+
+            $registration.WhitelistUrl | Should -Be 'https://api.example.com/w/token/whitelist.txt'
+            $registration.Classroom | Should -Be 'Room 101'
+            $registration.ClassroomId | Should -Be 'classroom-123'
+            $registration.MachineName | Should -Be 'pc-01-abcd1234'
+        }
+    }
+
     Context "Self-update helpers" {
         It "Extracts machine token from whitelist URL" {
             $token = Get-OpenPathMachineTokenFromWhitelistUrl -WhitelistUrl "https://api.example.com/w/abc123token/whitelist.txt"
@@ -1243,8 +1282,8 @@ Describe "Enrollment script" {
                 '[switch]$Unattended',
                 'RegistrationToken and EnrollmentToken cannot be used together',
                 'ClassroomId requires EnrollmentToken mode',
-                '$registerBody.classroomId = $ClassroomId',
-                '$registerBody.classroomName = $Classroom'
+                'New-OpenPathMachineRegistrationBody',
+                'Resolve-OpenPathMachineRegistration'
             )
         }
     }

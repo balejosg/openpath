@@ -219,6 +219,118 @@ function Set-OpenPathMachineName {
     return $normalized
 }
 
+function Set-OpenPathConfigValue {
+    <#
+    .SYNOPSIS
+        Sets or adds a config property on the provided OpenPath config object.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [PSCustomObject]$Config,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [object]$Value
+    )
+
+    if ($Config.PSObject.Properties[$Name]) {
+        $Config.$Name = $Value
+    }
+    else {
+        $Config | Add-Member -MemberType NoteProperty -Name $Name -Value $Value -Force
+    }
+}
+
+function New-OpenPathMachineRegistrationBody {
+    <#
+    .SYNOPSIS
+        Builds the canonical machine registration request payload.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$MachineName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+
+        [string]$Classroom = '',
+
+        [string]$ClassroomId = ''
+    )
+
+    $body = [ordered]@{
+        hostname = $MachineName
+        version = $Version
+    }
+
+    if ($ClassroomId) {
+        $body.classroomId = $ClassroomId
+    }
+    elseif ($Classroom) {
+        $body.classroomName = $Classroom
+    }
+
+    return [PSCustomObject]$body
+}
+
+function Resolve-OpenPathMachineRegistration {
+    <#
+    .SYNOPSIS
+        Normalizes the API registration response into canonical classroom/machine fields.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Response,
+
+        [string]$MachineName = '',
+
+        [string]$Classroom = '',
+
+        [string]$ClassroomId = ''
+    )
+
+    if (-not $Response.success) {
+        throw "Machine registration failed: $($Response | ConvertTo-Json -Compress)"
+    }
+
+    if (-not $Response.whitelistUrl) {
+        throw 'Registration succeeded but no tokenized whitelist URL was returned'
+    }
+
+    $resolvedClassroom = if ($Response.PSObject.Properties['classroomName'] -and $Response.classroomName) {
+        [string]$Response.classroomName
+    }
+    else {
+        [string]$Classroom
+    }
+
+    $resolvedClassroomId = if ($Response.PSObject.Properties['classroomId'] -and $Response.classroomId) {
+        [string]$Response.classroomId
+    }
+    else {
+        [string]$ClassroomId
+    }
+
+    $resolvedMachineName = if ($Response.PSObject.Properties['machineHostname'] -and $Response.machineHostname) {
+        [string]$Response.machineHostname
+    }
+    else {
+        [string]$MachineName
+    }
+
+    return [PSCustomObject]@{
+        Success = $true
+        WhitelistUrl = [string]$Response.whitelistUrl
+        Classroom = $resolvedClassroom
+        ClassroomId = $resolvedClassroomId
+        MachineName = $resolvedMachineName
+    }
+}
+
 function Get-OpenPathFileAgeHours {
     <#
     .SYNOPSIS

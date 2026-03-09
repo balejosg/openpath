@@ -147,8 +147,33 @@ get_registered_machine_name() {
     hostname
 }
 
+normalize_machine_name_value() {
+    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/-+/-/g; s/^-+//; s/-+$//'
+}
+
+compute_scoped_machine_name() {
+    local raw_hostname="$1"
+    local classroom_id="$2"
+    local base hash suffix max_base_length
+
+    base=$(normalize_machine_name_value "$raw_hostname")
+    [ -z "$base" ] && base="machine"
+
+    hash=$(printf '%s' "$classroom_id" | sha256sum | awk '{print $1}' | cut -c1-8)
+    suffix="-$hash"
+    max_base_length=$((63 - ${#suffix}))
+    [ "$max_base_length" -lt 1 ] && max_base_length=1
+    base="${base:0:max_base_length}"
+    base="${base%-}"
+    [ -z "$base" ] && base="machine"
+
+    printf '%s\n' "${base}${suffix}"
+}
+
 persist_machine_name() {
     local machine_name="$1"
+    [ -z "$machine_name" ] && return 1
+    machine_name=$(normalize_machine_name_value "$machine_name")
     [ -z "$machine_name" ] && return 1
 
     mkdir -p "$ETC_CONFIG_DIR"
@@ -461,26 +486,99 @@ check_root() {
     fi
 }
 
+build_machine_registration_payload() {
+    local reported_hostname="$1"
+    local classroom_name="$2"
+    local classroom_id="$3"
+    local version="$4"
+
+    HN="$reported_hostname" CNAME="$classroom_name" CID="$classroom_id" VER="$version" python3 -c '
+import json, os
+
+payload = {
+    "hostname": os.environ.get("HN", ""),
+    "version": os.environ.get("VER", "unknown"),
+}
+
+classroom_id = os.environ.get("CID", "")
+classroom_name = os.environ.get("CNAME", "")
+if classroom_id:
+    payload["classroomId"] = classroom_id
+elif classroom_name:
+    payload["classroomName"] = classroom_name
+
+print(json.dumps(payload))
+'
+}
+
+parse_machine_registration_response() {
+    local response="$1"
+    local parsed_response
+    local parsed_lines=()
+
+    parsed_response=$(printf '%s' "$response" | python3 -c '
+import json, sys
+
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+
+if data.get("success") is not True:
+    sys.exit(1)
+
+whitelist_url = data.get("whitelistUrl")
+if not isinstance(whitelist_url, str) or not whitelist_url:
+    sys.exit(1)
+
+def as_text(value):
+    return value if isinstance(value, str) else ""
+
+print(whitelist_url)
+print(as_text(data.get("classroomName")))
+print(as_text(data.get("classroomId")))
+print(as_text(data.get("machineHostname")))
+') || {
+        # shellcheck disable=SC2034  # Global outputs consumed by callers after register_machine
+        TOKENIZED_URL=""
+        # shellcheck disable=SC2034  # Global outputs consumed by callers after register_machine
+        REGISTERED_CLASSROOM_NAME=""
+        # shellcheck disable=SC2034  # Global outputs consumed by callers after register_machine
+        REGISTERED_CLASSROOM_ID=""
+        # shellcheck disable=SC2034  # Global outputs consumed by callers after register_machine
+        REGISTERED_MACHINE_NAME=""
+        return 1
+    }
+
+    mapfile -t parsed_lines <<< "$parsed_response"
+    # shellcheck disable=SC2034  # Global outputs consumed by callers after register_machine
+    TOKENIZED_URL="${parsed_lines[0]:-}"
+    # shellcheck disable=SC2034  # Global outputs consumed by callers after register_machine
+    REGISTERED_CLASSROOM_NAME="${parsed_lines[1]:-}"
+    # shellcheck disable=SC2034  # Global outputs consumed by callers after register_machine
+    REGISTERED_CLASSROOM_ID="${parsed_lines[2]:-}"
+    # shellcheck disable=SC2034  # Global outputs consumed by callers after register_machine
+    REGISTERED_MACHINE_NAME="${parsed_lines[3]:-}"
+
+    [ -n "$TOKENIZED_URL" ]
+}
+
 # Register machine with central API
-# Args: $1=reported_hostname $2=classroom_name $3=version $4=api_url $5=auth_token
+# Args: $1=reported_hostname $2=classroom_name $3=classroom_id $4=version $5=api_url $6=auth_token
 # Sets global: REGISTER_RESPONSE (raw JSON), TOKENIZED_URL (extracted URL or empty),
+#              REGISTERED_CLASSROOM_NAME, REGISTERED_CLASSROOM_ID,
 #              REGISTERED_MACHINE_NAME (server-issued machine identifier or empty)
 # Returns: 0 on success, 1 on failure
 register_machine() {
     local reported_hostname="$1"
     local classroom_name="$2"
-    local version="$3"
-    local api_url="$4"
-    local auth_token="$5"
+    local classroom_id="$3"
+    local version="$4"
+    local api_url="$5"
+    local auth_token="$6"
 
     local payload
-    payload=$(HN="$reported_hostname" CNAME="$classroom_name" VER="$version" python3 -c '
-import json, os
-print(json.dumps({
-    "hostname": os.environ.get("HN", ""),
-    "classroomName": os.environ.get("CNAME", ""),
-    "version": os.environ.get("VER", "unknown")
-}))')
+    payload=$(build_machine_registration_payload "$reported_hostname" "$classroom_name" "$classroom_id" "$version")
 
     REGISTER_RESPONSE=$(curl -s -X POST \
         -H "Content-Type: application/json" \
@@ -488,17 +586,7 @@ print(json.dumps({
         -d "$payload" \
         "$api_url/api/machines/register" 2>/dev/null || echo '{"success":false}')
 
-    if echo "$REGISTER_RESPONSE" | grep -q '"success":true'; then
-        TOKENIZED_URL=$(echo "$REGISTER_RESPONSE" | grep -o '"whitelistUrl":"[^"]*"' | sed 's/"whitelistUrl":"//;s/"$//')
-        REGISTERED_MACHINE_NAME=$(echo "$REGISTER_RESPONSE" | grep -o '"machineHostname":"[^"]*"' | sed 's/"machineHostname":"//;s/"$//')
-        return 0
-    else
-        # shellcheck disable=SC2034  # Used by callers of register_machine
-        TOKENIZED_URL=""
-        # shellcheck disable=SC2034  # Used by callers of register_machine
-        REGISTERED_MACHINE_NAME=""
-        return 1
-    fi
+    parse_machine_registration_response "$REGISTER_RESPONSE"
 }
 
 # Send health report to central API (tRPC)

@@ -112,29 +112,6 @@ read_prompt_secret() {
     return 0
 }
 
-normalize_machine_name_value() {
-    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/-+/-/g; s/^-+//; s/-+$//'
-}
-
-compute_scoped_machine_name() {
-    local raw_hostname="$1"
-    local classroom_id="$2"
-    local base hash suffix max_base_length
-
-    base=$(normalize_machine_name_value "$raw_hostname")
-    [ -z "$base" ] && base="machine"
-
-    hash=$(printf '%s' "$classroom_id" | sha256sum | awk '{print $1}' | cut -c1-8)
-    suffix="-$hash"
-    max_base_length=$((63 - ${#suffix}))
-    [ "$max_base_length" -lt 1 ] && max_base_length=1
-    base="${base:0:max_base_length}"
-    base="${base%-}"
-    [ -z "$base" ] && base="machine"
-
-    printf '%s\n' "${base}${suffix}"
-}
-
 # Mostrar estado
 cmd_status() {
     echo -e "${BLUE}═══════════════════════════════════════════════════${NC}"
@@ -540,84 +517,37 @@ except Exception:
     [[ -z "$machine_name" ]] && { echo -e "${RED}Error: nombre de maquina invalido${NC}"; exit 1; }
     version=$(dpkg -s openpath-dnsmasq 2>/dev/null | grep "^Version:" | awk '{print $2}' || echo "unknown")
 
-    local payload
-
+    local auth_token=""
     if [[ -n "$enrollment_token" ]]; then
-        payload=$(HN="$machine_name" CID="$classroom_id" VER="$version" python3 -c 'import json,os
-print(json.dumps({"hostname": os.environ.get("HN",""), "classroomId": os.environ.get("CID",""), "version": os.environ.get("VER","unknown")}))
-')
-        response=$(curl -s -X POST \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $enrollment_token" \
-            -d "$payload" \
-            "$api_url/api/machines/register" 2>/dev/null)
+        auth_token="$enrollment_token"
     else
-        payload=$(HN="$machine_name" CNAME="$classroom" VER="$version" python3 -c 'import json,os
-print(json.dumps({"hostname": os.environ.get("HN",""), "classroomName": os.environ.get("CNAME",""), "version": os.environ.get("VER","unknown")}))
-')
-        response=$(curl -s -X POST \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $token" \
-            -d "$payload" \
-            "$api_url/api/machines/register" 2>/dev/null)
+        auth_token="$token"
     fi
 
-    local parsed_response
-    parsed_response=$(echo "$response" | python3 -c 'import json,sys
-try:
-  d=json.load(sys.stdin)
-except Exception:
-  print("")
-  print("")
-  print("")
-  sys.exit(0)
-
-if d.get("success") is True and isinstance(d.get("whitelistUrl"), str) and d.get("whitelistUrl"):
-  print(d.get("whitelistUrl"))
-  name=d.get("classroomName")
-  cid=d.get("classroomId")
-  machine_name=d.get("machineHostname")
-  print(name if isinstance(name, str) else "")
-  print(cid if isinstance(cid, str) else "")
-  print(machine_name if isinstance(machine_name, str) else "")
-else:
-  print("")
-  print("")
-  print("")
-  print("")
-')
-
-    local parsed_lines=()
-    mapfile -t parsed_lines <<< "$parsed_response"
-    local tokenized_url="${parsed_lines[0]:-}"
-    local server_classroom="${parsed_lines[1]:-}"
-    local server_classroom_id="${parsed_lines[2]:-}"
-    local registered_machine_name="${parsed_lines[3]:-}"
-
-    if [[ -n "$tokenized_url" ]]; then
-        echo "$tokenized_url" > "$WHITELIST_URL_CONF"
+    if register_machine "$machine_name" "$classroom" "$classroom_id" "$version" "$api_url" "$auth_token"; then
+        echo "$TOKENIZED_URL" > "$WHITELIST_URL_CONF"
         chown root:root "$WHITELIST_URL_CONF" 2>/dev/null || true
         chmod 640 "$WHITELIST_URL_CONF"
-        persist_machine_name "${registered_machine_name:-$machine_name}" || true
+        persist_machine_name "${REGISTERED_MACHINE_NAME:-$machine_name}" || true
 
-        if [[ -n "$server_classroom" ]]; then
-            classroom="$server_classroom"
-            echo "$server_classroom" > "$ETC_CONFIG_DIR/classroom.conf"
+        if [[ -n "$REGISTERED_CLASSROOM_NAME" ]]; then
+            classroom="$REGISTERED_CLASSROOM_NAME"
+            echo "$REGISTERED_CLASSROOM_NAME" > "$ETC_CONFIG_DIR/classroom.conf"
             chown root:root "$ETC_CONFIG_DIR/classroom.conf" 2>/dev/null || true
             chmod 640 "$ETC_CONFIG_DIR/classroom.conf"
         fi
-        if [[ -n "$server_classroom_id" ]]; then
-            classroom_id="$server_classroom_id"
-            echo "$server_classroom_id" > "$ETC_CONFIG_DIR/classroom-id.conf"
+        if [[ -n "$REGISTERED_CLASSROOM_ID" ]]; then
+            classroom_id="$REGISTERED_CLASSROOM_ID"
+            echo "$REGISTERED_CLASSROOM_ID" > "$ETC_CONFIG_DIR/classroom-id.conf"
             chown root:root "$ETC_CONFIG_DIR/classroom-id.conf" 2>/dev/null || true
             chmod 640 "$ETC_CONFIG_DIR/classroom-id.conf"
         fi
 
         echo -e "  Registro: ${GREEN}exitoso${NC}"
-        echo "  URL: $tokenized_url"
+        echo "  URL: $TOKENIZED_URL"
     else
         echo -e "${RED}Error al registrar maquina${NC}"
-        echo "  Respuesta: $response"
+        echo "  Respuesta: $REGISTER_RESPONSE"
         exit 1
     fi
 
