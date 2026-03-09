@@ -138,8 +138,8 @@ test.describe('Inline Editing - Save Operations', () => {
     await valueInput.fill(newDomain);
     await page.keyboard.press('Enter');
 
-    // Wait for save to complete
-    await page.waitForTimeout(1000);
+    // Wait for inline-edit mode to close before asserting updated table state
+    await expect(rulesManager.getEditValueInput()).not.toBeVisible({ timeout: 10000 });
 
     // New value should be visible, old value should not
     await expect(rulesManager.getRuleRow(newDomain)).toBeVisible();

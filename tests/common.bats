@@ -302,7 +302,7 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-@test "send_health_report_to_api targets tRPC endpoint with auth when configured" {
+@test "send_health_report_to_api prefers machine token auth derived from whitelist URL" {
     local etc_dir="$TEST_TMP_DIR/etc/openpath"
     local bin_dir="$TEST_TMP_DIR/bin"
     local curl_log="$TEST_TMP_DIR/curl-args.log"
@@ -310,9 +310,9 @@ teardown() {
     mkdir -p "$etc_dir" "$bin_dir"
 
     HEALTH_API_URL_CONF="$etc_dir/health-api-url.conf"
-    HEALTH_API_SECRET_CONF="$etc_dir/health-api-secret.conf"
+    WHITELIST_URL_CONF="$etc_dir/whitelist-url.conf"
     echo "https://api.example.test" > "$HEALTH_API_URL_CONF"
-    echo "secret123" > "$HEALTH_API_SECRET_CONF"
+    echo "https://api.example.test/w/token123/whitelist.txt" > "$WHITELIST_URL_CONF"
 
     cat > "$bin_dir/curl" << EOF
 #!/bin/bash
@@ -332,5 +332,5 @@ EOF
 
     [ -f "$curl_log" ]
     grep -q "/trpc/healthReports.submit" "$curl_log"
-    grep -q "Authorization: Bearer secret123" "$curl_log"
+    grep -q "Authorization: Bearer token123" "$curl_log"
 }

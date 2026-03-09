@@ -1186,12 +1186,16 @@ function Send-OpenPathHealthReport {
         $versionToSend = [string]$config.version
     }
 
-    $healthApiSecret = ''
-    if ($config.PSObject.Properties['healthApiSecret'] -and $config.healthApiSecret) {
-        $healthApiSecret = [string]$config.healthApiSecret
+    $authToken = ''
+    if ($config.PSObject.Properties['whitelistUrl'] -and $config.whitelistUrl) {
+        $authToken = Get-OpenPathMachineTokenFromWhitelistUrl -WhitelistUrl ([string]$config.whitelistUrl)
     }
-    elseif ($env:OPENPATH_HEALTH_API_SECRET) {
-        $healthApiSecret = [string]$env:OPENPATH_HEALTH_API_SECRET
+
+    if (-not $authToken -and $config.PSObject.Properties['healthApiSecret'] -and $config.healthApiSecret) {
+        $authToken = [string]$config.healthApiSecret
+    }
+    elseif (-not $authToken -and $env:OPENPATH_HEALTH_API_SECRET) {
+        $authToken = [string]$env:OPENPATH_HEALTH_API_SECRET
     }
 
     $payload = @{
@@ -1208,8 +1212,8 @@ function Send-OpenPathHealthReport {
 
     $healthUrl = "$($config.apiUrl.TrimEnd('/'))/trpc/healthReports.submit"
     $headers = @{ 'Content-Type' = 'application/json' }
-    if ($healthApiSecret) {
-        $headers['Authorization'] = "Bearer $healthApiSecret"
+    if ($authToken) {
+        $headers['Authorization'] = "Bearer $authToken"
     }
 
     try {

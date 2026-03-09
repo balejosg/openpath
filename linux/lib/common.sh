@@ -147,6 +147,35 @@ get_registered_machine_name() {
     hostname
 }
 
+extract_machine_token_from_whitelist_url() {
+    local whitelist_url="${1:-}"
+    if [ -z "$whitelist_url" ]; then
+        return 1
+    fi
+
+    local machine_token
+    machine_token=$(printf '%s\n' "$whitelist_url" | sed -n 's#.*\/w\/\([^/][^/]*\)\/.*#\1#p')
+    if [ -z "$machine_token" ]; then
+        return 1
+    fi
+
+    printf '%s\n' "$machine_token"
+}
+
+get_machine_token_from_whitelist_url_file() {
+    if [ ! -r "$WHITELIST_URL_CONF" ]; then
+        return 1
+    fi
+
+    local whitelist_url
+    whitelist_url=$(tr -d '\r\n' < "$WHITELIST_URL_CONF" 2>/dev/null || true)
+    if [ -z "$whitelist_url" ]; then
+        return 1
+    fi
+
+    extract_machine_token_from_whitelist_url "$whitelist_url"
+}
+
 normalize_machine_name_value() {
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/-+/-/g; s/^-+//; s/-+$//'
 }
@@ -618,8 +647,11 @@ send_health_report_to_api() {
         return 0
     fi
 
-    local shared_secret=""
-    [ -f "$HEALTH_API_SECRET_CONF" ] && shared_secret=$(cat "$HEALTH_API_SECRET_CONF" 2>/dev/null)
+    local auth_token=""
+    auth_token=$(get_machine_token_from_whitelist_url_file 2>/dev/null || true)
+    if [ -z "$auth_token" ] && [ -f "$HEALTH_API_SECRET_CONF" ]; then
+        auth_token=$(cat "$HEALTH_API_SECRET_CONF" 2>/dev/null)
+    fi
 
     local hostname
     hostname=$(get_registered_machine_name)
@@ -638,10 +670,10 @@ print(json.dumps({"json": {
     "version": os.environ["VER"]
 }}))')
 
-    if [ -n "$shared_secret" ]; then
+    if [ -n "$auth_token" ]; then
         timeout 5 curl -s -X POST "$api_url/trpc/healthReports.submit" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer $shared_secret" \
+            -H "Authorization: Bearer $auth_token" \
             -d "$payload" >/dev/null 2>&1 &
     else
         timeout 5 curl -s -X POST "$api_url/trpc/healthReports.submit" \

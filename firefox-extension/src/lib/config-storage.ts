@@ -5,6 +5,7 @@ export interface RequestConfig {
   fallbackApiUrls: string[];
   requestTimeout: number;
   enableRequests: boolean;
+  // Deprecated legacy fallback; requests now authenticate with the machine token from the host.
   sharedSecret: string;
   debugMode: boolean;
 
@@ -27,11 +28,7 @@ export function getRequestApiEndpoints(config: RequestConfig): string[] {
 }
 
 export function hasValidRequestConfig(config: RequestConfig): boolean {
-  return (
-    config.enableRequests &&
-    config.sharedSecret.trim().length > 0 &&
-    getRequestApiEndpoints(config).length > 0
-  );
+  return config.enableRequests && getRequestApiEndpoints(config).length > 0;
 }
 
 export async function loadRequestConfig(): Promise<RequestConfig> {

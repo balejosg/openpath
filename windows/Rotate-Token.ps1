@@ -26,8 +26,8 @@
     the local configuration with the new tokenized whitelist URL.
     Requires classroom mode to be configured during installation.
 .PARAMETER Secret
-    The shared secret for API authentication. If not provided,
-    reads from the config file.
+    Legacy shared secret fallback for API authentication. Modern classroom
+    installs rotate tokens using the machine token derived from whitelistUrl.
 .EXAMPLE
     .\Rotate-Token.ps1
     .\Rotate-Token.ps1 -Secret "your-shared-secret"
@@ -71,23 +71,29 @@ if (-not $config.apiUrl -or -not $config.classroom) {
     exit 1
 }
 
-if (-not $Secret) {
-    Write-Host "ERROR: -Secret parameter is required" -ForegroundColor Red
-    Write-Host "  Provide the shared secret used for API authentication" -ForegroundColor Yellow
-    exit 1
-}
-
 $hostname = Get-OpenPathMachineName
 $apiUrl = $config.apiUrl
+$machineToken = ''
+if ($config.PSObject.Properties['whitelistUrl'] -and $config.whitelistUrl) {
+    $machineToken = Get-OpenPathMachineTokenFromWhitelistUrl -WhitelistUrl ([string]$config.whitelistUrl)
+}
+
+$authToken = if ($machineToken) { $machineToken } else { $Secret }
 
 Write-Host "Rotating download token..." -ForegroundColor Yellow
 Write-Host "  Hostname: $hostname"
 Write-Host "  API: $apiUrl"
 Write-Host ""
 
+if (-not $authToken) {
+    Write-Host "ERROR: No authentication token available" -ForegroundColor Red
+    Write-Host "  Expected whitelistUrl with a machine token in config, or -Secret for legacy fallback" -ForegroundColor Yellow
+    exit 1
+}
+
 try {
     $headers = @{
-        "Authorization" = "Bearer $Secret"
+        "Authorization" = "Bearer $authToken"
         "Content-Type" = "application/json"
     }
     

@@ -772,23 +772,27 @@ cmd_rotate_token() {
     api_url=$(cat "$ETC_CONFIG_DIR/api-url.conf")
     local hostname
     hostname=$(get_registered_machine_name)
-    local secret=""
-    if [ -f "$ETC_CONFIG_DIR/api-secret.conf" ]; then
-        secret=$(cat "$ETC_CONFIG_DIR/api-secret.conf")
+    local auth_token=""
+    local auth_source="token de máquina"
+    auth_token=$(get_machine_token_from_whitelist_url_file 2>/dev/null || true)
+    if [ -z "$auth_token" ] && [ -f "$ETC_CONFIG_DIR/api-secret.conf" ]; then
+        auth_token=$(cat "$ETC_CONFIG_DIR/api-secret.conf")
+        auth_source="secreto legacy"
     fi
     
-    if [ -z "$secret" ]; then
-        echo -e "${RED}Error: No se encontró el secreto de API${NC}"
-        echo "  Archivo esperado: $ETC_CONFIG_DIR/api-secret.conf"
-        echo "  Debe contener el SHARED_SECRET del servidor para rotar token"
+    if [ -z "$auth_token" ]; then
+        echo -e "${RED}Error: No se encontró credencial para rotar el token${NC}"
+        echo "  Se esperaba un token derivable desde $WHITELIST_URL_CONF"
+        echo "  Fallback legacy: $ETC_CONFIG_DIR/api-secret.conf"
         exit 1
     fi
     
     echo -e "${BLUE}Rotando token de descarga...${NC}"
+    echo "  Autenticación: $auth_source"
     
     local response
     response=$(timeout 30 curl -s -X POST \
-        -H "Authorization: Bearer $secret" \
+        -H "Authorization: Bearer $auth_token" \
         -H "Content-Type: application/json" \
         "$api_url/api/machines/$hostname/rotate-download-token" 2>/dev/null)
     

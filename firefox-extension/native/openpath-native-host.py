@@ -73,6 +73,33 @@ def log_debug(message):
         pass
 
 
+def get_machine_token():
+    whitelist_url_path = Path("/etc/openpath/whitelist-url.conf")
+
+    try:
+        whitelist_url = whitelist_url_path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        return {
+            "success": False,
+            "action": "get-machine-token",
+            "error": f"Could not read {whitelist_url_path}: {exc}",
+        }
+
+    match = re.search(r"/w/([^/]+)/", whitelist_url)
+    if not match:
+        return {
+            "success": False,
+            "action": "get-machine-token",
+            "error": "Whitelist URL does not contain a machine token",
+        }
+
+    return {
+        "success": True,
+        "action": "get-machine-token",
+        "token": match.group(1),
+    }
+
+
 def read_message():
     """Lee un mensaje del stdin en formato Native Messaging"""
     raw_length = sys.stdin.buffer.read(4)
@@ -313,6 +340,9 @@ def handle_message(message):
         # Return the system hostname for token generation
         hostname = socket.gethostname()
         return {"success": True, "action": "get-hostname", "hostname": hostname}
+
+    elif action == "get-machine-token":
+        return get_machine_token()
 
     elif action == "update-whitelist":
         # Trigger whitelist update script

@@ -32,13 +32,12 @@ void describe('config-storage', () => {
     assert.deepStrictEqual(endpoints, ['https://api.example', 'https://api-2.example']);
   });
 
-  void test('hasValidRequestConfig requires enableRequests, secret and endpoints', () => {
+  void test('hasValidRequestConfig requires enableRequests and endpoints', () => {
     assert.strictEqual(hasValidRequestConfig(DEFAULT_REQUEST_CONFIG), false);
     assert.strictEqual(
       hasValidRequestConfig({
         ...DEFAULT_REQUEST_CONFIG,
         requestApiUrl: 'https://api.example',
-        sharedSecret: 'secret',
       }),
       true
     );

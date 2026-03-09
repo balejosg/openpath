@@ -6,6 +6,10 @@
 
 import { Page, Locator, expect } from '@playwright/test';
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function clickSidebarNav(page: Page, navButton: Locator): Promise<void> {
   // On mobile, the sidebar is off-canvas until the hamburger is clicked.
   const menuButton = page.getByRole('button', { name: /Abrir menú/i });
@@ -527,7 +531,11 @@ export class RulesManagerPage {
    * Get a rule row by value
    */
   getRuleRow(value: string): Locator {
-    return this.page.locator('tbody tr').filter({ hasText: value });
+    return this.page.locator('tbody tr').filter({
+      has: this.page.locator('span.font-mono', {
+        hasText: new RegExp(`^${escapeRegExp(value)}$`),
+      }),
+    });
   }
 
   /**

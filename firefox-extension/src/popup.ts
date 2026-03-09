@@ -4,7 +4,6 @@
  */
 
 import { logger, getErrorMessage } from './lib/logger.js';
-import { generateProofToken } from './lib/proof-token.js';
 import {
   DEFAULT_REQUEST_CONFIG,
   getRequestApiEndpoints as getApiEndpoints,
@@ -597,7 +596,20 @@ async function submitDomainRequest(): Promise<void> {
       return;
     }
 
-    const token = await generateProofToken(machineHostname, CONFIG.sharedSecret.trim());
+    const tokenResponse: { success?: boolean; token?: string; error?: string } =
+      await browser.runtime.sendMessage({
+        action: 'getMachineToken',
+      });
+    if (!tokenResponse.success || !tokenResponse.token) {
+      showRequestStatus(
+        `❌ ${tokenResponse.error ?? 'No se pudo obtener token de la máquina'}`,
+        'error'
+      );
+      showToast('❌ Token de máquina no disponible');
+      return;
+    }
+
+    const token = tokenResponse.token;
 
     const apiResponse = await fetchWithFallback(
       '/api/requests/submit',

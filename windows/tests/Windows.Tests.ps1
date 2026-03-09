@@ -407,7 +407,7 @@ Describe "Common Module - Mocked Tests" {
             Mock Get-OpenPathConfig {
                 [PSCustomObject]@{
                     apiUrl = 'https://api.example.com'
-                    healthApiSecret = 'shared-secret'
+                    whitelistUrl = 'https://api.example.com/w/token123/whitelist.txt'
                     version = '4.1.0'
                 }
             } -ModuleName Common
@@ -431,7 +431,7 @@ Describe "Common Module - Mocked Tests" {
             $result | Should -BeTrue
 
             $script:capturedUri | Should -Be 'https://api.example.com/trpc/healthReports.submit'
-            $script:capturedHeaders['Authorization'] | Should -Be 'Bearer shared-secret'
+            $script:capturedHeaders['Authorization'] | Should -Be 'Bearer token123'
 
             $payload = $script:capturedBody | ConvertFrom-Json
             $payload.json.status | Should -Be 'DEGRADED'

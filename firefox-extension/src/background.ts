@@ -14,7 +14,6 @@
 
 import { Browser, WebRequest, Runtime, WebNavigation } from 'webextension-polyfill';
 import { logger, getErrorMessage } from './lib/logger.js';
-import { generateProofToken } from './lib/proof-token.js';
 import { getRequestApiEndpoints, loadRequestConfig } from './lib/config-storage.js';
 
 declare const browser: Browser;
@@ -786,7 +785,7 @@ async function autoAllowBlockedDomain(
     const requestConfig = await loadRequestConfig();
     const endpoints = getRequestApiEndpoints(requestConfig);
 
-    if (!requestConfig.enableRequests || requestConfig.sharedSecret.trim().length === 0) {
+    if (!requestConfig.enableRequests) {
       setDomainStatus(tabId, hostname, {
         state: 'apiError',
         updatedAt: Date.now(),
@@ -823,7 +822,22 @@ async function autoAllowBlockedDomain(
     }
 
     const machineHostname = hostnameResponse.hostname;
-    const token = await generateProofToken(machineHostname, requestConfig.sharedSecret.trim());
+    const tokenResponse = (await sendNativeMessage({ action: 'get-machine-token' })) as {
+      success: boolean;
+      token?: string;
+      error?: string;
+    };
+    if (!tokenResponse.success || !tokenResponse.token) {
+      setDomainStatus(tabId, hostname, {
+        state: 'apiError',
+        updatedAt: Date.now(),
+        message: tokenResponse.error ?? 'No se pudo obtener token de la máquina',
+        requestType,
+      });
+      return;
+    }
+
+    const token = tokenResponse.token;
 
     const reason = `auto-allow ajax (${requestType})`;
     const response = await fetchWithFallback(
@@ -1072,6 +1086,14 @@ browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.
     case 'getHostname':
       try {
         return await sendNativeMessage({ action: 'get-hostname' });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return { success: false, error: errorMessage };
+      }
+
+    case 'getMachineToken':
+      try {
+        return await sendNativeMessage({ action: 'get-machine-token' });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return { success: false, error: errorMessage };
