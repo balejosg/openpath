@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from 'express';
 
+import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
 import { touchGroupAndEmitWhitelistChanged } from '../lib/rule-events.js';
 import * as classroomStorage from '../lib/classroom-storage.js';
@@ -85,6 +86,44 @@ export function registerPublicRequestRoutes(app: Express): void {
       }
 
       const targetGroupId = groupContext.groupId;
+      if (!config.autoApproveMachineRequests) {
+        const created = await RequestService.createRequest({
+          domain: domainParse.domain,
+          reason: body.reasonRaw.slice(0, 200) || 'Submitted via Firefox extension auto request',
+          groupId: targetGroupId,
+          source: 'auto_extension',
+          machineHostname: proof.machineHostname,
+          originPage: body.originPageRaw.slice(0, 2048) || undefined,
+        });
+
+        if (!created.ok) {
+          const statusMap: Record<string, number> = {
+            CONFLICT: 409,
+            NOT_FOUND: 404,
+            FORBIDDEN: 403,
+            BAD_REQUEST: 400,
+          };
+          const statusCode = statusMap[created.error.code] ?? 400;
+          res.status(statusCode).json({
+            success: false,
+            error: created.error.message,
+          });
+          return;
+        }
+
+        res.json({
+          success: true,
+          id: created.data.id,
+          approved: false,
+          autoApproved: false,
+          status: created.data.status,
+          groupId: targetGroupId,
+          domain: domainParse.domain,
+          source: 'auto_extension',
+        });
+        return;
+      }
+
       const reasonText = body.reasonRaw.slice(0, 200);
       const sourceComment = body.originPageRaw
         ? `Auto-approved via Firefox extension (${body.originPageRaw.slice(0, 300)})${reasonText ? ` - ${reasonText}` : ''}`

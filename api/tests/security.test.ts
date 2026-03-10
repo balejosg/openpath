@@ -28,15 +28,23 @@ async function request(
   path: string,
   options: RequestInit = {}
 ): Promise<{ status: number; headers: Headers; body: any }> {
-  const response = await fetch(`${API_URL}${path}`, options);
-  const headers = response.headers;
+  const requestHeaders = new Headers(options.headers);
+  if (!requestHeaders.has('Connection')) {
+    requestHeaders.set('Connection', 'close');
+  }
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: requestHeaders,
+  });
+  const responseHeaders = response.headers;
   let body: any = null;
   try {
     body = await response.json();
   } catch {
     // ignore JSON parse error
   }
-  return { status: response.status, headers, body };
+  return { status: response.status, headers: responseHeaders, body };
 }
 
 await describe('Security and Hardening Tests', async () => {
@@ -58,6 +66,9 @@ await describe('Security and Hardening Tests', async () => {
 
   after(async () => {
     if (server !== undefined) {
+      if ('closeAllConnections' in server && typeof server.closeAllConnections === 'function') {
+        server.closeAllConnections();
+      }
       await new Promise<void>((resolve) => {
         server?.close(() => {
           console.log('Security test server closed');
@@ -65,6 +76,9 @@ await describe('Security and Hardening Tests', async () => {
         });
       });
     }
+
+    const { closeConnection } = await import('../src/db/index.js');
+    await closeConnection();
   });
 
   await describe('HTTP Headers & Security Hardening', async () => {
@@ -339,6 +353,25 @@ await describe('Security and Hardening Tests', async () => {
       assert.strictEqual(status, 400, 'Should reject unrecognized keys in domain request');
       const errorMessage = (body as { error: { message: string } }).error.message;
       assert.ok(errorMessage.includes('unrecognized_keys'));
+    });
+  });
+
+  await describe('Public Request Endpoint Rate Limits', async () => {
+    await it('enforces the public request rate limit on /api/requests/auto', async (): Promise<void> => {
+      const requests = [];
+      for (let i = 0; i < 6; i++) {
+        requests.push(
+          request('/api/requests/auto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          })
+        );
+      }
+
+      const responses = await Promise.all(requests);
+      const blocked = responses.filter((response) => response.status === 429);
+      assert.ok(blocked.length > 0, 'Should have blocked some auto-request submissions');
     });
   });
 });

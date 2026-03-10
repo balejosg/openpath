@@ -15,6 +15,18 @@ function parseIntEnv(value: string | undefined, fallback: number): number {
 }
 
 /**
+ * Parse a boolean from environment with fallback
+ */
+function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) return fallback;
+
+  const normalized = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
+
+/**
  * Parse a comma-separated list from environment
  */
 function parseListEnv(value: string | undefined, fallback: string[]): string[] {
@@ -76,137 +88,185 @@ function parseDatabaseUrl(url: string | undefined): {
   }
 }
 
-// Parse DATABASE_URL if provided, otherwise use individual env vars
-const parsedDbUrl = parseDatabaseUrl(process.env.DATABASE_URL);
+interface LoadedConfig {
+  readonly port: number;
+  readonly host: string;
+  readonly publicUrl: string | undefined;
+  readonly nodeEnv: string;
+  readonly trustProxy: boolean | number | string | undefined;
+  readonly isProduction: boolean;
+  readonly isTest: boolean;
+  readonly aptRepoUrl: string;
+  readonly enableRateLimitInTest: boolean;
+  readonly bcryptRounds: number;
+  readonly jwtSecret: string;
+  readonly jwtAccessExpiry: string;
+  readonly jwtRefreshExpiry: string;
+  readonly autoApproveMachineRequests: boolean;
+  readonly googleClientId: string;
+  readonly globalRateLimitWindowMs: number;
+  readonly globalRateLimitMax: number;
+  readonly authRateLimitWindowMs: number;
+  readonly authRateLimitMax: number;
+  readonly corsAllowedOrigins: string[];
+  readonly vapidPublicKey: string;
+  readonly vapidPrivateKey: string;
+  readonly vapidSubject: string;
+  readonly pushIconPath: string;
+  readonly pushBadgePath: string;
+  readonly databaseUrl: string;
+  readonly database: {
+    readonly host: string;
+    readonly port: number;
+    readonly name: string;
+    readonly user: string;
+    readonly password: string;
+    readonly poolMax: number;
+  };
+  readonly logLevel: string;
+  readonly enableSwagger: boolean;
+}
 
-export const config = {
-  // ==========================================================================
-  // Server Configuration
-  // ==========================================================================
+export function loadConfig(
+  env: Readonly<Record<string, string | undefined>> = process.env
+): LoadedConfig {
+  const parsedDbUrl = parseDatabaseUrl(env.DATABASE_URL);
+  const nodeEnv = env.NODE_ENV ?? 'development';
 
-  /** Server port */
-  port: parseIntEnv(process.env.PORT, 3000),
+  return {
+    // ==========================================================================
+    // Server Configuration
+    // ==========================================================================
 
-  /** Server host binding */
-  host: process.env.HOST ?? '0.0.0.0',
+    /** Server port */
+    port: parseIntEnv(env.PORT, 3000),
 
-  /** Public URL (for logs and references) */
-  publicUrl: process.env.PUBLIC_URL,
+    /** Server host binding */
+    host: env.HOST ?? '0.0.0.0',
 
-  /** Node environment */
-  nodeEnv: process.env.NODE_ENV ?? 'development',
+    /** Public URL (for logs and references) */
+    publicUrl: env.PUBLIC_URL,
 
-  /** Express trust proxy setting (optional) */
-  trustProxy: parseTrustProxyEnv(process.env.TRUST_PROXY),
+    /** Node environment */
+    nodeEnv,
 
-  /** Is production environment */
-  isProduction: process.env.NODE_ENV === 'production',
+    /** Express trust proxy setting (optional) */
+    trustProxy: parseTrustProxyEnv(env.TRUST_PROXY),
 
-  /** Is test environment */
-  isTest: process.env.NODE_ENV === 'test',
+    /** Is production environment */
+    isProduction: nodeEnv === 'production',
 
-  /** APT Repository Setup URL */
-  aptRepoUrl: process.env.APT_REPO_URL ?? 'https://balejosg.github.io/openpath/apt',
+    /** Is test environment */
+    isTest: nodeEnv === 'test',
 
-  /** Enable rate limiting even in test environment (defaults to false) */
-  enableRateLimitInTest: process.env.ENABLE_RATE_LIMIT_IN_TEST === 'true',
+    /** APT Repository Setup URL */
+    aptRepoUrl: env.APT_REPO_URL ?? 'https://balejosg.github.io/openpath/apt',
 
-  // ==========================================================================
-  // Security Configuration
-  // ==========================================================================
+    /** Enable rate limiting even in test environment (defaults to false) */
+    enableRateLimitInTest: parseBooleanEnv(env.ENABLE_RATE_LIMIT_IN_TEST, false),
 
-  /** Bcrypt hashing rounds for password hashing */
-  bcryptRounds: parseIntEnv(process.env.BCRYPT_ROUNDS, 12),
+    // ==========================================================================
+    // Security Configuration
+    // ==========================================================================
 
-  /** JWT secret for token signing */
-  jwtSecret: process.env.JWT_SECRET ?? 'openpath-dev-secret-change-in-production',
+    /** Bcrypt hashing rounds for password hashing */
+    bcryptRounds: parseIntEnv(env.BCRYPT_ROUNDS, 12),
 
-  /** JWT access token expiration */
-  jwtAccessExpiry: process.env.JWT_ACCESS_EXPIRY ?? process.env.JWT_EXPIRES_IN ?? '15m',
+    /** JWT secret for token signing */
+    jwtSecret: env.JWT_SECRET ?? 'openpath-dev-secret-change-in-production',
 
-  /** JWT refresh token expiration */
-  jwtRefreshExpiry: process.env.JWT_REFRESH_EXPIRY ?? process.env.JWT_REFRESH_EXPIRES_IN ?? '7d',
+    /** JWT access token expiration */
+    jwtAccessExpiry: env.JWT_ACCESS_EXPIRY ?? env.JWT_EXPIRES_IN ?? '15m',
 
-  // ==========================================================================
-  // Google OAuth Configuration
-  // ==========================================================================
+    /** JWT refresh token expiration */
+    jwtRefreshExpiry: env.JWT_REFRESH_EXPIRY ?? env.JWT_REFRESH_EXPIRES_IN ?? '7d',
 
-  /** Google OAuth Client ID for Sign In with Google */
-  googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+    /** Allow machine auto-request endpoint to approve immediately only when explicitly enabled */
+    autoApproveMachineRequests: parseBooleanEnv(env.AUTO_APPROVE_MACHINE_REQUESTS, false),
 
-  // ==========================================================================
-  // Rate Limiting
-  // ==========================================================================
+    // ==========================================================================
+    // Google OAuth Configuration
+    // ==========================================================================
 
-  /** Global rate limit window in milliseconds */
-  globalRateLimitWindowMs: parseIntEnv(process.env.RATE_LIMIT_WINDOW_MS, 60 * 1000),
+    /** Google OAuth Client ID for Sign In with Google */
+    googleClientId: env.GOOGLE_CLIENT_ID ?? '',
 
-  /** Global rate limit max requests per window */
-  globalRateLimitMax: parseIntEnv(process.env.RATE_LIMIT_MAX, 200),
+    // ==========================================================================
+    // Rate Limiting
+    // ==========================================================================
 
-  /** Auth rate limit window in milliseconds */
-  authRateLimitWindowMs: parseIntEnv(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 60 * 1000),
+    /** Global rate limit window in milliseconds */
+    globalRateLimitWindowMs: parseIntEnv(env.RATE_LIMIT_WINDOW_MS, 60 * 1000),
 
-  /** Auth rate limit max requests per window */
-  authRateLimitMax: parseIntEnv(process.env.AUTH_RATE_LIMIT_MAX, 10),
+    /** Global rate limit max requests per window */
+    globalRateLimitMax: parseIntEnv(env.RATE_LIMIT_MAX, 200),
 
-  // ==========================================================================
-  // CORS Configuration
-  // ==========================================================================
+    /** Auth rate limit window in milliseconds */
+    authRateLimitWindowMs: parseIntEnv(env.AUTH_RATE_LIMIT_WINDOW_MS, 60 * 1000),
 
-  /** CORS allowed origins (comma-separated). MUST be set in production. */
-  corsAllowedOrigins: parseListEnv(
-    process.env.CORS_ORIGINS,
-    process.env.NODE_ENV === 'production'
-      ? [] // Production MUST set CORS_ORIGINS explicitly
-      : ['http://localhost:3000', 'http://localhost:5500', 'http://127.0.0.1:3000']
-  ),
+    /** Auth rate limit max requests per window */
+    authRateLimitMax: parseIntEnv(env.AUTH_RATE_LIMIT_MAX, 10),
 
-  // ==========================================================================
-  // Push Notifications
-  // ==========================================================================
+    // ==========================================================================
+    // CORS Configuration
+    // ==========================================================================
 
-  /** VAPID public key for web push */
-  vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+    /** CORS allowed origins (comma-separated). MUST be set in production. */
+    corsAllowedOrigins: parseListEnv(
+      env.CORS_ORIGINS,
+      nodeEnv === 'production'
+        ? [] // Production MUST set CORS_ORIGINS explicitly
+        : ['http://localhost:3000', 'http://localhost:5500', 'http://127.0.0.1:3000']
+    ),
 
-  /** VAPID private key for web push */
-  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? '',
+    // ==========================================================================
+    // Push Notifications
+    // ==========================================================================
 
-  /** VAPID subject (email or URL) */
-  vapidSubject: process.env.VAPID_SUBJECT ?? 'mailto:admin@openpath.local',
+    /** VAPID public key for web push */
+    vapidPublicKey: env.VAPID_PUBLIC_KEY ?? '',
 
-  /** Push notification icon path */
-  pushIconPath: process.env.PUSH_ICON_PATH ?? '/icon-192.png',
+    /** VAPID private key for web push */
+    vapidPrivateKey: env.VAPID_PRIVATE_KEY ?? '',
 
-  /** Push notification badge path */
-  pushBadgePath: process.env.PUSH_BADGE_PATH ?? '/badge.png',
+    /** VAPID subject (email or URL) */
+    vapidSubject: env.VAPID_SUBJECT ?? 'mailto:admin@openpath.local',
 
-  // ==========================================================================
-  // Database Configuration
-  // ==========================================================================
+    /** Push notification icon path */
+    pushIconPath: env.PUSH_ICON_PATH ?? '/icon-192.png',
 
-  /** PostgreSQL connection URL */
-  databaseUrl: process.env.DATABASE_URL ?? 'postgres://openpath:openpath@localhost:5432/openpath',
+    /** Push notification badge path */
+    pushBadgePath: env.PUSH_BADGE_PATH ?? '/badge.png',
 
-  /** Database settings - uses DATABASE_URL if provided, otherwise individual env vars */
-  database: {
-    host: parsedDbUrl?.host ?? process.env.DB_HOST ?? 'localhost',
-    port: parsedDbUrl?.port ?? parseIntEnv(process.env.DB_PORT, 5432),
-    name: parsedDbUrl?.name ?? process.env.DB_NAME ?? 'openpath',
-    user: parsedDbUrl?.user ?? process.env.DB_USER ?? 'openpath',
-    password: parsedDbUrl?.password ?? process.env.DB_PASSWORD ?? 'openpath_dev',
-    poolMax: parseIntEnv(process.env.DB_POOL_MAX, 20),
-  },
+    // ==========================================================================
+    // Database Configuration
+    // ==========================================================================
 
-  // ==========================================================================
-  // Logging
-  // ==========================================================================
+    /** PostgreSQL connection URL */
+    databaseUrl: env.DATABASE_URL ?? 'postgres://openpath:openpath@localhost:5432/openpath',
 
-  /** Log level (debug, info, warn, error) */
-  logLevel: process.env.LOG_LEVEL ?? 'info',
+    /** Database settings - uses DATABASE_URL if provided, otherwise individual env vars */
+    database: {
+      host: parsedDbUrl?.host ?? env.DB_HOST ?? 'localhost',
+      port: parsedDbUrl?.port ?? parseIntEnv(env.DB_PORT, 5432),
+      name: parsedDbUrl?.name ?? env.DB_NAME ?? 'openpath',
+      user: parsedDbUrl?.user ?? env.DB_USER ?? 'openpath',
+      password: parsedDbUrl?.password ?? env.DB_PASSWORD ?? 'openpath_dev',
+      poolMax: parseIntEnv(env.DB_POOL_MAX, 20),
+    },
 
-  /** Enable Swagger documentation (defaults to true in non-production) */
-  enableSwagger: process.env.NODE_ENV !== 'production' && process.env.ENABLE_SWAGGER !== 'false',
-} as const;
+    // ==========================================================================
+    // Logging
+    // ==========================================================================
 
-export type Config = typeof config;
+    /** Log level (debug, info, warn, error) */
+    logLevel: env.LOG_LEVEL ?? 'info',
+
+    /** Enable Swagger documentation (defaults to true in non-production) */
+    enableSwagger: nodeEnv !== 'production' && env.ENABLE_SWAGGER !== 'false',
+  } as const;
+}
+
+export const config = loadConfig();
+
+export type Config = LoadedConfig;

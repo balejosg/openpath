@@ -24,6 +24,7 @@ import { sql } from 'drizzle-orm';
 
 process.env.NODE_ENV = 'test';
 delete process.env.ENABLE_RATE_LIMIT_IN_TEST;
+delete process.env.AUTO_APPROVE_MACHINE_REQUESTS;
 
 const { ensureTestSchema, getAvailablePort } = await import('./test-utils.js');
 const { closeConnection, db } = await import('../src/db/index.js');
@@ -148,7 +149,7 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
   });
 
   await describe('Auto Request Endpoint', async () => {
-    await test('should auto-approve to active group and mark source', async () => {
+    await test('should create a pending request to the active group and mark source', async () => {
       const suffix = Date.now().toString();
       const groupId = `grp-${suffix}`;
       const classroomId = `cls-${suffix}`;
@@ -195,34 +196,48 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
       assert.strictEqual(response.status, 200);
       const data = (await response.json()) as {
         success: boolean;
+        id: string;
         groupId: string;
         source: string;
         approved: boolean;
+        autoApproved: boolean;
         status: string;
       };
 
       assert.strictEqual(data.success, true);
-      assert.strictEqual(data.approved, true);
-      assert.strictEqual(data.status, 'approved');
+      assert.strictEqual(data.approved, false);
+      assert.strictEqual(data.autoApproved, false);
+      assert.strictEqual(data.status, 'pending');
       assert.strictEqual(data.groupId, groupId);
       assert.strictEqual(data.source, 'auto_extension');
 
-      const ruleRow = await db.execute(
+      const requestRow = await db.execute(
         sql.raw(
-          `SELECT type, value, source, comment FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}' LIMIT 1`
+          `SELECT status, group_id, source, machine_hostname, origin_page, reason FROM requests WHERE id='${data.id}' LIMIT 1`
         )
       );
-      const rows = ruleRow.rows as {
-        type: string;
-        value: string;
+      const rows = requestRow.rows as {
+        status: string;
+        group_id: string;
         source: string;
-        comment: string;
+        machine_hostname: string;
+        origin_page: string;
+        reason: string;
       }[];
       assert.strictEqual(rows.length, 1);
-      const firstRow = rows[0] as { type: string; value: string; source: string; comment: string };
-      assert.strictEqual(firstRow.type, 'whitelist');
+      const firstRow = rows[0];
+      assert.ok(firstRow !== undefined);
+      assert.strictEqual(firstRow.status, 'pending');
+      assert.strictEqual(firstRow.group_id, groupId);
       assert.strictEqual(firstRow.source, 'auto_extension');
-      assert.ok(firstRow.comment.includes(reason));
+      assert.strictEqual(firstRow.machine_hostname, hostname);
+      assert.strictEqual(firstRow.origin_page, `${classroomId}.school.local`);
+      assert.ok(firstRow.reason.includes(reason));
+
+      const ruleRow = await db.execute(
+        sql.raw(`SELECT id FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}'`)
+      );
+      assert.strictEqual(ruleRow.rows.length, 0);
 
       const duplicateResponse = await fetch(`${API_URL}/api/requests/auto`, {
         method: 'POST',
@@ -236,15 +251,13 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
         }),
       });
 
-      assert.strictEqual(duplicateResponse.status, 200);
+      assert.strictEqual(duplicateResponse.status, 409);
       const duplicateData = (await duplicateResponse.json()) as {
         success: boolean;
-        status: string;
-        duplicate: boolean;
+        error?: string;
       };
-      assert.strictEqual(duplicateData.success, true);
-      assert.strictEqual(duplicateData.status, 'duplicate');
-      assert.strictEqual(duplicateData.duplicate, true);
+      assert.strictEqual(duplicateData.success, false);
+      assert.match(duplicateData.error ?? '', /pending request exists/i);
     });
   });
 
@@ -391,6 +404,103 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
       assert.strictEqual(rows.length, 1);
       const firstRow = rows[0] as { group_id: string };
       assert.strictEqual(firstRow.group_id, defaultGroupId);
+    });
+
+    await test('should return 404 when the machine classroom has no effective group', async () => {
+      const suffix = `${Date.now().toString()}-submit-no-group`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const token = `machine-token-${suffix}`;
+
+      await db.execute(
+        sql.raw(
+          `INSERT INTO classrooms (id, name, display_name, default_group_id, active_group_id) VALUES ('${classroomId}', '${classroomId}', '${classroomId}', NULL, NULL)`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO machines (id, hostname, classroom_id, version, download_token_hash) VALUES ('${machineId}', '${hostname}', '${classroomId}', 'test', '${hashMachineToken(token)}')`
+        )
+      );
+
+      const response = await fetch(`${API_URL}/api/requests/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain: `submit-${suffix}.example.com`,
+          reason: 'This classroom has no default or active group',
+          token,
+          hostname,
+        }),
+      });
+
+      assert.strictEqual(response.status, 404);
+      const data = (await response.json()) as {
+        success: boolean;
+        error?: string;
+      };
+
+      assert.strictEqual(data.success, false);
+      assert.strictEqual(data.error, 'No active group found for machine hostname');
+    });
+
+    await test('should map duplicate pending requests to HTTP 409', async () => {
+      const suffix = `${Date.now().toString()}-submit-conflict`;
+      const groupId = `grp-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const token = `machine-token-${suffix}`;
+      const domain = `submit-${suffix}.example.com`;
+
+      await db.execute(
+        sql.raw(
+          `INSERT INTO whitelist_groups (id, name, display_name, enabled) VALUES ('${groupId}', '${groupId}', '${groupId}', 1)`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO classrooms (id, name, display_name, default_group_id, active_group_id) VALUES ('${classroomId}', '${classroomId}', '${classroomId}', '${groupId}', '${groupId}')`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO machines (id, hostname, classroom_id, version, download_token_hash) VALUES ('${machineId}', '${hostname}', '${classroomId}', 'test', '${hashMachineToken(token)}')`
+        )
+      );
+
+      const firstResponse = await fetch(`${API_URL}/api/requests/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          reason: 'First submit creates the pending request',
+          token,
+          hostname,
+        }),
+      });
+      assert.strictEqual(firstResponse.status, 200);
+
+      const duplicateResponse = await fetch(`${API_URL}/api/requests/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          reason: 'Second submit should surface the conflict',
+          token,
+          hostname,
+        }),
+      });
+
+      assert.strictEqual(duplicateResponse.status, 409);
+      const data = (await duplicateResponse.json()) as {
+        success: boolean;
+        error?: string;
+      };
+
+      assert.strictEqual(data.success, false);
+      assert.match(data.error ?? '', /pending request exists/i);
     });
   });
 

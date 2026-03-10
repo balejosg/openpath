@@ -482,6 +482,7 @@ app.use('/api/setup/first-admin', authLimiter);
 
 // Apply public request limiter to domain request creation
 app.use('/trpc/requests.create', publicRequestLimiter);
+app.use('/api/requests/auto', publicRequestLimiter);
 app.use('/api/requests/submit', publicRequestLimiter);
 
 // JSON body parser
