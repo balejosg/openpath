@@ -16,7 +16,7 @@ import { resetDb, uniqueEmail } from './test-utils.js';
 
 const DEFAULT_PASSWORD = 'SecurePassword123!';
 const originalGoogleClientId = config.googleClientId;
-const originalVerifyIdToken = OAuth2Client.prototype.verifyIdToken;
+const originalVerifyIdToken = Reflect.get(OAuth2Client.prototype, 'verifyIdToken');
 
 interface GooglePayload {
   email?: string;
@@ -29,14 +29,14 @@ function stubGooglePayload(payload: GooglePayload): void {
     getPayload: () => payload,
   } as unknown as LoginTicket;
 
-  OAuth2Client.prototype.verifyIdToken = (async () =>
-    ticket) as unknown as OAuth2Client['verifyIdToken'];
+  OAuth2Client.prototype.verifyIdToken = (() =>
+    Promise.resolve(ticket)) as unknown as OAuth2Client['verifyIdToken'];
 }
 
 function stubGoogleError(message: string): void {
-  OAuth2Client.prototype.verifyIdToken = async () => {
+  OAuth2Client.prototype.verifyIdToken = ((): never => {
     throw new Error(message);
-  };
+  }) as unknown as OAuth2Client['verifyIdToken'];
 }
 
 async function setUserActive(userId: string, isActive: boolean): Promise<void> {
@@ -68,7 +68,7 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
 
   void test('loads the storage types module at runtime', async () => {
     const storageTypesModule = await import('../src/types/storage.js');
-    assert.ok(storageTypesModule !== undefined);
+    assert.strictEqual(typeof storageTypesModule, 'object');
   });
 
   void describe('userStorage', { concurrency: false }, () => {
@@ -230,7 +230,6 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
         name: 'First Admin',
         password: DEFAULT_PASSWORD,
       });
-      assert.ok(created.ok);
       if (!created.ok) {
         throw new Error('Expected setup to succeed');
       }
@@ -246,14 +245,12 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
       assert.deepStrictEqual(tokenValidation, { valid: true });
 
       const existingToken = await setupService.getRegistrationToken();
-      assert.ok(existingToken.ok);
       if (!existingToken.ok) {
         throw new Error('Expected registration token to exist');
       }
       assert.strictEqual(existingToken.data.registrationToken, created.data.registrationToken);
 
       const rotatedToken = await setupService.regenerateToken();
-      assert.ok(rotatedToken.ok);
       if (!rotatedToken.ok) {
         throw new Error('Expected token regeneration to succeed');
       }
@@ -278,7 +275,6 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
         name: 'Service User',
         password: DEFAULT_PASSWORD,
       });
-      assert.ok(registered.ok);
       if (!registered.ok) {
         throw new Error('Expected userService.register to succeed');
       }
@@ -286,7 +282,6 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
       const userId = registered.data.user.id;
 
       const assigned = await userService.assignRole(userId, 'teacher', ['group-a']);
-      assert.ok(assigned.ok);
       if (!assigned.ok) {
         throw new Error('Expected role assignment to succeed');
       }
@@ -297,14 +292,12 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
       assert.strictEqual(listedUser.roles[0]?.role, 'teacher');
 
       const fetched = await userService.getUser(userId);
-      assert.ok(fetched.ok);
       if (!fetched.ok) {
         throw new Error('Expected getUser to succeed');
       }
       assert.strictEqual(fetched.data.emailVerified, true);
 
       const updated = await userService.updateUser(userId, { name: 'Updated Service User' });
-      assert.ok(updated.ok);
       if (!updated.ok) {
         throw new Error('Expected updateUser to succeed');
       }
@@ -355,7 +348,6 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
       const duplicateUpdate = await userService.updateUser(secondUser.id, {
         email: firstUser.email,
       });
-      assert.ok(!duplicateUpdate.ok);
       if (duplicateUpdate.ok) {
         throw new Error('Expected duplicate update to fail');
       }
@@ -366,7 +358,6 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
         name: 'Duplicate User',
         password: DEFAULT_PASSWORD,
       });
-      assert.ok(!duplicateRegister.ok);
       if (duplicateRegister.ok) {
         throw new Error('Expected duplicate register to fail');
       }
@@ -382,7 +373,6 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
         name: 'Auth Flow User',
         password: DEFAULT_PASSWORD,
       });
-      assert.ok(registerResult.ok);
       if (!registerResult.ok) {
         throw new Error('Expected authService.register to succeed');
       }
@@ -429,7 +419,6 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
       assert.deepStrictEqual(alreadyVerified, { ok: true, data: { success: true } });
 
       const loginResult = await authService.login(email, DEFAULT_PASSWORD);
-      assert.ok(loginResult.ok);
       if (!loginResult.ok) {
         throw new Error('Expected authService.login to succeed after verification');
       }
@@ -438,7 +427,6 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
       assert.ok(refreshResult.ok);
 
       const userProfile = await authService.getProfile(loginResult.data.user.id);
-      assert.ok(userProfile.ok);
       if (!userProfile.ok) {
         throw new Error('Expected profile lookup to succeed');
       }
@@ -471,7 +459,6 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
       });
 
       const resetToken = await authService.generateResetToken(email);
-      assert.ok(resetToken.ok);
       if (!resetToken.ok) {
         throw new Error('Expected reset token generation to succeed');
       }
@@ -561,7 +548,7 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
         { emailVerified: true }
       );
 
-      const triggerName = `change_password_fail_${Date.now()}`;
+      const triggerName = `change_password_fail_${String(Date.now())}`;
       const functionName = `${triggerName}_fn`;
 
       try {
@@ -671,7 +658,6 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
         name: 'Existing Google User',
       });
       const linkedLogin = await authService.loginWithGoogle('link-existing-user-token');
-      assert.ok(linkedLogin.ok);
       if (!linkedLogin.ok) {
         throw new Error('Expected Google login to succeed for existing user');
       }
@@ -732,7 +718,7 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
       setGoogleClientId('test-google-client-id');
 
       const disappearingGoogleId = 'google-disappearing-sub';
-      const triggerName = `google_disappear_${Date.now()}`;
+      const triggerName = `google_disappear_${String(Date.now())}`;
       const functionName = `${triggerName}_fn`;
 
       try {

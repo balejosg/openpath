@@ -41,16 +41,17 @@ async function waitForHealth(baseUrl: string): Promise<void> {
 async function waitForAdmin(
   email: string
 ): Promise<NonNullable<Awaited<ReturnType<typeof userStorage.getUserByEmail>>>> {
-  let foundUser: Awaited<ReturnType<typeof userStorage.getUserByEmail>> = null;
+  let foundUser!: NonNullable<Awaited<ReturnType<typeof userStorage.getUserByEmail>>>;
 
   await waitFor(async () => {
-    foundUser = await userStorage.getUserByEmail(email);
-    return foundUser !== null;
-  }, 15000);
+    const user = await userStorage.getUserByEmail(email);
+    if (user === null) {
+      return false;
+    }
 
-  if (foundUser === null) {
-    throw new Error(`Expected admin ${email} to exist`);
-  }
+    foundUser = user;
+    return true;
+  }, 15000);
 
   return foundUser;
 }
@@ -61,7 +62,9 @@ function waitForExit(child: ChildProcess): Promise<number | null> {
   }
 
   return new Promise((resolve, reject) => {
-    child.once('exit', (code) => resolve(code));
+    child.once('exit', (code) => {
+      resolve(code);
+    });
     child.once('error', reject);
   });
 }
@@ -97,11 +100,11 @@ void describe('Server startup coverage', () => {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      child.stdout?.on('data', (chunk) => {
-        childOutput.push(chunk.toString());
+      child.stdout.on('data', (chunk: Buffer | string) => {
+        childOutput.push(String(chunk));
       });
-      child.stderr?.on('data', (chunk) => {
-        childOutput.push(chunk.toString());
+      child.stderr.on('data', (chunk: Buffer | string) => {
+        childOutput.push(String(chunk));
       });
 
       try {
