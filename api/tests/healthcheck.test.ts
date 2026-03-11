@@ -34,30 +34,6 @@ GLOBAL_TIMEOUT.unref();
 
 let server: Server | undefined;
 
-// Expected version from package.json
-const EXPECTED_VERSION = '1.0.4';
-
-// Response type for systemInfo endpoint
-interface SystemInfoResponse {
-  version: string;
-  database: {
-    connected: boolean;
-    type: string;
-  };
-  session: {
-    accessTokenExpiry: string;
-    accessTokenExpiryHuman: string;
-    refreshTokenExpiry: string;
-    refreshTokenExpiryHuman: string;
-  };
-  backup: {
-    lastBackupAt: string | null;
-    lastBackupHuman: string | null;
-    lastBackupStatus: 'success' | 'failed' | null;
-  };
-  uptime: number;
-}
-
 await describe('Healthcheck Router Tests', { timeout: 30000 }, async () => {
   before(async () => {
     // Start server for testing
@@ -140,132 +116,9 @@ await describe('Healthcheck Router Tests', { timeout: 30000 }, async () => {
   });
 
   await describe('healthcheck.systemInfo', async () => {
-    await test('should return version from package.json', async () => {
+    await test('should be removed from the public surface', async () => {
       const response = await trpcQuery(API_URL, 'healthcheck.systemInfo');
-      assert.strictEqual(response.status, 200);
-
-      const { data } = (await parseTRPC(response)) as { data?: SystemInfoResponse };
-      assert.ok(data !== undefined, 'Expected data in response');
-      assert.strictEqual(data.version, EXPECTED_VERSION, `Version should be ${EXPECTED_VERSION}`);
-    });
-
-    await test('should return database connection status', async () => {
-      const response = await trpcQuery(API_URL, 'healthcheck.systemInfo');
-      assert.strictEqual(response.status, 200);
-
-      const { data } = (await parseTRPC(response)) as { data?: SystemInfoResponse };
-      assert.ok(data !== undefined, 'Expected data in response');
-      assert.ok('database' in data, 'Expected database object');
-      assert.strictEqual(typeof data.database.connected, 'boolean', 'connected should be boolean');
-      assert.strictEqual(data.database.type, 'PostgreSQL', 'Database type should be PostgreSQL');
-    });
-
-    await test('should return database as connected when DB is available', async () => {
-      const response = await trpcQuery(API_URL, 'healthcheck.systemInfo');
-      assert.strictEqual(response.status, 200);
-
-      const { data } = (await parseTRPC(response)) as { data?: SystemInfoResponse };
-      assert.ok(data !== undefined, 'Expected data in response');
-      // In test environment with DB running, should be connected
-      assert.strictEqual(data.database.connected, true, 'Database should be connected in test env');
-    });
-
-    await test('should return session configuration values', async () => {
-      const response = await trpcQuery(API_URL, 'healthcheck.systemInfo');
-      assert.strictEqual(response.status, 200);
-
-      const { data } = (await parseTRPC(response)) as { data?: SystemInfoResponse };
-      assert.ok(data !== undefined, 'Expected data in response');
-      assert.ok('session' in data, 'Expected session object');
-
-      // Access token expiry
-      assert.ok(
-        typeof data.session.accessTokenExpiry === 'string',
-        'accessTokenExpiry should be string'
-      );
-      assert.ok(
-        typeof data.session.accessTokenExpiryHuman === 'string',
-        'accessTokenExpiryHuman should be string'
-      );
-
-      // Refresh token expiry
-      assert.ok(
-        typeof data.session.refreshTokenExpiry === 'string',
-        'refreshTokenExpiry should be string'
-      );
-      assert.ok(
-        typeof data.session.refreshTokenExpiryHuman === 'string',
-        'refreshTokenExpiryHuman should be string'
-      );
-    });
-
-    await test('should return human-readable expiry format in Spanish', async () => {
-      const response = await trpcQuery(API_URL, 'healthcheck.systemInfo');
-      assert.strictEqual(response.status, 200);
-
-      const { data } = (await parseTRPC(response)) as { data?: SystemInfoResponse };
-      assert.ok(data !== undefined, 'Expected data in response');
-
-      // Human-readable should contain Spanish time units
-      const spanishTimeUnits = ['segundo', 'minuto', 'hora', 'día'];
-      const hasSpanishUnit = spanishTimeUnits.some(
-        (unit) =>
-          data.session.accessTokenExpiryHuman.includes(unit) ||
-          data.session.refreshTokenExpiryHuman.includes(unit)
-      );
-      assert.ok(hasSpanishUnit, 'Human-readable expiry should contain Spanish time units');
-    });
-
-    await test('should return uptime as positive number', async () => {
-      const response = await trpcQuery(API_URL, 'healthcheck.systemInfo');
-      assert.strictEqual(response.status, 200);
-
-      const { data } = (await parseTRPC(response)) as { data?: SystemInfoResponse };
-      assert.ok(data !== undefined, 'Expected data in response');
-      assert.ok(typeof data.uptime === 'number', 'Uptime should be a number');
-      assert.ok(data.uptime > 0, 'Uptime should be positive');
-    });
-
-    await test('should be accessible without authentication (public endpoint)', async () => {
-      // No auth headers provided
-      const response = await trpcQuery(API_URL, 'healthcheck.systemInfo');
-      assert.strictEqual(response.status, 200, 'Should be accessible without auth');
-
-      const { data, error } = (await parseTRPC(response)) as {
-        data?: SystemInfoResponse;
-        error?: string;
-      };
-      assert.ok(error === undefined, 'Should not return auth error');
-      assert.ok(data !== undefined, 'Should return data');
-    });
-
-    await test('should return consistent response structure', async () => {
-      const response = await trpcQuery(API_URL, 'healthcheck.systemInfo');
-      assert.strictEqual(response.status, 200);
-
-      const { data } = (await parseTRPC(response)) as { data?: SystemInfoResponse };
-      assert.ok(data !== undefined, 'Expected data in response');
-
-      // Verify all expected keys exist
-      const expectedKeys = ['version', 'database', 'session', 'uptime'];
-      for (const key of expectedKeys) {
-        assert.ok(key in data, `Response should contain ${key}`);
-      }
-
-      // Verify database structure
-      assert.ok('connected' in data.database, 'database should have connected');
-      assert.ok('type' in data.database, 'database should have type');
-
-      // Verify session structure
-      const sessionKeys = [
-        'accessTokenExpiry',
-        'accessTokenExpiryHuman',
-        'refreshTokenExpiry',
-        'refreshTokenExpiryHuman',
-      ];
-      for (const key of sessionKeys) {
-        assert.ok(key in data.session, `session should contain ${key}`);
-      }
+      assert.strictEqual(response.status, 404);
     });
   });
 });

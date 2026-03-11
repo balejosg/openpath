@@ -23,36 +23,10 @@ GLOBAL_TIMEOUT.unref();
 
 let server: Server | undefined;
 
-// Response types
-interface BackupStatusResponse {
-  lastBackupAt: string | null;
-  lastBackupHuman: string | null;
-  lastBackupSize: string | null;
-  lastBackupSizeHuman: string | null;
-  lastBackupStatus: 'success' | 'failed' | null;
-}
-
 interface BackupRecordResponse {
   success: boolean;
   recordedAt?: string;
   error?: string;
-}
-
-interface SystemInfoResponse {
-  version: string;
-  database: { connected: boolean; type: string };
-  session: {
-    accessTokenExpiry: string;
-    accessTokenExpiryHuman: string;
-    refreshTokenExpiry: string;
-    refreshTokenExpiryHuman: string;
-  };
-  backup: {
-    lastBackupAt: string | null;
-    lastBackupHuman: string | null;
-    lastBackupStatus: 'success' | 'failed' | null;
-  };
-  uptime: number;
 }
 
 await describe('Backup Router Tests', { timeout: 30000 }, async () => {
@@ -95,27 +69,9 @@ await describe('Backup Router Tests', { timeout: 30000 }, async () => {
   });
 
   await describe('backup.status', async () => {
-    await test('should return backup status (public endpoint)', async () => {
+    await test('should be removed from the product surface', async () => {
       const response = await trpcQuery(API_URL, 'backup.status');
-      assert.strictEqual(response.status, 200);
-
-      const { data } = (await parseTRPC(response)) as { data?: BackupStatusResponse };
-      assert.ok(data !== undefined, 'Expected data in response');
-
-      // Check structure exists (values may be null if no backup recorded)
-      assert.ok('lastBackupAt' in data, 'Should have lastBackupAt');
-      assert.ok('lastBackupHuman' in data, 'Should have lastBackupHuman');
-      assert.ok('lastBackupSize' in data, 'Should have lastBackupSize');
-      assert.ok('lastBackupSizeHuman' in data, 'Should have lastBackupSizeHuman');
-      assert.ok('lastBackupStatus' in data, 'Should have lastBackupStatus');
-    });
-
-    await test('should be accessible without authentication', async () => {
-      const response = await trpcQuery(API_URL, 'backup.status');
-      assert.strictEqual(response.status, 200, 'Should be accessible without auth');
-
-      const { error } = await parseTRPC(response);
-      assert.ok(error === undefined, 'Should not return auth error');
+      assert.strictEqual(response.status, 404);
     });
   });
 
@@ -175,44 +131,10 @@ await describe('Backup Router Tests', { timeout: 30000 }, async () => {
     });
   });
 
-  await describe('backup status after recording', async () => {
-    await test('should show recorded backup in status', async () => {
-      // First record a backup
-      await trpcMutate(
-        API_URL,
-        'backup.record',
-        { status: 'success', sizeBytes: 2048000 },
-        { Authorization: 'Bearer test-backup-secret' }
-      );
-
-      // Then check status
-      const response = await trpcQuery(API_URL, 'backup.status');
-      assert.strictEqual(response.status, 200);
-
-      const { data } = (await parseTRPC(response)) as { data?: BackupStatusResponse };
-      assert.ok(data !== undefined, 'Expected data in response');
-
-      // Should now have backup info
-      assert.ok(data.lastBackupAt !== null, 'Should have lastBackupAt after recording');
-      assert.ok(data.lastBackupHuman !== null, 'Should have human-readable time');
-      assert.strictEqual(data.lastBackupStatus, 'success');
-      assert.ok(data.lastBackupSizeHuman !== null, 'Should have size');
-    });
-  });
-
-  await describe('systemInfo includes backup', async () => {
-    await test('should include backup info in systemInfo', async () => {
+  await describe('removed operational surfaces', async () => {
+    await test('healthcheck.systemInfo should be removed from the product surface', async () => {
       const response = await trpcQuery(API_URL, 'healthcheck.systemInfo');
-      assert.strictEqual(response.status, 200);
-
-      const { data } = (await parseTRPC(response)) as { data?: SystemInfoResponse };
-      assert.ok(data !== undefined, 'Expected data in response');
-
-      // Check backup object exists
-      assert.ok('backup' in data, 'Should have backup object');
-      assert.ok('lastBackupAt' in data.backup, 'Should have lastBackupAt');
-      assert.ok('lastBackupHuman' in data.backup, 'Should have lastBackupHuman');
-      assert.ok('lastBackupStatus' in data.backup, 'Should have lastBackupStatus');
+      assert.strictEqual(response.status, 404);
     });
   });
 });

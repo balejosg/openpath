@@ -22,7 +22,10 @@ export const authRouter = router({
     if (!result.ok) {
       throw new TRPCError({ code: result.error.code, message: result.error.message });
     }
-    return result.data;
+    return {
+      user: result.data.user,
+      verificationRequired: result.data.verificationRequired,
+    };
   }),
 
   /**
@@ -69,7 +72,7 @@ export const authRouter = router({
    * Generate a new email verification token for an existing unverified user.
    * Public endpoint so SaaS wrappers can own delivery without teaching OpenPath about providers.
    */
-  generateEmailVerificationToken: publicProcedure
+  generateEmailVerificationToken: adminProcedure
     .input(z.object({ email: z.string().email() }))
     .mutation(async ({ input }) => {
       const result = await AuthService.generateEmailVerificationToken(input.email);

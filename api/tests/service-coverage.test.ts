@@ -624,7 +624,7 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
       });
     });
 
-    void test('covers Google login branches for config, payload, linking, creation, inactivity, and timeouts', async () => {
+    void test('covers Google login branches for config, payload, linking, unknown accounts, inactivity, and timeouts', async () => {
       const missingConfig = await authService.loginWithGoogle('token-without-config');
       assert.deepStrictEqual(missingConfig, {
         ok: false,
@@ -668,24 +668,27 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
       assert.strictEqual(linkedUser.id, existingUser.id);
       assert.strictEqual(linkedUser.emailVerified, true);
 
-      const createdEmail = uniqueEmail('google-create-new');
+      const unknownEmail = uniqueEmail('google-create-new');
       stubGooglePayload({
-        email: createdEmail,
+        email: unknownEmail,
         sub: 'google-create-sub',
-        name: 'Created Via Google',
+        name: 'Unknown Google User',
       });
-      const createdLogin = await authService.loginWithGoogle('create-new-user-token');
-      assert.ok(createdLogin.ok);
+      const unknownAccountLogin = await authService.loginWithGoogle('create-new-user-token');
+      assert.deepStrictEqual(unknownAccountLogin, {
+        ok: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Google sign-in is only available for existing or preapproved accounts',
+        },
+      });
+      assert.strictEqual(await userStorage.getUserByGoogleId('google-create-sub'), null);
 
-      const createdUser = await userStorage.getUserByGoogleId('google-create-sub');
-      assert.ok(createdUser);
-      assert.strictEqual(createdUser.email, createdEmail);
-
-      await setUserActive(createdUser.id, false);
+      await setUserActive(existingUser.id, false);
       stubGooglePayload({
-        email: createdEmail,
-        sub: 'google-create-sub',
-        name: 'Created Via Google',
+        email: existingEmail,
+        sub: 'google-link-sub',
+        name: 'Existing Google User',
       });
       const inactiveLogin = await authService.loginWithGoogle('inactive-google-user-token');
       assert.deepStrictEqual(inactiveLogin, {
@@ -714,12 +717,18 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
       });
     });
 
-    void test('returns unauthorized when Google provisioning cannot reload the created user', async () => {
+    void test('returns unauthorized when Google linking cannot reload the existing user', async () => {
       setGoogleClientId('test-google-client-id');
 
       const disappearingGoogleId = 'google-disappearing-sub';
       const triggerName = `google_disappear_${String(Date.now())}`;
       const functionName = `${triggerName}_fn`;
+      const existingEmail = uniqueEmail('google-disappearing');
+      const existingUser = await userStorage.createUser({
+        email: existingEmail,
+        name: 'Google Disappearing User',
+        password: DEFAULT_PASSWORD,
+      });
 
       try {
         await db.execute(
@@ -738,14 +747,14 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
         await db.execute(
           sql.raw(`
             CREATE TRIGGER ${triggerName}
-            AFTER INSERT ON users
+            AFTER UPDATE ON users
             FOR EACH ROW
             EXECUTE FUNCTION ${functionName}();
           `)
         );
 
         stubGooglePayload({
-          email: uniqueEmail('google-disappearing'),
+          email: existingEmail,
           sub: disappearingGoogleId,
           name: 'Google Disappearing User',
         });
@@ -758,6 +767,7 @@ void describe('Coverage-oriented service and storage tests', { concurrency: fals
             message: 'Failed to create or find user',
           },
         });
+        assert.strictEqual(await userStorage.getUserById(existingUser.id), null);
       } finally {
         await db.execute(sql.raw(`DROP TRIGGER IF EXISTS ${triggerName} ON users;`));
         await db.execute(sql.raw(`DROP FUNCTION IF EXISTS ${functionName}();`));

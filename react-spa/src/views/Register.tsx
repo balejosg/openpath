@@ -1,7 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { Mail, Lock, User, ArrowRight, Loader2, Shield, Briefcase } from 'lucide-react';
-import { loginWithGoogle } from '../lib/auth';
-import GoogleLoginButton from '../components/GoogleLoginButton';
 import { trpc } from '../lib/trpc';
 import { reportError } from '../lib/reportError';
 
@@ -69,21 +67,6 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onNavigateToLogin }) =>
       const message = err instanceof Error ? err.message : 'Error al registrar la cuenta';
       setError(message);
       reportError('Failed to register user:', err);
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleSuccess = async (idToken: string) => {
-    setIsLoading(true);
-    setError('');
-    try {
-      await loginWithGoogle(idToken);
-      onRegister();
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al registrarse con Google';
-      setError(message);
-      reportError('Failed to register with Google:', err);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -252,7 +235,8 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onNavigateToLogin }) =>
                 <a href="#" className="text-blue-600 font-semibold">
                   Términos de Servicio
                 </a>{' '}
-                y confirmas que representas a una institución educativa verificada.
+                y confirmas que representas a una institución educativa verificada. Los accesos
+                externos se habilitan después de la aprobación institucional.
               </p>
             </div>
 
@@ -269,22 +253,6 @@ const Register: React.FC<RegisterProps> = ({ onRegister, onNavigateToLogin }) =>
                 </>
               )}
             </button>
-
-            <div className="relative py-2">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-200"></div>
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-2 text-slate-400">O también</span>
-              </div>
-            </div>
-
-            <GoogleLoginButton
-              onSuccess={(token) => {
-                void handleGoogleSuccess(token);
-              }}
-              disabled={isLoading}
-            />
           </form>
 
           <div className="mt-6 text-center text-sm">

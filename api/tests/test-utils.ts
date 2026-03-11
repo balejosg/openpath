@@ -371,8 +371,18 @@ export async function registerAndVerifyUser(
   const registerResponse = await trpcMutate(baseUrl, 'auth.register', input, headers);
   const { data } = (await parseTRPC(registerResponse)) as { data?: AuthResult };
 
-  if (registerResponse.status !== 200 || !data?.verificationToken) {
+  if (registerResponse.status !== 200) {
     return data ? { registerResponse, registerData: data } : { registerResponse };
+  }
+
+  let verificationToken = data?.verificationToken;
+  if (!verificationToken) {
+    const { AuthService } = await import('../src/services/index.js');
+    const internalResult = await AuthService.generateEmailVerificationToken(input.email);
+    if (!internalResult.ok) {
+      return data ? { registerResponse, registerData: data } : { registerResponse };
+    }
+    verificationToken = internalResult.data.verificationToken;
   }
 
   const verifyResponse = await trpcMutate(
@@ -380,16 +390,21 @@ export async function registerAndVerifyUser(
     'auth.verifyEmail',
     {
       email: input.email,
-      token: data.verificationToken,
+      token: verificationToken,
     },
     headers
   );
 
-  return {
-    registerResponse,
-    registerData: data,
-    verifyResponse,
-  };
+  return data
+    ? {
+        registerResponse,
+        registerData: data,
+        verifyResponse,
+      }
+    : {
+        registerResponse,
+        verifyResponse,
+      };
 }
 
 /**

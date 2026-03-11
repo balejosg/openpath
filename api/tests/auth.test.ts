@@ -27,6 +27,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import type { Server } from 'node:http';
+import { OAuth2Client, type LoginTicket } from 'google-auth-library';
 import { getAvailablePort, resetDb } from './test-utils.js';
 import { closeConnection } from '../src/db/index.js';
 import * as authLib from '../src/lib/auth.js';
@@ -114,6 +115,8 @@ await describe(
       PORT = await getAvailablePort();
       API_URL = `http://localhost:${String(PORT)}`;
       process.env.PORT = String(PORT);
+      const { config } = await import('../src/config.js');
+      (config as { googleClientId: string }).googleClientId = 'test-google-client-id';
       const { app } = await import('../src/server.js');
 
       server = app.listen(PORT, () => {
@@ -168,8 +171,16 @@ await describe(
         assert.ok(data.user.id);
         assert.deepStrictEqual(data.user.roles ?? [], []);
         assert.strictEqual(data.verificationRequired, true);
-        assert.ok(data.verificationToken);
-        assert.ok(data.verificationExpiresAt);
+        assert.strictEqual(
+          data.verificationToken,
+          undefined,
+          'public registration should not expose verification tokens'
+        );
+        assert.strictEqual(
+          data.verificationExpiresAt,
+          undefined,
+          'public registration should not expose verification expiry'
+        );
       });
 
       await test('should reject registration without email', async () => {
@@ -210,6 +221,143 @@ await describe(
           [409, 429].includes(response.status),
           `Expected 409 or 429, got ${String(response.status)}`
         );
+      });
+    });
+
+    await describe('tRPC auth.generateEmailVerificationToken - Restricted issuance', async () => {
+      const adminAccessToken = authLib.generateTokens(
+        {
+          id: 'legacy_admin',
+          email: 'admin@openpath.dev',
+          name: 'Legacy Admin',
+          passwordHash: 'placeholder',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          isActive: true,
+        },
+        [{ role: 'admin', groupIds: [] }]
+      ).accessToken;
+
+      await test('should reject unauthenticated email verification issuance', async () => {
+        const email = `verify-public-${String(Date.now())}@example.com`;
+        await userStorage.createUser(
+          {
+            email,
+            password: 'SecurePassword123!',
+            name: 'Verification Public User',
+          },
+          { emailVerified: false }
+        );
+
+        const response = await trpcMutate('auth.generateEmailVerificationToken', { email });
+        assert.strictEqual(response.status, 401);
+      });
+
+      await test('should allow admins to issue a verification token for an unverified user', async () => {
+        const email = `verify-admin-${String(Date.now())}@example.com`;
+        await userStorage.createUser(
+          {
+            email,
+            password: 'SecurePassword123!',
+            name: 'Verification Admin User',
+          },
+          { emailVerified: false }
+        );
+
+        const response = await trpcMutate(
+          'auth.generateEmailVerificationToken',
+          { email },
+          { Authorization: `Bearer ${adminAccessToken}` }
+        );
+        assert.strictEqual(response.status, 200);
+
+        const { data } = (await parseTRPC(response)) as {
+          data?: {
+            email?: string;
+            verificationRequired?: boolean;
+            verificationToken?: string;
+            verificationExpiresAt?: string;
+          };
+        };
+        assert.ok(data);
+        assert.strictEqual(data.email, email);
+        assert.strictEqual(data.verificationRequired, true);
+        assert.ok(data.verificationToken);
+        assert.ok(data.verificationExpiresAt);
+      });
+    });
+
+    await describe('tRPC auth.googleLogin - Existing users only', async () => {
+      async function withStubbedGooglePayload(
+        payload: { email?: string; sub?: string; name?: string },
+        run: () => Promise<void>
+      ): Promise<void> {
+        const originalVerifyIdToken = Reflect.get(OAuth2Client.prototype, 'verifyIdToken');
+        const verifyIdTokenStub = (): Promise<LoginTicket> =>
+          Promise.resolve({
+            getPayload: (): { email?: string; sub?: string; name?: string } => payload,
+          } as unknown as LoginTicket);
+        OAuth2Client.prototype.verifyIdToken =
+          verifyIdTokenStub as unknown as typeof OAuth2Client.prototype.verifyIdToken;
+
+        try {
+          await run();
+        } finally {
+          OAuth2Client.prototype.verifyIdToken = originalVerifyIdToken;
+        }
+      }
+
+      await test('should link Google login to an existing account instead of provisioning a new one', async () => {
+        const email = `google-existing-${String(Date.now())}@example.com`;
+        const googleId = `google-existing-${String(Date.now())}`;
+        await userStorage.createUser(
+          {
+            email,
+            password: 'SecurePassword123!',
+            name: 'Existing Google User',
+          },
+          { emailVerified: false }
+        );
+
+        await withStubbedGooglePayload(
+          { email, sub: googleId, name: 'Existing Google User' },
+          async () => {
+            const response = await trpcMutate('auth.googleLogin', { idToken: 'fake-google-token' });
+            assert.strictEqual(response.status, 200);
+
+            const { data } = (await parseTRPC(response)) as { data?: AuthResult };
+            const user = data?.user;
+            if (!user) {
+              throw new Error('Expected google login to return a user');
+            }
+            assert.strictEqual(user.email, email);
+
+            const storedUser = await userStorage.getUserByEmail(email);
+            if (!storedUser) {
+              throw new Error('Expected existing user to remain in storage');
+            }
+            assert.strictEqual(storedUser.googleId, googleId);
+            assert.strictEqual(storedUser.emailVerified, true);
+          }
+        );
+      });
+
+      await test('should reject unknown Google accounts instead of auto-provisioning them', async () => {
+        const email = `google-unknown-${String(Date.now())}@example.com`;
+
+        await withStubbedGooglePayload(
+          { email, sub: `google-unknown-${String(Date.now())}`, name: 'Unknown Google User' },
+          async () => {
+            const response = await trpcMutate('auth.googleLogin', { idToken: 'fake-google-token' });
+            assert.strictEqual(response.status, 403);
+
+            const { error } = await parseTRPC(response);
+            assert.match(error ?? '', /existing|preapproved/i);
+          }
+        );
+
+        const storedUser = await userStorage.getUserByEmail(email);
+        assert.strictEqual(storedUser, null);
       });
     });
 

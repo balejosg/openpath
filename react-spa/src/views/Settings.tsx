@@ -1,63 +1,9 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import {
-  Settings as SettingsIcon,
-  Bell,
-  Shield,
-  Database,
-  Key,
-  Info,
-  AlertCircle,
-  Loader2,
-  Plus,
-  Trash2,
-  RefreshCw,
-  Copy,
-  Check,
-} from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { Settings as SettingsIcon, Bell, Shield, Info, AlertCircle, Loader2 } from 'lucide-react';
 import { trpc } from '../lib/trpc';
 import { reportError } from '../lib/reportError';
-import { useClipboard } from '../hooks/useClipboard';
 import { usePersistentNotificationPrefs } from '../hooks/usePersistentNotificationPrefs';
-import { DangerConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Modal } from '../components/ui/Modal';
-
-interface SystemInfo {
-  version: string;
-  database: {
-    connected: boolean;
-    type: string;
-  };
-  session: {
-    accessTokenExpiry: string;
-    accessTokenExpiryHuman: string;
-    refreshTokenExpiry: string;
-    refreshTokenExpiryHuman: string;
-  };
-  backup?: {
-    lastBackupAt: string | null;
-    lastBackupHuman: string | null;
-    lastBackupStatus: 'success' | 'failed' | null;
-  };
-  uptime: number;
-}
-
-interface ApiToken {
-  id: string;
-  name: string;
-  maskedToken: string;
-  lastUsedAt: string | null;
-  expiresAt: string | null;
-  createdAt: string | null;
-  isExpired: boolean;
-}
-
-interface NewTokenResponse {
-  id: string;
-  name: string;
-  token: string;
-  expiresAt: string | null;
-  createdAt: string;
-}
 
 const Settings: React.FC = () => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -67,30 +13,9 @@ const Settings: React.FC = () => {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-
-  // System info from API
-  const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
-  const [systemInfoLoading, setSystemInfoLoading] = useState(true);
-
-  // API Tokens state
-  const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
-  const [tokensLoading, setTokensLoading] = useState(true);
-  const [showCreateTokenModal, setShowCreateTokenModal] = useState(false);
-  const [newTokenName, setNewTokenName] = useState('');
-  const [newTokenExpiry, setNewTokenExpiry] = useState<number | null>(null);
-  const [createdToken, setCreatedToken] = useState<NewTokenResponse | null>(null);
-  const [tokenError, setTokenError] = useState('');
-  const [tokenActionLoading, setTokenActionLoading] = useState<string | null>(null);
-  const [revokeTokenConfirmId, setRevokeTokenConfirmId] = useState<string | null>(null);
-  const [regenerateTokenConfirmId, setRegenerateTokenConfirmId] = useState<string | null>(null);
-
-  const {
-    copy: copyTokenToClipboard,
-    isCopied: isTokenCopied,
-    clearCopied: clearTokenCopied,
-  } = useClipboard();
-
   const passwordResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { prefs, setPrefs } = usePersistentNotificationPrefs();
 
   const clearPasswordResetTimer = () => {
     if (!passwordResetTimerRef.current) return;
@@ -98,45 +23,19 @@ const Settings: React.FC = () => {
     passwordResetTimerRef.current = null;
   };
 
-  // Fetch API tokens
-  const fetchTokens = useCallback(async () => {
-    try {
-      setTokensLoading(true);
-      const tokens = await trpc.apiTokens.list.query();
-      setApiTokens(tokens);
-    } catch (err) {
-      reportError('Failed to fetch API tokens:', err);
-    } finally {
-      setTokensLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Fetch system info on mount
-    const fetchSystemInfo = async () => {
-      try {
-        setSystemInfoLoading(true);
-        const info = await trpc.healthcheck.systemInfo.query();
-        setSystemInfo(info);
-      } catch (err) {
-        reportError('Failed to fetch system info:', err);
-      } finally {
-        setSystemInfoLoading(false);
-      }
-    };
-    void fetchSystemInfo();
-    void fetchTokens();
-
-    return () => {
-      clearPasswordResetTimer();
-    };
-  }, [fetchTokens]);
-
-  const { prefs, setPrefs } = usePersistentNotificationPrefs();
-
   const closePasswordModal = () => {
     clearPasswordResetTimer();
     setShowPasswordModal(false);
+  };
+
+  const openPasswordModal = () => {
+    clearPasswordResetTimer();
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+    setPasswordSuccess(false);
+    setShowPasswordModal(true);
   };
 
   const handleChangePassword = async () => {
@@ -190,107 +89,19 @@ const Settings: React.FC = () => {
     }
   };
 
-  const openPasswordModal = () => {
-    clearPasswordResetTimer();
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setPasswordError('');
-    setPasswordSuccess(false);
-    setShowPasswordModal(true);
-  };
-
-  // API Token handlers
-  const handleCreateToken = async () => {
-    if (!newTokenName.trim()) {
-      setTokenError('El nombre es obligatorio');
-      return;
-    }
-    if (newTokenName.length > 100) {
-      setTokenError('El nombre es demasiado largo (máx. 100 caracteres)');
-      return;
-    }
-
-    try {
-      setTokenError('');
-      setTokenActionLoading('create');
-      const result = await trpc.apiTokens.create.mutate({
-        name: newTokenName.trim(),
-        expiresInDays: newTokenExpiry ?? undefined,
-      });
-      setCreatedToken(result);
-      void fetchTokens();
-    } catch (err) {
-      reportError('Failed to create token:', err);
-      setTokenError('Error al crear el token');
-    } finally {
-      setTokenActionLoading(null);
-    }
-  };
-
-  const handleRevokeToken = async (tokenId: string) => {
-    try {
-      setTokenActionLoading(tokenId);
-      await trpc.apiTokens.revoke.mutate({ id: tokenId });
-      void fetchTokens();
-    } catch (err) {
-      reportError('Failed to revoke token:', err);
-    } finally {
-      setTokenActionLoading(null);
-    }
-  };
-
-  const handleRegenerateToken = async (tokenId: string) => {
-    try {
-      setTokenActionLoading(tokenId);
-      const result = await trpc.apiTokens.regenerate.mutate({ id: tokenId });
-      setCreatedToken(result);
-      setShowCreateTokenModal(true);
-      void fetchTokens();
-    } catch (err) {
-      reportError('Failed to regenerate token:', err);
-    } finally {
-      setTokenActionLoading(null);
-    }
-  };
-
-  const requestRevokeToken = (tokenId: string) => {
-    setRevokeTokenConfirmId(tokenId);
-  };
-
-  const requestRegenerateToken = (tokenId: string) => {
-    setRegenerateTokenConfirmId(tokenId);
-  };
-
-  const closeTokenModal = useCallback(() => {
-    clearTokenCopied();
-    setShowCreateTokenModal(false);
-    setNewTokenName('');
-    setNewTokenExpiry(null);
-    setCreatedToken(null);
-    setTokenError('');
-  }, [clearTokenCopied]);
-
-  const closeTokenModalSafe = useCallback(() => {
-    if (tokenActionLoading === 'create') return;
-    closeTokenModal();
-  }, [tokenActionLoading, closeTokenModal]);
-
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <div className="p-2 bg-slate-100 rounded-lg">
           <SettingsIcon className="text-slate-600" size={24} />
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-800">Configuración</h1>
-          <p className="text-sm text-slate-500">Administra las preferencias del sistema</p>
+          <p className="text-sm text-slate-500">Administra tus preferencias esenciales</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Notificaciones */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-blue-50 rounded-lg">
@@ -335,7 +146,6 @@ const Settings: React.FC = () => {
           </div>
         </div>
 
-        {/* Seguridad */}
         <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 bg-green-50 rounded-lg">
@@ -350,10 +160,10 @@ const Settings: React.FC = () => {
                 Próximamente
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-slate-600">Tiempo de sesión</span>
-              <span className="text-sm text-slate-800 font-medium">
-                {systemInfoLoading ? '...' : (systemInfo?.session.accessTokenExpiryHuman ?? 'N/A')}
+            <div className="flex items-start justify-between gap-4">
+              <span className="text-sm text-slate-600">Protección de sesión</span>
+              <span className="text-sm text-slate-800 font-medium text-right">
+                Administrada por el servidor
               </span>
             </div>
             <button
@@ -364,148 +174,13 @@ const Settings: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {/* Base de Datos */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-purple-50 rounded-lg">
-              <Database className="text-purple-600" size={20} />
-            </div>
-            <h2 className="font-semibold text-slate-800">Base de Datos</h2>
-          </div>
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Estado</span>
-              {systemInfoLoading ? (
-                <Loader2 size={16} className="animate-spin text-slate-400" />
-              ) : systemInfo?.database.connected ? (
-                <span className="flex items-center gap-1 text-green-600 font-medium">
-                  <span className="w-2 h-2 bg-green-500 rounded-full"></span> Conectada
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 text-red-600 font-medium">
-                  <span className="w-2 h-2 bg-red-500 rounded-full"></span> Desconectada
-                </span>
-              )}
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Tipo</span>
-              <span className="text-slate-800">
-                {systemInfoLoading ? '...' : (systemInfo?.database.type ?? 'N/A')}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Último backup</span>
-              {systemInfoLoading ? (
-                <Loader2 size={16} className="animate-spin text-slate-400" />
-              ) : systemInfo?.backup?.lastBackupHuman ? (
-                <span
-                  className={`text-sm ${systemInfo.backup.lastBackupStatus === 'failed' ? 'text-red-600' : 'text-slate-800'}`}
-                >
-                  {systemInfo.backup.lastBackupHuman}
-                </span>
-              ) : (
-                <span className="text-slate-400 text-xs">No disponible</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* API Keys */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-50 rounded-lg">
-                <Key className="text-orange-600" size={20} />
-              </div>
-              <h2 className="font-semibold text-slate-800">API Keys</h2>
-            </div>
-            <button
-              onClick={() => setShowCreateTokenModal(true)}
-              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-medium"
-            >
-              <Plus size={16} /> Crear token
-            </button>
-          </div>
-          <div className="space-y-3">
-            {tokensLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 size={24} className="animate-spin text-slate-400" />
-              </div>
-            ) : apiTokens.length === 0 ? (
-              <div className="text-center py-6 text-slate-500 text-sm">
-                No tienes tokens API. Crea uno para acceder a la API.
-              </div>
-            ) : (
-              apiTokens.map((token) => (
-                <div key={token.id} className="p-3 bg-slate-50 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <div className="flex-1">
-                      <span className="text-sm font-medium text-slate-700">{token.name}</span>
-                      {token.isExpired ? (
-                        <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">
-                          Expirado
-                        </span>
-                      ) : (
-                        <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
-                          Activo
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => requestRegenerateToken(token.id)}
-                        disabled={tokenActionLoading === token.id}
-                        className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors disabled:opacity-50"
-                        title="Regenerar token"
-                      >
-                        {tokenActionLoading === token.id ? (
-                          <Loader2 size={16} className="animate-spin" />
-                        ) : (
-                          <RefreshCw size={16} />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => requestRevokeToken(token.id)}
-                        disabled={tokenActionLoading === token.id}
-                        className="p-1.5 text-slate-400 hover:text-red-600 transition-colors disabled:opacity-50"
-                        title="Revocar token"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                  <code className="text-xs text-slate-500 mt-1 block font-mono">
-                    {token.maskedToken}
-                  </code>
-                  <div className="flex gap-4 mt-1 text-xs text-slate-400">
-                    {token.createdAt && (
-                      <span>Creado: {new Date(token.createdAt).toLocaleDateString()}</span>
-                    )}
-                    {token.expiresAt && (
-                      <span>Expira: {new Date(token.expiresAt).toLocaleDateString()}</span>
-                    )}
-                    {token.lastUsedAt && (
-                      <span>Último uso: {new Date(token.lastUsedAt).toLocaleDateString()}</span>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
       </div>
 
-      {/* Footer info */}
       <div className="flex items-center gap-2 text-sm text-slate-400 pt-4">
         <Info size={16} />
-        <span>
-          OpenPath v{systemInfoLoading ? '...' : (systemInfo?.version ?? '?')} - Los cambios se
-          guardan automáticamente
-        </span>
+        <span>Los cambios de esta página se guardan automáticamente en tu navegador.</span>
       </div>
 
-      {/* Modal: Cambiar Contraseña */}
       {showPasswordModal && (
         <Modal isOpen onClose={closePasswordModal} title="Cambiar Contraseña" className="max-w-md">
           {passwordSuccess ? (
@@ -585,183 +260,6 @@ const Settings: React.FC = () => {
           )}
         </Modal>
       )}
-
-      {/* Modal: Crear/Ver Token API */}
-      {showCreateTokenModal && (
-        <Modal
-          isOpen
-          onClose={closeTokenModalSafe}
-          title={createdToken ? 'Token Creado' : 'Crear Token API'}
-          className="max-w-md"
-        >
-          {createdToken ? (
-            <div className="space-y-4">
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="text-amber-600 flex-shrink-0 mt-0.5" size={16} />
-                  <p className="text-sm text-amber-800">
-                    <strong>¡Importante!</strong> Copia este token ahora. No podrás verlo de nuevo.
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nombre</label>
-                <p className="text-sm text-slate-800">{createdToken.name}</p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Token</label>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 p-2 bg-slate-100 rounded text-xs font-mono break-all">
-                    {createdToken.token}
-                  </code>
-                  <button
-                    onClick={() => void copyTokenToClipboard(createdToken.token, createdToken.id)}
-                    className="p-2 text-slate-500 hover:text-blue-600 transition-colors"
-                    title="Copiar token"
-                  >
-                    {isTokenCopied(createdToken.id) ? (
-                      <Check size={18} className="text-green-600" />
-                    ) : (
-                      <Copy size={18} />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {createdToken.expiresAt && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Expira</label>
-                  <p className="text-sm text-slate-800">
-                    {new Date(createdToken.expiresAt).toLocaleDateString()}
-                  </p>
-                </div>
-              )}
-
-              <button
-                onClick={closeTokenModalSafe}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-              >
-                Entendido
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Nombre del token
-                </label>
-                <input
-                  type="text"
-                  value={newTokenName}
-                  onChange={(e) => {
-                    setNewTokenName(e.target.value);
-                    if (tokenError) {
-                      setTokenError('');
-                    }
-                  }}
-                  placeholder="Ej: API de producción"
-                  maxLength={100}
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Expiración (opcional)
-                </label>
-                <select
-                  value={newTokenExpiry ?? ''}
-                  onChange={(e) =>
-                    setNewTokenExpiry(e.target.value ? Number(e.target.value) : null)
-                  }
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                >
-                  <option value="">Sin expiración</option>
-                  <option value="7">7 días</option>
-                  <option value="30">30 días</option>
-                  <option value="90">90 días</option>
-                  <option value="365">1 año</option>
-                </select>
-              </div>
-
-              {tokenError && (
-                <p className="text-red-500 text-xs flex items-center gap-1">
-                  <AlertCircle size={12} /> {tokenError}
-                </p>
-              )}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  onClick={closeTokenModalSafe}
-                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={() => void handleCreateToken()}
-                  disabled={tokenActionLoading === 'create'}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {tokenActionLoading === 'create' && (
-                    <Loader2 size={16} className="animate-spin" />
-                  )}
-                  Crear Token
-                </button>
-              </div>
-            </div>
-          )}
-        </Modal>
-      )}
-
-      <DangerConfirmDialog
-        isOpen={revokeTokenConfirmId !== null}
-        title="Revocar token"
-        confirmLabel="Revocar"
-        cancelLabel="Cancelar"
-        isLoading={revokeTokenConfirmId !== null && tokenActionLoading === revokeTokenConfirmId}
-        onClose={() => setRevokeTokenConfirmId(null)}
-        onConfirm={async () => {
-          if (!revokeTokenConfirmId) return;
-          await handleRevokeToken(revokeTokenConfirmId);
-          setRevokeTokenConfirmId(null);
-        }}
-      >
-        <p className="text-sm text-slate-600">
-          ¿Estás seguro de que deseas revocar el token{' '}
-          <strong>
-            {apiTokens.find((t) => t.id === revokeTokenConfirmId)?.name ?? 'seleccionado'}
-          </strong>
-          ?
-        </p>
-        <p className="text-xs text-slate-500">Esta acción no se puede deshacer.</p>
-      </DangerConfirmDialog>
-
-      <DangerConfirmDialog
-        isOpen={regenerateTokenConfirmId !== null}
-        title="Regenerar token"
-        confirmLabel="Regenerar"
-        cancelLabel="Cancelar"
-        isLoading={
-          regenerateTokenConfirmId !== null && tokenActionLoading === regenerateTokenConfirmId
-        }
-        onClose={() => setRegenerateTokenConfirmId(null)}
-        onConfirm={async () => {
-          if (!regenerateTokenConfirmId) return;
-          await handleRegenerateToken(regenerateTokenConfirmId);
-          setRegenerateTokenConfirmId(null);
-        }}
-      >
-        <p className="text-sm text-slate-600">
-          ¿Estás seguro de que deseas regenerar el token{' '}
-          <strong>
-            {apiTokens.find((t) => t.id === regenerateTokenConfirmId)?.name ?? 'seleccionado'}
-          </strong>
-          ?
-        </p>
-        <p className="text-xs text-slate-500">El token anterior dejará de funcionar.</p>
-      </DangerConfirmDialog>
     </div>
   );
 };

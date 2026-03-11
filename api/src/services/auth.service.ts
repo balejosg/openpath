@@ -604,17 +604,17 @@ export async function loginWithGoogle(idToken: string): Promise<AuthResult<Login
         }
         user = await userStorage.getUserById(user.id);
       } else {
-        logger.info('auth.loginWithGoogle: creating new user');
-        const newUser = await userStorage.createGoogleUser({
+        logger.warn('auth.loginWithGoogle: rejected unknown Google account', {
           email: payload.email,
-          name: payload.name ?? payload.email,
-          googleId: payload.sub,
-        });
-        user = await userStorage.getUserById(newUser.id);
-        logger.info('auth.loginWithGoogle: new user created', {
-          userId: user?.id,
           elapsed: Date.now() - startTime,
         });
+        return {
+          ok: false,
+          error: {
+            code: 'FORBIDDEN',
+            message: 'Google sign-in is only available for existing or preapproved accounts',
+          },
+        };
       }
     }
 
