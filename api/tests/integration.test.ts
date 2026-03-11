@@ -9,7 +9,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import type { Server } from 'node:http';
 import {
-  createLegacyAdminAccessToken,
+  bootstrapAdminSession,
   getAvailablePort,
   registerAndVerifyUser,
   resetDb,
@@ -22,9 +22,7 @@ let BASE_URL: string;
 process.env.NODE_ENV = 'test';
 process.env.SHARED_SECRET = 'integration-test-shared-secret';
 process.env.JWT_SECRET = 'integration-test-jwt-secret';
-process.env.ADMIN_TOKEN = createLegacyAdminAccessToken();
-
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+let ADMIN_TOKEN = '';
 
 // Unique ID for this test run
 const TEST_RUN_ID = `${String(Date.now())}-${Math.random().toString(36).slice(2, 8)}`;
@@ -142,6 +140,8 @@ await describe('Integration Tests (tRPC)', async () => {
     const { app } = await import('../src/server.js');
     server = app.listen(PORT);
     await new Promise((resolve) => setTimeout(resolve, 500));
+    ADMIN_TOKEN = (await bootstrapAdminSession(BASE_URL, { name: 'Integration Test Admin' }))
+      .accessToken;
     console.log(`Integration test server started on port ${String(PORT)}`);
   });
 

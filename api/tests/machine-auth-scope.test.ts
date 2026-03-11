@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   TEST_RUN_ID,
-  createLegacyAdminAccessToken,
+  bootstrapAdminSession,
   uniqueDomain,
   uniqueEmail,
   trpcMutate as _trpcMutate,
@@ -171,8 +171,6 @@ await describe('Machine authentication scope regressions', async () => {
 
     process.env.PORT = String(PORT);
     process.env.JWT_SECRET = 'test-jwt-secret';
-    ADMIN_TOKEN = createLegacyAdminAccessToken();
-    process.env.ADMIN_TOKEN = ADMIN_TOKEN;
     process.env.SHARED_SECRET = SHARED_SECRET;
 
     testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpath-machine-auth-scope-'));
@@ -184,6 +182,8 @@ await describe('Machine authentication scope regressions', async () => {
     const { app } = await import('../src/server.js');
     server = app.listen(PORT);
     await new Promise((resolve) => setTimeout(resolve, 1000));
+    ADMIN_TOKEN = (await bootstrapAdminSession(API_URL, { name: 'Machine Scope Admin' }))
+      .accessToken;
   });
 
   after(async () => {

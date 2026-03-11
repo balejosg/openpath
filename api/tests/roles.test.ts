@@ -8,7 +8,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import type { Server } from 'node:http';
-import { createLegacyAdminAccessToken, getAvailablePort, resetDb } from './test-utils.js';
+import { bootstrapAdminSession, getAvailablePort, resetDb } from './test-utils.js';
 import { closeConnection } from '../src/db/index.js';
 
 let PORT: number;
@@ -99,7 +99,6 @@ await describe('Role Management E2E Tests (tRPC)', { timeout: 45000 }, async () 
     API_URL = `http://localhost:${String(PORT)}`;
     process.env.PORT = String(PORT);
     process.env.JWT_SECRET = 'test-jwt-secret';
-    process.env.ADMIN_TOKEN = createLegacyAdminAccessToken();
 
     const { app } = await import('../src/server.js');
 
@@ -108,7 +107,7 @@ await describe('Role Management E2E Tests (tRPC)', { timeout: 45000 }, async () 
     });
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    adminToken = process.env.ADMIN_TOKEN;
+    adminToken = (await bootstrapAdminSession(API_URL, { name: 'Roles Test Admin' })).accessToken;
   });
 
   after(async () => {

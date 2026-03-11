@@ -13,7 +13,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   TEST_RUN_ID,
-  createLegacyAdminAccessToken,
+  bootstrapAdminSession,
   uniqueEmail,
   trpcMutate as _trpcMutate,
   trpcQuery as _trpcQuery,
@@ -131,8 +131,6 @@ await describe('Machine registration regressions', async () => {
 
     process.env.PORT = String(PORT);
     process.env.JWT_SECRET = 'test-jwt-secret';
-    ADMIN_TOKEN = createLegacyAdminAccessToken();
-    process.env.ADMIN_TOKEN = ADMIN_TOKEN;
     process.env.SHARED_SECRET = SHARED_SECRET;
 
     testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpath-machine-registration-'));
@@ -148,6 +146,8 @@ await describe('Machine registration regressions', async () => {
 
   beforeEach(async () => {
     await resetDb();
+    ADMIN_TOKEN = (await bootstrapAdminSession(API_URL, { name: 'Machine Registration Admin' }))
+      .accessToken;
   });
 
   after(async () => {

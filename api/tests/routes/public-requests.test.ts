@@ -51,9 +51,19 @@ await describe('public-requests routes', async () => {
   });
 
   await test('loadConfig disables machine auto-approval by default and only enables it explicitly', () => {
-    const defaultConfig = loadConfig({});
-    const enabledConfig = loadConfig({ AUTO_APPROVE_MACHINE_REQUESTS: 'true' });
-    const disabledConfig = loadConfig({ AUTO_APPROVE_MACHINE_REQUESTS: 'false' });
+    const baseEnv = {
+      NODE_ENV: 'test',
+      JWT_SECRET: 'test-jwt-secret',
+    };
+    const defaultConfig = loadConfig(baseEnv);
+    const enabledConfig = loadConfig({
+      ...baseEnv,
+      AUTO_APPROVE_MACHINE_REQUESTS: 'true',
+    });
+    const disabledConfig = loadConfig({
+      ...baseEnv,
+      AUTO_APPROVE_MACHINE_REQUESTS: 'false',
+    });
 
     assert.strictEqual(defaultConfig.autoApproveMachineRequests, false);
     assert.strictEqual(enabledConfig.autoApproveMachineRequests, true);

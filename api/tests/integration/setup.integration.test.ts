@@ -9,7 +9,6 @@ import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import type { Server } from 'node:http';
 import {
-  createLegacyAdminAccessToken,
   getAvailablePort,
   trpcQuery,
   trpcMutate,
@@ -24,6 +23,7 @@ import { closeConnection } from '../../src/db/index.js';
 let PORT: number;
 let API_URL: string;
 let ADMIN_TOKEN = '';
+const ADMIN_PASSWORD = 'StrongPassword123';
 
 let server: Server | undefined;
 
@@ -35,8 +35,6 @@ void describe('Setup & Settings Integration', () => {
     API_URL = `http://localhost:${String(PORT)}`;
     process.env.PORT = String(PORT);
     process.env.JWT_SECRET = 'test-jwt-secret';
-    ADMIN_TOKEN = createLegacyAdminAccessToken();
-    process.env.ADMIN_TOKEN = ADMIN_TOKEN;
 
     const { app } = await import('../../src/server.js');
 
@@ -66,7 +64,7 @@ void describe('Setup & Settings Integration', () => {
     const createResp = await trpcMutate(API_URL, 'setup.createFirstAdmin', {
       email: adminEmail,
       name: 'Setup Admin',
-      password: 'StrongPassword123',
+      password: ADMIN_PASSWORD,
     });
     assertStatus(createResp, 200);
     const { data: createData } = (await parseTRPC(createResp)) as {
@@ -82,8 +80,15 @@ void describe('Setup & Settings Integration', () => {
     assert.strictEqual(status2.hasAdmin, true);
     assert.strictEqual(status2.needsSetup, false);
 
+    const loginResp = await trpcMutate(API_URL, 'auth.login', {
+      email: adminEmail,
+      password: ADMIN_PASSWORD,
+    });
+    assertStatus(loginResp, 200);
+    ADMIN_TOKEN = ((await parseTRPC(loginResp)).data as { accessToken: string }).accessToken;
+    assert.ok(ADMIN_TOKEN);
+
     // 4. Manage tokens (as admin)
-    // Use ADMIN_TOKEN (legacy fallback) to bypass auth for internal test management
     const getResp = await trpcQuery(
       API_URL,
       'setup.getRegistrationToken',

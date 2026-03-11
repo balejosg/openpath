@@ -312,6 +312,49 @@ export function createLegacyAdminAccessToken(): string {
   );
 }
 
+export async function bootstrapAdminSession(
+  baseUrl: string,
+  input: {
+    email?: string;
+    password?: string;
+    name?: string;
+  } = {}
+): Promise<{ accessToken: string; email: string; password: string }> {
+  const email = input.email ?? uniqueEmail('bootstrap-admin');
+  const password = input.password ?? 'AdminPassword123!';
+  const name = input.name ?? 'Bootstrap Admin';
+
+  const setupResponse = await trpcMutate(baseUrl, 'setup.createFirstAdmin', {
+    email,
+    password,
+    name,
+  });
+  if (![200, 201, 409].includes(setupResponse.status)) {
+    throw new Error(
+      `Expected setup.createFirstAdmin to succeed, got ${String(setupResponse.status)}`
+    );
+  }
+
+  const loginResponse = await trpcMutate(baseUrl, 'auth.login', {
+    email,
+    password,
+  });
+  if (loginResponse.status !== 200) {
+    throw new Error(`Expected auth.login to succeed, got ${String(loginResponse.status)}`);
+  }
+
+  const authData = (await parseTRPC(loginResponse)).data as { accessToken?: string };
+  if (authData.accessToken === undefined || authData.accessToken === '') {
+    throw new Error('Expected bootstrap admin login to return an access token');
+  }
+
+  return {
+    accessToken: authData.accessToken,
+    email,
+    password,
+  };
+}
+
 export async function registerAndVerifyUser(
   baseUrl: string,
   input: {

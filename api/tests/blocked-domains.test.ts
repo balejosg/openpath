@@ -8,7 +8,7 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import type { Server } from 'node:http';
-import { createLegacyAdminAccessToken, getAvailablePort, resetDb } from './test-utils.js';
+import { getAvailablePort, resetDb } from './test-utils.js';
 import { closeConnection } from '../src/db/index.js';
 
 let PORT: number;
@@ -26,6 +26,8 @@ let teacherToken: string | null = null;
 let teacherUserId: string | null = null;
 let pendingRequestId: string | null = null;
 
+const ADMIN_EMAIL = `blocked-test-admin-${String(Date.now())}@school.edu`;
+const ADMIN_PASSWORD = 'AdminPassword123!';
 const TEACHER_EMAIL = `blocked-test-teacher-${String(Date.now())}@school.edu`;
 const TEACHER_PASSWORD = 'TeacherPassword123!';
 const TEACHER_GROUP = 'ciencias-3eso';
@@ -107,7 +109,6 @@ await describe('Blocked Domains Tests - US3 (tRPC)', { timeout: 45000 }, async (
     API_URL = `http://localhost:${String(PORT)}`;
     process.env.PORT = String(PORT);
     process.env.JWT_SECRET = 'test-jwt-secret';
-    process.env.ADMIN_TOKEN = createLegacyAdminAccessToken();
 
     const { app } = await import('../src/server.js');
 
@@ -116,14 +117,34 @@ await describe('Blocked Domains Tests - US3 (tRPC)', { timeout: 45000 }, async (
     });
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    adminToken = process.env.ADMIN_TOKEN;
 
-    await trpcMutate(
+    const setupResponse = await trpcMutate('setup.createFirstAdmin', {
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+      name: 'Blocked Domains Admin',
+    });
+    assert.strictEqual(setupResponse.status, 200);
+
+    const loginResponse = await trpcMutate('auth.login', {
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+    });
+    assert.strictEqual(loginResponse.status, 200);
+    const loginResult = await parseTRPC(loginResponse);
+    const loginData = loginResult.data as AuthResult;
+    adminToken = loginData.accessToken ?? null;
+    assert.ok(adminToken);
+
+    const groupResponse = await trpcMutate(
       'groups.create',
-      { name: TEACHER_GROUP },
+      { name: TEACHER_GROUP, displayName: TEACHER_GROUP },
       {
         Authorization: `Bearer ${adminToken}`,
       }
+    );
+    assert.ok(
+      [200, 201, 409].includes(groupResponse.status),
+      `Expected 200, 201 or 409, got ${String(groupResponse.status)}`
     );
   });
 

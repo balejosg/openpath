@@ -12,7 +12,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import type { Server } from 'node:http';
 import {
-  createLegacyAdminAccessToken,
+  bootstrapAdminSession,
   getAvailablePort,
   trpcMutate,
   parseTRPC,
@@ -61,8 +61,6 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
     API_URL = `http://localhost:${String(PORT)}`;
     process.env.PORT = String(PORT);
     process.env.JWT_SECRET = 'test-jwt-secret';
-    ADMIN_TOKEN = createLegacyAdminAccessToken();
-    process.env.ADMIN_TOKEN = ADMIN_TOKEN;
 
     const { app } = await import('../src/server.js');
 
@@ -71,6 +69,7 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
     });
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
+    ADMIN_TOKEN = (await bootstrapAdminSession(API_URL, { name: 'SSE Test Admin' })).accessToken;
 
     // Create a test group
     const groupResp = await trpcMutate(

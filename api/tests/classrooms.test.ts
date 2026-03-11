@@ -11,12 +11,14 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import type { Server } from 'node:http';
-import { createLegacyAdminAccessToken, getAvailablePort, resetDb } from './test-utils.js';
+import { bootstrapAdminSession, getAvailablePort, resetDb } from './test-utils.js';
 import { closeConnection } from '../src/db/index.js';
 
 let PORT: number;
 let API_URL: string;
 let ADMIN_TOKEN = '';
+let cienciasGroupId = '';
+let lenguaGroupId = '';
 
 let server: Server | undefined;
 let testDataDir: string | null = null;
@@ -89,8 +91,6 @@ await describe('Classroom Management API Tests (tRPC)', async () => {
     API_URL = `http://localhost:${String(PORT)}`;
     process.env.PORT = String(PORT);
     process.env.JWT_SECRET = 'test-jwt-secret';
-    ADMIN_TOKEN = createLegacyAdminAccessToken();
-    process.env.ADMIN_TOKEN = ADMIN_TOKEN;
 
     // Ensure test isolation (classrooms/machines persisted data)
     testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpath-classrooms-'));
@@ -107,16 +107,24 @@ await describe('Classroom Management API Tests (tRPC)', async () => {
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    await trpcMutate(
+    ADMIN_TOKEN = (await bootstrapAdminSession(API_URL, { name: 'Classrooms Test Admin' }))
+      .accessToken;
+
+    const cienciasResponse = await trpcMutate(
       'groups.create',
-      { name: 'ciencias-3eso' },
+      { name: 'ciencias-3eso', displayName: 'ciencias-3eso' },
       { Authorization: `Bearer ${ADMIN_TOKEN}` }
     );
-    await trpcMutate(
+    assert.ok([200, 201].includes(cienciasResponse.status));
+    cienciasGroupId = ((await parseTRPC(cienciasResponse)).data as { id: string }).id;
+
+    const lenguaResponse = await trpcMutate(
       'groups.create',
-      { name: 'lengua-2eso' },
+      { name: 'lengua-2eso', displayName: 'lengua-2eso' },
       { Authorization: `Bearer ${ADMIN_TOKEN}` }
     );
+    assert.ok([200, 201].includes(lenguaResponse.status));
+    lenguaGroupId = ((await parseTRPC(lenguaResponse)).data as { id: string }).id;
   });
 
   after(async () => {
@@ -144,7 +152,7 @@ await describe('Classroom Management API Tests (tRPC)', async () => {
         {
           name: 'informatica-3',
           displayName: 'Aula de Informática 3',
-          defaultGroupId: 'ciencias-3eso',
+          defaultGroupId: cienciasGroupId,
         },
         { Authorization: `Bearer ${ADMIN_TOKEN}` }
       );
@@ -206,7 +214,7 @@ await describe('Classroom Management API Tests (tRPC)', async () => {
         'classrooms.setActiveGroup',
         {
           id: classroomId,
-          groupId: 'lengua-2eso',
+          groupId: lenguaGroupId,
         },
         { Authorization: `Bearer ${ADMIN_TOKEN}` }
       );

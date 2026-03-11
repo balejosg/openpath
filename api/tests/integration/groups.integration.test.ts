@@ -9,7 +9,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import type { Server } from 'node:http';
 import {
-  createLegacyAdminAccessToken,
+  bootstrapAdminSession,
   getAvailablePort,
   trpcQuery,
   trpcMutate,
@@ -35,8 +35,6 @@ void describe('Groups & Domains Integration', () => {
     API_URL = `http://localhost:${String(PORT)}`;
     process.env.PORT = String(PORT);
     process.env.JWT_SECRET = 'test-jwt-secret';
-    ADMIN_TOKEN = createLegacyAdminAccessToken();
-    process.env.ADMIN_TOKEN = ADMIN_TOKEN;
 
     const { app } = await import('../../src/server.js');
 
@@ -45,6 +43,8 @@ void describe('Groups & Domains Integration', () => {
     });
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
+    ADMIN_TOKEN = (await bootstrapAdminSession(API_URL, { name: 'Groups Integration Admin' }))
+      .accessToken;
   });
 
   after(async () => {
@@ -108,7 +108,7 @@ void describe('Groups & Domains Integration', () => {
 
     void test('should handle blocked subdomains and paths', async () => {
       // Add blocked subdomain
-      await trpcMutate(
+      const blockedSubdomainResp = await trpcMutate(
         API_URL,
         'groups.createRule',
         {
@@ -118,18 +118,20 @@ void describe('Groups & Domains Integration', () => {
         },
         bearerAuth(ADMIN_TOKEN)
       );
+      assertStatus(blockedSubdomainResp, 200);
 
       // Add blocked path
-      await trpcMutate(
+      const blockedPathResp = await trpcMutate(
         API_URL,
         'groups.createRule',
         {
           groupId,
           type: 'blocked_path',
-          value: '/api/v1/track',
+          value: '*/api/v1/track',
         },
         bearerAuth(ADMIN_TOKEN)
       );
+      assertStatus(blockedPathResp, 200);
 
       const statsResp = await trpcQuery(
         API_URL,
@@ -160,6 +162,7 @@ void describe('Groups & Domains Integration', () => {
       assert.ok(exported.content.includes('## BLOCKED-PATHS'));
       assert.ok(exported.content.includes('google.com'));
       assert.ok(exported.content.includes('ads.google.com'));
+      assert.ok(exported.content.includes('*/api/v1/track'));
     });
   });
 });

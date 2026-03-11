@@ -13,7 +13,6 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   TEST_RUN_ID,
-  createLegacyAdminAccessToken,
   uniqueEmail,
   trpcMutate as _trpcMutate,
   trpcQuery as _trpcQuery,
@@ -39,6 +38,8 @@ let deniedClassroomId = '';
 let deniedMachineId = '';
 let deniedScheduleId = '';
 let deniedExemptionId = '';
+const ADMIN_EMAIL = uniqueEmail('classroom-authz-admin');
+const ADMIN_PASSWORD = 'AdminPassword123!';
 
 const trpcMutate = (
   procedure: string,
@@ -130,8 +131,6 @@ await describe('Classroom authorization regressions', async () => {
 
     process.env.PORT = String(PORT);
     process.env.JWT_SECRET = 'test-jwt-secret';
-    ADMIN_TOKEN = createLegacyAdminAccessToken();
-    process.env.ADMIN_TOKEN = ADMIN_TOKEN;
     testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpath-classroom-authz-'));
     process.env.DATA_DIR = testDataDir;
 
@@ -141,6 +140,21 @@ await describe('Classroom authorization regressions', async () => {
     const { app } = await import('../src/server.js');
     server = app.listen(PORT);
     await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const setupResponse = await trpcMutate('setup.createFirstAdmin', {
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+      name: 'Classroom Auth Admin',
+    });
+    assert.ok([200, 201, 409].includes(setupResponse.status));
+
+    const loginResponse = await trpcMutate('auth.login', {
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD,
+    });
+    assert.strictEqual(loginResponse.status, 200);
+    ADMIN_TOKEN = ((await parseTRPC(loginResponse)).data as { accessToken: string }).accessToken;
+    assert.ok(ADMIN_TOKEN);
 
     allowedGroupId = await createGroup(`allowed-${TEST_RUN_ID}`);
     deniedGroupId = await createGroup(`denied-${TEST_RUN_ID}`);

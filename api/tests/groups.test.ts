@@ -12,7 +12,7 @@ import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
 import type { Server } from 'node:http';
 import {
-  createLegacyAdminAccessToken,
+  bootstrapAdminSession,
   getAvailablePort,
   trpcQuery,
   trpcMutate,
@@ -102,8 +102,6 @@ await describe('Groups Router (tRPC)', { timeout: 30000 }, async () => {
     API_URL = `http://localhost:${String(PORT)}`;
     process.env.PORT = String(PORT);
     process.env.JWT_SECRET = 'test-jwt-secret';
-    ADMIN_TOKEN = createLegacyAdminAccessToken();
-    process.env.ADMIN_TOKEN = ADMIN_TOKEN;
 
     const { app } = await import('../src/server.js');
 
@@ -112,6 +110,7 @@ await describe('Groups Router (tRPC)', { timeout: 30000 }, async () => {
     });
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
+    ADMIN_TOKEN = (await bootstrapAdminSession(API_URL, { name: 'Groups Test Admin' })).accessToken;
   });
 
   after(async () => {

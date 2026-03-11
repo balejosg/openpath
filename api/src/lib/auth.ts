@@ -9,7 +9,6 @@
 import jwt, { type SignOptions } from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { getTokenStore } from './token-store.js';
-import { logger } from './logger.js';
 import { config } from '../config.js';
 import type { User, JWTPayload, RoleInfo } from '../types/index.js';
 import { normalizeUserRoleString } from '@openpath/shared/roles';
@@ -40,27 +39,7 @@ interface LegacyAdminPayload {
 // SECURITY: JWT Secret Configuration
 // =============================================================================
 
-const isProduction = process.env.NODE_ENV === 'production';
-
-if (isProduction && (process.env.JWT_SECRET === undefined || process.env.JWT_SECRET === '')) {
-  logger.error('FATAL SECURITY ERROR: JWT_SECRET not set in production', {
-    hint: "Generate a secure secret with: node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\"",
-    action: 'Set JWT_SECRET environment variable before starting the server',
-  });
-  process.exit(1);
-}
-
-// In development, generate a random secret but warn about token invalidation
-let JWT_SECRET: string;
-if (process.env.JWT_SECRET !== undefined && process.env.JWT_SECRET !== '') {
-  JWT_SECRET = process.env.JWT_SECRET;
-} else {
-  JWT_SECRET = crypto.randomBytes(32).toString('hex');
-  logger.warn('JWT_SECRET not set - using random secret', {
-    consequence: 'All tokens will be invalidated on server restart',
-    action: 'Set JWT_SECRET environment variable for persistent tokens',
-  });
-}
+const JWT_SECRET = config.jwtSecret;
 
 const JWT_ACCESS_EXPIRES_IN = config.jwtAccessExpiry;
 const JWT_REFRESH_EXPIRES_IN = config.jwtRefreshExpiry;

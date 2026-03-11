@@ -129,7 +129,8 @@ await describe('Push Notifications API Tests (tRPC)', { timeout: 45000 }, async 
     });
 
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    adminToken = testUtils.createLegacyAdminAccessToken();
+    adminToken = (await testUtils.bootstrapAdminSession(API_URL, { name: 'Push Test Admin' }))
+      .accessToken;
   });
 
   after(async () => {

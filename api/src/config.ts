@@ -61,6 +61,30 @@ function parseTrustProxyEnv(value: string | undefined): boolean | number | strin
   return trimmed;
 }
 
+const DEFAULT_DEV_JWT_SECRET = 'openpath-dev-secret-change-in-production';
+const TEST_JWT_SECRET = 'openpath-test-secret';
+
+function resolveJwtSecret(
+  env: Readonly<Record<string, string | undefined>>,
+  nodeEnv: string
+): string {
+  const rawSecret = env.JWT_SECRET?.trim();
+
+  if (nodeEnv === 'test') {
+    return rawSecret && rawSecret.length > 0 ? rawSecret : TEST_JWT_SECRET;
+  }
+
+  if (!rawSecret) {
+    throw new Error('JWT_SECRET must be set when NODE_ENV is not test');
+  }
+
+  if (rawSecret === DEFAULT_DEV_JWT_SECRET) {
+    throw new Error('JWT_SECRET must not use the built-in default outside test mode');
+  }
+
+  return rawSecret;
+}
+
 /**
  * Parse DATABASE_URL into individual components
  * Format: postgres://user:password@host:port/database
@@ -173,7 +197,7 @@ export function loadConfig(
     bcryptRounds: parseIntEnv(env.BCRYPT_ROUNDS, 12),
 
     /** JWT secret for token signing */
-    jwtSecret: env.JWT_SECRET ?? 'openpath-dev-secret-change-in-production',
+    jwtSecret: resolveJwtSecret(env, nodeEnv),
 
     /** JWT access token expiration */
     jwtAccessExpiry: env.JWT_ACCESS_EXPIRY ?? env.JWT_EXPIRES_IN ?? '15m',

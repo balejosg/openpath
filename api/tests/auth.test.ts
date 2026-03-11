@@ -332,6 +332,10 @@ await describe(
         assert.strictEqual(response.status, 401);
       });
 
+      await test('should use the deterministic test JWT secret fallback when unset', () => {
+        assert.strictEqual(authLib.JWT_SECRET, 'openpath-test-secret');
+      });
+
       await test('should reject request with invalid token', async () => {
         const response = await trpcQuery('auth.me', undefined, {
           Authorization: 'Bearer invalid-token',
