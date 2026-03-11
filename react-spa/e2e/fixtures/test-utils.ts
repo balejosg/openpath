@@ -103,13 +103,54 @@ export const TEACHER_CREDENTIALS = isStaging()
       password: 'TeacherPassword123!',
     };
 
+const LOGOUT_BUTTON_NAME = /Cerrar Ses(?:i[oó]n)?/i;
+const LOGIN_ERROR_TEXT = /Credenciales inv[aá]lidas|error de conexi[oó]n/i;
+
 /**
  * Waits for the authenticated layout (role-agnostic).
  * Use this after login instead of admin-only dashboard assertions.
  */
 export async function waitForAuthenticatedLayout(page: Page, timeout = 15000): Promise<void> {
   // Sidebar logout button is present for all authenticated roles.
-  await page.getByRole('button', { name: /Cerrar Ses(?:i[oó]n)?/i }).waitFor({ timeout });
+  await page.getByRole('button', { name: LOGOUT_BUTTON_NAME }).waitFor({ timeout });
+}
+
+async function loginThroughForm(
+  page: Page,
+  credentials: { email: string; password: string },
+  retryOnError = true
+): Promise<void> {
+  for (let attempt = 1; attempt <= (retryOnError ? 2 : 1); attempt += 1) {
+    await page.goto('./');
+    await page.waitForLoadState('networkidle');
+    await waitForLoginPage(page);
+
+    await page.locator('input[type="email"]').fill(credentials.email);
+    await page.locator('input[type="password"]').fill(credentials.password);
+    await page.getByRole('button', { name: 'Entrar' }).click();
+
+    const result = await Promise.race([
+      page
+        .getByRole('button', { name: LOGOUT_BUTTON_NAME })
+        .waitFor({ timeout: 15000 })
+        .then(() => 'authenticated' as const),
+      page
+        .getByText(LOGIN_ERROR_TEXT)
+        .first()
+        .waitFor({ timeout: 15000 })
+        .then(() => 'error' as const),
+    ]);
+
+    if (result === 'authenticated') {
+      return;
+    }
+
+    if (attempt === 2) {
+      break;
+    }
+  }
+
+  await waitForAuthenticatedLayout(page);
 }
 
 /**
@@ -117,24 +158,14 @@ export async function waitForAuthenticatedLayout(page: Page, timeout = 15000): P
  * Note: SPA uses state-based navigation, not URL routing
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
-  await page.goto('./');
-  await page.waitForLoadState('networkidle');
-  await page.locator('input[type="email"]').fill(ADMIN_CREDENTIALS.email);
-  await page.locator('input[type="password"]').fill(ADMIN_CREDENTIALS.password);
-  await page.getByRole('button', { name: 'Entrar' }).click();
-  await waitForAuthenticatedLayout(page);
+  await loginThroughForm(page, ADMIN_CREDENTIALS);
 }
 
 /**
  * Logs in as teacher user - assumes test database is seeded
  */
 export async function loginAsTeacher(page: Page): Promise<void> {
-  await page.goto('./');
-  await page.waitForLoadState('networkidle');
-  await page.locator('input[type="email"]').fill(TEACHER_CREDENTIALS.email);
-  await page.locator('input[type="password"]').fill(TEACHER_CREDENTIALS.password);
-  await page.getByRole('button', { name: 'Entrar' }).click();
-  await waitForAuthenticatedLayout(page);
+  await loginThroughForm(page, TEACHER_CREDENTIALS);
 }
 
 /**
@@ -143,7 +174,7 @@ export async function loginAsTeacher(page: Page): Promise<void> {
  */
 export async function logout(page: Page): Promise<void> {
   // Try sidebar logout button first
-  const logoutButton = page.getByRole('button', { name: /Cerrar Ses(?:i[oó]n)?/i });
+  const logoutButton = page.getByRole('button', { name: LOGOUT_BUTTON_NAME });
   if (await logoutButton.isVisible({ timeout: 2000 }).catch(() => false)) {
     await logoutButton.click();
     // Wait for login form to appear
