@@ -58,7 +58,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-2022]
-    # Note: Windows failures now visible but don't block Linux-only users
 
     steps:
       - name: Checkout code
@@ -93,11 +92,13 @@ jobs:
           if [[ "${{ needs.windows-e2e.result }}" == "success" ]]; then
             echo "✅ Windows E2E: PASSED"
           else
-            echo "⚠️ Windows E2E: ${{ needs.windows-e2e.result }} (may have limitations)"
+            echo "❌ Windows E2E: ${{ needs.windows-e2e.result }}"
           fi
 
-          # Fail only if Linux fails (Windows has continue-on-error)
-          if [[ "${{ needs.linux-e2e.result }}" == "failure" ]]; then
+          if [[ "${{ needs.linux-e2e.result }}" == "failure" ]] || \
+             [[ "${{ needs.linux-e2e.result }}" == "cancelled" ]] || \
+             [[ "${{ needs.windows-e2e.result }}" == "failure" ]] || \
+             [[ "${{ needs.windows-e2e.result }}" == "cancelled" ]]; then
             echo ""
             echo "❌ E2E Tests FAILED"
             exit 1
