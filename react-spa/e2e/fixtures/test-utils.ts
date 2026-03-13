@@ -120,7 +120,9 @@ async function loginThroughForm(
   credentials: { email: string; password: string },
   retryOnError = true
 ): Promise<void> {
-  for (let attempt = 1; attempt <= (retryOnError ? 2 : 1); attempt += 1) {
+  const maxAttempts = retryOnError ? 4 : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     await page.goto('./');
     await page.waitForLoadState('networkidle');
     await waitForLoginPage(page);
@@ -145,9 +147,11 @@ async function loginThroughForm(
       return;
     }
 
-    if (attempt === 2) {
+    if (attempt === maxAttempts) {
       break;
     }
+
+    await page.waitForTimeout(500 * attempt);
   }
 
   await waitForAuthenticatedLayout(page);

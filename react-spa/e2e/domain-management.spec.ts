@@ -12,6 +12,7 @@ import {
   createTestDomain,
   waitForNetworkIdle,
 } from './fixtures/test-utils';
+import { ACCESS_TOKEN_KEY, COOKIE_SESSION_MARKER, LEGACY_TOKEN_KEY } from '../src/lib/auth-storage';
 
 const TEST_GROUP_ID = 'test-e2e-group';
 const TEST_REQUESTER_EMAIL = 'student@openpath.local';
@@ -46,10 +47,21 @@ async function callTrpcFromBrowser<T>(
   }
 ): Promise<T> {
   const response = await page.evaluate(
-    async ({ procedure, input, method, requiresAuth }): Promise<TrpcBrowserResponse<T>> => {
-      const token = requiresAuth ? window.localStorage.getItem('openpath_access_token') : null;
+    async ({
+      procedure,
+      input,
+      method,
+      requiresAuth,
+      accessTokenKey,
+      legacyTokenKey,
+      cookieSessionMarker,
+    }): Promise<TrpcBrowserResponse<T>> => {
+      const accessToken = requiresAuth ? window.localStorage.getItem(accessTokenKey) : null;
+      const legacyToken = requiresAuth ? window.localStorage.getItem(legacyTokenKey) : null;
+      const hasCookieSession = accessToken === cookieSessionMarker;
+      const token = accessToken && accessToken !== cookieSessionMarker ? accessToken : legacyToken;
 
-      if (requiresAuth && !token) {
+      if (requiresAuth && !token && !hasCookieSession) {
         return {
           ok: false,
           status: 401,
@@ -82,6 +94,9 @@ async function callTrpcFromBrowser<T>(
       input: params.input,
       method: params.method ?? 'POST',
       requiresAuth: params.requiresAuth ?? false,
+      accessTokenKey: ACCESS_TOKEN_KEY,
+      legacyTokenKey: LEGACY_TOKEN_KEY,
+      cookieSessionMarker: COOKIE_SESSION_MARKER,
     }
   );
 

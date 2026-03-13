@@ -124,6 +124,28 @@ void describe('Enrollment API (secure tickets)', { timeout: 30000 }, async () =>
     assert.strictEqual(res.status, 401);
   });
 
+  await test('POST /api/enroll/:classroomId/ticket rejects legacy ADMIN_TOKEN bearer auth', async () => {
+    const previousAdminToken = process.env.ADMIN_TOKEN;
+    process.env.ADMIN_TOKEN = 'legacy-admin-token';
+
+    try {
+      const res = await fetch(`${API_URL}/api/enroll/${classroomId}/ticket`, {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer legacy-admin-token',
+        },
+      });
+
+      assert.strictEqual(res.status, 401);
+    } finally {
+      if (previousAdminToken === undefined) {
+        delete process.env.ADMIN_TOKEN;
+      } else {
+        process.env.ADMIN_TOKEN = previousAdminToken;
+      }
+    }
+  });
+
   await test('POST /api/enroll/:classroomId/ticket accepts cookie auth when configured', async () => {
     const prev = process.env.OPENPATH_ACCESS_TOKEN_COOKIE_NAME;
     const cookieName = 'test_access_cookie';

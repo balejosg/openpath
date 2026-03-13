@@ -26,9 +26,7 @@ export const healthcheckRouter = router({
     }
 
     // Config checks
-    const authConfigured =
-      (process.env.ADMIN_TOKEN !== undefined && process.env.ADMIN_TOKEN !== '') ||
-      (process.env.JWT_SECRET !== undefined && process.env.JWT_SECRET !== '');
+    const authConfigured = process.env.JWT_SECRET !== undefined && process.env.JWT_SECRET !== '';
     checks.auth = { status: authConfigured ? 'configured' : 'not_configured' };
     if (!authConfigured) status = 'degraded';
 

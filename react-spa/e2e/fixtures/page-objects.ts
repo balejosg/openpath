@@ -55,8 +55,32 @@ export class LoginPage {
   }
 
   async goto() {
-    await this.page.goto('./');
-    await this.page.waitForLoadState('networkidle');
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      await this.page.goto('./');
+      await this.page.waitForLoadState('networkidle');
+
+      const loginVisible = await this.page
+        .getByRole('heading', { name: 'Acceso Seguro' })
+        .isVisible({ timeout: 1000 })
+        .catch(() => false);
+
+      if (loginVisible) {
+        return;
+      }
+
+      const bodyText =
+        (await this.page
+          .locator('body')
+          .textContent()
+          .catch(() => '')) ?? '';
+      const spaDistMissing = bodyText.includes('"code":"ENOENT"');
+
+      if (!spaDistMissing || attempt === 4) {
+        return;
+      }
+
+      await this.page.waitForTimeout(500 * attempt);
+    }
   }
 
   async login(email: string, password: string) {

@@ -161,7 +161,7 @@ export async function resetDb(): Promise<void> {
     await db.execute(sql.raw(`TRUNCATE TABLE "${table}" CASCADE`));
   }
 
-  // Insert legacy_admin user for FK constraints (required for tests using ADMIN_TOKEN)
+  // Insert legacy_admin user for fixtures that reuse that stable user id in FK-backed data.
   await db.execute(
     sql.raw(`
         INSERT INTO users (id, email, name, password_hash)

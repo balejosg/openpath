@@ -113,6 +113,45 @@ await describe('Healthcheck Router Tests', { timeout: 30000 }, async () => {
       assert.ok('checks' in data, 'Expected checks object');
       assert.ok('responseTime' in data, 'Expected responseTime');
     });
+
+    await test('should not treat legacy ADMIN_TOKEN as auth configuration', async () => {
+      const previousAdminToken = process.env.ADMIN_TOKEN;
+      const previousJwtSecret = process.env.JWT_SECRET;
+      process.env.ADMIN_TOKEN = 'legacy-admin-token';
+      delete process.env.JWT_SECRET;
+
+      try {
+        const response = await trpcQuery(API_URL, 'healthcheck.ready');
+        assert.strictEqual(response.status, 200);
+
+        const { data } = (await parseTRPC(response)) as {
+          data?: {
+            status: string;
+            checks: {
+              auth?: {
+                status: string;
+              };
+            };
+          };
+        };
+
+        assert.ok(data !== undefined, 'Expected data in response');
+        assert.strictEqual(data.checks.auth?.status, 'not_configured');
+        assert.strictEqual(data.status, 'degraded');
+      } finally {
+        if (previousAdminToken === undefined) {
+          delete process.env.ADMIN_TOKEN;
+        } else {
+          process.env.ADMIN_TOKEN = previousAdminToken;
+        }
+
+        if (previousJwtSecret === undefined) {
+          delete process.env.JWT_SECRET;
+        } else {
+          process.env.JWT_SECRET = previousJwtSecret;
+        }
+      }
+    });
   });
 
   await describe('healthcheck.systemInfo', async () => {

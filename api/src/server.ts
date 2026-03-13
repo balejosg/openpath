@@ -64,7 +64,7 @@ import * as userStorage from './lib/user-storage.js';
 import * as groupsStorage from './lib/groups-storage.js';
 import * as classroomStorage from './lib/classroom-storage.js';
 import * as setupStorage from './lib/setup-storage.js';
-import { cleanupBlacklist, verifyAccessToken, createLegacyAdminPayload } from './lib/auth.js';
+import { cleanupBlacklist, verifyAccessToken } from './lib/auth.js';
 import { verifyEnrollmentToken } from './lib/enrollment-token.js';
 import { generateEnrollmentToken } from './lib/enrollment-token.js';
 import {
@@ -157,11 +157,6 @@ async function verifyAccessTokenFromRequest(
   for (const token of candidates) {
     const decoded = await verifyAccessToken(token);
     if (decoded) return decoded;
-
-    const adminToken = process.env.ADMIN_TOKEN;
-    if (adminToken && adminToken === token) {
-      return createLegacyAdminPayload() as unknown as Awaited<ReturnType<typeof verifyAccessToken>>;
-    }
   }
 
   return null;
@@ -1674,11 +1669,6 @@ if (isMainModule) {
       logger.info('');
     })();
   });
-  const adminToken = process.env.ADMIN_TOKEN;
-  if (adminToken === undefined || adminToken === '') {
-    logger.warn('ADMIN_TOKEN not set - admin endpoints will fail');
-  }
-
   process.on('SIGTERM', () => {
     gracefulShutdown('SIGTERM');
   });

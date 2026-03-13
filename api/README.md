@@ -36,7 +36,7 @@ cp .env.example .env
 
 Required settings:
 
-- `ADMIN_TOKEN`: Secret token for admin endpoints
+- `JWT_SECRET`: Secret used to sign access and refresh tokens
 - `GITHUB_TOKEN`: GitHub Personal Access Token (with repo write access)
 - `GITHUB_OWNER`: GitHub username/org owning the whitelist repo
 - `GITHUB_REPO`: Repository name
@@ -313,19 +313,13 @@ api/
 
 ### Token Generation
 
-1. **ADMIN_TOKEN**: Generate a secure token:
-
-   ```bash
-   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-   ```
-
-2. **JWT_SECRET** (required in production):
+1. **JWT_SECRET** (required in production):
 
    ```bash
    node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
    ```
 
-3. **GITHUB_TOKEN**: Create at https://github.com/settings/tokens with `repo` scope
+2. **GITHUB_TOKEN**: Create at https://github.com/settings/tokens with `repo` scope
 
 ### Security Features
 

@@ -26,15 +26,6 @@ export interface TokensResult {
   tokenType: 'Bearer';
 }
 
-interface LegacyAdminPayload {
-  sub: string;
-  email: string;
-  name: string;
-  roles: RoleInfo[];
-  type: 'access';
-  isLegacy: true;
-}
-
 // =============================================================================
 // SECURITY: JWT Secret Configuration
 // =============================================================================
@@ -265,27 +256,5 @@ export function getApprovalGroups(decoded: DecodedWithRoles | null | undefined):
 
   return Array.from(groups);
 }
-
-// =============================================================================
-// Legacy Token Support (for backward compatibility with ADMIN_TOKEN)
-// =============================================================================
-
-/**
- * Create a pseudo-decoded token for legacy admin token
- */
-export function createLegacyAdminPayload(): LegacyAdminPayload {
-  return {
-    sub: 'legacy_admin',
-    email: 'admin@system',
-    name: 'Legacy Admin',
-    roles: [{ role: 'admin', groupIds: [] }],
-    type: 'access',
-    isLegacy: true,
-  };
-}
-
-// =============================================================================
-// Exports
-// =============================================================================
 
 export { JWT_SECRET, JWT_ACCESS_EXPIRES_IN as JWT_EXPIRES_IN };

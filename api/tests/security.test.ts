@@ -51,8 +51,10 @@ async function request(
 await describe('Security and Hardening Tests', async () => {
   before(async () => {
     // Dynamic imports
-    const { getAvailablePort } = await import('./test-utils.js');
+    const { getAvailablePort, resetDb } = await import('./test-utils.js');
     const { app } = await import('../src/server.js');
+
+    await resetDb();
 
     PORT = await getAvailablePort();
     API_URL = `http://localhost:${String(PORT)}`;
@@ -262,6 +264,52 @@ await describe('Security and Hardening Tests', async () => {
           },
         });
         assert.strictEqual(response.status, 401);
+      } finally {
+        if (previousAdminToken === undefined) {
+          delete process.env.ADMIN_TOKEN;
+        } else {
+          process.env.ADMIN_TOKEN = previousAdminToken;
+        }
+      }
+    });
+
+    await it('should reject the legacy ADMIN_TOKEN fallback for admin setup REST routes', async (): Promise<void> => {
+      const email = `setup-rest-${String(Date.now())}@example.com`;
+      const forwardedFor = '198.51.100.77';
+      const bootstrapResponse = await fetch(`${API_URL}/api/setup/first-admin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': forwardedFor,
+        },
+        body: JSON.stringify({
+          email,
+          name: 'Setup REST Admin',
+          password: 'SecurePassword123!',
+        }),
+      });
+      assert.strictEqual(bootstrapResponse.status, 200);
+
+      const previousAdminToken = process.env.ADMIN_TOKEN;
+      process.env.ADMIN_TOKEN = 'legacy-admin-token';
+
+      try {
+        const registrationTokenResponse = await fetch(`${API_URL}/api/setup/registration-token`, {
+          headers: {
+            Authorization: 'Bearer legacy-admin-token',
+            'X-Forwarded-For': forwardedFor,
+          },
+        });
+        assert.strictEqual(registrationTokenResponse.status, 401);
+
+        const regenerateTokenResponse = await fetch(`${API_URL}/api/setup/regenerate-token`, {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer legacy-admin-token',
+            'X-Forwarded-For': forwardedFor,
+          },
+        });
+        assert.strictEqual(regenerateTokenResponse.status, 401);
       } finally {
         if (previousAdminToken === undefined) {
           delete process.env.ADMIN_TOKEN;

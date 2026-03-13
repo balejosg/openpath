@@ -48,7 +48,6 @@ services:
       - JWT_SECRET=${JWT_SECRET:-dev-secret-key-change-me-in-production}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
       - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN:-7d}
-      - ADMIN_TOKEN=${ADMIN_TOKEN:-}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - GITHUB_OWNER=${GITHUB_OWNER:-}
       - GITHUB_REPO=${GITHUB_REPO:-}

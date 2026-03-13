@@ -20,7 +20,7 @@ Implement JWT (JSON Web Tokens) with the following design:
 1. **Dual token system**: Short-lived access tokens (24h) + long-lived refresh tokens (7d)
 2. **Token blacklisting**: Support logout by maintaining a blacklist of revoked tokens
 3. **Role embedding**: Include user roles in token payload for quick authorization
-4. **Legacy support**: Maintain backward compatibility with simple ADMIN_TOKEN for existing installations
+4. **Privileged surface policy**: Require signed JWT access tokens for authenticated admin and teacher operations
 
 ```javascript
 // Token payload structure

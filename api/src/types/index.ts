@@ -95,7 +95,6 @@ export interface JWTPayload {
   name: string;
   roles: RoleInfo[];
   type: 'access' | 'refresh';
-  isLegacy?: boolean;
   iat?: number;
   exp?: number;
 }
@@ -182,7 +181,6 @@ export interface Config {
   jwtSecret: string;
   jwtExpiresIn: string;
   refreshExpiresIn: string;
-  adminToken?: string;
   sharedSecret?: string;
   corsOrigins: string;
   dataDir: string;

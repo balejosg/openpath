@@ -99,7 +99,7 @@ export default defineConfig({
     {
       // Use test database (Docker on port 5433) for E2E tests
       command: `PORT=${apiPort} bash ../scripts/start-api-e2e.sh`,
-      port: apiPort,
+      url: `http://127.0.0.1:${apiPort}/trpc/healthcheck.ready`,
       reuseExistingServer: !isCI,
       timeout: 120000,
     },

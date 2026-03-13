@@ -63,12 +63,6 @@ const options: SwaggerOptions = {
           scheme: 'bearer',
           bearerFormat: 'JWT',
         },
-        adminToken: {
-          type: 'apiKey',
-          in: 'header',
-          name: 'Authorization',
-          description: 'Admin token (Bearer admin-token)',
-        },
       },
       schemas: {
         Error: {
