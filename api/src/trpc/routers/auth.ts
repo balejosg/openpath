@@ -73,7 +73,7 @@ export const authRouter = router({
    * Public endpoint so SaaS wrappers can own delivery without teaching OpenPath about providers.
    */
   generateEmailVerificationToken: adminProcedure
-    .input(z.object({ email: z.string().email() }))
+    .input(z.object({ email: z.email() }))
     .mutation(async ({ input }) => {
       const result = await AuthService.generateEmailVerificationToken(input.email);
       if (!result.ok) {
@@ -89,7 +89,7 @@ export const authRouter = router({
   verifyEmail: publicProcedure
     .input(
       z.object({
-        email: z.string().email(),
+        email: z.email(),
         token: z.string().min(1),
       })
     )
@@ -158,7 +158,7 @@ export const authRouter = router({
    * Generate password reset token (Admin only).
    */
   generateResetToken: adminProcedure
-    .input(z.object({ email: z.string().email() }))
+    .input(z.object({ email: z.email() }))
     .mutation(async ({ input }) => {
       const result = await AuthService.generateResetToken(input.email);
       if (!result.ok) {
@@ -173,7 +173,7 @@ export const authRouter = router({
   resetPassword: publicProcedure
     .input(
       z.object({
-        email: z.string().email(),
+        email: z.email(),
         token: z.string(),
         newPassword: z.string().min(8),
       })

@@ -19,7 +19,7 @@
     "clean:all": "rm -rf dist coverage *.tsbuildinfo",
     "prebuild": "npm run clean:all",
     "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "npm --prefix .. run build --workspace=@openpath/shared && tsc --noEmit",
     "test": "NODE_ENV=test PORT=3006 node --import tsx --test --test-force-exit tests/api.test.ts tests/lib/machine-proof.test.ts tests/lib/public-request-input.test.ts tests/lib/exemption-storage.test.ts tests/routes/public-requests.test.ts",
     "test:watch": "NODE_ENV=test PORT=3006 node --import tsx --test --watch tests/api.test.ts",
     "test:auth": "NODE_ENV=test PORT=3001 node --import tsx --test --test-force-exit tests/auth.test.ts",
@@ -41,7 +41,7 @@
     "test:load": "NODE_ENV=test k6 run tests/load/load-test.js",
     "db:seed:e2e": "tsx scripts/seed-e2e.ts",
     "db:setup:e2e": "npm run db:migrate && npm run db:seed:e2e",
-    "lint": "eslint . --max-warnings=0",
+    "lint": "npm --prefix .. run build --workspace=@openpath/shared && eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",
     "test:unit": "NODE_ENV=test node --import tsx --test tests/schedules.test.ts",
     "test:mutation": "stryker run",
@@ -85,7 +85,7 @@
     "uuid": "^13.0.0",
     "web-push": "^3.6.7",
     "winston": "^3.19.0",
-    "zod": "^3.25.76"
+    "zod": "^4.3.6"
   },
   "c8": {
     "check-coverage": true,

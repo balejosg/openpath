@@ -19,3 +19,21 @@ export function stripUndefined<T extends Record<string, unknown>>(obj: T): Parti
   }
   return result;
 }
+
+export function getRows<T>(result: unknown): T[] {
+  if (typeof result !== 'object' || result === null || !('rows' in result)) {
+    return [];
+  }
+
+  const rows = (result as { rows?: unknown }).rows;
+  return Array.isArray(rows) ? (rows as T[]) : [];
+}
+
+export function getRowCount(result: unknown): number {
+  if (typeof result !== 'object' || result === null || !('rowCount' in result)) {
+    return 0;
+  }
+
+  const rowCount = (result as { rowCount?: unknown }).rowCount;
+  return typeof rowCount === 'number' ? rowCount : 0;
+}

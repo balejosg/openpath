@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 import { eq, lt } from 'drizzle-orm';
 import { db, tokens } from '../db/index.js';
+import { getRowCount } from './utils.js';
 import { logger } from './logger.js';
 import type { ITokenStore } from '../types/storage.js';
 
@@ -68,9 +69,7 @@ export async function isBlacklisted(token: string): Promise<boolean> {
 }
 
 export async function cleanup(): Promise<number> {
-  const result = await db.delete(tokens).where(lt(tokens.expiresAt, new Date()));
-
-  return result.rowCount ?? 0;
+  return getRowCount(await db.delete(tokens).where(lt(tokens.expiresAt, new Date())));
 }
 
 // =============================================================================

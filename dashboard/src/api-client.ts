@@ -222,7 +222,7 @@ export async function login(username: string, password: string): Promise<LoginRe
   const email = username.includes('@') ? username : `${username}@dashboard.local`;
 
   try {
-    const result = await trpc.auth.login.mutate({ email, password });
+    const result = await (trpc as any).auth.login.mutate({ email, password });
 
     return {
       success: true,
@@ -256,7 +256,7 @@ export async function refreshToken(refreshTokenValue: string): Promise<LoginResu
   const trpc = createTRPCPublic();
 
   try {
-    const result = await trpc.auth.refresh.mutate({ refreshToken: refreshTokenValue });
+    const result = await (trpc as any).auth.refresh.mutate({ refreshToken: refreshTokenValue });
 
     return {
       success: true,
@@ -279,7 +279,7 @@ export async function logout(accessToken: string, refreshTokenValue: string): Pr
   const trpc = createTRPCWithAuth(accessToken);
 
   try {
-    await trpc.auth.logout.mutate({ refreshToken: refreshTokenValue });
+    await (trpc as any).auth.logout.mutate({ refreshToken: refreshTokenValue });
     return true;
   } catch (error) {
     logger.error('Logout failed', { error: getTRPCErrorMessage(error) });

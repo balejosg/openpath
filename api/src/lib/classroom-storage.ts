@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { eq, sql, count } from 'drizzle-orm';
 import { db, classrooms, machines } from '../db/index.js';
+import { getRowCount } from './utils.js';
 import { logger } from './logger.js';
 import { getCurrentSchedule } from './schedule-storage.js';
 import { sanitizeSlug } from '@openpath/shared';
@@ -260,9 +261,7 @@ export async function getCurrentGroupId(id: string): Promise<string | null> {
 }
 
 export async function deleteClassroom(id: string): Promise<boolean> {
-  const result = await db.delete(classrooms).where(eq(classrooms.id, id));
-
-  return (result.rowCount ?? 0) > 0;
+  return getRowCount(await db.delete(classrooms).where(eq(classrooms.id, id))) > 0;
 }
 
 // =============================================================================
@@ -396,15 +395,11 @@ export async function deleteMachine(hostname: string): Promise<boolean> {
   const machine = await getMachineByHostname(hostname);
   if (!machine) return false;
 
-  const result = await db.delete(machines).where(eq(machines.id, machine.id));
-
-  return (result.rowCount ?? 0) > 0;
+  return getRowCount(await db.delete(machines).where(eq(machines.id, machine.id))) > 0;
 }
 
 export async function removeMachinesByClassroom(classroomId: string): Promise<number> {
-  const result = await db.delete(machines).where(eq(machines.classroomId, classroomId));
-
-  return result.rowCount ?? 0;
+  return getRowCount(await db.delete(machines).where(eq(machines.classroomId, classroomId)));
 }
 
 /**

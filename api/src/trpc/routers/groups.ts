@@ -103,7 +103,7 @@ async function addGroupToTeacherRole(params: {
   await roleStorage.addGroupsToRole(teacherRole.id, [params.groupId]);
 }
 
-const teacherGroupIdProcedure = <TSchema extends z.ZodTypeAny>(
+const teacherGroupIdProcedure = <TSchema extends z.ZodType>(
   schema: TSchema
 ): ReturnType<typeof teacherProcedure.input<TSchema>> => {
   return teacherProcedure.input(schema).use(async ({ ctx, input, next }) => {
@@ -116,7 +116,7 @@ const teacherGroupIdProcedure = <TSchema extends z.ZodTypeAny>(
   });
 };
 
-const teacherGroupByIdProcedure = <TSchema extends z.ZodTypeAny>(
+const teacherGroupByIdProcedure = <TSchema extends z.ZodType>(
   schema: TSchema
 ): ReturnType<typeof teacherProcedure.input<TSchema>> => {
   return teacherProcedure.input(schema).use(async ({ ctx, input, next }) => {
@@ -129,7 +129,7 @@ const teacherGroupByIdProcedure = <TSchema extends z.ZodTypeAny>(
   });
 };
 
-const teacherViewGroupIdProcedure = <TSchema extends z.ZodTypeAny>(
+const teacherViewGroupIdProcedure = <TSchema extends z.ZodType>(
   schema: TSchema
 ): ReturnType<typeof teacherProcedure.input<TSchema>> => {
   return teacherProcedure.input(schema).use(async ({ ctx, input, next }) => {
@@ -205,7 +205,7 @@ const CreateRuleSchema = z
     const result = validateRuleValue(data.value, data.type);
     if (!result.valid) {
       ctx.addIssue({
-        code: z.ZodIssueCode.custom,
+        code: 'custom',
         path: ['value'],
         message: result.error ?? 'Invalid rule value',
       });
@@ -223,7 +223,7 @@ const BulkCreateRulesSchema = z
       const result = validateRuleValue(value, data.type);
       if (!result.valid) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ['values', i],
           message: result.error ?? 'Invalid rule value',
         });

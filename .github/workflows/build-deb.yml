@@ -49,7 +49,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      
+
       - name: Extract version
         id: version
         run: |
@@ -118,7 +118,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      
+
       - name: Checkout gh-pages branch
         uses: actions/checkout@v6
         with:

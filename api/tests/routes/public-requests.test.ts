@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
 import { sql } from 'drizzle-orm';
+import { getRows } from '../../src/lib/utils.js';
 
 const { ensureTestSchema, getAvailablePort } = await import('../test-utils.js');
 const { config, loadConfig } = await import('../../src/config.js');
@@ -129,18 +130,19 @@ await describe('public-requests routes', async () => {
     assert.strictEqual(payload.source, 'auto_extension');
     assert.ok(typeof payload.id === 'string' && payload.id.length > 0);
 
-    const requestRows = await db.execute(
-      sql.raw(
-        `SELECT status, group_id, source, machine_hostname, origin_page FROM requests WHERE domain='${domain}' LIMIT 1`
-      )
-    );
-    const createdRequests = requestRows.rows as {
+    const createdRequests = getRows<{
       status: string;
       group_id: string;
       source: string;
       machine_hostname: string;
       origin_page: string;
-    }[];
+    }>(
+      await db.execute(
+        sql.raw(
+          `SELECT status, group_id, source, machine_hostname, origin_page FROM requests WHERE domain='${domain}' LIMIT 1`
+        )
+      )
+    );
     assert.strictEqual(createdRequests.length, 1);
     const firstRequest = createdRequests[0];
     assert.ok(firstRequest !== undefined);
@@ -150,10 +152,16 @@ await describe('public-requests routes', async () => {
     assert.strictEqual(firstRequest.machine_hostname, hostname);
     assert.ok(firstRequest.origin_page.includes(`${classroomId}.school.local`));
 
-    const ruleRows = await db.execute(
-      sql.raw(`SELECT id FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}'`)
+    assert.strictEqual(
+      getRows(
+        await db.execute(
+          sql.raw(
+            `SELECT id FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}'`
+          )
+        )
+      ).length,
+      0
     );
-    assert.strictEqual(ruleRows.rows.length, 0);
   });
 
   await test('POST /api/requests/submit rejects requests with missing required fields', async () => {
@@ -293,19 +301,24 @@ await describe('public-requests routes', async () => {
       assert.strictEqual(payload.source, 'auto_extension');
       assert.strictEqual(payload.duplicate, false);
 
-      const ruleRows = await db.execute(
-        sql.raw(
-          `SELECT source, value FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}' LIMIT 1`
+      const createdRules = getRows<{ source: string; value: string }>(
+        await db.execute(
+          sql.raw(
+            `SELECT source, value FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}' LIMIT 1`
+          )
         )
       );
-      const createdRules = ruleRows.rows as { source: string; value: string }[];
       assert.strictEqual(createdRules.length, 1);
       assert.strictEqual(createdRules[0]?.source, 'auto_extension');
 
-      const requestRows = await db.execute(
-        sql.raw(`SELECT id FROM requests WHERE domain='${domain}' AND group_id='${groupId}'`)
+      assert.strictEqual(
+        getRows(
+          await db.execute(
+            sql.raw(`SELECT id FROM requests WHERE domain='${domain}' AND group_id='${groupId}'`)
+          )
+        ).length,
+        0
       );
-      assert.strictEqual(requestRows.rows.length, 0);
     } finally {
       Object.defineProperty(config, 'autoApproveMachineRequests', {
         value: originalAutoApprove,

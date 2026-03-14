@@ -45,7 +45,7 @@ export const DomainRequest = z.object({
 
 export const User = z.object({
   id: z.string(),
-  email: z.string().email(),
+  email: z.email(),
   name: z.string(),
   passwordHash: z.string().optional(),
   googleId: z.string().optional(),
@@ -246,7 +246,7 @@ export const CreateRequestDTO = z
   .object({
     domain: DomainSchema,
     reason: z.string().optional(),
-    requesterEmail: z.string().email().optional(),
+    requesterEmail: z.email().optional(),
     groupId: z.string().optional(),
 
     source: z.string().max(50).optional(),
@@ -272,13 +272,13 @@ export const StrongPasswordSchema = z
   .regex(/\d/, 'La contraseña debe incluir al menos un número');
 
 export const CreateUserDTO = z.object({
-  email: z.string().email(),
+  email: z.email(),
   name: z.string().min(1),
   password: StrongPasswordSchema,
 });
 
 export const LoginDTO = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8),
 });
 

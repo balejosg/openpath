@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { eq, sql, count } from 'drizzle-orm';
 import { normalize } from '@openpath/shared';
 import { db, users } from '../db/index.js';
+import { getRowCount } from './utils.js';
 import type { User, SafeUser } from '../types/index.js';
 import type { IUserStorage, CreateUserData, UpdateUserData } from '../types/storage.js';
 import { config } from '../config.js';
@@ -157,12 +158,11 @@ export async function createGoogleUser(userData: CreateGoogleUserData): Promise<
 }
 
 export async function linkGoogleId(userId: string, googleId: string): Promise<boolean> {
-  const result = await db
-    .update(users)
-    .set({ googleId, updatedAt: new Date() })
-    .where(eq(users.id, userId));
-
-  return (result.rowCount ?? 0) > 0;
+  return (
+    getRowCount(
+      await db.update(users).set({ googleId, updatedAt: new Date() }).where(eq(users.id, userId))
+    ) > 0
+  );
 }
 
 /**
@@ -277,18 +277,18 @@ export async function updateLastLogin(id: string): Promise<void> {
 }
 
 export async function deleteUser(id: string): Promise<boolean> {
-  const result = await db.delete(users).where(eq(users.id, id));
-
-  return (result.rowCount ?? 0) > 0;
+  return getRowCount(await db.delete(users).where(eq(users.id, id))) > 0;
 }
 
 export async function verifyEmail(id: string): Promise<boolean> {
-  const result = await db
-    .update(users)
-    .set({ emailVerified: true, updatedAt: new Date() })
-    .where(eq(users.id, id));
-
-  return (result.rowCount ?? 0) > 0;
+  return (
+    getRowCount(
+      await db
+        .update(users)
+        .set({ emailVerified: true, updatedAt: new Date() })
+        .where(eq(users.id, id))
+    ) > 0
+  );
 }
 
 /**

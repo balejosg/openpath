@@ -8,7 +8,7 @@
  */
 
 import { createTRPCClient, httpBatchLink, TRPCClientError } from '@trpc/client';
-import type { AppRouter } from '@openpath/api';
+import type { AnyRouter } from '@trpc/server';
 
 // =============================================================================
 // Configuration
@@ -20,14 +20,18 @@ const API_URL = process.env.API_URL ?? 'http://localhost:3000';
 // Client Factory
 // =============================================================================
 
+type DashboardRouter = AnyRouter;
+
 /**
  * Create a tRPC client with the provided authentication token.
  *
  * @param token - JWT access token for authentication
  * @returns Configured tRPC client
  */
-export function createTRPCWithAuth(token: string): ReturnType<typeof createTRPCClient<AppRouter>> {
-  return createTRPCClient<AppRouter>({
+export function createTRPCWithAuth(
+  token: string
+): ReturnType<typeof createTRPCClient<DashboardRouter>> {
+  return createTRPCClient<DashboardRouter>({
     links: [
       httpBatchLink({
         url: `${API_URL}/trpc`,
@@ -43,8 +47,8 @@ export function createTRPCWithAuth(token: string): ReturnType<typeof createTRPCC
  * Create an unauthenticated tRPC client.
  * Used for login and other public endpoints.
  */
-export function createTRPCPublic(): ReturnType<typeof createTRPCClient<AppRouter>> {
-  return createTRPCClient<AppRouter>({
+export function createTRPCPublic(): ReturnType<typeof createTRPCClient<DashboardRouter>> {
+  return createTRPCClient<DashboardRouter>({
     links: [
       httpBatchLink({
         url: `${API_URL}/trpc`,
@@ -60,8 +64,17 @@ export function createTRPCPublic(): ReturnType<typeof createTRPCClient<AppRouter
 /**
  * Check if an error is a tRPC client error.
  */
-export function isTRPCError(error: unknown): error is TRPCClientError<AppRouter> {
+export function isTRPCError(error: unknown): error is TRPCClientError<DashboardRouter> {
   return error instanceof TRPCClientError;
+}
+
+export function getTRPCErrorCode(error: unknown): string | undefined {
+  if (!isTRPCError(error) || typeof error.data !== 'object' || error.data === null) {
+    return undefined;
+  }
+
+  const { code } = error.data as { code?: unknown };
+  return typeof code === 'string' ? code : undefined;
 }
 
 /**
@@ -81,11 +94,7 @@ export function getTRPCErrorMessage(error: unknown): string {
  * Get HTTP-like status code from tRPC error.
  */
 export function getTRPCErrorStatus(error: unknown): number {
-  if (!isTRPCError(error)) {
-    return 500;
-  }
-
-  switch (error.data?.code) {
+  switch (getTRPCErrorCode(error)) {
     case 'BAD_REQUEST':
       return 400;
     case 'UNAUTHORIZED':
@@ -108,4 +117,4 @@ export function getTRPCErrorStatus(error: unknown): number {
 // =============================================================================
 
 export { API_URL };
-export type { AppRouter };
+export type { DashboardRouter };

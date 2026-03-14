@@ -8,6 +8,7 @@
 import crypto from 'node:crypto';
 import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import { db, schedules } from '../db/index.js';
+import { getRowCount } from './utils.js';
 import { logger } from './logger.js';
 import {
   assertQuarterHourInstant,
@@ -407,9 +408,7 @@ export async function updateOneOffSchedule(
 }
 
 export async function deleteSchedule(id: string): Promise<boolean> {
-  const result = await db.delete(schedules).where(eq(schedules.id, id));
-
-  return (result.rowCount ?? 0) > 0;
+  return getRowCount(await db.delete(schedules).where(eq(schedules.id, id))) > 0;
 }
 
 export async function getCurrentSchedule(
@@ -499,9 +498,7 @@ export async function getClassroomIdsWithBoundaryAt(date: Date = new Date()): Pr
 }
 
 export async function deleteSchedulesByClassroom(classroomId: string): Promise<number> {
-  const result = await db.delete(schedules).where(eq(schedules.classroomId, classroomId));
-
-  return result.rowCount ?? 0;
+  return getRowCount(await db.delete(schedules).where(eq(schedules.classroomId, classroomId)));
 }
 
 export default {

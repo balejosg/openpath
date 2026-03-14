@@ -8,6 +8,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { eq, sql, and, count, inArray } from 'drizzle-orm';
 import { db, roles } from '../db/index.js';
+import { getRowCount } from './utils.js';
 import { logger } from './logger.js';
 import type { UserRole } from '../types/index.js';
 import type { IRoleStorage, AssignRoleData, Role } from '../types/storage.js';
@@ -276,15 +277,11 @@ export async function removeGroupsFromRole(
 }
 
 export async function revokeRole(roleId: string, _revokedBy?: string): Promise<boolean> {
-  const result = await db.delete(roles).where(eq(roles.id, roleId));
-
-  return (result.rowCount ?? 0) > 0;
+  return getRowCount(await db.delete(roles).where(eq(roles.id, roleId))) > 0;
 }
 
 export async function revokeAllUserRoles(userId: string, _revokedBy?: string): Promise<number> {
-  const result = await db.delete(roles).where(eq(roles.userId, userId));
-
-  return result.rowCount ?? 0;
+  return getRowCount(await db.delete(roles).where(eq(roles.userId, userId)));
 }
 
 export async function removeGroupFromAllRoles(groupId: string): Promise<number> {

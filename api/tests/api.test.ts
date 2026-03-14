@@ -21,6 +21,7 @@ import assert from 'node:assert';
 import { createHash } from 'node:crypto';
 import type { Server } from 'node:http';
 import { sql } from 'drizzle-orm';
+import { getRows } from '../src/lib/utils.js';
 
 process.env.NODE_ENV = 'test';
 delete process.env.ENABLE_RATE_LIMIT_IN_TEST;
@@ -211,19 +212,20 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
       assert.strictEqual(data.groupId, groupId);
       assert.strictEqual(data.source, 'auto_extension');
 
-      const requestRow = await db.execute(
-        sql.raw(
-          `SELECT status, group_id, source, machine_hostname, origin_page, reason FROM requests WHERE id='${data.id}' LIMIT 1`
-        )
-      );
-      const rows = requestRow.rows as {
+      const rows = getRows<{
         status: string;
         group_id: string;
         source: string;
         machine_hostname: string;
         origin_page: string;
         reason: string;
-      }[];
+      }>(
+        await db.execute(
+          sql.raw(
+            `SELECT status, group_id, source, machine_hostname, origin_page, reason FROM requests WHERE id='${data.id}' LIMIT 1`
+          )
+        )
+      );
       assert.strictEqual(rows.length, 1);
       const firstRow = rows[0];
       assert.ok(firstRow !== undefined);
@@ -234,10 +236,16 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
       assert.strictEqual(firstRow.origin_page, `${classroomId}.school.local`);
       assert.ok(firstRow.reason.includes(reason));
 
-      const ruleRow = await db.execute(
-        sql.raw(`SELECT id FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}'`)
+      assert.strictEqual(
+        getRows(
+          await db.execute(
+            sql.raw(
+              `SELECT id FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}'`
+            )
+          )
+        ).length,
+        0
       );
-      assert.strictEqual(ruleRow.rows.length, 0);
 
       const duplicateResponse = await fetch(`${API_URL}/api/requests/auto`, {
         method: 'POST',
@@ -320,18 +328,19 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
       assert.strictEqual(data.groupId, activeGroupId);
       assert.strictEqual(data.source, 'firefox-extension');
 
-      const requestRow = await db.execute(
-        sql.raw(
-          `SELECT status, group_id, source, machine_hostname, origin_host FROM requests WHERE id='${data.id}' LIMIT 1`
-        )
-      );
-      const rows = requestRow.rows as {
+      const rows = getRows<{
         status: string;
         group_id: string;
         source: string;
         machine_hostname: string;
         origin_host: string;
-      }[];
+      }>(
+        await db.execute(
+          sql.raw(
+            `SELECT status, group_id, source, machine_hostname, origin_host FROM requests WHERE id='${data.id}' LIMIT 1`
+          )
+        )
+      );
 
       assert.strictEqual(rows.length, 1);
       const firstRow = rows[0] as {
@@ -396,10 +405,9 @@ await describe('Whitelist Request API Tests (tRPC)', { timeout: 30000 }, async (
       assert.strictEqual(data.status, 'pending');
       assert.strictEqual(data.groupId, defaultGroupId);
 
-      const requestRow = await db.execute(
-        sql.raw(`SELECT group_id FROM requests WHERE id='${data.id}' LIMIT 1`)
+      const rows = getRows<{ group_id: string }>(
+        await db.execute(sql.raw(`SELECT group_id FROM requests WHERE id='${data.id}' LIMIT 1`))
       );
-      const rows = requestRow.rows as { group_id: string }[];
 
       assert.strictEqual(rows.length, 1);
       const firstRow = rows[0] as { group_id: string };

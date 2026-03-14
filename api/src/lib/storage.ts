@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { eq, desc, and, sql, count } from 'drizzle-orm';
 import { normalize } from '@openpath/shared';
 import { db, requests } from '../db/index.js';
+import { getRowCount, getRows } from './utils.js';
 import type { DomainRequest, RequestStatus } from '../types/index.js';
 import type { IRequestStorage, CreateRequestData, RequestStats } from '../types/storage.js';
 
@@ -89,7 +90,8 @@ let metadataColumnCheck: boolean | null = null;
 async function hasRequestMetadataColumns(): Promise<boolean> {
   if (metadataColumnCheck !== null) return metadataColumnCheck;
 
-  const result = await db.execute(sql`
+  const row = getRows<{ has_source?: boolean | number | string }>(
+    await db.execute(sql`
     SELECT EXISTS (
       SELECT 1
       FROM information_schema.columns
@@ -97,9 +99,8 @@ async function hasRequestMetadataColumns(): Promise<boolean> {
         AND table_name = 'requests'
         AND column_name = 'source'
     ) AS has_source
-  `);
-
-  const row = result.rows[0] as { has_source?: boolean | number | string } | undefined;
+  `)
+  )[0];
   const raw = row?.has_source;
   metadataColumnCheck = raw === true || raw === 't' || raw === 1 || raw === '1';
   return metadataColumnCheck;
@@ -113,14 +114,15 @@ export async function getAllRequests(
   status: RequestStatus | null = null
 ): Promise<DomainRequest[]> {
   if (!(await hasRequestMetadataColumns())) {
-    const rows = await db.execute(sql`
+    return getRows<LegacyRequestRow>(
+      await db.execute(sql`
       SELECT id, domain, reason, requester_email, group_id, status,
              created_at, updated_at, resolved_at, resolved_by, resolution_note
       FROM requests
       ${status !== null ? sql`WHERE status = ${status}` : sql``}
       ORDER BY created_at DESC
-    `);
-    return rows.rows.map((r) => legacyRowToStorageType(r as unknown as LegacyRequestRow));
+    `)
+    ).map((row) => legacyRowToStorageType(row));
   }
 
   const conditions = status !== null ? eq(requests.status, status) : undefined;
@@ -136,14 +138,15 @@ export async function getAllRequests(
 
 export async function getRequestsByGroup(groupId: string): Promise<DomainRequest[]> {
   if (!(await hasRequestMetadataColumns())) {
-    const rows = await db.execute(sql`
+    return getRows<LegacyRequestRow>(
+      await db.execute(sql`
       SELECT id, domain, reason, requester_email, group_id, status,
              created_at, updated_at, resolved_at, resolved_by, resolution_note
       FROM requests
       WHERE group_id = ${groupId}
       ORDER BY created_at DESC
-    `);
-    return rows.rows.map((r) => legacyRowToStorageType(r as unknown as LegacyRequestRow));
+    `)
+    ).map((row) => legacyRowToStorageType(row));
   }
 
   const result = await db
@@ -157,16 +160,16 @@ export async function getRequestsByGroup(groupId: string): Promise<DomainRequest
 
 export async function getRequestById(id: string): Promise<DomainRequest | null> {
   if (!(await hasRequestMetadataColumns())) {
-    const rows = await db.execute(sql`
+    const row = getRows<LegacyRequestRow>(
+      await db.execute(sql`
       SELECT id, domain, reason, requester_email, group_id, status,
              created_at, updated_at, resolved_at, resolved_by, resolution_note
       FROM requests
       WHERE id = ${id}
       LIMIT 1
-    `);
-    return rows.rows[0]
-      ? legacyRowToStorageType(rows.rows[0] as unknown as LegacyRequestRow)
-      : null;
+    `)
+    )[0];
+    return row ? legacyRowToStorageType(row) : null;
   }
 
   const result = await db.select().from(requests).where(eq(requests.id, id)).limit(1);
@@ -188,7 +191,8 @@ export async function createRequest(requestData: CreateRequestData): Promise<Dom
   const id = `req_${uuidv4().slice(0, 8)}`;
 
   if (!(await hasRequestMetadataColumns())) {
-    const result = await db.execute(sql`
+    const row = getRows<LegacyRequestRow>(
+      await db.execute(sql`
       INSERT INTO requests (id, domain, reason, requester_email, group_id, status)
       VALUES (
         ${id},
@@ -200,9 +204,8 @@ export async function createRequest(requestData: CreateRequestData): Promise<Dom
       )
       RETURNING id, domain, reason, requester_email, group_id, status,
                 created_at, updated_at, resolved_at, resolved_by, resolution_note
-    `);
-
-    const row = result.rows[0] as LegacyRequestRow | undefined;
+    `)
+    )[0];
     if (!row) {
       throw new Error(`Failed to create request for domain "${requestData.domain}"`);
     }
@@ -260,9 +263,7 @@ export async function updateRequestStatus(
 }
 
 export async function deleteRequest(id: string): Promise<boolean> {
-  const result = await db.delete(requests).where(eq(requests.id, id));
-
-  return (result.rowCount ?? 0) > 0;
+  return getRowCount(await db.delete(requests).where(eq(requests.id, id))) > 0;
 }
 
 export async function getStats(): Promise<RequestStats> {

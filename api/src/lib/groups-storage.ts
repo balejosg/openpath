@@ -10,6 +10,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { normalize, getRootDomain } from '@openpath/shared';
 import type { GroupVisibility } from '@openpath/shared';
 import { db, whitelistGroups, whitelistRules } from '../db/index.js';
+import { getRowCount } from './utils.js';
 import { logger } from './logger.js';
 import type { WhitelistGroup, WhitelistRule } from '../db/schema.js';
 
@@ -396,8 +397,8 @@ export async function updateGroup(
  * Delete a group and all its rules (cascade).
  */
 export async function deleteGroup(id: string): Promise<boolean> {
-  const result = await db.delete(whitelistGroups).where(eq(whitelistGroups.id, id));
-  const deleted = (result.rowCount ?? 0) > 0;
+  const deleted =
+    getRowCount(await db.delete(whitelistGroups).where(eq(whitelistGroups.id, id))) > 0;
   if (deleted) {
     logger.debug('Deleted group', { id });
   }
@@ -715,8 +716,7 @@ export async function createRule(
  * Delete a rule by ID.
  */
 export async function deleteRule(id: string): Promise<boolean> {
-  const result = await db.delete(whitelistRules).where(eq(whitelistRules.id, id));
-  return (result.rowCount ?? 0) > 0;
+  return getRowCount(await db.delete(whitelistRules).where(eq(whitelistRules.id, id))) > 0;
 }
 
 /**
@@ -729,9 +729,9 @@ export async function bulkDeleteRules(ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
 
   const uniqueIds = Array.from(new Set(ids));
-  const result = await db.delete(whitelistRules).where(inArray(whitelistRules.id, uniqueIds));
-
-  const deletedCount = result.rowCount ?? 0;
+  const deletedCount = getRowCount(
+    await db.delete(whitelistRules).where(inArray(whitelistRules.id, uniqueIds))
+  );
   logger.debug('Bulk deleted rules', { count: deletedCount, requested: ids.length });
   return deletedCount;
 }

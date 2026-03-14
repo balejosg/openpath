@@ -143,6 +143,10 @@ function parseCookieValue(cookieHeader: string | undefined, name: string): strin
   return null;
 }
 
+function getFirstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
 async function verifyAccessTokenFromRequest(
   req: Pick<Request, 'headers'>
 ): Promise<Awaited<ReturnType<typeof verifyAccessToken>>> {
@@ -262,7 +266,7 @@ async function authenticateMachineToken(
   res: Response
 ): Promise<AuthenticatedMachine | null> {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  if (authHeader?.startsWith('Bearer ') !== true) {
     res.status(401).json({ success: false, error: 'Authorization header required' });
     return null;
   }
@@ -294,7 +298,7 @@ async function authenticateEnrollmentToken(
   res: Response
 ): Promise<AuthenticatedEnrollment | null> {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
+  if (authHeader?.startsWith('Bearer ') !== true) {
     res.status(401).json({ success: false, error: 'Authorization header required' });
     return null;
   }
@@ -521,7 +525,7 @@ registerPublicRequestRoutes(app);
 // Public endpoint for dnsmasq clients to fetch whitelist files
 // This endpoint is unauthenticated to allow machines to fetch their whitelist
 app.get('/export/:name.txt', (req: Request, res: Response): void => {
-  const name = req.params.name;
+  const name = getFirstParam(req.params.name);
   if (!name) {
     res.status(400).type('text/plain').send('Group name required');
     return;
@@ -699,7 +703,7 @@ app.post('/api/setup/validate-token', (req: Request, res: Response): void => {
 app.post('/api/machines/register', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {
     const authHeader = req.headers.authorization;
-    if (!authHeader?.startsWith('Bearer ')) {
+    if (authHeader?.startsWith('Bearer ') !== true) {
       res.status(401).json({ success: false, error: 'Authorization header required' });
       return;
     }
@@ -806,7 +810,7 @@ app.post('/api/enroll/:classroomId/ticket', (req: Request, res: Response): void 
         return;
       }
 
-      const classroomId = req.params.classroomId;
+      const classroomId = getFirstParam(req.params.classroomId);
       if (!classroomId) {
         res.status(400).json({ success: false, error: 'classroomId parameter required' });
         return;
@@ -840,15 +844,15 @@ app.post('/api/enroll/:classroomId/ticket', (req: Request, res: Response): void 
 app.get('/api/enroll/:classroomId', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {
     try {
-      const { classroomId } = req.params;
+      const classroomId = getFirstParam(req.params.classroomId);
       const authHeader = req.headers.authorization;
 
-      if (!classroomId) {
+      if (classroomId === undefined || classroomId === '') {
         res.status(400).send('Missing classroomId');
         return;
       }
 
-      if (!authHeader?.startsWith('Bearer ')) {
+      if (authHeader?.startsWith('Bearer ') !== true) {
         res.status(401).send('Authorization header required');
         return;
       }
@@ -941,7 +945,7 @@ app.get('/api/enroll/:classroomId/windows.ps1', (req: Request, res: Response): v
     try {
       const authHeader = req.headers.authorization;
 
-      if (!authHeader?.startsWith('Bearer ')) {
+      if (authHeader?.startsWith('Bearer ') !== true) {
         res.status(401).send('Authorization header required');
         return;
       }
@@ -953,7 +957,7 @@ app.get('/api/enroll/:classroomId/windows.ps1', (req: Request, res: Response): v
         return;
       }
 
-      const requestedClassroomId = req.params.classroomId;
+      const requestedClassroomId = getFirstParam(req.params.classroomId);
       if (!requestedClassroomId) {
         res.status(400).send('Missing classroomId');
         return;
@@ -1068,7 +1072,7 @@ app.post('/api/machines/:hostname/rotate-download-token', (req: Request, res: Re
       return;
     }
 
-    const hostname = req.params.hostname;
+    const hostname = getFirstParam(req.params.hostname);
     if (!hostname) {
       res.status(400).json({ success: false, error: 'hostname parameter required' });
       return;
@@ -1262,7 +1266,7 @@ app.get('/w/whitelist.txt', (_req: Request, res: Response): void => {
 app.get('/w/:machineToken/whitelist.txt', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {
     try {
-      const { machineToken } = req.params;
+      const machineToken = getFirstParam(req.params.machineToken);
       if (!machineToken) {
         res.setHeader('Cache-Control', 'no-store, max-age=0');
         res.setHeader('Pragma', 'no-cache');
@@ -1498,7 +1502,7 @@ if (fs.existsSync(reactSpaPath)) {
 // SPA fallback (HTML) - must come after API routes and static files.
 // Only serve for non-API paths so unknown API endpoints can return JSON 404.
 if (fs.existsSync(reactSpaPath)) {
-  app.get('*', (req: Request, res: Response, next) => {
+  app.get(/.*/, (req: Request, res: Response, next) => {
     const url = req.originalUrl || req.url;
     if (url.startsWith('/api') || url.startsWith('/trpc') || url.startsWith('/api-docs')) {
       next();

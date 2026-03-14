@@ -14,7 +14,7 @@ import cookieParser from 'cookie-parser';
 import * as api from './api-client.js';
 import type { ApiClient } from './api-client.js';
 import { logger } from './lib/logger.js';
-import { getTRPCErrorMessage, getTRPCErrorStatus, isTRPCError } from './trpc.js';
+import { getTRPCErrorCode, getTRPCErrorMessage, getTRPCErrorStatus, isTRPCError } from './trpc.js';
 
 // =============================================================================
 // Express Types Extension
@@ -101,6 +101,10 @@ function getAccessToken(req: Request): string {
     throw new Error('Access token not set - requireAuth middleware must be used');
   }
   return req.accessToken;
+}
+
+function getFirstValue(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 /**
@@ -267,7 +271,7 @@ app.post(
       const result = await getApiClient(req).createGroup(name, displayName);
       res.json({ success: true, id: result.id, name: result.name });
     } catch (err: unknown) {
-      if (isTRPCError(err) && err.data?.code === 'CONFLICT') {
+      if (isTRPCError(err) && getTRPCErrorCode(err) === 'CONFLICT') {
         res.status(400).json({ error: 'Ya existe un grupo con ese nombre' });
         return;
       }
@@ -280,7 +284,7 @@ app.get(
   '/api/groups/:id',
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const id = req.params.id;
+    const id = getFirstValue(req.params.id);
     if (!id) {
       res.status(400).json({ error: 'ID requerido' });
       return;
@@ -299,7 +303,7 @@ app.put(
   '/api/groups/:id',
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const id = req.params.id;
+    const id = getFirstValue(req.params.id);
     if (!id) {
       res.status(400).json({ error: 'ID requerido' });
       return;
@@ -320,7 +324,7 @@ app.delete(
   '/api/groups/:id',
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const id = req.params.id;
+    const id = getFirstValue(req.params.id);
     if (!id) {
       res.status(400).json({ error: 'ID requerido' });
       return;
@@ -339,13 +343,13 @@ app.get(
   '/api/groups/:groupId/rules',
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const groupId = req.params.groupId;
+    const groupId = getFirstValue(req.params.groupId);
     if (!groupId) {
       res.status(400).json({ error: 'Group ID requerido' });
       return;
     }
 
-    const { type } = req.query;
+    const type = getFirstValue(req.query.type as string | string[] | undefined);
     const rules = await getApiClient(req).getRulesByGroup(
       groupId,
       (type as api.RuleType | undefined) ?? undefined
@@ -358,7 +362,7 @@ app.post(
   '/api/groups/:groupId/rules',
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const groupId = req.params.groupId;
+    const groupId = getFirstValue(req.params.groupId);
     if (!groupId) {
       res.status(400).json({ error: 'Group ID requerido' });
       return;
@@ -379,7 +383,7 @@ app.post(
       );
       res.json({ success: true, id: result.id });
     } catch (err: unknown) {
-      if (isTRPCError(err) && err.data?.code === 'CONFLICT') {
+      if (isTRPCError(err) && getTRPCErrorCode(err) === 'CONFLICT') {
         res.status(400).json({ error: 'La regla ya existe' });
         return;
       }
@@ -392,7 +396,7 @@ app.post(
   '/api/groups/:groupId/rules/bulk',
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const groupId = req.params.groupId;
+    const groupId = getFirstValue(req.params.groupId);
     if (!groupId) {
       res.status(400).json({ error: 'Group ID requerido' });
       return;
@@ -417,7 +421,7 @@ app.delete(
   '/api/rules/:id',
   requireAuth,
   asyncHandler(async (req: Request, res: Response): Promise<void> => {
-    const id = req.params.id;
+    const id = getFirstValue(req.params.id);
     if (!id) {
       res.status(400).json({ error: 'ID requerido' });
       return;
@@ -433,7 +437,7 @@ app.delete(
 // =============================================================================
 
 app.get('/export/:name.txt', (req: Request, res: Response): void => {
-  const name = req.params.name;
+  const name = getFirstValue(req.params.name);
   if (!name) {
     res.status(400).send('Nombre requerido');
     return;
@@ -459,7 +463,7 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (isTRPCError(err)) {
     const status = getTRPCErrorStatus(err);
     const message = getTRPCErrorMessage(err);
-    logger.error('tRPC error', { code: err.data?.code, message });
+    logger.error('tRPC error', { code: getTRPCErrorCode(err), message });
     res.status(status).json({ error: message });
     return;
   }

@@ -8,6 +8,7 @@
 
 import { eq } from 'drizzle-orm';
 import { db, settings } from '../db/index.js';
+import { getRowCount } from './utils.js';
 import { logger } from './logger.js';
 
 // =============================================================================
@@ -83,8 +84,7 @@ export async function setSetting(key: string, value: string): Promise<boolean> {
  */
 export async function deleteSetting(key: string): Promise<boolean> {
   try {
-    const result = await db.delete(settings).where(eq(settings.key, key));
-    return (result.rowCount ?? 0) > 0;
+    return getRowCount(await db.delete(settings).where(eq(settings.key, key))) > 0;
   } catch (error) {
     logger.error('Failed to delete setting', {
       key,
