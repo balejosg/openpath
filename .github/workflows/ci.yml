@@ -272,11 +272,11 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
-        working-directory: spa
+        working-directory: react-spa
 
       - name: Run Smoke E2E tests
         run: npx playwright test --grep @smoke --project=chromium
-        working-directory: spa
+        working-directory: react-spa
         env:
           CI: true
           PORT: 3001
@@ -296,7 +296,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: playwright-report
-          path: spa/playwright-report/
+          path: react-spa/playwright-report/
           retention-days: 7
 
   # ============================================
@@ -304,7 +304,7 @@ jobs:
   # ============================================
   build-docker:
     name: Build Dashboard Docker
-    needs: [lint, test-web]
+    needs: [test-web]
     uses: ./.github/workflows/reusable-docker.yml
     with:
       image-name: dashboard
@@ -317,7 +317,7 @@ jobs:
   # ============================================
   build-docker-api:
     name: Build API Docker
-    needs: [lint, test-api]
+    needs: [test-api]
     uses: ./.github/workflows/reusable-docker.yml
     with:
       image-name: api
