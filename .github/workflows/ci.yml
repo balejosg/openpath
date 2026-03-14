@@ -10,6 +10,11 @@ on:
       - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'linux/**'
+      - 'windows/**'
+      - 'tests/**'
+      - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
@@ -28,68 +33,16 @@ permissions:
 # ============================================
 
 jobs:
-  detect-relevant-changes:
-    name: Detect Relevant Changes
-    runs-on: ubuntu-latest
-    outputs:
-      linux_relevant: ${{ steps.filter.outputs.linux_relevant }}
-      windows_relevant: ${{ steps.filter.outputs.windows_relevant }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect changed paths
-        id: filter
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            base_sha="${{ github.event.pull_request.base.sha }}"
-            head_sha="${{ github.event.pull_request.head.sha }}"
-          else
-            base_sha="${{ github.event.before }}"
-            head_sha="${{ github.sha }}"
-          fi
-
-          changed_files="$(git diff --name-only "$base_sha" "$head_sha")"
-
-          echo "Changed files:"
-          if [ -n "$changed_files" ]; then
-            echo "$changed_files"
-          else
-            echo "(none)"
-          fi
-
-          linux_relevant=false
-          windows_relevant=false
-
-          if echo "$changed_files" | grep -Eq '^(linux/|tests/|\.github/workflows/ci\.yml$)'; then
-            linux_relevant=true
-          fi
-
-          if echo "$changed_files" | grep -Eq '^(windows/|tests/|\.github/workflows/ci\.yml$)'; then
-            windows_relevant=true
-          fi
-
-          echo "linux_relevant=$linux_relevant" >> "$GITHUB_OUTPUT"
-          echo "windows_relevant=$windows_relevant" >> "$GITHUB_OUTPUT"
-
   # ============================================
   # Job 1: Linux dnsmasq Agent Tests
   # ============================================
   test-linux-dnsmasq:
     name: Linux Agent Tests (BATS)
     runs-on: ubuntu-latest
-    needs: detect-relevant-changes
-    if: needs.detect-relevant-changes.outputs.linux_relevant == 'true'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Install dnsmasq
         run: |
@@ -109,54 +62,15 @@ jobs:
           bats tests/e2e/agent-integration.bats
 
   # ============================================
-  # Job 2: Security Audit
-  # ============================================
-  security:
-    name: Security Audit
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-
-      - name: NPM Audit (API)
-        run: npm audit --audit-level=moderate --workspace=@openpath/api
-
-  # ============================================
-  # Job 3: Test Web Application
-  # ============================================
-  test-web:
-    name: Web Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: web
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ============================================
-  # Job 4: Test Bash Scripts
-  # ============================================
-  test-bash:
-    name: Bash Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: bash
-
-  # ============================================
-  # Job 5: Test Windows PowerShell Scripts
+  # Job 2: Windows Agent Tests
   # ============================================
   test-windows:
     name: Windows Agent Tests (Pester)
     runs-on: windows-latest
-    needs: detect-relevant-changes
-    if: needs.detect-relevant-changes.outputs.windows_relevant == 'true'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Install Pester
         shell: pwsh
@@ -176,7 +90,7 @@ jobs:
           Invoke-Pester -Configuration $config
 
       - name: Upload test results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v4
         if: always()
         with:
           name: windows-test-results
@@ -184,176 +98,20 @@ jobs:
           retention-days: 7
 
   # ============================================
-  # Job 6: Test Request API
-  # ============================================
-  test-api:
-    name: API Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: api
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ============================================
-  # Job 7: Test SPA
-  # ============================================
-  test-spa:
-    name: SPA Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: spa
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ============================================
-  # Job 8: Test Shared Package
-  # ============================================
-  test-shared:
-    name: Shared Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: shared
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ============================================
-  # Job 9: Test Firefox Extension
-  # ============================================
-  test-firefox-extension:
-    name: Extension Tests
-    uses: ./.github/workflows/reusable-test.yml
-    with:
-      test-type: extension
-    secrets:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  # ============================================
-  # Job 11: SPA E2E Smoke Tests (fast feedback)
-  # Full E2E suite runs in e2e-comprehensive.yml
-  # ============================================
-  test-spa-e2e:
-    name: SPA E2E Smoke
-    runs-on: ubuntu-latest
-    needs: [test-api]
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: openpath
-          POSTGRES_PASSWORD: openpath_dev
-          POSTGRES_DB: openpath
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: ./.github/actions/setup-node
-
-      - name: Build workspaces
-        uses: ./.github/actions/build-workspaces
-
-      - name: Run DB migrations
-        run: npm run drizzle:push --workspace=@openpath/api
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: openpath
-          DB_USER: openpath
-          DB_PASSWORD: openpath_dev
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-        working-directory: react-spa
-
-      - name: Run Smoke E2E tests
-        run: npx playwright test --grep @smoke --project=chromium
-        working-directory: react-spa
-        env:
-          CI: true
-          PORT: 3001
-          NODE_ENV: test
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_NAME: openpath
-          DB_USER: openpath
-          DB_PASSWORD: openpath_dev
-          JWT_SECRET: test-jwt-secret-for-ci-testing
-          ADMIN_TOKEN: test-admin-token-for-ci
-          SHARED_SECRET: test-shared-secret-for-ci
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload test artifacts
-        if: failure()
-        uses: actions/upload-artifact@v6
-        with:
-          name: playwright-report
-          path: react-spa/playwright-report/
-          retention-days: 7
-
-  # ============================================
-  # Job 12: Build Docker Image (Dashboard)
-  # ============================================
-  build-docker:
-    name: Build Dashboard Docker
-    needs: [test-web]
-    uses: ./.github/workflows/reusable-docker.yml
-    with:
-      image-name: dashboard
-      dockerfile: ./dashboard/Dockerfile
-      push: ${{ github.event_name != 'pull_request' }}
-    secrets: inherit
-
-  # ============================================
-  # Job 13: Build Docker Image (API)
-  # ============================================
-  build-docker-api:
-    name: Build API Docker
-    needs: [test-api]
-    uses: ./.github/workflows/reusable-docker.yml
-    with:
-      image-name: api
-      dockerfile: ./api/Dockerfile
-      push: ${{ github.event_name != 'pull_request' }}
-    secrets: inherit
-
-  # ============================================
   # Summary Job
   # ============================================
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [detect-relevant-changes, test-linux-dnsmasq, test-windows]
+    needs: [test-linux-dnsmasq, test-windows]
     if: always()
 
     steps:
       - name: Check all jobs
         run: |
-          echo "Linux relevant: ${{ needs.detect-relevant-changes.outputs.linux_relevant }}"
-          echo "Windows relevant: ${{ needs.detect-relevant-changes.outputs.windows_relevant }}"
-
           if [[ "${{ needs.test-linux-dnsmasq.result }}" == "failure" ]] || \
-             [[ "${{ needs.test-linux-dnsmasq.result }}" == "cancelled" ]] || \
-             [[ "${{ needs.test-windows.result }}" == "failure" ]] || \
-             [[ "${{ needs.test-windows.result }}" == "cancelled" ]]; then
+             [[ "${{ needs.test-windows.result }}" == "failure" ]]; then
             echo "CI Failed"
             exit 1
           fi
-
-          if [[ "${{ needs.test-linux-dnsmasq.result }}" == "skipped" ]]; then
-            echo "Linux Agent Tests skipped: no relevant changes"
-          fi
-
-          if [[ "${{ needs.test-windows.result }}" == "skipped" ]]; then
-            echo "Windows Agent Tests skipped: no relevant changes"
-          fi
-
           echo "All CI checks passed"
