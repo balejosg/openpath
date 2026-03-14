@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install dnsmasq
         run: |
@@ -62,7 +62,44 @@ jobs:
           bats tests/e2e/agent-integration.bats
 
   # ============================================
-  # Job 2: Windows Agent Tests
+  # Job 2: Security Audit
+  # ============================================
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: NPM Audit (API)
+        run: npm audit --audit-level=moderate --workspace=@openpath/api
+
+  # ============================================
+  # Job 3: Test Web Application
+  # ============================================
+  test-web:
+    name: Web Tests
+    uses: ./.github/workflows/reusable-test.yml
+    with:
+      test-type: web
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ============================================
+  # Job 4: Test Bash Scripts
+  # ============================================
+  test-bash:
+    name: Bash Tests
+    uses: ./.github/workflows/reusable-test.yml
+    with:
+      test-type: bash
+
+  # ============================================
+  # Job 5: Test Windows PowerShell Scripts
   # ============================================
   test-windows:
     name: Windows Agent Tests (Pester)
@@ -70,7 +107,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install Pester
         shell: pwsh
@@ -96,6 +133,148 @@ jobs:
           name: windows-test-results
           path: windows-test-results.xml
           retention-days: 7
+
+  # ============================================
+  # Job 6: Test Request API
+  # ============================================
+  test-api:
+    name: API Tests
+    uses: ./.github/workflows/reusable-test.yml
+    with:
+      test-type: api
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ============================================
+  # Job 7: Test SPA
+  # ============================================
+  test-spa:
+    name: SPA Tests
+    uses: ./.github/workflows/reusable-test.yml
+    with:
+      test-type: spa
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ============================================
+  # Job 8: Test Shared Package
+  # ============================================
+  test-shared:
+    name: Shared Tests
+    uses: ./.github/workflows/reusable-test.yml
+    with:
+      test-type: shared
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ============================================
+  # Job 9: Test Firefox Extension
+  # ============================================
+  test-firefox-extension:
+    name: Extension Tests
+    uses: ./.github/workflows/reusable-test.yml
+    with:
+      test-type: extension
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ============================================
+  # Job 11: SPA E2E Smoke Tests (fast feedback)
+  # Full E2E suite runs in e2e-comprehensive.yml
+  # ============================================
+  test-spa-e2e:
+    name: SPA E2E Smoke
+    runs-on: ubuntu-latest
+    needs: [test-api]
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: openpath
+          POSTGRES_PASSWORD: openpath_dev
+          POSTGRES_DB: openpath
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Build workspaces
+        uses: ./.github/actions/build-workspaces
+
+      - name: Run DB migrations
+        run: npm run drizzle:push --workspace=@openpath/api
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: openpath
+          DB_USER: openpath
+          DB_PASSWORD: openpath_dev
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: spa
+
+      - name: Run Smoke E2E tests
+        run: npx playwright test --grep @smoke --project=chromium
+        working-directory: spa
+        env:
+          CI: true
+          PORT: 3001
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: openpath
+          DB_USER: openpath
+          DB_PASSWORD: openpath_dev
+          JWT_SECRET: test-jwt-secret-for-ci-testing
+          ADMIN_TOKEN: test-admin-token-for-ci
+          SHARED_SECRET: test-shared-secret-for-ci
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: spa/playwright-report/
+          retention-days: 7
+
+  # ============================================
+  # Job 12: Build Docker Image (Dashboard)
+  # ============================================
+  build-docker:
+    name: Build Dashboard Docker
+    needs: [lint, test-web]
+    uses: ./.github/workflows/reusable-docker.yml
+    with:
+      image-name: dashboard
+      dockerfile: ./dashboard/Dockerfile
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets: inherit
+
+  # ============================================
+  # Job 13: Build Docker Image (API)
+  # ============================================
+  build-docker-api:
+    name: Build API Docker
+    needs: [lint, test-api]
+    uses: ./.github/workflows/reusable-docker.yml
+    with:
+      image-name: api
+      dockerfile: ./api/Dockerfile
+      push: ${{ github.event_name != 'pull_request' }}
+    secrets: inherit
 
   # ============================================
   # Summary Job

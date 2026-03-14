@@ -46,8 +46,8 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@v6
+      
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
@@ -57,7 +57,72 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: '/language:${{ matrix.language }}'
+          category: "/language:${{ matrix.language }}"
+
+  # ============================================
+  # Shellcheck Security Patterns
+  # ============================================
+  shellcheck-security:
+    name: Shell Script Security
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Run shellcheck with security focus
+        run: |
+          echo "🔍 Scanning shell scripts for security issues..."
+          
+          # Check for common security issues
+          find . -type f -name "*.sh" ! -path "./node_modules/*" | while read script; do
+            echo "Checking: $script"
+            
+            # Run shellcheck with extended checks
+            shellcheck --severity=warning "$script" || true
+            
+            # Check for hardcoded credentials
+            if grep -iE "(password|passwd|pwd|secret|token|api_key).*=.*['\"]" "$script" 2>/dev/null; then
+              echo "⚠️  WARNING: Potential hardcoded credentials in $script"
+            fi
+            
+            # Check for eval usage
+            if grep -E "eval\s" "$script" 2>/dev/null; then
+              echo "⚠️  WARNING: Use of eval detected in $script"
+            fi
+          done
+          
+          echo "✓ Security scan complete"
+      
+      - name: Check for sensitive files
+        run: |
+          echo "🔍 Checking for accidentally committed secrets..."
+          
+          SENSITIVE_FILES=(
+            "*.pem"
+            "*.key"
+            "*.p12"
+            "*.pfx"
+            "id_rsa"
+            "id_dsa"
+            ".env"
+            ".env.local"
+            ".env.production"
+            "*.env"
+          )
+          
+          FOUND=0
+          for pattern in "${SENSITIVE_FILES[@]}"; do
+            if find . -name "$pattern" ! -path "./node_modules/*" ! -path "./.git/*" | grep -q .; then
+              echo "⚠️  WARNING: Found files matching: $pattern"
+              find . -name "$pattern" ! -path "./node_modules/*" ! -path "./.git/*"
+              FOUND=1
+            fi
+          done
+          
+          if [ $FOUND -eq 0 ]; then
+            echo "✓ No sensitive files found"
+          fi
 
   # ============================================
   # Docker Image Scanning with Trivy (API image)
@@ -68,8 +133,8 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
+        uses: actions/checkout@v6
+      
       - name: Build Docker image
         run: |
           docker build -t openpath-api:scan -f api/Dockerfile .
@@ -96,6 +161,51 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM'
 
   # ============================================
+  # Dependency Vulnerability Check
+  # ============================================
+  npm-audit:
+    name: NPM Audit
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        package:
+          - api
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Run npm audit
+        working-directory: ${{ matrix.package }}
+        run: |
+          echo "🔍 Running npm audit for ${{ matrix.package }}..."
+          
+          # Install dependencies first
+          npm ci || npm install
+          
+          # Run audit (allow moderate/low to not fail CI)
+          npm audit --audit-level=high || true
+          
+          # Generate JSON report
+          npm audit --json > audit-report.json || true
+          
+          echo "✓ Audit complete"
+      
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-${{ matrix.package }}
+          path: ${{ matrix.package }}/audit-report.json
+          retention-days: 30
+
+  # ============================================
   # Secret Scanning (gitleaks)
   # ============================================
   secret-scan:
@@ -104,7 +214,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
