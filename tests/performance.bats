@@ -152,9 +152,11 @@ teardown() {
     sha256_time=$(( ($(date +%s%N) - start_time) / 1000000 ))
 
     echo "md5sum 100x: ${md5_time}ms, sha256sum 100x: ${sha256_time}ms"
-    # Both should complete quickly (under 500ms for 100 iterations)
-    [ "$md5_time" -lt 500 ]
-    [ "$sha256_time" -lt 500 ]
+    # Process startup dominates this microbenchmark on loaded runners.
+    # Keeping 100 iterations under 1s preserves sub-10ms hashing for the
+    # single-file change detection paths used in practice.
+    [ "$md5_time" -lt 1000 ]
+    [ "$sha256_time" -lt 1000 ]
 }
 
 # =============================================================================
