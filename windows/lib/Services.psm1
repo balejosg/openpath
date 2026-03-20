@@ -30,9 +30,9 @@ function Register-OpenPathTask {
     $updateAction = New-ScheduledTaskAction -Execute "PowerShell.exe" `
         -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$openPathRoot\scripts\Update-OpenPath.ps1`""
     
+    # Omit RepetitionDuration so Task Scheduler repeats indefinitely on all supported Windows versions.
     $updateTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) `
-        -RepetitionInterval (New-TimeSpan -Minutes $UpdateIntervalMinutes) `
-        -RepetitionDuration ([TimeSpan]::MaxValue)
+        -RepetitionInterval (New-TimeSpan -Minutes $UpdateIntervalMinutes)
     
     $updatePrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
     
@@ -57,8 +57,7 @@ function Register-OpenPathTask {
         -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$openPathRoot\scripts\Test-DNSHealth.ps1`""
     
     $watchdogTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-        -RepetitionInterval (New-TimeSpan -Minutes $WatchdogIntervalMinutes) `
-        -RepetitionDuration ([TimeSpan]::MaxValue)
+        -RepetitionInterval (New-TimeSpan -Minutes $WatchdogIntervalMinutes)
     
     Register-ScheduledTask -TaskName "$script:TaskPrefix-Watchdog" `
         -Action $watchdogAction `

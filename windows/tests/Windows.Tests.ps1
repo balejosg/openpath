@@ -920,6 +920,20 @@ Describe "Services Module" {
             $content.Contains('$script:TaskPrefix-AgentUpdate') | Should -BeTrue
             $content.Contains('self-update --silent') | Should -BeTrue
         }
+
+        It "Avoids explicit max repetition duration for recurring tasks" {
+            $servicesPath = Join-Path $PSScriptRoot ".." "lib" "Services.psm1"
+            $content = Get-Content $servicesPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '$updateTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2)',
+                '-RepetitionInterval (New-TimeSpan -Minutes $UpdateIntervalMinutes)',
+                '$watchdogTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)',
+                '-RepetitionInterval (New-TimeSpan -Minutes $WatchdogIntervalMinutes)'
+            )
+
+            $content.Contains('RepetitionDuration ([TimeSpan]::MaxValue)') | Should -BeFalse
+        }
     }
 
     Context "Start-OpenPathTask" {
