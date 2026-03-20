@@ -648,6 +648,17 @@ Describe "DNS Module" {
                 'Write-OpenPathLog "DNS resolution failed'
             )
         }
+
+        It "Configures Acrylic to ignore and avoid caching upstream negative responses" {
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "DNS.psm1"
+            $content = Get-Content $modulePath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '"IgnoreNegativeResponsesFromPrimaryServer" = "Yes"',
+                '"IgnoreNegativeResponsesFromSecondaryServer" = "Yes"',
+                '"AddressCacheNegativeTime" = "0"'
+            )
+        }
     }
 
     Context "Max domains limit" {

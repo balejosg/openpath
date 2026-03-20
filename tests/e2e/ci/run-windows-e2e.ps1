@@ -276,6 +276,39 @@ function Write-AcrylicDiagnostics {
         Write-Host "---- $path ----"
         Get-Content $path -TotalCount 120 | ForEach-Object { Write-Host $_ }
     }
+
+    $configPath = Join-Path $acrylicPath 'AcrylicConfiguration.ini'
+    if (Test-Path $configPath) {
+        $primaryServer = Select-String -Path $configPath -Pattern '^PrimaryServerAddress=' | Select-Object -First 1
+        $secondaryServer = Select-String -Path $configPath -Pattern '^SecondaryServerAddress=' | Select-Object -First 1
+
+        foreach ($serverLine in @($primaryServer, $secondaryServer)) {
+            if (-not $serverLine) {
+                continue
+            }
+
+            $server = ($serverLine.Line -split '=', 2)[1].Trim()
+            if (-not $server) {
+                continue
+            }
+
+            try {
+                $upstreamResult = Resolve-DnsName -Name 'google.com' -Server $server -DnsOnly -ErrorAction Stop
+                $upstreamIp = $upstreamResult |
+                    Where-Object { $_.PSObject.Properties['IPAddress'] -and $_.IPAddress } |
+                    Select-Object -First 1 -ExpandProperty IPAddress
+                if ($upstreamIp) {
+                    Write-Host "OK: Direct upstream resolution via $server returned $upstreamIp"
+                }
+                else {
+                    Write-Host "OK: Direct upstream resolution via $server returned a DNS answer"
+                }
+            }
+            catch {
+                Write-Host "WARN: Direct upstream resolution via $server failed: $_"
+            }
+        }
+    }
 }
 
 function Test-InstalledDnsProxyResolution {
