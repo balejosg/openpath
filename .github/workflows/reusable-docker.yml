@@ -41,6 +41,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      # Opt Docker-maintained JS actions into Node 24 ahead of the runner default switch.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     outputs:
       tags: ${{ steps.docker.outputs.tags }}
       digest: ${{ steps.docker.outputs.digest }}
