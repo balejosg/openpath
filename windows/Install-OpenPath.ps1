@@ -279,7 +279,7 @@ Import-Module "$OpenPathRoot\lib\Common.psm1" -Force
 Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
 
 function Get-InstallerPrimaryDNS {
-    return Get-PrimaryDNS
+    return (Get-PrimaryDNS)
 }
 
 # Step 3: Create configuration
