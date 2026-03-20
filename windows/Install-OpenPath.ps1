@@ -282,13 +282,7 @@ Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
 Write-Host "[3/7] Creando configuración..." -ForegroundColor Yellow
 
 # Detect primary DNS
-$primaryDNS = (Get-DnsClientServerAddress -AddressFamily IPv4 | 
-    Where-Object { $_.ServerAddresses -and $_.ServerAddresses[0] -ne "127.0.0.1" } |
-    Select-Object -First 1).ServerAddresses[0]
-
-if (-not $primaryDNS) {
-    $primaryDNS = "8.8.8.8"
-}
+$primaryDNS = Get-PrimaryDNS
 
 $agentVersion = "0.0.0"
 if ($env:OPENPATH_VERSION) {

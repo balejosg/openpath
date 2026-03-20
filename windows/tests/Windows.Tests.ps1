@@ -1282,6 +1282,16 @@ Describe "Installer" {
             )
         }
     }
+
+    Context "Primary DNS detection" {
+        It "Uses the Common helper instead of indexing directly into adapter DNS arrays" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content.Contains('$primaryDNS = Get-PrimaryDNS') | Should -BeTrue
+            $content.Contains('Select-Object -First 1).ServerAddresses[0]') | Should -BeFalse
+        }
+    }
 }
 
 Describe "Enrollment script" {
