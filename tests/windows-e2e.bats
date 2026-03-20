@@ -62,7 +62,13 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
-@test "windows pester e2e waits on installed whitelist domains instead of hardcoded public DNS" {
+@test "windows pester e2e receives whitelist domains from the harness and keeps file fallback" {
+    run grep -nF 'OPENPATH_E2E_EXPECTED_WHITELIST_DOMAINS' "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'OPENPATH_E2E_EXPECTED_WHITELIST_DOMAINS' "$PROJECT_DIR/tests/e2e/Windows-E2E.Tests.ps1"
+    [ "$status" -eq 0 ]
+
     run grep -nF "Get-ValidWhitelistDomainsFromFile -Path \$whitelistPath" "$PROJECT_DIR/tests/e2e/Windows-E2E.Tests.ps1"
     [ "$status" -eq 0 ]
 

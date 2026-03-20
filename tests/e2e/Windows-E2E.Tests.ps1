@@ -27,6 +27,16 @@ BeforeAll {
     }
 
     function Get-InstalledWhitelistDomains {
+        $expectedDomains = @(
+            ($env:OPENPATH_E2E_EXPECTED_WHITELIST_DOMAINS -split ',') |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ }
+        )
+
+        if ($expectedDomains.Count -gt 0) {
+            return $expectedDomains
+        }
+
         $whitelistPath = Join-Path $OpenPathRoot 'data\whitelist.txt'
         if (-not (Test-Path $whitelistPath)) {
             return @()

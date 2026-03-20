@@ -323,13 +323,14 @@ function Test-SinkholeBlocking {
 
 function Test-InstalledUpdateRefresh {
     param(
-        [Parameter(Mandatory = $true)][object]$ServerState
+        [Parameter(Mandatory = $true)][object]$ServerState,
+        [Parameter(Mandatory = $true)][string[]]$WhitelistDomains
     )
 
     Write-Step "Testing installed update script against the local server..."
 
     Set-TestWhitelistContent -RootPath $ServerState.RootPath `
-        -WhitelistDomains @('google.com', 'github.com', 'newdomain.example.com') `
+        -WhitelistDomains $WhitelistDomains `
         -BlockedSubdomains @('ads.example.com')
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\OpenPath\scripts\Update-OpenPath.ps1'
@@ -399,11 +400,26 @@ function Verify-InstalledScheduledTasks {
 
 function Run-PesterE2E {
     param(
-        [Parameter(Mandatory = $true)][string]$RepoRoot
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [string[]]$ExpectedWhitelistDomains = @()
     )
 
     Write-Step "Running Pester E2E tests..."
+    $previousExpectedDomains = $env:OPENPATH_E2E_EXPECTED_WHITELIST_DOMAINS
     try {
+        $normalizedExpectedDomains = @(
+            $ExpectedWhitelistDomains |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ }
+        )
+
+        if ($normalizedExpectedDomains.Count -gt 0) {
+            $env:OPENPATH_E2E_EXPECTED_WHITELIST_DOMAINS = ($normalizedExpectedDomains -join ',')
+        }
+        else {
+            Remove-Item Env:OPENPATH_E2E_EXPECTED_WHITELIST_DOMAINS -ErrorAction SilentlyContinue
+        }
+
         $config = New-PesterConfiguration
         $config.Run.Path = (Join-Path $RepoRoot 'tests\e2e\Windows-E2E.Tests.ps1')
         $config.Output.Verbosity = 'Detailed'
@@ -418,6 +434,14 @@ function Run-PesterE2E {
     }
     catch {
         Fail-Step "Invoke-Pester failed." $_
+    }
+    finally {
+        if ($null -eq $previousExpectedDomains) {
+            Remove-Item Env:OPENPATH_E2E_EXPECTED_WHITELIST_DOMAINS -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:OPENPATH_E2E_EXPECTED_WHITELIST_DOMAINS = $previousExpectedDomains
+        }
     }
 }
 
@@ -452,6 +476,7 @@ $serverState = $null
 
 try {
     $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+    $updatedWhitelistDomains = @('google.com', 'github.com', 'newdomain.example.com')
 
     Ensure-Pester
     $serverState = Start-TestWhitelistServer
@@ -460,10 +485,10 @@ try {
     Test-InstalledWhitelist
     Test-DnsResolution
     Test-SinkholeBlocking
-    Test-InstalledUpdateRefresh -ServerState $serverState
+    Test-InstalledUpdateRefresh -ServerState $serverState -WhitelistDomains $updatedWhitelistDomains
     Test-Firewall
     Verify-InstalledScheduledTasks
-    Run-PesterE2E -RepoRoot $RepoRoot
+    Run-PesterE2E -RepoRoot $RepoRoot -ExpectedWhitelistDomains $updatedWhitelistDomains
 
     Write-Host ""
     Write-Host 'Windows E2E complete'
