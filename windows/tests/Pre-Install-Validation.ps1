@@ -114,7 +114,7 @@ Test-Requirement "Sufficient disk space (100MB free on C:)" {
 } -FailMessage "Need at least 100MB free on C: drive"
 
 Write-Host ""
-Write-Host "─────────────────────────────────────" -ForegroundColor Gray
+Write-Host "-------------------------------------" -ForegroundColor Gray
 
 if ($errors -gt 0) {
     Write-Host ""
