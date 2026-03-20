@@ -45,3 +45,11 @@ load 'test_helper'
     run grep -n "Installed whitelist file is missing after first update" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
     [ "$status" -ne 0 ]
 }
+
+@test "windows updater re-imports Common globally for standalone execution" {
+    run grep -nF 'Import-Module "$OpenPathRoot\lib\Common.psm1" -Force -Global' "$PROJECT_DIR/windows/scripts/Update-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Update-OpenPath.ps1 failed to import required common commands' "$PROJECT_DIR/windows/scripts/Update-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+}

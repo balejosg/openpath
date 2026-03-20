@@ -1028,6 +1028,23 @@ Describe "Update Script" {
         }
     }
 
+    Context "Module import resilience" {
+        It "Re-imports Common globally after dependent modules" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Import-Module "$OpenPathRoot\lib\DNS.psm1" -Force',
+                'Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force',
+                'Import-Module "$OpenPathRoot\lib\Browser.psm1" -Force',
+                'Import-Module "$OpenPathRoot\lib\Common.psm1" -Force -Global',
+                '$requiredCommonCommands = @(',
+                'Get-Command -Name $_ -ErrorAction SilentlyContinue',
+                'Update-OpenPath.ps1 failed to import required common commands'
+            )
+        }
+    }
+
     Context "Rollback system" {
         It "Creates rolling checkpoints before applying new whitelist" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"

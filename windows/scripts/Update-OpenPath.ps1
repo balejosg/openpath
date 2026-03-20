@@ -27,11 +27,33 @@ $ErrorActionPreference = "Stop"
 $OpenPathRoot = "C:\OpenPath"
 $script:UpdateMutexName = "Global\OpenPathUpdateLock"
 
-# Import modules
-Import-Module "$OpenPathRoot\lib\Common.psm1" -Force
+# Import dependent modules first, then re-import Common globally so its
+# exported helpers remain visible in standalone script sessions.
 Import-Module "$OpenPathRoot\lib\DNS.psm1" -Force
 Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
 Import-Module "$OpenPathRoot\lib\Browser.psm1" -Force
+Import-Module "$OpenPathRoot\lib\Common.psm1" -Force -Global
+
+$requiredCommonCommands = @(
+    'Write-OpenPathLog',
+    'Get-OpenPathConfig',
+    'Get-OpenPathFileAgeHours',
+    'Get-HostFromUrl',
+    'Get-OpenPathFromUrl',
+    'Get-OpenPathRuntimeHealth',
+    'Get-ValidWhitelistDomainsFromFile',
+    'Restore-OpenPathLatestCheckpoint',
+    'Save-OpenPathWhitelistCheckpoint',
+    'Send-OpenPathHealthReport'
+)
+$missingCommonCommands = @(
+    $requiredCommonCommands | Where-Object {
+        -not (Get-Command -Name $_ -ErrorAction SilentlyContinue)
+    }
+)
+if ($missingCommonCommands.Count -gt 0) {
+    throw "Update-OpenPath.ps1 failed to import required common commands: $($missingCommonCommands -join ', ')"
+}
 
 $mutex = $null
 $lockAcquired = $false
