@@ -107,8 +107,14 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
-@test "windows installer calls shared upstream detection as an expression" {
-    run grep -nF 'return (Get-PrimaryDNS)' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+@test "windows installer validates direct DNS candidates before picking upstream" {
+    run grep -nF 'function Test-InstallerDirectDnsServer' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Resolve-DnsName -Name \$ProbeDomain -Server \$Server -DnsOnly -ErrorAction Stop" "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "@('8.8.8.8', '1.1.1.1', '9.9.9.9', '8.8.4.4')" "$PROJECT_DIR/windows/Install-OpenPath.ps1"
     [ "$status" -eq 0 ]
 }
 
