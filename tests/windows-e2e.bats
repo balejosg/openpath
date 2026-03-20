@@ -102,6 +102,14 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "windows installer keeps Acrylic on the modern portable release track" {
+    run grep -nF '$installerVersion = "2.2.1"' "$PROJECT_DIR/windows/lib/DNS.psm1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Acrylic/$installerVersion/Acrylic-Portable.zip/download' "$PROJECT_DIR/windows/lib/DNS.psm1"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows firewall does not install a global DNS port 53 block that overrides Acrylic" {
     run grep -nF 'OpenPath-DNS-Block-DNS-UDP' "$PROJECT_DIR/windows/lib/Firewall.psm1"
     [ "$status" -ne 0 ]

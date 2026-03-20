@@ -68,7 +68,10 @@ function Install-AcrylicDNS {
 
     Write-OpenPathLog "Installing Acrylic DNS Proxy..."
     
-    $installerUrl = "https://sourceforge.net/projects/acrylic/files/Acrylic/2.1.1/Acrylic-Portable.zip/download"
+    # Acrylic 2.2.x improves modern HTTPS query handling in the hosts cache,
+    # which the Windows 2022 runner hits during end-to-end installation tests.
+    $installerVersion = "2.2.1"
+    $installerUrl = "https://sourceforge.net/projects/acrylic/files/Acrylic/$installerVersion/Acrylic-Portable.zip/download"
     $tempDir = "$env:TEMP\acrylic-install"
     $installDir = "${env:ProgramFiles(x86)}\Acrylic DNS Proxy"
     

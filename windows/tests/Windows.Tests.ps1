@@ -674,6 +674,16 @@ Describe "DNS Module" {
     }
 
     Context "Acrylic installation fallback" {
+        It "Pins the Acrylic portable installer to a release with modern hosts-cache fixes" {
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "DNS.psm1"
+            $content = Get-Content $modulePath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '$installerVersion = "2.2.1"',
+                'https://sourceforge.net/projects/acrylic/files/Acrylic/$installerVersion/Acrylic-Portable.zip/download'
+            )
+        }
+
         It "Falls back to Chocolatey when the direct Acrylic download fails" {
             $modulePath = Join-Path $PSScriptRoot ".." "lib" "DNS.psm1"
             $content = Get-Content $modulePath -Raw
