@@ -37,3 +37,11 @@ load 'test_helper'
     run grep -nP "[^\\x00-\\x7F]" "$PROJECT_DIR/windows/tests/Pre-Install-Validation.ps1"
     [ "$status" -ne 0 ]
 }
+
+@test "windows e2e accepts install-time whitelist bootstrap as best effort" {
+    run grep -n "proceeding to explicit update validation" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -n "Installed whitelist file is missing after first update" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -ne 0 ]
+}
