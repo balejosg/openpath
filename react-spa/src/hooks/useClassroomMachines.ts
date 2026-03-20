@@ -56,6 +56,28 @@ export function sortOneOffSchedules(oneOffSchedules: OneOffScheduleWithPermissio
   });
 }
 
+function quotePowerShellSingle(value: string) {
+  return value.replaceAll("'", "''");
+}
+
+function encodePowerShellCommand(command: string) {
+  const utf16le = new Uint8Array(command.length * 2);
+
+  for (let index = 0; index < command.length; index += 1) {
+    const codeUnit = command.charCodeAt(index);
+    utf16le[index * 2] = codeUnit & 0xff;
+    utf16le[index * 2 + 1] = codeUnit >> 8;
+  }
+
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let index = 0; index < utf16le.length; index += chunkSize) {
+    binary += String.fromCharCode(...utf16le.subarray(index, index + chunkSize));
+  }
+
+  return btoa(binary);
+}
+
 export function buildEnrollCommands(params: {
   apiUrl: string;
   classroomId: string | null;
@@ -71,11 +93,12 @@ export function buildEnrollCommands(params: {
   const encodedClassroomId = encodeURIComponent(params.classroomId);
   const linuxCommand = `curl -fsSL -H 'Authorization: Bearer ${params.enrollToken}' '${params.apiUrl}/api/enroll/${encodedClassroomId}' | sudo bash`;
   const windowsScriptUrl = `${params.apiUrl}/api/enroll/${encodedClassroomId}/windows.ps1`;
-  const windowsCommand = [
-    'powershell -NoProfile -ExecutionPolicy Bypass -Command',
-    `"$t='${params.enrollToken}'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;`,
-    `irm -Headers @{Authorization=('Bearer '+$t)} '${windowsScriptUrl}' | iex"`,
+  const windowsCommandScript = [
+    `$t='${quotePowerShellSingle(params.enrollToken)}';`,
+    '[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12;',
+    `irm -Headers @{Authorization=('Bearer '+$t)} '${quotePowerShellSingle(windowsScriptUrl)}' | iex`,
   ].join(' ');
+  const windowsCommand = `powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(windowsCommandScript)}`;
 
   return {
     linuxCommand,

@@ -59,6 +59,14 @@ vi.mock('../useScheduleBoundaryInvalidation', () => ({
     mockUseScheduleBoundaryInvalidation(input),
 }));
 
+function decodeEncodedPowerShellCommand(command: string) {
+  const encodedCommand = command.split('-EncodedCommand ')[1];
+  if (!encodedCommand) {
+    throw new Error('Missing PowerShell encoded command');
+  }
+  return Buffer.from(encodedCommand, 'base64').toString('utf16le');
+}
+
 const classroom: Classroom = {
   id: 'classroom-1',
   name: 'Aula 1',
@@ -124,11 +132,16 @@ describe('useClassroomMachines helpers', () => {
       classroomId: 'classroom-1',
       enrollToken: 'token-123',
     });
+    const decodedWindowsCommand = decodeEncodedPowerShellCommand(commands.windowsCommand);
 
     expect(commands.linuxCommand).toContain('Authorization: Bearer token-123');
     expect(commands.linuxCommand).toContain('/api/enroll/classroom-1');
-    expect(commands.windowsCommand).toContain('token-123');
-    expect(commands.windowsCommand).toContain('/api/enroll/classroom-1/windows.ps1');
+    expect(commands.windowsCommand).toContain('-EncodedCommand ');
+    expect(decodedWindowsCommand).toContain("$t='token-123'");
+    expect(decodedWindowsCommand).toContain("Authorization=('Bearer '+$t)");
+    expect(decodedWindowsCommand).toContain(
+      'https://openpath.test/api/enroll/classroom-1/windows.ps1'
+    );
   });
 });
 
@@ -274,7 +287,10 @@ describe('useClassroomMachines', () => {
       result.current.enrollModal.selectPlatform('windows');
     });
 
-    expect(result.current.enrollModal.enrollCommand).toContain('windows.ps1');
+    expect(result.current.enrollModal.enrollCommand).toContain('-EncodedCommand ');
+    expect(decodeEncodedPowerShellCommand(result.current.enrollModal.enrollCommand)).toContain(
+      'windows.ps1'
+    );
 
     act(() => {
       result.current.enrollModal.copy();
