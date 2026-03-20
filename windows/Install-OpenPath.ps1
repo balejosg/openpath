@@ -200,13 +200,13 @@ if ($SkipPreflight) {
 else {
     $validationScript = Join-Path $scriptDir "tests\Pre-Install-Validation.ps1"
     if (Test-Path $validationScript) {
-        Write-Host "[Preflight] Ejecutando validación previa..." -ForegroundColor Yellow
+        Write-Host "[Preflight] Ejecutando validacion previa..." -ForegroundColor Yellow
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $validationScript
         if ($LASTEXITCODE -ne 0) {
             Write-Host "ERROR: Pre-install validation failed" -ForegroundColor Red
             exit 1
         }
-        Write-Host "[Preflight] Validación completada" -ForegroundColor Green
+        Write-Host "[Preflight] Validacion completada" -ForegroundColor Green
     }
     else {
         Write-Host "[Preflight] ADVERTENCIA: Script no encontrado ($validationScript)" -ForegroundColor Yellow
@@ -253,7 +253,7 @@ catch {
 }
 
 # Step 2: Copy modules and scripts
-Write-Host "[2/7] Copiando módulos y scripts..." -ForegroundColor Yellow
+Write-Host "[2/7] Copiando modulos y scripts..." -ForegroundColor Yellow
 
 # Copy lib modules
 Get-ChildItem "$scriptDir\lib\*.psm1" -ErrorAction SilentlyContinue | 
@@ -272,17 +272,34 @@ foreach ($rootScript in $rootScripts) {
     }
 }
 
-Write-Host "  Módulos copiados" -ForegroundColor Green
+Write-Host "  Modulos copiados" -ForegroundColor Green
 
 # Import modules
 Import-Module "$OpenPathRoot\lib\Common.psm1" -Force
 Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
 
+function Get-InstallerPrimaryDNS {
+    $dns = Get-DnsClientServerAddress -AddressFamily IPv4 |
+        Where-Object { $_.ServerAddresses -and $_.ServerAddresses[0] -ne "127.0.0.1" } |
+        Select-Object -First 1
+
+    if ($dns -and $dns.ServerAddresses) {
+        return $dns.ServerAddresses[0]
+    }
+
+    $gateway = (Get-NetRoute -DestinationPrefix "0.0.0.0/0" | Select-Object -First 1).NextHop
+    if ($gateway) {
+        return $gateway
+    }
+
+    return "8.8.8.8"
+}
+
 # Step 3: Create configuration
-Write-Host "[3/7] Creando configuración..." -ForegroundColor Yellow
+Write-Host "[3/7] Creando configuracion..." -ForegroundColor Yellow
 
 # Detect primary DNS
-$primaryDNS = Get-PrimaryDNS
+$primaryDNS = Get-InstallerPrimaryDNS
 
 $agentVersion = "0.0.0"
 if ($env:OPENPATH_VERSION) {
@@ -360,13 +377,13 @@ if (-not $SkipAcrylic) {
             Write-Host "  Acrylic instalado" -ForegroundColor Green
         }
         else {
-            Write-Host "  ADVERTENCIA: No se pudo instalar Acrylic automáticamente" -ForegroundColor Yellow
+            Write-Host "  ADVERTENCIA: No se pudo instalar Acrylic automaticamente" -ForegroundColor Yellow
             Write-Host "  Descarga manual: https://mayakron.altervista.org/support/acrylic/Home.htm" -ForegroundColor Yellow
         }
     }
 }
 else {
-    Write-Host "  Instalación de Acrylic omitida" -ForegroundColor Yellow
+    Write-Host "  Instalacion de Acrylic omitida" -ForegroundColor Yellow
 }
 
 # Configure Acrylic
@@ -441,21 +458,21 @@ if ($classroomModeRequested) {
 }
 
 # Step 7: First update
-Write-Host "[7/7] Ejecutando primera actualización..." -ForegroundColor Yellow
+Write-Host "[7/7] Ejecutando primera actualizacion..." -ForegroundColor Yellow
 
 $shouldRunFirstUpdate = $true
 if ($classroomModeRequested -and $machineRegistered -ne "REGISTERED") {
-    Write-Host "  ADVERTENCIA: Registro no completado; se omite primera actualización" -ForegroundColor Yellow
+    Write-Host "  ADVERTENCIA: Registro no completado; se omite primera actualizacion" -ForegroundColor Yellow
     $shouldRunFirstUpdate = $false
 }
 
 if ($shouldRunFirstUpdate) {
     try {
         & "$OpenPathRoot\scripts\Update-OpenPath.ps1"
-        Write-Host "  Primera actualización completada" -ForegroundColor Green
+        Write-Host "  Primera actualizacion completada" -ForegroundColor Green
     }
     catch {
-        Write-Host "  ADVERTENCIA: Primera actualización fallida (se reintentará)" -ForegroundColor Yellow
+        Write-Host "  ADVERTENCIA: Primera actualizacion fallida (se reintentara)" -ForegroundColor Yellow
     }
 }
 
@@ -474,7 +491,7 @@ catch {
 # Verify installation
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  Verificando instalación..." -ForegroundColor Cyan
+Write-Host "  Verificando instalacion..." -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 
 $checks = @()
@@ -489,10 +506,10 @@ else {
 
 # Check DNS
 if (Test-DNSResolution -Domain "google.com") {
-    $checks += @{Name = "Resolución DNS"; Status = "OK"}
+    $checks += @{Name = "Resolucion DNS"; Status = "OK"}
 }
 else {
-    $checks += @{Name = "Resolución DNS"; Status = "FAIL"}
+    $checks += @{Name = "Resolucion DNS"; Status = "FAIL"}
 }
 
 # Check Firewall
@@ -523,10 +540,10 @@ foreach ($check in $checks) {
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Green
-Write-Host "  INSTALACIÓN COMPLETADA" -ForegroundColor Green
+Write-Host "  INSTALACION COMPLETADA" -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Configuración:"
+Write-Host "Configuracion:"
 if ($classroomModeRequested) {
     if ($Classroom) {
         Write-Host "  - Classroom: $Classroom"
@@ -539,13 +556,13 @@ if ($classroomModeRequested) {
 Write-Host "  - Whitelist: $WhitelistUrl"
 Write-Host "  - Agent version: $agentVersion"
 Write-Host "  - DNS upstream: $primaryDNS"
-Write-Host "  - Actualización: SSE real-time + cada 15 min (fallback)"
+Write-Host "  - Actualizacion: SSE real-time + cada 15 min (fallback)"
 Write-Host ""
-Write-Host "Comandos útiles:"
+Write-Host "Comandos utiles:"
 Write-Host "  .\OpenPath.ps1 status          # Estado del agente"
-Write-Host "  .\OpenPath.ps1 update          # Forzar actualización"
+Write-Host "  .\OpenPath.ps1 update          # Forzar actualizacion"
 Write-Host "  .\OpenPath.ps1 health          # Ejecutar watchdog"
-Write-Host "  .\OpenPath.ps1 self-update --check  # Comprobar actualización de agente"
+Write-Host "  .\OpenPath.ps1 self-update --check  # Comprobar actualizacion de agente"
 Write-Host "  nslookup google.com 127.0.0.1  # Probar DNS"
 Write-Host "  Get-ScheduledTask OpenPath-*  # Ver tareas"
 if ($classroomModeRequested) {

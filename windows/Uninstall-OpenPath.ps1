@@ -76,7 +76,7 @@ Get-NetFirewallRule -DisplayName "OpenPath-DNS-*" -ErrorAction SilentlyContinue 
 Write-Host "  Reglas eliminadas" -ForegroundColor Green
 
 # Step 3: Restore DNS
-Write-Host "[3/6] Restaurando configuración DNS..." -ForegroundColor Yellow
+Write-Host "[3/6] Restaurando configuracion DNS..." -ForegroundColor Yellow
 Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object {
     Set-DnsClientServerAddress -InterfaceIndex $_.ifIndex -ResetServerAddresses -ErrorAction SilentlyContinue
 }
@@ -84,7 +84,7 @@ Clear-DnsClientCache
 Write-Host "  DNS restaurado" -ForegroundColor Green
 
 # Step 4: Remove browser policies
-Write-Host "[4/6] Eliminando políticas de navegadores..." -ForegroundColor Yellow
+Write-Host "[4/6] Eliminando politicas de navegadores..." -ForegroundColor Yellow
 
 # Firefox
 $firefoxPolicies = @(
@@ -107,7 +107,7 @@ foreach ($path in $regPaths) {
         Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
-Write-Host "  Políticas eliminadas" -ForegroundColor Green
+Write-Host "  Politicas eliminadas" -ForegroundColor Green
 
 # Step 5: Stop and optionally remove Acrylic
 Write-Host "[5/6] Deteniendo Acrylic DNS..." -ForegroundColor Yellow
@@ -148,7 +148,7 @@ if (Test-Path $OpenPathRoot) {
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
-Write-Host "  DESINSTALACIÓN COMPLETADA" -ForegroundColor Green
+Write-Host "  DESINSTALACION COMPLETADA" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "El sistema ha sido restaurado a su estado original."
