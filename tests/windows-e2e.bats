@@ -88,6 +88,9 @@ load 'test_helper'
 
     run grep -nF "Resolve-OpenPathDnsWithRetry -Domain 'google.com' -MaxAttempts 20 -DelayMilliseconds 1500" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
     [ "$status" -eq 0 ]
+
+    run grep -nF "(Join-Path \$acrylicPath 'AcrylicConfiguration.ini')" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
 }
 
 @test "windows pester e2e receives whitelist domains from the harness and keeps file fallback" {

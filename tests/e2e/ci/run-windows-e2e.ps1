@@ -262,8 +262,8 @@ function Write-AcrylicDiagnostics {
     }
 
     $diagnosticFiles = @(
-        Join-Path $acrylicPath 'AcrylicConfiguration.ini',
-        Join-Path $acrylicPath 'AcrylicHosts.txt'
+        (Join-Path $acrylicPath 'AcrylicConfiguration.ini'),
+        (Join-Path $acrylicPath 'AcrylicHosts.txt')
     )
 
     foreach ($path in $diagnosticFiles) {
