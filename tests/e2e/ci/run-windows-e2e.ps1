@@ -35,97 +35,228 @@ function Ensure-Pester {
     }
 }
 
-function Ensure-Chocolatey {
-    Write-Step "Ensuring Chocolatey is available..."
-    if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
-        Set-ExecutionPolicy Bypass -Scope Process -Force
-        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-        iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
-    }
-    Write-Host "OK: Chocolatey available"
-}
-
-function Install-Acrylic {
-    Write-Step "Installing Acrylic DNS Proxy..."
+function Get-FreeTcpPort {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
     try {
-        choco install acrylic-dns-proxy -y --no-progress | Out-Default
-        Start-Sleep -Seconds 5
-
-        $svc = Get-Service -Name 'AcrylicDNSProxySvc' -ErrorAction SilentlyContinue
-        if ($svc -and $svc.Status -ne 'Running') {
-            Start-Service -Name 'AcrylicDNSProxySvc' -ErrorAction Stop
-            Start-Sleep -Seconds 2
-        }
-
-        $svc = Get-Service -Name 'AcrylicDNSProxySvc' -ErrorAction SilentlyContinue
-        if (-not $svc) {
-            Fail-Step "Acrylic service not found after installation."
-        }
-
-        if ($svc.Status -ne 'Running') {
-            Fail-Step "Acrylic service is not running after installation. Current status: $($svc.Status)"
-        }
-
-        Write-Host "Acrylic service status: $($svc.Status)"
+        $listener.Start()
+        return $listener.LocalEndpoint.Port
     }
-    catch {
-        Fail-Step "Acrylic installation failed." $_
+    finally {
+        $listener.Stop()
     }
 }
 
-function Prepare-OpenPathLayout {
+function Set-TestWhitelistContent {
     param(
-        [Parameter(Mandatory = $true)][string]$RepoRoot
+        [Parameter(Mandatory = $true)][string]$RootPath,
+        [Parameter(Mandatory = $true)][string[]]$WhitelistDomains,
+        [string[]]$BlockedSubdomains = @()
     )
 
-    Write-Step "Preparing OpenPath test layout under C:\OpenPath..."
+    $lines = @(
+        '## WHITELIST'
+    ) + $WhitelistDomains + @(
+        '',
+        '## BLOCKED-SUBDOMAINS'
+    ) + $BlockedSubdomains
 
-    New-Item -ItemType Directory -Path 'C:\OpenPath\lib' -Force | Out-Null
-    New-Item -ItemType Directory -Path 'C:\OpenPath\scripts' -Force | Out-Null
-    New-Item -ItemType Directory -Path 'C:\OpenPath\data\logs' -Force | Out-Null
-
-    Copy-Item (Join-Path $RepoRoot 'windows\lib\*.psm1') 'C:\OpenPath\lib\' -Force
-    Copy-Item (Join-Path $RepoRoot 'windows\scripts\*.ps1') 'C:\OpenPath\scripts\' -Force
-
-    Write-Host "OK: Modules/scripts copied"
+    $targetPath = Join-Path $RootPath 'whitelist.txt'
+    $lines | Set-Content -Path $targetPath -Encoding UTF8
 }
 
-function Write-TestConfig {
-    Write-Step "Creating test configuration..."
-    $config = @{
-        whitelistUrl            = 'https://raw.githubusercontent.com/LasEncinasIT/Whitelist-por-aula/main/Informatica%203.txt'
-        updateIntervalMinutes   = 5
-        watchdogIntervalMinutes = 1
-        primaryDNS              = '8.8.8.8'
-        acrylicPath             = ''
-        enableFirewall          = $true
-        enableBrowserPolicies   = $false
-        installedAt             = (Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+function Start-TestWhitelistServer {
+    Write-Step "Starting local whitelist server..."
+
+    $rootPath = Join-Path $env:TEMP ("openpath-whitelist-" + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $rootPath -Force | Out-Null
+
+    Set-TestWhitelistContent -RootPath $rootPath `
+        -WhitelistDomains @('google.com', 'github.com', 'microsoft.com') `
+        -BlockedSubdomains @('ads.example.com', 'tracking.example.com')
+
+    $port = Get-FreeTcpPort
+    $job = Start-Job -ArgumentList $port, $rootPath -ScriptBlock {
+        param($Port, $ContentRoot)
+
+        $listener = [System.Net.HttpListener]::new()
+        $listener.Prefixes.Add("http://127.0.0.1:$Port/")
+        $listener.Start()
+
+        try {
+            while ($listener.IsListening) {
+                try {
+                    $context = $listener.GetContext()
+                }
+                catch {
+                    break
+                }
+
+                try {
+                    $relativePath = $context.Request.Url.AbsolutePath.TrimStart('/')
+                    if ([string]::IsNullOrWhiteSpace($relativePath)) {
+                        $relativePath = 'whitelist.txt'
+                    }
+
+                    $candidatePath = [System.IO.Path]::GetFullPath((Join-Path $ContentRoot $relativePath))
+                    $normalizedRoot = [System.IO.Path]::GetFullPath($ContentRoot)
+
+                    if (-not $candidatePath.StartsWith($normalizedRoot, [System.StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path $candidatePath)) {
+                        $context.Response.StatusCode = 404
+                    }
+                    else {
+                        $bytes = [System.IO.File]::ReadAllBytes($candidatePath)
+                        $context.Response.StatusCode = 200
+                        $context.Response.ContentType = 'text/plain; charset=utf-8'
+                        $context.Response.ContentLength64 = $bytes.Length
+                        $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+                    }
+                }
+                catch {
+                    $context.Response.StatusCode = 500
+                }
+                finally {
+                    $context.Response.OutputStream.Close()
+                    $context.Response.Close()
+                }
+            }
+        }
+        finally {
+            if ($listener.IsListening) {
+                $listener.Stop()
+            }
+            $listener.Close()
+        }
     }
 
-    $config | ConvertTo-Json -Depth 10 | Set-Content 'C:\OpenPath\data\config.json' -Encoding UTF8
-    Write-Host "OK: Test configuration created"
+    $url = "http://127.0.0.1:$port/whitelist.txt"
+
+    for ($attempt = 1; $attempt -le 20; $attempt++) {
+        if ($job.State -eq 'Failed') {
+            $jobError = Receive-Job -Job $job -Keep | Out-String
+            Fail-Step "Whitelist server job failed to start. $jobError"
+        }
+
+        try {
+            Invoke-WebRequest -Uri $url -TimeoutSec 2 | Out-Null
+            Write-Host "OK: Local whitelist server ready at $url"
+            return [PSCustomObject]@{
+                Job      = $job
+                RootPath = $rootPath
+                Url      = $url
+            }
+        }
+        catch {
+            Start-Sleep -Milliseconds 500
+        }
+    }
+
+    Fail-Step "Local whitelist server did not become ready in time."
 }
 
-function Import-ModulesAndSmoke {
-    Write-Step "Importing modules and smoke-testing basic functions..."
+function Stop-TestWhitelistServer {
+    param(
+        [Parameter()][object]$ServerState
+    )
+
+    if ($null -eq $ServerState) {
+        return
+    }
+
+    if ($ServerState.PSObject.Properties['Job'] -and $ServerState.Job) {
+        Stop-Job -Job $ServerState.Job -ErrorAction SilentlyContinue
+        Remove-Job -Job $ServerState.Job -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($ServerState.PSObject.Properties['RootPath'] -and (Test-Path $ServerState.RootPath)) {
+        Remove-Item $ServerState.RootPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Invoke-OpenPathInstaller {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter(Mandatory = $true)][string]$WhitelistUrl
+    )
+
+    Write-Step "Running Windows installer..."
+
+    $installerPath = Join-Path $RepoRoot 'windows\Install-OpenPath.ps1'
+    $installerArgs = @(
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $installerPath,
+        '-WhitelistUrl', $WhitelistUrl,
+        '-Unattended'
+    )
+
+    & powershell.exe @installerArgs
+    if ($LASTEXITCODE -ne 0) {
+        Fail-Step "Install-OpenPath.ps1 exited with code $LASTEXITCODE."
+    }
+
+    if (-not (Test-Path 'C:\OpenPath\data\config.json')) {
+        Fail-Step 'Installer completed but C:\OpenPath\data\config.json is missing.'
+    }
+
+    $config = Get-Content 'C:\OpenPath\data\config.json' -Raw | ConvertFrom-Json
+    if ($config.whitelistUrl -ne $WhitelistUrl) {
+        Fail-Step "Installer persisted whitelistUrl '$($config.whitelistUrl)' instead of '$WhitelistUrl'."
+    }
+}
+
+function Import-InstalledModulesAndSmoke {
+    Write-Step "Importing installed modules..."
 
     Import-Module 'C:\OpenPath\lib\Common.psm1' -Force
     Import-Module 'C:\OpenPath\lib\DNS.psm1' -Force
     Import-Module 'C:\OpenPath\lib\Firewall.psm1' -Force
 
-    if (Get-Command 'Get-AcrylicPath' -ErrorAction SilentlyContinue) {
-        $acrylicPath = Get-AcrylicPath
-        Write-Host "Acrylic Path: $acrylicPath"
+    if (-not (Test-Path 'C:\OpenPath\scripts\Update-OpenPath.ps1')) {
+        Fail-Step 'Installed update script is missing.'
     }
-    if (Get-Command 'Test-AcrylicInstalled' -ErrorAction SilentlyContinue) {
-        $installed = Test-AcrylicInstalled
-        Write-Host "Acrylic Installed: $installed"
+
+    if (-not (Test-Path 'C:\OpenPath\OpenPath.ps1')) {
+        Fail-Step 'Installed OpenPath.ps1 command is missing.'
     }
+
+    $acrylicPath = Get-AcrylicPath
+    Write-Host "Acrylic Path: $acrylicPath"
+
+    $installed = Test-AcrylicInstalled
+    if (-not $installed) {
+        Fail-Step 'Acrylic was not installed by Install-OpenPath.ps1.'
+    }
+
+    Write-Host 'OK: Installed modules import successfully'
+}
+
+function Test-InstalledWhitelist {
+    Write-Step "Testing installed whitelist state..."
+
+    $whitelistPath = 'C:\OpenPath\data\whitelist.txt'
+    if (-not (Test-Path $whitelistPath)) {
+        Fail-Step 'Installed whitelist file is missing after first update.'
+    }
+
+    $content = Get-Content $whitelistPath -Raw
+    foreach ($domain in @('google.com', 'github.com', 'microsoft.com')) {
+        if ($content -notmatch [regex]::Escape($domain)) {
+            Fail-Step "Installed whitelist file does not contain expected domain '$domain'."
+        }
+    }
+
+    Write-Host 'OK: First update downloaded whitelist content'
 }
 
 function Test-DnsResolution {
     Write-Step "Testing system DNS resolution..."
+
+    $loopbackConfigured = Get-DnsClientServerAddress -AddressFamily IPv4 |
+        Where-Object { $_.ServerAddresses -contains '127.0.0.1' }
+
+    if (-not $loopbackConfigured) {
+        Fail-Step 'Installer did not set any IPv4 adapter DNS server to 127.0.0.1.'
+    }
 
     try {
         $result = Resolve-DnsName -Name 'google.com' -ErrorAction Stop
@@ -135,13 +266,11 @@ function Test-DnsResolution {
         Fail-Step "System DNS resolution failed." $_
     }
 
-    $acrylicRunning = (Get-Service -Name 'AcrylicDNSProxySvc' -ErrorAction SilentlyContinue).Status -eq 'Running'
-    if (-not $acrylicRunning) {
-        Fail-Step "Acrylic DNS Proxy service is not running before proxy validation."
+    $acrylicService = Get-Service -Name 'AcrylicDNSProxySvc' -ErrorAction SilentlyContinue
+    if (-not $acrylicService -or $acrylicService.Status -ne 'Running') {
+        Fail-Step 'Acrylic DNS Proxy service is not running after installation.'
     }
 
-    Write-Host ""
-    Write-Host "Testing Acrylic DNS proxy..."
     try {
         $result = Resolve-DnsName -Name 'google.com' -Server '127.0.0.1' -ErrorAction Stop
         Write-Host "OK: Acrylic proxy working: $($result[0].IPAddress)"
@@ -186,29 +315,28 @@ function Test-SinkholeBlocking {
     }
 }
 
-function Test-WhitelistUpdate {
-    Write-Step "Testing whitelist parsing (module-level)..."
+function Test-InstalledUpdateRefresh {
+    param(
+        [Parameter(Mandatory = $true)][object]$ServerState
+    )
 
-    $testFile = 'C:\OpenPath\data\test-whitelist.txt'
-    @(
-        '## WHITELIST',
-        'google.com',
-        'github.com',
-        'test-allowed-domain.com',
-        '',
-        '## BLOCKED-SUBDOMAINS',
-        'ads.example.com',
-        'tracking.example.com'
-    ) | Set-Content -Path $testFile -Encoding UTF8
+    Write-Step "Testing installed update script against the local server..."
 
-    Get-Content $testFile | Out-Default
+    Set-TestWhitelistContent -RootPath $ServerState.RootPath `
+        -WhitelistDomains @('google.com', 'github.com', 'newdomain.example.com') `
+        -BlockedSubdomains @('ads.example.com')
 
-    if (Get-Command 'Parse-Whitelist' -ErrorAction SilentlyContinue) {
-        $parsed = Parse-Whitelist -Path $testFile
-        Write-Host "Parsed: $($parsed.Whitelist.Count) allowed, $($parsed.BlockedSubdomains.Count) blocked"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\OpenPath\scripts\Update-OpenPath.ps1'
+    if ($LASTEXITCODE -ne 0) {
+        Fail-Step "Update-OpenPath.ps1 exited with code $LASTEXITCODE."
     }
 
-    Remove-Item $testFile -ErrorAction SilentlyContinue
+    $content = Get-Content 'C:\OpenPath\data\whitelist.txt' -Raw
+    if ($content -notmatch 'newdomain\.example\.com') {
+        Fail-Step 'Installed update script did not refresh the whitelist from the local test server.'
+    }
+
+    Write-Host 'OK: Installed update script refreshed whitelist data'
 }
 
 function Test-Firewall {
@@ -242,6 +370,27 @@ function Test-Firewall {
     }
 }
 
+function Verify-InstalledScheduledTasks {
+    Write-Step "Verifying installed OpenPath scheduled tasks..."
+
+    $expectedTasks = @(
+        'OpenPath-Update',
+        'OpenPath-Watchdog',
+        'OpenPath-Startup',
+        'OpenPath-SSE',
+        'OpenPath-AgentUpdate'
+    )
+
+    foreach ($taskName in $expectedTasks) {
+        $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        if (-not $task) {
+            Fail-Step "Expected scheduled task '$taskName' was not registered by the installer."
+        }
+    }
+
+    Write-Host 'OK: Installer registered all expected scheduled tasks'
+}
+
 function Run-PesterE2E {
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot
@@ -266,66 +415,53 @@ function Run-PesterE2E {
     }
 }
 
-function Verify-ScheduledTasksApi {
-    Write-Step "Testing scheduled tasks API..."
-
-    try {
-        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-Command 'echo test'"
-        $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddHours(1)
-
-        Register-ScheduledTask -TaskName 'OpenPath-E2E-Test' -Action $action -Trigger $trigger -Force | Out-Null
-        Write-Host 'OK: Test task created'
-
-        $task = Get-ScheduledTask -TaskName 'OpenPath-E2E-Test' -ErrorAction SilentlyContinue
-        if ($task) {
-            Write-Host 'OK: Test task verified'
-        }
-        else {
-            Fail-Step "Scheduled task was not present after registration."
-        }
-    }
-    catch {
-        Fail-Step "Scheduled task API validation failed." $_
-    }
-    finally {
-        Unregister-ScheduledTask -TaskName 'OpenPath-E2E-Test' -Confirm:$false -ErrorAction SilentlyContinue
-    }
-}
-
 function Cleanup-WindowsE2E {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [Parameter()][object]$ServerState
+    )
+
     Write-Step "Cleanup..."
 
-    if (Test-Path 'C:\OpenPath') {
-        Remove-Item 'C:\OpenPath' -Recurse -Force -ErrorAction SilentlyContinue
-        Write-Host 'OK: Test directories removed'
+    try {
+        if (Test-Path 'C:\OpenPath') {
+            $uninstallPath = Join-Path $RepoRoot 'windows\Uninstall-OpenPath.ps1'
+            if (Test-Path $uninstallPath) {
+                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $uninstallPath
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "WARN: Uninstall-OpenPath.ps1 exited with code $LASTEXITCODE"
+                }
+                else {
+                    Write-Host 'OK: Uninstaller completed'
+                }
+            }
+        }
     }
-
-    Get-NetFirewallRule -DisplayName 'OpenPath-*' -ErrorAction SilentlyContinue |
-        Remove-NetFirewallRule -ErrorAction SilentlyContinue
-
-    Get-ScheduledTask -TaskName 'OpenPath-*' -ErrorAction SilentlyContinue |
-        Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue
+    finally {
+        Stop-TestWhitelistServer -ServerState $ServerState
+    }
 }
+
+$serverState = $null
 
 try {
     $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 
     Ensure-Pester
-    Ensure-Chocolatey
-    Install-Acrylic
-    Prepare-OpenPathLayout -RepoRoot $RepoRoot
-    Write-TestConfig
-    Import-ModulesAndSmoke
+    $serverState = Start-TestWhitelistServer
+    Invoke-OpenPathInstaller -RepoRoot $RepoRoot -WhitelistUrl $serverState.Url
+    Import-InstalledModulesAndSmoke
+    Test-InstalledWhitelist
     Test-DnsResolution
     Test-SinkholeBlocking
-    Test-WhitelistUpdate
+    Test-InstalledUpdateRefresh -ServerState $serverState
     Test-Firewall
+    Verify-InstalledScheduledTasks
     Run-PesterE2E -RepoRoot $RepoRoot
-    Verify-ScheduledTasksApi
 
     Write-Host ""
     Write-Host 'Windows E2E complete'
 }
 finally {
-    Cleanup-WindowsE2E
+    Cleanup-WindowsE2E -RepoRoot $RepoRoot -ServerState $serverState
 }
