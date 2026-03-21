@@ -84,6 +84,17 @@ load 'test_helper'
     run grep -nF 'Get-AcrylicForwardRules -Domain $domain' "$PROJECT_DIR/windows/lib/DNS.psm1"
     [ "$status" -eq 0 ]
 
+    run sh -c '
+        dns_file="$1"
+        whitelist_line=$(grep -nF "# WHITELISTED DOMAINS" "$dns_file" | head -1 | cut -d: -f1)
+        nx_line=$(grep -nF "NX *" "$dns_file" | head -1 | cut -d: -f1)
+        test -n "$whitelist_line" && test -n "$nx_line" && [ "$nx_line" -gt "$whitelist_line" ]
+    ' _ "$PROJECT_DIR/windows/lib/DNS.psm1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'This MUST come last after FW rules.' "$PROJECT_DIR/windows/lib/DNS.psm1"
+    [ "$status" -eq 0 ]
+
     run grep -nE 'Get-AcrylicForwardRules -Domain [^)]* -join' "$PROJECT_DIR/windows/lib/DNS.psm1"
     [ "$status" -ne 0 ]
 

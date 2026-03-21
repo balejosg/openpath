@@ -639,6 +639,12 @@ Describe "DNS Module" {
             $content | Should -Not -Match 'FORWARD >'
             $content | Should -Not -Match 'NX >\*'
             $content | Should -Not -Match 'Get-AcrylicForwardRules -Domain [^\)]* -join'
+
+            $whitelistSectionIndex = $content.IndexOf('# WHITELISTED DOMAINS')
+            $nxRuleIndex = $content.IndexOf('NX *')
+            $whitelistSectionIndex | Should -BeGreaterThan -1
+            $nxRuleIndex | Should -BeGreaterThan $whitelistSectionIndex
+            $content | Should -Match 'This MUST come last after FW rules\.'
         }
 
         It "Retries Acrylic DNS resolution before reporting failure" {

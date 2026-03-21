@@ -227,12 +227,6 @@ function Update-AcrylicHost {
 # ========================================
 
 # ========================================
-# DEFAULT BLOCK (NXDOMAIN for everything)
-# This MUST come first!
-# ========================================
-NX *
-
-# ========================================
 # ESSENTIAL DOMAINS (always allowed)
 # Required for system operation
 # ========================================
@@ -283,6 +277,14 @@ $((Get-AcrylicForwardRules -Domain 'time.google.com') -join "`n")
             $content += ($rules -join "`n") + "`n"
         }
     }
+
+    # Keep the catch-all NXDOMAIN rule after all FW exceptions so Acrylic
+    # forwards whitelisted domains during real end-to-end installs.
+    $content += "`n# ========================================`n"
+    $content += "# DEFAULT BLOCK (NXDOMAIN for everything else)`n"
+    $content += "# This MUST come last after FW rules.`n"
+    $content += "# ========================================`n"
+    $content += "NX *`n"
     
     # Write to file
     $content | Set-Content $hostsPath -Encoding UTF8 -Force
