@@ -9,7 +9,28 @@ import { useClassroomListModelsQuery } from './useClassroomsList';
 import { useListDetailSelection } from './useListDetailSelection';
 import { useNormalizedSearch } from './useNormalizedSearch';
 
-export function useClassroomsViewModel() {
+let pendingSelectedClassroomId: string | null = null;
+
+export function setPendingSelectedClassroomId(classroomId: string | null) {
+  pendingSelectedClassroomId = classroomId;
+}
+
+function consumePendingSelectedClassroomId() {
+  const classroomId = pendingSelectedClassroomId;
+  pendingSelectedClassroomId = null;
+  return classroomId;
+}
+
+interface UseClassroomsViewModelOptions {
+  initialSelectedClassroomId?: string | null;
+}
+
+export function useClassroomsViewModel({
+  initialSelectedClassroomId = null,
+}: UseClassroomsViewModelOptions = {}) {
+  const [requestedInitialSelectedClassroomId] = useState<string | null>(
+    () => initialSelectedClassroomId ?? consumePendingSelectedClassroomId()
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewModal, setShowNewModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -43,7 +64,9 @@ export function useClassroomsViewModel() {
     selectedId: selectedClassroomId,
     selectedItem: selectedClassroom,
     setSelectedId: setSelectedClassroomId,
-  } = useListDetailSelection(filteredClassrooms);
+  } = useListDetailSelection(filteredClassrooms, {
+    initialSelectedId: requestedInitialSelectedClassroomId,
+  });
 
   const allowedGroupsError = groupsQueryError ? 'Error al cargar aulas' : null;
   const isInitialLoading = classroomsQuery.loading || groupsLoading;

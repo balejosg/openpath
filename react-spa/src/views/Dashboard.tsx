@@ -62,6 +62,7 @@ interface GroupFromAPI {
 
 interface DashboardProps {
   onNavigateToRules?: (group: { id: string; name: string }) => void;
+  onNavigateToClassroom?: (classroom: { id: string; name: string }) => void;
 }
 
 type SortOption = 'name' | 'rules' | 'recent';
@@ -91,7 +92,7 @@ const StatCard = ({ title, value, icon, color, subtext }: StatCardProps) => (
   </div>
 );
 
-const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules, onNavigateToClassroom }) => {
   const [stats, setStats] = useState<StatsData | null>(null);
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -287,20 +288,46 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigateToRules }) => {
             </p>
           ) : (
             <ul className="mt-3 space-y-2 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
-              {activeGroupsByClassroom.map((row) => (
-                <li key={row.classroomId} className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-slate-700 truncate">{row.classroomName}</span>
-                  <GroupLabel
-                    className="text-xs whitespace-nowrap"
-                    groupId={row.groupId}
-                    group={row.group}
-                    source={row.source}
-                    revealUnknownId
-                    showSourceTag={row.source !== 'none'}
-                    showInactiveTag
-                  />
-                </li>
-              ))}
+              {activeGroupsByClassroom.map((row) => {
+                const rowContent = (
+                  <>
+                    <span className="text-sm text-slate-700 truncate">{row.classroomName}</span>
+                    <GroupLabel
+                      className="text-xs whitespace-nowrap"
+                      groupId={row.groupId}
+                      group={row.group}
+                      source={row.source}
+                      revealUnknownId
+                      showSourceTag={row.source !== 'none'}
+                      showInactiveTag
+                    />
+                  </>
+                );
+
+                return (
+                  <li key={row.classroomId}>
+                    {onNavigateToClassroom ? (
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-white"
+                        data-testid={`dashboard-classroom-${row.classroomId}`}
+                        onClick={() =>
+                          onNavigateToClassroom({
+                            id: row.classroomId,
+                            name: row.classroomName,
+                          })
+                        }
+                      >
+                        {rowContent}
+                      </button>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3 px-2 py-1.5">
+                        {rowContent}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

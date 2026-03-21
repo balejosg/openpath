@@ -13,6 +13,7 @@ import ResetPassword from './views/ResetPassword';
 import Settings from './views/Settings';
 import DomainRequests from './views/DomainRequests';
 import RulesManager from './views/RulesManager';
+import { setPendingSelectedClassroomId } from './hooks/useClassroomsViewModel';
 import { isAuthenticated, onAuthChange, isAdmin } from './lib/auth';
 
 type AuthView = 'login' | 'register' | 'forgot-password' | 'reset-password';
@@ -199,13 +200,21 @@ const App: React.FC = () => {
     setActiveTab('groups');
   };
 
+  const handleNavigateToClassroom = (classroom: { id: string; name: string }) => {
+    setPendingSelectedClassroomId(classroom.id);
+    setActiveTab('classrooms');
+  };
+
   const admin = isAdmin();
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
         return admin ? (
-          <Dashboard onNavigateToRules={handleNavigateToRules} />
+          <Dashboard
+            onNavigateToRules={handleNavigateToRules}
+            onNavigateToClassroom={handleNavigateToClassroom}
+          />
         ) : (
           <TeacherDashboard onNavigateToRules={handleNavigateToRules} />
         );
@@ -240,7 +249,10 @@ const App: React.FC = () => {
         );
       default:
         return admin ? (
-          <Dashboard onNavigateToRules={handleNavigateToRules} />
+          <Dashboard
+            onNavigateToRules={handleNavigateToRules}
+            onNavigateToClassroom={handleNavigateToClassroom}
+          />
         ) : (
           <TeacherDashboard onNavigateToRules={handleNavigateToRules} />
         );
@@ -304,6 +316,7 @@ const App: React.FC = () => {
       <Sidebar
         activeTab={activeTab}
         setActiveTab={(tab) => {
+          setPendingSelectedClassroomId(null);
           setActiveTab(tab);
           setSidebarOpen(false);
         }}

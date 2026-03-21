@@ -1,6 +1,6 @@
 import { act, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useClassroomsViewModel } from '../useClassroomsViewModel';
+import { setPendingSelectedClassroomId, useClassroomsViewModel } from '../useClassroomsViewModel';
 import { renderHookWithQueryClient } from '../../test-utils/query';
 
 const {
@@ -39,8 +39,10 @@ vi.mock('../useAllowedGroups', () => ({
 
 let queryClient: ReturnType<typeof renderHookWithQueryClient>['queryClient'] | null = null;
 
-function renderUseClassroomsViewModel() {
-  const rendered = renderHookWithQueryClient(() => useClassroomsViewModel());
+function renderUseClassroomsViewModel(initialSelectedClassroomId?: string | null) {
+  const rendered = renderHookWithQueryClient(() =>
+    useClassroomsViewModel({ initialSelectedClassroomId })
+  );
   queryClient = rendered.queryClient;
   return rendered;
 }
@@ -63,6 +65,7 @@ describe('useClassroomsViewModel', () => {
   });
 
   afterEach(() => {
+    setPendingSelectedClassroomId(null);
     queryClient?.clear();
     queryClient = null;
   });
@@ -97,7 +100,8 @@ describe('useClassroomsViewModel', () => {
       },
     ]);
 
-    const { result } = renderUseClassroomsViewModel();
+    const firstRender = renderUseClassroomsViewModel();
+    const { result } = firstRender;
 
     await waitFor(() => {
       expect(result.current.isInitialLoading).toBe(false);
@@ -128,6 +132,127 @@ describe('useClassroomsViewModel', () => {
       expect(result.current.selectedClassroom).toBeNull();
       expect(result.current.selectedClassroomId).toBeNull();
     });
+  });
+
+  it('selects the requested classroom first when a classroom id is provided', async () => {
+    mockListClassrooms.mockResolvedValueOnce([
+      {
+        id: 'classroom-1',
+        name: 'Laboratorio Norte',
+        displayName: 'Laboratorio Norte',
+        defaultGroupId: null,
+        activeGroupId: null,
+        currentGroupId: null,
+        currentGroupSource: 'none',
+        status: 'operational',
+        machineCount: 0,
+        onlineMachineCount: 0,
+        machines: [],
+      },
+      {
+        id: 'classroom-2',
+        name: 'Aula Sur',
+        displayName: 'Aula Sur',
+        defaultGroupId: null,
+        activeGroupId: null,
+        currentGroupId: null,
+        currentGroupSource: 'none',
+        status: 'operational',
+        machineCount: 0,
+        onlineMachineCount: 0,
+        machines: [],
+      },
+    ]);
+
+    const { result } = renderUseClassroomsViewModel('classroom-2');
+
+    await waitFor(() => {
+      expect(result.current.isInitialLoading).toBe(false);
+    });
+
+    expect(result.current.selectedClassroomId).toBe('classroom-2');
+    expect(result.current.selectedClassroom?.id).toBe('classroom-2');
+  });
+
+  it('consumes a pending classroom selection when no explicit classroom id is provided', async () => {
+    mockListClassrooms.mockResolvedValueOnce([
+      {
+        id: 'classroom-1',
+        name: 'Laboratorio Norte',
+        displayName: 'Laboratorio Norte',
+        defaultGroupId: null,
+        activeGroupId: null,
+        currentGroupId: null,
+        currentGroupSource: 'none',
+        status: 'operational',
+        machineCount: 0,
+        onlineMachineCount: 0,
+        machines: [],
+      },
+      {
+        id: 'classroom-2',
+        name: 'Aula Sur',
+        displayName: 'Aula Sur',
+        defaultGroupId: null,
+        activeGroupId: null,
+        currentGroupId: null,
+        currentGroupSource: 'none',
+        status: 'operational',
+        machineCount: 0,
+        onlineMachineCount: 0,
+        machines: [],
+      },
+    ]);
+
+    setPendingSelectedClassroomId('classroom-2');
+
+    const firstRender = renderUseClassroomsViewModel();
+    const { result } = firstRender;
+
+    await waitFor(() => {
+      expect(result.current.isInitialLoading).toBe(false);
+    });
+
+    expect(result.current.selectedClassroomId).toBe('classroom-2');
+    expect(result.current.selectedClassroom?.id).toBe('classroom-2');
+    firstRender.unmount();
+
+    mockListClassrooms.mockResolvedValueOnce([
+      {
+        id: 'classroom-1',
+        name: 'Laboratorio Norte',
+        displayName: 'Laboratorio Norte',
+        defaultGroupId: null,
+        activeGroupId: null,
+        currentGroupId: null,
+        currentGroupSource: 'none',
+        status: 'operational',
+        machineCount: 0,
+        onlineMachineCount: 0,
+        machines: [],
+      },
+      {
+        id: 'classroom-2',
+        name: 'Aula Sur',
+        displayName: 'Aula Sur',
+        defaultGroupId: null,
+        activeGroupId: null,
+        currentGroupId: null,
+        currentGroupSource: 'none',
+        status: 'operational',
+        machineCount: 0,
+        onlineMachineCount: 0,
+        machines: [],
+      },
+    ]);
+
+    const secondRender = renderUseClassroomsViewModel();
+
+    await waitFor(() => {
+      expect(secondRender.result.current.isInitialLoading).toBe(false);
+    });
+
+    expect(secondRender.result.current.selectedClassroomId).toBe('classroom-1');
   });
 
   it('creates a classroom, refreshes the list, and selects the created row', async () => {

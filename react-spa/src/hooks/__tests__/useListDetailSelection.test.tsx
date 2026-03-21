@@ -55,4 +55,20 @@ describe('useListDetailSelection', () => {
     expect(result.current.selectedId).toBeNull();
     expect(result.current.selectedItem).toBeNull();
   });
+
+  it('keeps the requested initial selection until the list is populated', () => {
+    const { result, rerender } = renderHook(
+      ({ items }) => useListDetailSelection(items, { initialSelectedId: 'b' }),
+      {
+        initialProps: { items: [] as Item[] },
+      }
+    );
+
+    expect(result.current.selectedId).toBe('b');
+
+    rerender({ items: [A, B] });
+
+    expect(result.current.selectedId).toBe('b');
+    expect(result.current.selectedItem?.id).toBe('b');
+  });
 });

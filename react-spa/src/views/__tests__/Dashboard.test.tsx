@@ -167,6 +167,23 @@ describe('Dashboard', () => {
     });
   });
 
+  it('calls onNavigateToClassroom when a classroom entry in the banner is clicked', async () => {
+    const onNavigateToClassroom = vi.fn();
+
+    renderDashboard({ onNavigateToClassroom });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('dashboard-classroom-classroom-1')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByTestId('dashboard-classroom-classroom-1'));
+
+    expect(onNavigateToClassroom).toHaveBeenCalledWith({
+      id: 'classroom-1',
+      name: 'Laboratorio A',
+    });
+  });
+
   it('renders quick access section when onNavigateToRules is provided', async () => {
     const onNavigateToRules = vi.fn();
 
