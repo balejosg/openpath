@@ -1251,6 +1251,20 @@ Describe "Operational Command Script" {
             $content.Contains('Enroll-Machine.ps1') | Should -BeTrue
         }
     }
+
+    Context "Argument forwarding" {
+        It "Normalizes named arguments before invoking child scripts" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'function ConvertTo-OpenPathInvocationSplat',
+                '$namedArguments = @{}',
+                '& $ScriptPath @namedArguments @positionalArguments'
+            )
+            $content.Contains('& $ScriptPath @ScriptArguments') | Should -BeFalse
+        }
+    }
 }
 
 Describe "Update Script" {
@@ -1502,6 +1516,20 @@ Describe "Installer" {
                 'SkipTokenValidation',
                 'Machine registration completed'
             )
+        }
+    }
+
+    Context "Enrollment argument forwarding" {
+        It "Uses named parameter splatting for classroom registration" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '$enrollParams = @{',
+                '& $enrollScript @enrollParams'
+            )
+            $content.Contains('$enrollArgs = @(') | Should -BeFalse
+            $content.Contains('& $enrollScript @enrollArgs') | Should -BeFalse
         }
     }
 

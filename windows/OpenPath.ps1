@@ -72,6 +72,45 @@ function Show-OpenPathHelp {
     Write-Host '  .\OpenPath.ps1 rotate-token -Secret <shared-secret>'
 }
 
+function ConvertTo-OpenPathInvocationSplat {
+    param(
+        [string[]]$ArgumentTokens = @()
+    )
+
+    $namedArguments = @{}
+    $positionalArguments = New-Object System.Collections.Generic.List[string]
+    $tokenCount = if ($null -eq $ArgumentTokens) { 0 } else { $ArgumentTokens.Count }
+
+    # ValueFromRemainingArguments yields raw strings, so convert them back into
+    # named/switch parameters before forwarding to child scripts.
+    for ($index = 0; $index -lt $tokenCount; $index++) {
+        $token = [string]$ArgumentTokens[$index]
+
+        if ($token.StartsWith('-') -and $token.Length -gt 1) {
+            $parameterName = $token.TrimStart('-')
+            $nextIndex = $index + 1
+            $nextTokenIsValue = $nextIndex -lt $tokenCount -and -not ([string]$ArgumentTokens[$nextIndex]).StartsWith('-')
+
+            if ($nextTokenIsValue) {
+                $namedArguments[$parameterName] = [string]$ArgumentTokens[$nextIndex]
+                $index = $nextIndex
+            }
+            else {
+                $namedArguments[$parameterName] = $true
+            }
+
+            continue
+        }
+
+        $positionalArguments.Add($token) | Out-Null
+    }
+
+    return [PSCustomObject]@{
+        NamedArguments = $namedArguments
+        PositionalArguments = $positionalArguments.ToArray()
+    }
+}
+
 function Invoke-OpenPathScript {
     param(
         [Parameter(Mandatory = $true)]
@@ -84,7 +123,11 @@ function Invoke-OpenPathScript {
         throw "Script not found: $ScriptPath"
     }
 
-    & $ScriptPath @ScriptArguments
+    $invocationSplat = ConvertTo-OpenPathInvocationSplat -ArgumentTokens $ScriptArguments
+    $namedArguments = $invocationSplat.NamedArguments
+    $positionalArguments = @($invocationSplat.PositionalArguments)
+
+    & $ScriptPath @namedArguments @positionalArguments
 }
 
 function Show-OpenPathStatus {

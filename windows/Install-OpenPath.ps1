@@ -478,31 +478,31 @@ if ($classroomModeRequested) {
     }
     else {
         try {
-            $enrollArgs = @(
-                '-ApiUrl', $apiBaseUrl,
-                '-OpenPathRoot', $OpenPathRoot
-            )
+            $enrollParams = @{
+                ApiUrl = $apiBaseUrl
+                OpenPathRoot = $OpenPathRoot
+            }
             if ($Classroom) {
-                $enrollArgs += @('-Classroom', $Classroom)
+                $enrollParams.Classroom = $Classroom
             }
             if ($ClassroomId) {
-                $enrollArgs += @('-ClassroomId', $ClassroomId)
+                $enrollParams.ClassroomId = $ClassroomId
             }
             if ($EnrollmentToken) {
-                $enrollArgs += @('-EnrollmentToken', $EnrollmentToken)
+                $enrollParams.EnrollmentToken = $EnrollmentToken
             }
             if ($MachineName) {
-                $enrollArgs += @('-MachineName', $MachineName)
+                $enrollParams.MachineName = $MachineName
             }
             if ($RegistrationToken) {
-                $enrollArgs += @('-RegistrationToken', $RegistrationToken)
-                $enrollArgs += '-SkipTokenValidation'
+                $enrollParams.RegistrationToken = $RegistrationToken
+                $enrollParams.SkipTokenValidation = $true
             }
             if ($Unattended) {
-                $enrollArgs += '-Unattended'
+                $enrollParams.Unattended = $true
             }
 
-            $enrollResult = & $enrollScript @enrollArgs
+            $enrollResult = & $enrollScript @enrollParams
 
             if ($enrollResult -and $enrollResult.Success) {
                 $machineRegistered = "REGISTERED"
