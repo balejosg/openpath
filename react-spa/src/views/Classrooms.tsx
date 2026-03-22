@@ -71,7 +71,7 @@ const ClassroomListPane: React.FC<ClassroomListPaneProps> = ({
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+      <div className="flex-1 space-y-3 md:overflow-y-auto md:pr-2 custom-scrollbar">
         {isInitialLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
@@ -429,7 +429,7 @@ const Classrooms: React.FC<ClassroomsProps> = ({
   });
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-6">
+    <div className="flex flex-col gap-6 md:h-[calc(100vh-8rem)] md:flex-row">
       <ClassroomListPane
         admin={admin}
         searchQuery={searchQuery}
@@ -445,7 +445,7 @@ const Classrooms: React.FC<ClassroomsProps> = ({
       />
 
       {/* Detail Column */}
-      <div className="min-w-0 flex-1 flex flex-col gap-6 overflow-y-auto custom-scrollbar">
+      <div className="min-w-0 flex-1 flex flex-col gap-6 md:overflow-y-auto custom-scrollbar">
         <ClassroomDetailPane
           admin={admin}
           allowedGroups={allowedGroups}

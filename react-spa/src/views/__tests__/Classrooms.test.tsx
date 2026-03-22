@@ -586,15 +586,49 @@ describe('Classrooms', () => {
 
     await screen.findByText('Configuración y estado del aula');
 
-    const splitView = container.querySelector('div.h-\\[calc\\(100vh-8rem\\)\\]');
+    const splitView = container.querySelector('[class*="flex-col"][class*="md:flex-row"]');
     expect(splitView).not.toBeNull();
 
     const listPane = splitView?.children.item(0);
     const detailPane = splitView?.children.item(1);
+    const splitViewTokens = (splitView?.className ?? '').split(/\s+/);
 
+    expect(splitViewTokens).toContain('md:h-[calc(100vh-8rem)]');
     expect(listPane?.className).toContain('shrink-0');
     expect(listPane?.className).toContain('md:max-w-md');
     expect(detailPane?.className).toContain('min-w-0');
+  });
+
+  it('only constrains the classrooms split view height from md upwards', async () => {
+    mockClassroomsListQuery.mockResolvedValue([
+      {
+        id: 'classroom-1',
+        name: 'Laboratorio Norte',
+        displayName: 'Laboratorio Norte',
+        defaultGroupId: null,
+        activeGroupId: null,
+        currentGroupId: null,
+        status: 'operational',
+        machineCount: 0,
+        onlineMachineCount: 0,
+      },
+    ]);
+
+    const { container } = renderClassrooms();
+
+    await screen.findByText('Configuración y estado del aula');
+
+    const splitView = container.querySelector('[class*="flex-col"][class*="md:flex-row"]');
+    expect(splitView).not.toBeNull();
+
+    const splitViewTokens = (splitView?.className ?? '').split(/\s+/);
+    const detailPane = splitView?.children.item(1);
+    const detailPaneTokens = (detailPane?.className ?? '').split(/\s+/);
+
+    expect(splitViewTokens).toContain('md:h-[calc(100vh-8rem)]');
+    expect(splitViewTokens).not.toContain('h-[calc(100vh-8rem)]');
+    expect(detailPaneTokens).toContain('md:overflow-y-auto');
+    expect(detailPaneTokens).not.toContain('overflow-y-auto');
   });
 
   it('shows list loading and retry states when classrooms cannot be loaded yet', () => {
