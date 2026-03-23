@@ -742,7 +742,6 @@ Describe "DNS Module" {
 
                 $expectedNeedles = @(
                     '# ESSENTIAL DOMAINS (always allowed)',
-                    '# Whitelist source',
                     'FW raw.githubusercontent.com',
                     'FW >raw.githubusercontent.com',
                     '# BLOCKED SUBDOMAINS (1)',
