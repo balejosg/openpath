@@ -26,11 +26,29 @@
 $ErrorActionPreference = "Stop"
 $OpenPathRoot = "C:\OpenPath"
 
-# Import modules
-Import-Module "$OpenPathRoot\lib\Common.psm1" -Force
-Import-Module "$OpenPathRoot\lib\DNS.psm1" -Force
-Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
-Import-Module "$OpenPathRoot\lib\CaptivePortal.psm1" -Force
+# Initialize standalone script session via the shared bootstrap helper.
+Import-Module "$OpenPathRoot\lib\ScriptBootstrap.psm1" -Force
+Initialize-OpenPathScriptSession `
+    -OpenPathRoot $OpenPathRoot `
+    -DependentModules @('DNS', 'Firewall', 'CaptivePortal') `
+    -RequiredCommands @(
+    'Write-OpenPathLog',
+    'Get-OpenPathConfig',
+    'Get-OpenPathRuntimeHealth',
+    'Restore-OpenPathProtectedMode',
+    'Send-OpenPathHealthReport',
+    'Test-OpenPathIntegrity',
+    'Restore-OpenPathIntegrity',
+    'Test-DNSResolution',
+    'Test-DNSSinkhole',
+    'Test-FirewallActive',
+    'Set-LocalDNS',
+    'Start-AcrylicService',
+    'Restart-AcrylicService',
+    'Enable-OpenPathCaptivePortalMode',
+    'Disable-OpenPathCaptivePortalMode'
+) `
+    -ScriptName 'Test-DNSHealth.ps1' | Out-Null
 
 $issues = @()
 $watchdogFailCountPath = "$OpenPathRoot\data\watchdog-fails.txt"

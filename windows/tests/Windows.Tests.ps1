@@ -163,6 +163,29 @@ Describe "Common Module" {
         }
     }
 
+    Context "Protected mode helpers" {
+        It "Defines Restore-OpenPathProtectedMode with optional Acrylic restart" {
+            $commonPath = Join-Path $PSScriptRoot ".." "lib" "Common.psm1"
+            $content = Get-Content $commonPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'function Restore-OpenPathProtectedMode',
+                '[switch]$SkipAcrylicRestart',
+                'Restart-AcrylicService',
+                'Set-LocalDNS',
+                'Set-OpenPathFirewall',
+                'Enable-OpenPathFirewall'
+            )
+        }
+
+        It "Reuses Restore-OpenPathProtectedMode during checkpoint restore" {
+            $commonPath = Join-Path $PSScriptRoot ".." "lib" "Common.psm1"
+            $content = Get-Content $commonPath -Raw
+
+            $content | Should -Match '(?s)function Restore-OpenPathLatestCheckpoint.*?Restore-OpenPathProtectedMode -Config \$Config'
+        }
+    }
+
     Context "Get-OpenPathDnsProbeDomains" {
         It "Prefers cached whitelist domains before protected fallbacks" {
             $expectedWhitelistPath = 'C:\OpenPath\data\whitelist.txt'
@@ -1498,6 +1521,26 @@ Describe "Services Module" {
     }
 }
 
+Describe "Script Bootstrap Module" {
+    Context "Standalone script initialization" {
+        It "Provides a shared initializer for standalone Windows scripts" {
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "ScriptBootstrap.psm1"
+            $content = Get-Content $modulePath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'function Initialize-OpenPathScriptSession',
+                '[string[]]$DependentModules = @()',
+                '[string[]]$RequiredCommands = @()',
+                '[string]$ScriptName = ''OpenPath script''',
+                'Import-Module (Join-Path $OpenPathRoot "lib\$moduleName.psm1") -Force',
+                'Import-Module (Join-Path $OpenPathRoot ''lib\Common.psm1'') -Force -Global',
+                'failed to import required commands',
+                'Export-ModuleMember -Function @('
+            )
+        }
+    }
+}
+
 Describe "SSE Listener" {
     Context "Script existence" {
         It "Start-SSEListener.ps1 exists" {
@@ -1589,18 +1632,17 @@ Describe "Update Script" {
     }
 
     Context "Module import resilience" {
-        It "Re-imports Common globally after dependent modules" {
+        It "Uses the shared standalone bootstrap helper" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
-                'Import-Module "$OpenPathRoot\lib\DNS.psm1" -Force',
-                'Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force',
-                'Import-Module "$OpenPathRoot\lib\Browser.psm1" -Force',
-                'Import-Module "$OpenPathRoot\lib\Common.psm1" -Force -Global',
-                '$requiredCommonCommands = @(',
-                'Get-Command -Name $_ -ErrorAction SilentlyContinue',
-                'Update-OpenPath.ps1 failed to import required common commands'
+                'Import-Module "$OpenPathRoot\lib\ScriptBootstrap.psm1" -Force',
+                'Initialize-OpenPathScriptSession `',
+                '-OpenPathRoot $OpenPathRoot',
+                '-DependentModules @(''DNS'', ''Firewall'', ''Browser'')',
+                '-RequiredCommands @(',
+                '-ScriptName ''Update-OpenPath.ps1'''
             )
         }
     }
@@ -1655,20 +1697,48 @@ Describe "Update Script" {
     }
 
     Context "Stale whitelist fail-safe" {
-        It "Includes stale threshold logic and STALE_FAILSAFE handling" {
+        It "Includes stale threshold logic and restores protected mode via shared helper" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 'staleWhitelistMaxAgeHours',
                 'Enter-StaleWhitelistFailsafe',
-                'STALE_FAILSAFE'
+                'STALE_FAILSAFE',
+                'Restore-OpenPathProtectedMode -Config $Config'
             )
+        }
+    }
+
+    Context "Protected mode recovery" {
+        It "Restores local DNS and firewall through the shared helper after applying a valid whitelist" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content | Should -Match '(?s)elseif \(\$whitelist\.IsDisabled\).*?Restore-OriginalDNS'
+            $content | Should -Match '(?s)# Save whitelist to local file.*?Update-AcrylicHost.*?Restore-OpenPathProtectedMode -Config \$config'
+            $content | Should -Match '(?s)Falling back to backup whitelist rollback.*?Restore-OpenPathProtectedMode -Config \$config -ErrorAction SilentlyContinue'
         }
     }
 }
 
 Describe "Watchdog Script" {
+    Context "Module import resilience" {
+        It "Uses the shared standalone bootstrap helper" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Import-Module "$OpenPathRoot\lib\ScriptBootstrap.psm1" -Force',
+                'Initialize-OpenPathScriptSession `',
+                '-OpenPathRoot $OpenPathRoot',
+                '-DependentModules @(''DNS'', ''Firewall'', ''CaptivePortal'')',
+                '-RequiredCommands @(',
+                '-ScriptName ''Test-DNSHealth.ps1'''
+            )
+        }
+    }
+
     Context "SSE listener monitoring" {
         It "Checks and restarts SSE listener task" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
@@ -1719,8 +1789,7 @@ Describe "Watchdog Script" {
             Assert-ContentContainsAll -Content $moduleContent -Needles @(
                 'Captive portal resolved',
                 'restoring DNS protection',
-                'Set-LocalDNS',
-                'Set-OpenPathFirewall',
+                'Restore-OpenPathProtectedMode -Config $Config -SkipAcrylicRestart',
                 'Clear-OpenPathCaptivePortalMarker'
             )
         }

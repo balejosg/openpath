@@ -196,8 +196,6 @@ function Disable-OpenPathCaptivePortalMode {
 
     Write-OpenPathLog 'Watchdog: Captive portal resolved - restoring DNS protection' -Level WARN
 
-    Set-LocalDNS
-
     if (-not $Config) {
         try {
             $Config = Get-OpenPathConfig
@@ -208,18 +206,7 @@ function Disable-OpenPathCaptivePortalMode {
     }
 
     try {
-        $acrylicPath = Get-AcrylicPath
-        $upstream = '8.8.8.8'
-        if ($Config -and $Config.PSObject.Properties['primaryDNS'] -and $Config.primaryDNS) {
-            $upstream = [string]$Config.primaryDNS
-        }
-
-        if ($acrylicPath) {
-            Set-OpenPathFirewall -UpstreamDNS $upstream -AcrylicPath $acrylicPath | Out-Null
-        }
-        else {
-            Enable-OpenPathFirewall | Out-Null
-        }
+        Restore-OpenPathProtectedMode -Config $Config -SkipAcrylicRestart | Out-Null
     }
     catch {
         # Non-fatal

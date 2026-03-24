@@ -527,6 +527,60 @@ function Get-OpenPathRuntimeHealth {
     }
 }
 
+function Restore-OpenPathProtectedMode {
+    <#
+    .SYNOPSIS
+        Restores protected DNS enforcement using the currently loaded OpenPath modules.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [PSCustomObject]$Config = $null,
+
+        [switch]$SkipAcrylicRestart
+    )
+
+    if (-not $PSCmdlet.ShouldProcess('OpenPath', 'Restore protected DNS enforcement')) {
+        return $false
+    }
+
+    if (-not $SkipAcrylicRestart -and (Get-Command -Name 'Restart-AcrylicService' -ErrorAction SilentlyContinue)) {
+        Restart-AcrylicService | Out-Null
+    }
+
+    if (Get-Command -Name 'Set-LocalDNS' -ErrorAction SilentlyContinue) {
+        Set-LocalDNS
+    }
+
+    $enableFirewall = $true
+    if ($Config -and $Config.PSObject.Properties['enableFirewall']) {
+        $enableFirewall = [bool]$Config.enableFirewall
+    }
+
+    if (-not $enableFirewall) {
+        return $true
+    }
+
+    $upstream = '8.8.8.8'
+    if ($Config -and $Config.PSObject.Properties['primaryDNS'] -and $Config.primaryDNS) {
+        $upstream = [string]$Config.primaryDNS
+    }
+
+    if ((Get-Command -Name 'Set-OpenPathFirewall' -ErrorAction SilentlyContinue) -and
+        (Get-Command -Name 'Get-AcrylicPath' -ErrorAction SilentlyContinue)) {
+        $acrylicPath = Get-AcrylicPath
+        if ($acrylicPath) {
+            Set-OpenPathFirewall -UpstreamDNS $upstream -AcrylicPath $acrylicPath | Out-Null
+            return $true
+        }
+    }
+
+    if (Get-Command -Name 'Enable-OpenPathFirewall' -ErrorAction SilentlyContinue) {
+        Enable-OpenPathFirewall | Out-Null
+    }
+
+    return $true
+}
+
 function Get-OpenPathDnsProbeDomains {
     <#
     .SYNOPSIS
@@ -747,14 +801,7 @@ function Restore-OpenPathLatestCheckpoint {
         }
 
         Update-AcrylicHost -WhitelistedDomains $domains -BlockedSubdomains @() | Out-Null
-        Restart-AcrylicService | Out-Null
-
-        if ($Config.enableFirewall) {
-            $acrylicPath = Get-AcrylicPath
-            Set-OpenPathFirewall -UpstreamDNS $Config.primaryDNS -AcrylicPath $acrylicPath | Out-Null
-        }
-
-        Set-LocalDNS
+        Restore-OpenPathProtectedMode -Config $Config | Out-Null
 
         $result.Success = $true
         $result.CheckpointPath = $checkpoint.Path
@@ -774,6 +821,7 @@ function Get-OpenPathCriticalFiles {
     #>
     $files = @(
         "$script:OpenPathRoot\lib\Common.psm1",
+        "$script:OpenPathRoot\lib\ScriptBootstrap.psm1",
         "$script:OpenPathRoot\lib\DNS.psm1",
         "$script:OpenPathRoot\lib\Firewall.psm1",
         "$script:OpenPathRoot\lib\Browser.psm1",
@@ -1895,6 +1943,7 @@ Export-ModuleMember -Function @(
     'Get-OpenPathMachineName',
     'Test-OpenPathDomainFormat',
     'Get-OpenPathRuntimeHealth',
+    'Restore-OpenPathProtectedMode',
     'Get-OpenPathDnsProbeDomains',
     'Get-ValidWhitelistDomainsFromFile',
     'Save-OpenPathWhitelistCheckpoint',

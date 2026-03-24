@@ -27,14 +27,12 @@ $ErrorActionPreference = "Stop"
 $OpenPathRoot = "C:\OpenPath"
 $script:UpdateMutexName = "Global\OpenPathUpdateLock"
 
-# Import dependent modules first, then re-import Common globally so its
-# exported helpers remain visible in standalone script sessions.
-Import-Module "$OpenPathRoot\lib\DNS.psm1" -Force
-Import-Module "$OpenPathRoot\lib\Firewall.psm1" -Force
-Import-Module "$OpenPathRoot\lib\Browser.psm1" -Force
-Import-Module "$OpenPathRoot\lib\Common.psm1" -Force -Global
-
-$requiredCommonCommands = @(
+# Initialize standalone script session via the shared bootstrap helper.
+Import-Module "$OpenPathRoot\lib\ScriptBootstrap.psm1" -Force
+Initialize-OpenPathScriptSession `
+    -OpenPathRoot $OpenPathRoot `
+    -DependentModules @('DNS', 'Firewall', 'Browser') `
+    -RequiredCommands @(
     'Write-OpenPathLog',
     'Get-OpenPathConfig',
     'Get-OpenPathFileAgeHours',
@@ -43,17 +41,16 @@ $requiredCommonCommands = @(
     'Get-OpenPathRuntimeHealth',
     'Get-ValidWhitelistDomainsFromFile',
     'Restore-OpenPathLatestCheckpoint',
+    'Restore-OpenPathProtectedMode',
     'Save-OpenPathWhitelistCheckpoint',
-    'Send-OpenPathHealthReport'
-)
-$missingCommonCommands = @(
-    $requiredCommonCommands | Where-Object {
-        -not (Get-Command -Name $_ -ErrorAction SilentlyContinue)
-    }
-)
-if ($missingCommonCommands.Count -gt 0) {
-    throw "Update-OpenPath.ps1 failed to import required common commands: $($missingCommonCommands -join ', ')"
-}
+    'Send-OpenPathHealthReport',
+    'Update-AcrylicHost',
+    'Restore-OriginalDNS',
+    'Remove-OpenPathFirewall',
+    'Remove-BrowserPolicy',
+    'Set-AllBrowserPolicy'
+) `
+    -ScriptName 'Update-OpenPath.ps1' | Out-Null
 
 $mutex = $null
 $lockAcquired = $false
@@ -96,14 +93,7 @@ function Enter-StaleWhitelistFailsafe {
 
     Write-OpenPathLog "Entering stale-whitelist fail-safe mode (age=$WhitelistAgeHours h)" -Level WARN
     Update-AcrylicHost -WhitelistedDomains $controlDomains -BlockedSubdomains @()
-    Restart-AcrylicService | Out-Null
-
-    if ($Config.enableFirewall) {
-        $acrylicPath = Get-AcrylicPath
-        Set-OpenPathFirewall -UpstreamDNS $Config.primaryDNS -AcrylicPath $acrylicPath | Out-Null
-    }
-
-    Set-LocalDNS
+    Restore-OpenPathProtectedMode -Config $Config | Out-Null
 
     @{
         enteredAt = (Get-Date -Format 'o')
@@ -323,14 +313,8 @@ try {
                 # Update Acrylic DNS hosts
                 Update-AcrylicHost -WhitelistedDomains $whitelist.Whitelist -BlockedSubdomains $whitelist.BlockedSubdomains
 
-                # Restart Acrylic to apply changes
-                Restart-AcrylicService | Out-Null
-
-                # Configure firewall (if enabled)
-                if ($config.enableFirewall) {
-                    $acrylicPath = Get-AcrylicPath
-                    Set-OpenPathFirewall -UpstreamDNS $config.primaryDNS -AcrylicPath $acrylicPath | Out-Null
-                }
+                # Leave fail-open immediately once a valid policy is available again.
+                Restore-OpenPathProtectedMode -Config $config | Out-Null
 
                 # Configure browser policies (if enabled)
                 if ($config.enableBrowserPolicies) {
@@ -376,14 +360,7 @@ catch {
             Copy-Item $backupPath $whitelistPath -Force
             $backupContent = Get-ValidWhitelistDomainsFromFile -Path $whitelistPath
             Update-AcrylicHost -WhitelistedDomains $backupContent -BlockedSubdomains @() -ErrorAction SilentlyContinue
-            Restart-AcrylicService -ErrorAction SilentlyContinue
-
-            if ($config -and $config.enableFirewall) {
-                $acrylicPath = Get-AcrylicPath
-                Set-OpenPathFirewall -UpstreamDNS $config.primaryDNS -AcrylicPath $acrylicPath -ErrorAction SilentlyContinue | Out-Null
-            }
-
-            Set-LocalDNS -ErrorAction SilentlyContinue
+            Restore-OpenPathProtectedMode -Config $config -ErrorAction SilentlyContinue | Out-Null
             $rollbackSucceeded = $true
             $rollbackMethod = 'backup'
             Write-UpdateCatchLog 'Backup rollback completed successfully' -Level WARN
