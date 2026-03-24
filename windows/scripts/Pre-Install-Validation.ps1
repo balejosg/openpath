@@ -83,7 +83,7 @@ Write-Host "Network Configuration:" -ForegroundColor White
 
 Test-Requirement "Network adapter present" {
     (Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }).Count -gt 0
-} -FailMessage "No active network adapter found"
+} -FailMessage "No active network adapter found" -Warning
 
 Test-Requirement "DNS resolution working" {
     try {

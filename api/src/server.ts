@@ -1039,12 +1039,19 @@ foreach ($file in $manifest.files) {
 }
 
 Push-Location $WindowsRoot
+$installExitCode = 0
 try {
+    $global:LASTEXITCODE = 0
     & (Join-Path $WindowsRoot 'Install-OpenPath.ps1') -ApiUrl $ApiUrl -ClassroomId $ClassroomId -EnrollmentToken $EnrollmentToken -Unattended
+    $installExitCode = [int]$LASTEXITCODE
 }
 finally {
     Pop-Location
     Remove-Item $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+if ($installExitCode -ne 0) {
+    exit $installExitCode
 }
 
 Write-Host ''

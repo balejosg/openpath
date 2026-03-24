@@ -205,6 +205,14 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "windows preflight treats missing active adapter enumeration as advisory" {
+    run grep -nF '} -FailMessage "No active network adapter found" -Warning' "$PROJECT_DIR/windows/scripts/Pre-Install-Validation.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Test-Requirement "DNS resolution working"' "$PROJECT_DIR/windows/scripts/Pre-Install-Validation.ps1"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows pester e2e receives whitelist domains from the harness and keeps file fallback" {
     run grep -nF 'OPENPATH_E2E_EXPECTED_WHITELIST_DOMAINS' "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
     [ "$status" -eq 0 ]

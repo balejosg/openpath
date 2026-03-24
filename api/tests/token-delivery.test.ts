@@ -461,6 +461,11 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       assert.match(body, /bootstrap\/latest\.json/);
       assert.match(body, /-EnrollmentToken/);
       assert.match(body, /-ClassroomId/);
+      assert.match(body, /\$installExitCode\s*=\s*0/);
+      assert.match(
+        body,
+        /if\s*\(\$installExitCode\s*-ne\s*0\)\s*\{\s*exit \$installExitCode\s*\}/s
+      );
     });
 
     await test('should reject Windows enrollment script with mismatched classroom', async () => {
