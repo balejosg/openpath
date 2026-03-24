@@ -51,7 +51,7 @@ windows/
 Invoke-Pester -Path tests/
 
 # Pre-install validation
-.\tests\Pre-Install-Validation.ps1
+.\scripts\Pre-Install-Validation.ps1
 ```
 
 ## Anti-Patterns

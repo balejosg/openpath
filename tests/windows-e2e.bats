@@ -34,7 +34,7 @@ load 'test_helper'
     run grep -nP "[^\\x00-\\x7F]" "$PROJECT_DIR/windows/Uninstall-OpenPath.ps1"
     [ "$status" -ne 0 ]
 
-    run grep -nP "[^\\x00-\\x7F]" "$PROJECT_DIR/windows/tests/Pre-Install-Validation.ps1"
+    run grep -nP "[^\\x00-\\x7F]" "$PROJECT_DIR/windows/scripts/Pre-Install-Validation.ps1"
     [ "$status" -ne 0 ]
 }
 

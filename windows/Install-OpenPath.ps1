@@ -181,9 +181,6 @@ if ($classroomModeRequested) {
     if ($HealthApiSecret) {
         Write-Host "Health API secret: configured"
     }
-    else {
-        Write-Host "Health API secret: not configured (health reports may be rejected if SHARED_SECRET is required)" -ForegroundColor Yellow
-    }
 }
 elseif ($WhitelistUrl) {
     Write-Host "URL: $WhitelistUrl"
@@ -198,7 +195,7 @@ if ($SkipPreflight) {
     Write-Host ""
 }
 else {
-    $validationScript = Join-Path $scriptDir "tests\Pre-Install-Validation.ps1"
+    $validationScript = Join-Path $scriptDir "scripts\Pre-Install-Validation.ps1"
     if (Test-Path $validationScript) {
         Write-Host "[Preflight] Ejecutando validacion previa..." -ForegroundColor Yellow
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $validationScript
@@ -209,7 +206,7 @@ else {
         Write-Host "[Preflight] Validacion completada" -ForegroundColor Green
     }
     else {
-        Write-Host "[Preflight] ADVERTENCIA: Script no encontrado ($validationScript)" -ForegroundColor Yellow
+        Write-Host "[Preflight] Omitido: paquete sin script de validacion previa" -ForegroundColor Yellow
     }
     Write-Host ""
 }

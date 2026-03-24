@@ -36,7 +36,7 @@ Internet access control system using a DNS sinkhole for Windows, powered by Acry
 .\Install-OpenPath.ps1 -WhitelistUrl "http://your-server:3000/export/group.txt" -SkipPreflight
 ```
 
-The installer executes `tests\Pre-Install-Validation.ps1` by default before making changes.
+The installer executes `scripts\Pre-Install-Validation.ps1` by default before making changes.
 
 If you use the React SPA classroom modal, it provides a one-liner that downloads and runs
 `/api/enroll/<classroomId>/windows.ps1` directly.

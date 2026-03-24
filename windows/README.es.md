@@ -34,7 +34,7 @@ Sistema de control de acceso a internet mediante DNS sinkhole para Windows, usan
 .\Install-OpenPath.ps1 -WhitelistUrl "http://tu-servidor:3000/export/grupo.txt" -SkipPreflight
 ```
 
-El instalador ejecuta `tests\Pre-Install-Validation.ps1` por defecto antes de aplicar cambios.
+El instalador ejecuta `scripts\Pre-Install-Validation.ps1` por defecto antes de aplicar cambios.
 
 Si usas el modal de aulas en la React SPA, se genera un one-liner para descargar y ejecutar
 `/api/enroll/<classroomId>/windows.ps1` directamente.

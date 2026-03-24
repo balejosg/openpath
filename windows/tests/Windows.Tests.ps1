@@ -1883,9 +1883,10 @@ Describe "Installer" {
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 'SkipPreflight',
-                'Pre-Install-Validation.ps1',
+                'scripts\Pre-Install-Validation.ps1',
                 'powershell.exe -NoProfile -ExecutionPolicy Bypass -File'
             )
+            $content.Contains('tests\Pre-Install-Validation.ps1') | Should -BeFalse
         }
     }
 

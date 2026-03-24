@@ -498,6 +498,7 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
 
       assert.strictEqual(manifest.success, true);
       assert.ok(manifest.files.some((file) => file.path === 'Install-OpenPath.ps1'));
+      assert.ok(manifest.files.some((file) => file.path === 'scripts/Pre-Install-Validation.ps1'));
       assert.ok(manifest.files.some((file) => file.path === 'scripts/Enroll-Machine.ps1'));
 
       const fileResponse = await fetch(
@@ -512,6 +513,19 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       assert.strictEqual(fileResponse.status, 200);
       const fileText = await fileResponse.text();
       assert.match(fileText, /OpenPath DNS para Windows - Instalador/);
+
+      const preflightResponse = await fetch(
+        `${API_URL}/api/agent/windows/bootstrap/file?path=${encodeURIComponent('scripts/Pre-Install-Validation.ps1')}`,
+        {
+          headers: {
+            Authorization: `Bearer ${enrollmentToken}`,
+          },
+        }
+      );
+
+      assert.strictEqual(preflightResponse.status, 200);
+      const preflightText = await preflightResponse.text();
+      assert.match(preflightText, /OpenPath Pre-Installation Validation/);
     });
   });
 
