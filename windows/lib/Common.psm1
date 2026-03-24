@@ -1253,7 +1253,7 @@ function Get-OpenPathFromUrl {
         throw
     }
 
-    $result = @{
+    $result = [PSCustomObject]@{
         Whitelist = @()
         BlockedSubdomains = @()
         BlockedPaths = @()

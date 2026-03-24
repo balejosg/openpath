@@ -440,6 +440,17 @@ Describe "Common Module - Mocked Tests" {
             $result.Whitelist | Should -Contain "github.com"
         }
 
+        It "Returns a detectable NotModified property when the whitelist ETag matches" {
+            Mock Invoke-OpenPathHttpGetText {
+                [PSCustomObject]@{ StatusCode = 304; Content = ""; ETag = '"etag-123"' }
+            } -ModuleName Common
+
+            $result = Get-OpenPathFromUrl -Url "http://test.example.com/whitelist.txt"
+            $result.PSObject.Properties['NotModified'] | Should -Not -BeNullOrEmpty
+            $result.NotModified | Should -BeTrue
+            $result.Whitelist | Should -HaveCount 0
+        }
+
         It "Protects control-plane hosts from blocked sections and injects them into the effective whitelist" {
             Mock Get-OpenPathConfig {
                 [PSCustomObject]@{
