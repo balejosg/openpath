@@ -57,6 +57,11 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "stable deb publish workflow removes the legacy whitelist package before publishing" {
+    run grep -n 'reprepro remove stable whitelist-dnsmasq || true' "$PROJECT_DIR/.github/workflows/build-deb.yml"
+    [ "$status" -eq 0 ]
+}
+
 @test "prerelease deb publish workflow re-signs existing APT suites before exporting the public key" {
     run grep -n 'for suite in stable unstable; do' "$PROJECT_DIR/.github/workflows/prerelease-deb.yml"
     [ "$status" -eq 0 ]

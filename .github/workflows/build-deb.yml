@@ -205,6 +205,10 @@ jobs:
         working-directory: gh-pages/apt
         run: |
           echo "Adding package to ${{ env.SUITE }} suite..."
+          if [ "${{ env.SUITE }}" = "stable" ]; then
+            # Remove the legacy package so the stable index advertises the current package name.
+            reprepro remove stable whitelist-dnsmasq || true
+          fi
           reprepro includedeb ${{ env.SUITE }} ../../packages/*.deb
 
       - name: Re-sign published suites
