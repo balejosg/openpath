@@ -1,0 +1,40 @@
+{
+  "name": "openpath-monorepo",
+  "private": true,
+  "version": "4.1.0",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "workspaces": ["api", "react-spa", "shared", "dashboard", "firefox-extension"],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "npm@10.9.3",
+  "overrides": {
+    "esbuild": "^0.25.0",
+    "flatted": "^3.4.0",
+    "qs": "^6.14.2",
+    "minimatch": "^10.2.1",
+    "swagger-jsdoc": {
+      "glob": "^11.0.0"
+    }
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^20.4.0",
+    "@commitlint/config-conventional": "^20.4.0",
+    "@eslint/js": "^10.0.1",
+    "@secretlint/secretlint-rule-preset-recommend": "^11.3.1",
+    "@size-limit/preset-app": "^12.0.0",
+    "concurrently": "^9.2.1",
+    "eslint": "^10.0.0",
+    "eslint-plugin-no-only-tests": "^3.3.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "node-gyp-build": "^4.8.4",
+    "pg": "8.20.0",
+    "prettier": "^3.8.1",
+    "secretlint": "^11.3.1",
+    "size-limit": "^12.0.0",
+    "turbo": "^2.8.3",
+    "typescript-eslint": "^8.20.0"
+  }
+}

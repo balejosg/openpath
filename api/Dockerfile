@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -5,15 +7,17 @@ WORKDIR /app
 # Install system dependencies for native modules (bcrypt)
 RUN apk add --no-cache python3 make g++
 
-# Copy root package files and workspace package files
-COPY package*.json ./
+# Copy dependency manifests separately so script-only metadata changes do not
+# invalidate the expensive npm install layers.
+COPY package-lock.json ./
+COPY package.docker.json ./package.json
 COPY tsconfig.base.json ./
-COPY api/package*.json ./api/
-COPY shared/package*.json ./shared/
-COPY react-spa/package*.json ./react-spa/
+COPY api/package.docker.json ./api/package.json
+COPY shared/package.docker.json ./shared/package.json
+COPY react-spa/package.docker.json ./react-spa/package.json
 
 # Install all dependencies
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 # Copy source code
 COPY api ./api
@@ -43,16 +47,20 @@ WORKDIR /app
 # Install dumb-init and build tools for native modules (bcrypt)
 RUN apk add --no-cache dumb-init python3 make g++
 
-# Copy package files
-COPY package*.json ./
-COPY api/package*.json ./api/
-COPY shared/package*.json ./shared/
-COPY react-spa/package*.json ./react-spa/
+# Copy dependency manifests
+COPY package-lock.json ./
+COPY package.docker.json ./package.json
+COPY api/package.docker.json ./api/package.json
+COPY shared/package.docker.json ./shared/package.json
+COPY react-spa/package.docker.json ./react-spa/package.json
 
 # Install production dependencies only
-RUN npm ci --omit=dev && npm cache clean --force
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev && npm cache clean --force
 
-# Copy built artifacts from builder stage
+# Restore runtime package metadata and built artifacts from the builder stage
+COPY --from=builder /app/api/package.json ./api/package.json
+COPY --from=builder /app/shared/package.json ./shared/package.json
+COPY --from=builder /app/react-spa/package.json ./react-spa/package.json
 COPY --from=builder /app/api/dist ./api/dist
 COPY --from=builder /app/shared/dist ./shared/dist
 COPY --from=builder /app/react-spa/dist ./react-spa/dist

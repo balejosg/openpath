@@ -12,6 +12,16 @@ function readPackageJson() {
   return JSON.parse(readFileSync(resolve(projectRoot, 'package.json'), 'utf8'));
 }
 
+function readJson(relativePath) {
+  return JSON.parse(readFileSync(resolve(projectRoot, relativePath), 'utf8'));
+}
+
+function projectPackage(pkg, keys) {
+  return Object.fromEntries(
+    keys.filter((key) => Object.hasOwn(pkg, key)).map((key) => [key, pkg[key]])
+  );
+}
+
 describe('repository verification contract', () => {
   test('verify:full runs coverage before unit, e2e, and security stages', () => {
     const packageJson = readPackageJson();
@@ -35,5 +45,100 @@ describe('repository verification contract', () => {
       'pre-commit should not rerun verify:coverage after verify:full'
     );
     assert.ok(!hook.includes('[4/4]'), 'pre-commit should no longer advertise a fourth stage');
+  });
+
+  test('docker install manifests stay aligned with dependency-bearing package.json fields', () => {
+    const cases = [
+      {
+        packagePath: 'package.json',
+        dockerPackagePath: 'package.docker.json',
+        keys: [
+          'name',
+          'private',
+          'version',
+          'license',
+          'type',
+          'workspaces',
+          'engines',
+          'packageManager',
+          'overrides',
+          'devDependencies',
+        ],
+      },
+      {
+        packagePath: 'api/package.json',
+        dockerPackagePath: 'api/package.docker.json',
+        keys: [
+          'name',
+          'version',
+          'license',
+          'type',
+          'main',
+          'types',
+          'exports',
+          'engines',
+          'dependencies',
+          'devDependencies',
+        ],
+      },
+      {
+        packagePath: 'shared/package.json',
+        dockerPackagePath: 'shared/package.docker.json',
+        keys: [
+          'name',
+          'version',
+          'license',
+          'type',
+          'main',
+          'types',
+          'exports',
+          'engines',
+          'dependencies',
+          'devDependencies',
+        ],
+      },
+      {
+        packagePath: 'react-spa/package.json',
+        dockerPackagePath: 'react-spa/package.docker.json',
+        keys: ['name', 'private', 'version', 'type', 'dependencies', 'devDependencies'],
+      },
+    ];
+
+    for (const { packagePath, dockerPackagePath, keys } of cases) {
+      assert.deepStrictEqual(
+        readJson(dockerPackagePath),
+        projectPackage(readJson(packagePath), keys),
+        `${dockerPackagePath} should only contain dependency-relevant fields from ${packagePath}`
+      );
+    }
+  });
+
+  test('api Dockerfile uses dependency-only manifests and npm cache mounts', () => {
+    const dockerfile = readFileSync(resolve(projectRoot, 'api/Dockerfile'), 'utf8');
+
+    assert.ok(
+      dockerfile.includes('# syntax=docker/dockerfile:1.7'),
+      'api Dockerfile should opt into Dockerfile features required for cache mounts'
+    );
+    assert.ok(
+      dockerfile.includes('COPY package.docker.json ./package.json'),
+      'api Dockerfile should use the dependency-only root manifest during npm ci'
+    );
+    assert.ok(
+      dockerfile.includes('COPY api/package.docker.json ./api/package.json'),
+      'api Dockerfile should use the dependency-only api manifest during npm ci'
+    );
+    assert.ok(
+      dockerfile.includes('COPY shared/package.docker.json ./shared/package.json'),
+      'api Dockerfile should use the dependency-only shared manifest during npm ci'
+    );
+    assert.ok(
+      dockerfile.includes('COPY react-spa/package.docker.json ./react-spa/package.json'),
+      'api Dockerfile should use the dependency-only react-spa manifest during npm ci'
+    );
+    assert.ok(
+      dockerfile.includes('--mount=type=cache,target=/root/.npm'),
+      'api Dockerfile should cache npm downloads across repeated image builds'
+    );
   });
 });
