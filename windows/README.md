@@ -9,6 +9,7 @@ Internet access control system using a DNS sinkhole for Windows, powered by Acry
 ✅ **Windows Firewall** - Blocks external DNS, VPNs, and Tor.  
 ✅ **DoH Egress Blocking** - Blocks known DNS-over-HTTPS resolver IPs on 443.  
 ✅ **Browser Policies** - Supports Firefox, Chrome, and Edge.  
+✅ **Firefox Extension Auto-Install** - Stages and force-installs the bundled browser extension when installer assets are available.  
 ✅ **Real-Time SSE Updates** - Instant rule changes via Server-Sent Events.  
 ✅ **Auto-Update Fallback** - Syncs every 15 minutes via Task Scheduler.  
 ✅ **Silent Agent Self-Update** - Daily software updates from the same OpenPath server version.  
@@ -71,6 +72,11 @@ Get-ScheduledTask -TaskName "OpenPath-*"
 # View firewall rules
 Get-NetFirewallRule -DisplayName "OpenPath-*"
 ```
+
+## Browser Extension Notes
+
+- Firefox: when the installer has access to the extension assets, it stages them under `C:\OpenPath\browser-extension\firefox` and force-installs the extension through `policies.json`.
+- Chrome and Edge: OpenPath keeps managing browser blocking policies, but self-hosted force-install flows for Chromium browsers on Windows remain subject to browser enterprise restrictions. A managed CRX/update-manifest pipeline is still required for unattended Chrome/Edge rollout on Windows.
 
 ## Structure
 

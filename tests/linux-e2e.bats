@@ -25,6 +25,16 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "linux debian postinst treats chromium extension installation as best effort" {
+    run grep -nF 'install_chromium_extension /usr/share/openpath/firefox-extension || echo "⚠ Extensión Chrome/Edge no instalada (se puede reintentar más tarde)"' "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
+    [ "$status" -eq 0 ]
+}
+
+@test "linux deb build includes browser native host assets" {
+    run grep -nF 'cp -r "$ROOT_DIR/firefox-extension/native" "$BUILD_DIR/usr/share/openpath/firefox-extension/"' "$PROJECT_DIR/linux/scripts/build/build-deb.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "linux uninstall restores resolv.conf with a copy fallback when symlink replacement is blocked" {
     run grep -nF 'cp /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf' "$PROJECT_DIR/linux/uninstall.sh"
     [ "$status" -eq 0 ]
@@ -38,5 +48,18 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 
     run grep -nF "/usr/local/lib/openpath/uninstall.sh --auto-yes" "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "windows installer stages browser extension assets when available" {
+    run grep -nF '$OpenPathRoot\browser-extension\firefox' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+}
+
+@test "windows browser policies force-install the staged Firefox extension" {
+    run grep -nF 'ExtensionSettings' "$PROJECT_DIR/windows/lib/Browser.psm1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'install_url' "$PROJECT_DIR/windows/lib/Browser.psm1"
     [ "$status" -eq 0 ]
 }

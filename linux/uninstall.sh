@@ -190,6 +190,11 @@ iptables -P OUTPUT ACCEPT 2>/dev/null || true
 iptables-save > /etc/iptables/rules.v4 2>/dev/null || true
 
 echo "[6/7] Eliminando archivos..."
+CHROMIUM_EXT_ID=""
+if [ -f /var/lib/openpath/browser-extension/extension-id ]; then
+    CHROMIUM_EXT_ID=$(cat /var/lib/openpath/browser-extension/extension-id 2>/dev/null || true)
+fi
+
 rm -f /usr/local/bin/openpath-update.sh
 rm -f /usr/local/bin/dnsmasq-watchdog.sh
 rm -f /usr/local/bin/dnsmasq-init-resolv.sh
@@ -215,8 +220,17 @@ rm -f /etc/opt/chrome/policies/managed/url-whitelist.json 2>/dev/null || true
 
 # Eliminar extensión de Firefox
 echo "  Eliminando extensión Firefox..."
+rm -rf "/usr/share/mozilla/extensions/{ec8030f7-c20a-464f-9b0e-13a3a9e97384}/monitor-bloqueos@openpath" 2>/dev/null || true
 rm -rf "/usr/share/mozilla/extensions/{ec8030f7-c20a-464f-9b0e-13a3a9e97384}/monitor-bloqueos@whitelist-system" 2>/dev/null || true
 rm -f /usr/lib/mozilla/native-messaging-hosts/whitelist_native_host.json 2>/dev/null || true
+rm -f /etc/chromium/native-messaging-hosts/openpath_native_host.json 2>/dev/null || true
+rm -f /etc/opt/chrome/native-messaging-hosts/openpath_native_host.json 2>/dev/null || true
+rm -f /etc/opt/edge/native-messaging-hosts/openpath_native_host.json 2>/dev/null || true
+
+if [ -n "$CHROMIUM_EXT_ID" ]; then
+    rm -f "/usr/share/google-chrome/extensions/$CHROMIUM_EXT_ID.json" 2>/dev/null || true
+    rm -f "/usr/share/microsoft-edge/extensions/$CHROMIUM_EXT_ID.json" 2>/dev/null || true
+fi
 
 # Eliminar autoconfig de Firefox (restaurar verificación de firmas)
 for firefox_dir in /usr/lib/firefox-esr /usr/lib/firefox /opt/firefox; do

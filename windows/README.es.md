@@ -9,6 +9,7 @@ Sistema de control de acceso a internet mediante DNS sinkhole para Windows, usan
 ✅ **Windows Firewall** - Bloquea DNS externo, VPNs, Tor  
 ✅ **Bloqueo de salida DoH** - Bloquea IPs conocidas de resolutores DNS-over-HTTPS por 443  
 ✅ **Políticas de navegadores** - Firefox y Chrome/Edge  
+✅ **Auto-instalación de extensión Firefox** - Copia y fuerza la instalación de la extensión incluida cuando el instalador dispone de sus assets  
 ✅ **Actualización automática** - Cada 15 minutos vía Task Scheduler  
 ✅ **Fail-safe por whitelist caducada** - Modo restrictivo seguro cuando la caché expira sin conexión  
 ✅ **Baseline de integridad** - Detecta manipulación de scripts/módulos e intenta restauración acotada  
@@ -68,6 +69,11 @@ Get-ScheduledTask -TaskName "OpenPath-*"
 # Ver reglas de firewall
 Get-NetFirewallRule -DisplayName "OpenPath-*"
 ```
+
+## Notas Sobre La Extensión Del Navegador
+
+- Firefox: cuando el instalador tiene acceso a los assets de la extensión, los copia en `C:\OpenPath\browser-extension\firefox` y fuerza su instalación mediante `policies.json`.
+- Chrome y Edge: OpenPath sigue aplicando políticas de bloqueo del navegador, pero la instalación forzada self-hosted en Windows depende de las restricciones corporativas del propio navegador. Sigue siendo necesario un pipeline gestionado de `CRX` + manifiesto de actualización para un despliegue totalmente desatendido en Chrome/Edge sobre Windows.
 
 ## Estructura
 

@@ -542,16 +542,36 @@ step_apply_policies() {
 
 step_install_extension() {
     echo ""
-    echo "[12/13] Instalando extensión Firefox..."
+    echo "[12/13] Instalando extensiones del navegador..."
 
     if [ "$INSTALL_EXTENSION" = true ]; then
-        install_firefox_extension "$INSTALLER_SOURCE_DIR/firefox-extension"
-        if [ "$INSTALL_NATIVE_HOST" = true ]; then
-            install_native_host "$INSTALLER_SOURCE_DIR/firefox-extension/native"
+        local staged_ext_dir="$INSTALL_DIR/firefox-extension"
+        local chromium_ext_id=""
+
+        rm -rf "$staged_ext_dir"
+        mkdir -p "$staged_ext_dir"
+        cp "$INSTALLER_SOURCE_DIR/firefox-extension/manifest.json" "$staged_ext_dir/"
+        cp -r "$INSTALLER_SOURCE_DIR/firefox-extension/dist" "$staged_ext_dir/"
+        cp -r "$INSTALLER_SOURCE_DIR/firefox-extension/popup" "$staged_ext_dir/"
+        cp -r "$INSTALLER_SOURCE_DIR/firefox-extension/icons" "$staged_ext_dir/"
+        cp -r "$INSTALLER_SOURCE_DIR/firefox-extension/blocked" "$staged_ext_dir/"
+        if [ -d "$INSTALLER_SOURCE_DIR/firefox-extension/native" ]; then
+            cp -r "$INSTALLER_SOURCE_DIR/firefox-extension/native" "$staged_ext_dir/"
         fi
-        echo "✓ Extensión Firefox instalada"
+
+        install_firefox_extension "$staged_ext_dir"
+        if install_chromium_extension "$staged_ext_dir"; then
+            chromium_ext_id="$(cat "$(get_chromium_extension_id_file)" 2>/dev/null || true)"
+        else
+            echo "⚠ Extensión Chrome/Edge no instalada (se puede reintentar más tarde)"
+        fi
+
+        if [ "$INSTALL_NATIVE_HOST" = true ]; then
+            install_native_host "$staged_ext_dir/native" "$chromium_ext_id"
+        fi
+        echo "✓ Extensiones del navegador instaladas"
     else
-        echo "⊘ Extensión Firefox omitida (--no-extension)"
+        echo "⊘ Extensiones del navegador omitidas (--no-extension)"
     fi
 }
 

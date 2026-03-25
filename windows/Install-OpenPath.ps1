@@ -217,7 +217,8 @@ Write-Host "[1/7] Creando estructura de directorios..." -ForegroundColor Yellow
 $dirs = @(
     "$OpenPathRoot\lib",
     "$OpenPathRoot\scripts",
-    "$OpenPathRoot\data\logs"
+    "$OpenPathRoot\data\logs",
+    "$OpenPathRoot\browser-extension\firefox"
 )
 
 foreach ($dir in $dirs) {
@@ -267,6 +268,45 @@ foreach ($rootScript in $rootScripts) {
     if (Test-Path $sourcePath) {
         Copy-Item $sourcePath -Destination (Join-Path $OpenPathRoot $rootScript) -Force
     }
+}
+
+# Stage browser extension assets when the installer has access to the source tree.
+$browserExtensionCandidates = @(
+    (Join-Path $scriptDir 'browser-extension\firefox'),
+    (Join-Path $scriptDir 'firefox-extension'),
+    (Join-Path (Split-Path $scriptDir -Parent) 'firefox-extension')
+)
+$browserExtensionSource = $browserExtensionCandidates |
+    Where-Object { Test-Path (Join-Path $_ 'manifest.json') } |
+    Select-Object -First 1
+
+if ($browserExtensionSource) {
+    $browserExtensionTarget = "$OpenPathRoot\browser-extension\firefox"
+    $requiredItems = @('manifest.json', 'dist', 'popup', 'icons', 'blocked')
+    $missingItems = @(
+        $requiredItems | Where-Object { -not (Test-Path (Join-Path $browserExtensionSource $_)) }
+    )
+
+    if ($missingItems.Count -eq 0) {
+        Remove-Item $browserExtensionTarget -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Path $browserExtensionTarget -Force | Out-Null
+
+        foreach ($item in $requiredItems) {
+            Copy-Item (Join-Path $browserExtensionSource $item) -Destination $browserExtensionTarget -Recurse -Force
+        }
+
+        if (Test-Path (Join-Path $browserExtensionSource 'native')) {
+            Copy-Item (Join-Path $browserExtensionSource 'native') -Destination $browserExtensionTarget -Recurse -Force
+        }
+
+        Write-Host "  Browser extension assets staged in $OpenPathRoot\browser-extension\firefox" -ForegroundColor Green
+    }
+    else {
+        Write-Host "  ADVERTENCIA: Browser extension source incomplete ($($missingItems -join ', '))" -ForegroundColor Yellow
+    }
+}
+else {
+    Write-Host "  ADVERTENCIA: Browser extension source not found; Firefox extension auto-install skipped" -ForegroundColor Yellow
 }
 
 Write-Host "  Modulos copiados" -ForegroundColor Green

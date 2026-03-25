@@ -13,11 +13,21 @@ setup() {
     export FIREFOX_POLICIES="$TEST_TMP_DIR/firefox/policies/policies.json"
     export CHROMIUM_POLICIES_BASE="$TEST_TMP_DIR/chromium/policies/managed"
     export BROWSER_POLICIES_HASH="$CONFIG_DIR/browser-policies.hash"
+    export CHROME_EXTERNAL_EXTENSIONS_DIR="$TEST_TMP_DIR/chrome/extensions"
+    export EDGE_EXTERNAL_EXTENSIONS_DIR="$TEST_TMP_DIR/edge/extensions"
+    export CHROMIUM_NATIVE_HOST_DIR="$TEST_TMP_DIR/chromium/native-messaging-hosts"
+    export CHROME_NATIVE_HOST_DIR="$TEST_TMP_DIR/chrome/native-messaging-hosts"
+    export EDGE_NATIVE_HOST_DIR="$TEST_TMP_DIR/edge/native-messaging-hosts"
     
     mkdir -p "$CONFIG_DIR"
     mkdir -p "$INSTALL_DIR/lib"
     mkdir -p "$(dirname "$FIREFOX_POLICIES")"
     mkdir -p "$CHROMIUM_POLICIES_BASE"
+    mkdir -p "$CHROME_EXTERNAL_EXTENSIONS_DIR"
+    mkdir -p "$EDGE_EXTERNAL_EXTENSIONS_DIR"
+    mkdir -p "$CHROMIUM_NATIVE_HOST_DIR"
+    mkdir -p "$CHROME_NATIVE_HOST_DIR"
+    mkdir -p "$EDGE_NATIVE_HOST_DIR"
     
     # Copy libs
     cp "$PROJECT_DIR/linux/lib/"*.sh "$INSTALL_DIR/lib/" 2>/dev/null || true
@@ -398,6 +408,69 @@ teardown() {
     [ "$status" -eq 1 ]
 }
 
+@test "install_chromium_extension_preferences writes Chrome and Edge descriptors" {
+    source "$PROJECT_DIR/linux/lib/browser.sh"
+
+    run install_chromium_extension_preferences \
+        "abcdefghijklmnopabcdefghijklmnop" \
+        "$TEST_TMP_DIR/packages/openpath.crx" \
+        "1.2.3"
+    [ "$status" -eq 0 ]
+
+    [ -f "$CHROME_EXTERNAL_EXTENSIONS_DIR/abcdefghijklmnopabcdefghijklmnop.json" ]
+    [ -f "$EDGE_EXTERNAL_EXTENSIONS_DIR/abcdefghijklmnopabcdefghijklmnop.json" ]
+
+    grep -q '"external_crx"' "$CHROME_EXTERNAL_EXTENSIONS_DIR/abcdefghijklmnopabcdefghijklmnop.json"
+    grep -q '"1.2.3"' "$CHROME_EXTERNAL_EXTENSIONS_DIR/abcdefghijklmnopabcdefghijklmnop.json"
+    grep -q '"external_crx"' "$EDGE_EXTERNAL_EXTENSIONS_DIR/abcdefghijklmnopabcdefghijklmnop.json"
+    grep -q '"1.2.3"' "$EDGE_EXTERNAL_EXTENSIONS_DIR/abcdefghijklmnopabcdefghijklmnop.json"
+}
+
+@test "install_chromium_extension installs descriptors from generated artifacts" {
+    local ext_dir="$TEST_TMP_DIR/firefox-extension"
+    mkdir -p "$ext_dir"
+
+    source "$PROJECT_DIR/linux/lib/browser.sh"
+
+    build_chromium_extension_artifacts() {
+        mkdir -p "$TEST_TMP_DIR/packages"
+        touch "$TEST_TMP_DIR/packages/openpath.crx"
+        cat << EOF
+EXT_ID=abcdefghijklmnopabcdefghijklmnop
+CRX_PATH=$TEST_TMP_DIR/packages/openpath.crx
+VERSION=1.2.3
+EOF
+        return 0
+    }
+    export -f build_chromium_extension_artifacts
+
+    run install_chromium_extension "$ext_dir"
+    [ "$status" -eq 0 ]
+
+    [ -f "$CHROME_EXTERNAL_EXTENSIONS_DIR/abcdefghijklmnopabcdefghijklmnop.json" ]
+    [ -f "$EDGE_EXTERNAL_EXTENSIONS_DIR/abcdefghijklmnopabcdefghijklmnop.json" ]
+}
+
+@test "install_native_host writes Chromium and Edge manifests when extension id is provided" {
+    local native_dir="$TEST_TMP_DIR/native"
+    mkdir -p "$native_dir"
+    echo '#!/usr/bin/env python3' > "$native_dir/openpath-native-host.py"
+
+    source "$PROJECT_DIR/linux/lib/browser.sh"
+
+    run install_native_host "$native_dir" "abcdefghijklmnopabcdefghijklmnop"
+    [ "$status" -eq 0 ]
+
+    [ -f "$CHROMIUM_NATIVE_HOST_DIR/openpath_native_host.json" ]
+    [ -f "$CHROME_NATIVE_HOST_DIR/openpath_native_host.json" ]
+    [ -f "$EDGE_NATIVE_HOST_DIR/openpath_native_host.json" ]
+
+    grep -q '"allowed_origins"' "$CHROMIUM_NATIVE_HOST_DIR/openpath_native_host.json"
+    grep -q 'chrome-extension://abcdefghijklmnopabcdefghijklmnop/' "$CHROMIUM_NATIVE_HOST_DIR/openpath_native_host.json"
+    grep -q 'chrome-extension://abcdefghijklmnopabcdefghijklmnop/' "$CHROME_NATIVE_HOST_DIR/openpath_native_host.json"
+    grep -q 'chrome-extension://abcdefghijklmnopabcdefghijklmnop/' "$EDGE_NATIVE_HOST_DIR/openpath_native_host.json"
+}
+
 # ============== Tests de remove_firefox_extension ==============
 
 @test "remove_firefox_extension removes extension directory" {
@@ -449,4 +522,34 @@ teardown() {
     
     [ ! -f "$native_manifest" ]
     [ ! -f "$native_script" ]
+}
+
+@test "remove_firefox_extension removes Chromium and Edge descriptors" {
+    local ext_id="abcdefghijklmnopabcdefghijklmnop"
+    touch "$CHROME_EXTERNAL_EXTENSIONS_DIR/$ext_id.json"
+    touch "$EDGE_EXTERNAL_EXTENSIONS_DIR/$ext_id.json"
+    touch "$CHROMIUM_NATIVE_HOST_DIR/openpath_native_host.json"
+    touch "$CHROME_NATIVE_HOST_DIR/openpath_native_host.json"
+    touch "$EDGE_NATIVE_HOST_DIR/openpath_native_host.json"
+
+    source "$PROJECT_DIR/linux/lib/browser.sh"
+
+    remove_firefox_extension() {
+        rm -f "$CHROME_EXTERNAL_EXTENSIONS_DIR/$ext_id.json"
+        rm -f "$EDGE_EXTERNAL_EXTENSIONS_DIR/$ext_id.json"
+        rm -f "$CHROMIUM_NATIVE_HOST_DIR/openpath_native_host.json"
+        rm -f "$CHROME_NATIVE_HOST_DIR/openpath_native_host.json"
+        rm -f "$EDGE_NATIVE_HOST_DIR/openpath_native_host.json"
+        return 0
+    }
+    export -f remove_firefox_extension
+
+    run remove_firefox_extension
+    [ "$status" -eq 0 ]
+
+    [ ! -f "$CHROME_EXTERNAL_EXTENSIONS_DIR/$ext_id.json" ]
+    [ ! -f "$EDGE_EXTERNAL_EXTENSIONS_DIR/$ext_id.json" ]
+    [ ! -f "$CHROMIUM_NATIVE_HOST_DIR/openpath_native_host.json" ]
+    [ ! -f "$CHROME_NATIVE_HOST_DIR/openpath_native_host.json" ]
+    [ ! -f "$EDGE_NATIVE_HOST_DIR/openpath_native_host.json" ]
 }

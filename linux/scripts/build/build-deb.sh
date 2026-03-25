@@ -72,6 +72,7 @@ cp -r "$ROOT_DIR/firefox-extension/dist/lib" "$BUILD_DIR/usr/share/openpath/fire
 cp -r "$ROOT_DIR/firefox-extension/popup" "$BUILD_DIR/usr/share/openpath/firefox-extension/"
 cp -r "$ROOT_DIR/firefox-extension/icons" "$BUILD_DIR/usr/share/openpath/firefox-extension/"
 cp -r "$ROOT_DIR/firefox-extension/blocked" "$BUILD_DIR/usr/share/openpath/firefox-extension/"
+cp -r "$ROOT_DIR/firefox-extension/native" "$BUILD_DIR/usr/share/openpath/firefox-extension/"
 
 # Set correct permissions
 echo "[7/8] Setting permissions..."

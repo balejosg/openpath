@@ -5,6 +5,21 @@
 $modulePath = Split-Path $PSScriptRoot -Parent
 Import-Module "$modulePath\lib\Common.psm1" -Force -ErrorAction SilentlyContinue
 
+function Get-OpenPathFirefoxExtensionRoot {
+    return "$script:OpenPathRoot\browser-extension\firefox"
+}
+
+function Get-OpenPathFirefoxExtensionInstallUrl {
+    param(
+        [string]$ExtensionRoot = (Get-OpenPathFirefoxExtensionRoot)
+    )
+
+    $resolvedRoot = Resolve-Path $ExtensionRoot -ErrorAction SilentlyContinue
+    $path = if ($resolvedRoot) { $resolvedRoot.ProviderPath } else { $ExtensionRoot }
+    $uri = [System.Uri]::new($path)
+    return ($uri.AbsoluteUri.TrimEnd('/') + '/')
+}
+
 function Set-FirefoxPolicy {
     <#
     .SYNOPSIS
@@ -96,6 +111,17 @@ function Set-FirefoxPolicy {
                 }
                 DisableTelemetry = $true
                 OverrideFirstRunPage = ""
+            }
+        }
+
+        $extensionRoot = Get-OpenPathFirefoxExtensionRoot
+        $extensionManifest = Join-Path $extensionRoot 'manifest.json'
+        if (Test-Path $extensionManifest) {
+            $policies.policies.ExtensionSettings = @{
+                'monitor-bloqueos@openpath' = @{
+                    installation_mode = 'force_installed'
+                    install_url = (Get-OpenPathFirefoxExtensionInstallUrl -ExtensionRoot $extensionRoot)
+                }
             }
         }
         
