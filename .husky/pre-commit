@@ -12,23 +12,18 @@ echo "=========================================="
 echo ""
 
 # 1. FAST: Check for sensitive files
-echo "[1/4] Checking for sensitive files..."
+echo "[1/3] Checking for sensitive files..."
 npm run security:files
 
 # 2. FAST: Check test files exist for all source files
 echo ""
-echo "[2/4] Checking test file coverage..."
+echo "[2/3] Checking test file coverage..."
 bash scripts/check-test-files.sh
 
-# 3. SLOW: Full verification suite (typecheck, lint, tests, e2e)
+# 3. SLOW: Full verification suite (typecheck, lint, coverage, tests, e2e)
 echo ""
-echo "[3/4] Running full verification suite..."
+echo "[3/3] Running full verification suite..."
 npm run verify:full
-
-# 4. FAST: Generate coverage for changed workspaces and enforce threshold
-echo ""
-echo "[4/4] Checking coverage on changed files..."
-npm run verify:coverage
 
 echo ""
 echo "=========================================="
