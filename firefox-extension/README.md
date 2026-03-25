@@ -35,6 +35,20 @@ Para instalar el XPI:
 
 > **Nota**: La extensión no está firmada. Solo funciona en Firefox Developer Edition/Nightly con `xpinstall.signatures.required = false` en `about:config`.
 
+### Artefactos gestionados para Chrome/Edge
+
+```bash
+npm run build
+npm run build:chromium-managed
+```
+
+El comando genera:
+
+- `build/chromium-unpacked/` para pruebas manuales en navegadores Chromium
+- `build/chromium-managed/metadata.json` y `build/chromium-managed/openpath-chromium-extension.crx` cuando hay un navegador compatible disponible para empaquetar el `CRX`
+
+Si el entorno no puede empaquetar el `CRX`, el script deja preparado el bundle desempaquetado y termina sin error para no romper builds Linux/Docker que no tengan Chrome/Edge instalados.
+
 ### Publicar en Firefox Add-ons (AMO)
 
 Para publicar la extensión en [addons.mozilla.org](https://addons.mozilla.org):

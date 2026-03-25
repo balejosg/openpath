@@ -218,7 +218,8 @@ $dirs = @(
     "$OpenPathRoot\lib",
     "$OpenPathRoot\scripts",
     "$OpenPathRoot\data\logs",
-    "$OpenPathRoot\browser-extension\firefox"
+    "$OpenPathRoot\browser-extension\firefox",
+    "$OpenPathRoot\browser-extension\chromium-managed"
 )
 
 foreach ($dir in $dirs) {
@@ -307,6 +308,27 @@ if ($browserExtensionSource) {
 }
 else {
     Write-Host "  ADVERTENCIA: Browser extension source not found; Firefox extension auto-install skipped" -ForegroundColor Yellow
+}
+
+$chromiumManagedCandidates = @(
+    (Join-Path $scriptDir 'browser-extension\chromium-managed'),
+    (Join-Path $scriptDir 'firefox-extension\build\chromium-managed'),
+    (Join-Path (Split-Path $scriptDir -Parent) 'firefox-extension\build\chromium-managed')
+)
+$chromiumManagedSource = $chromiumManagedCandidates |
+    Where-Object { Test-Path (Join-Path $_ 'metadata.json') } |
+    Select-Object -First 1
+
+if ($chromiumManagedSource) {
+    $chromiumManagedTarget = "$OpenPathRoot\browser-extension\chromium-managed"
+    New-Item -ItemType Directory -Path $chromiumManagedTarget -Force | Out-Null
+    Copy-Item (Join-Path $chromiumManagedSource 'metadata.json') -Destination $chromiumManagedTarget -Force
+    Write-Host "  Chromium managed metadata staged in $OpenPathRoot\browser-extension\chromium-managed" -ForegroundColor Green
+    Write-Host "  Chrome/Edge auto-install will use the API-hosted CRX/update manifest when managed browser policies allow it." -ForegroundColor Green
+}
+else {
+    Write-Host "  ADVERTENCIA: Chromium managed metadata not found; Chrome/Edge auto-install remains disabled" -ForegroundColor Yellow
+    Write-Host "  Nota: unattended Chrome/Edge rollout on Windows requires a managed CRX + update manifest pipeline." -ForegroundColor Yellow
 }
 
 Write-Host "  Modulos copiados" -ForegroundColor Green

@@ -1463,6 +1463,65 @@ Describe "Browser Module" {
                 })
             $dohModeWrites.Count | Should -BeGreaterThan 0
         }
+
+        It "Set-ChromePolicy writes ExtensionInstallForcelist when managed metadata is available" {
+            $script:capturedRegistryWrites = @()
+
+            Mock Test-Path {
+                param([string]$Path)
+                if ($Path -like '*chromium-managed\metadata.json') {
+                    return $true
+                }
+                return $false
+            } -ModuleName Browser
+            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-reg-path' } } -ModuleName Browser
+            Mock Remove-Item { } -ModuleName Browser
+            Mock Get-Content {
+                param(
+                    [string]$Path,
+                    [switch]$Raw
+                )
+
+                if ($Path -like '*chromium-managed\metadata.json') {
+                    return '{"extensionId":"abcdefghijklmnopabcdefghijklmnop","version":"2.0.0"}'
+                }
+
+                throw "Unexpected path: $Path"
+            } -ModuleName Browser
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    apiUrl = 'https://school.example'
+                }
+            } -ModuleName Browser
+
+            Mock Set-ItemProperty {
+                param(
+                    [string]$Path,
+                    [object]$Name,
+                    [object]$Value,
+                    [string]$Type
+                )
+
+                $script:capturedRegistryWrites += [PSCustomObject]@{
+                    Path = $Path
+                    Name = [string]$Name
+                    Value = [string]$Value
+                    Type = $Type
+                }
+            } -ModuleName Browser
+
+            Mock Write-OpenPathLog { } -ModuleName Browser
+
+            $result = Set-ChromePolicy -BlockedPaths @()
+            $result | Should -BeTrue
+
+            $forceInstallWrites = @($script:capturedRegistryWrites | Where-Object {
+                    $_.Path -like '*ExtensionInstallForcelist' -and
+                    $_.Name -eq '1' -and
+                    $_.Value -eq 'abcdefghijklmnopabcdefghijklmnop;https://school.example/api/extensions/chromium/updates.xml'
+                })
+            $forceInstallWrites.Count | Should -BeGreaterThan 0
+        }
     }
 }
 

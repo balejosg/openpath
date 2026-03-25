@@ -20,6 +20,38 @@ function Get-OpenPathFirefoxExtensionInstallUrl {
     return ($uri.AbsoluteUri.TrimEnd('/') + '/')
 }
 
+function Get-OpenPathChromiumManagedMetadataPath {
+    return "$script:OpenPathRoot\browser-extension\chromium-managed\metadata.json"
+}
+
+function Get-OpenPathChromiumManagedPolicy {
+    $metadataPath = Get-OpenPathChromiumManagedMetadataPath
+    if (-not (Test-Path $metadataPath)) {
+        return $null
+    }
+
+    try {
+        $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+        $config = Get-OpenPathConfig
+    }
+    catch {
+        Write-OpenPathLog "Failed to load Chromium managed extension metadata: $_" -Level WARN
+        return $null
+    }
+
+    $extensionId = if ($metadata.PSObject.Properties['extensionId']) { [string]$metadata.extensionId } else { '' }
+    $apiUrl = if ($config.PSObject.Properties['apiUrl']) { [string]$config.apiUrl } else { '' }
+
+    if (-not $extensionId -or -not $apiUrl) {
+        return $null
+    }
+
+    return [PSCustomObject]@{
+        ExtensionId = $extensionId.Trim()
+        UpdateUrl = "$($apiUrl.TrimEnd('/'))/api/extensions/chromium/updates.xml"
+    }
+}
+
 function Set-FirefoxPolicy {
     <#
     .SYNOPSIS
@@ -156,6 +188,8 @@ function Set-ChromePolicy {
     }
 
     Write-OpenPathLog "Configuring Chrome/Edge policies..."
+
+    $managedChromiumPolicy = Get-OpenPathChromiumManagedPolicy
     
     # Policy registry paths
     $regPaths = @(
@@ -192,9 +226,19 @@ function Set-ChromePolicy {
             Set-ItemProperty -Path $regPath -Name "DefaultSearchProviderEnabled" -Value 1 -Type DWord
             Set-ItemProperty -Path $regPath -Name "DefaultSearchProviderName" -Value "DuckDuckGo"
             Set-ItemProperty -Path $regPath -Name "DefaultSearchProviderSearchURL" -Value "https://duckduckgo.com/?q={searchTerms}"
-
+            
             # Block DNS-over-HTTPS to prevent DNS sinkhole bypass
             Set-ItemProperty -Path $regPath -Name "DnsOverHttpsMode" -Value "off" -Type String
+
+            $forceInstallPath = "$regPath\ExtensionInstallForcelist"
+            if (Test-Path $forceInstallPath) {
+                Remove-Item $forceInstallPath -Recurse -Force
+            }
+
+            if ($managedChromiumPolicy) {
+                New-Item -Path $forceInstallPath -Force | Out-Null
+                Set-ItemProperty -Path $forceInstallPath -Name 1 -Value "$($managedChromiumPolicy.ExtensionId);$($managedChromiumPolicy.UpdateUrl)" -Type String
+            }
             
             Write-OpenPathLog "Policies written to: $regPath"
         }
@@ -235,7 +279,9 @@ function Remove-BrowserPolicy {
     # Chrome/Edge registry
     $regPaths = @(
         "HKLM:\SOFTWARE\Policies\Google\Chrome\URLBlocklist",
-        "HKLM:\SOFTWARE\Policies\Microsoft\Edge\URLBlocklist"
+        "HKLM:\SOFTWARE\Policies\Microsoft\Edge\URLBlocklist",
+        "HKLM:\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist",
+        "HKLM:\SOFTWARE\Policies\Microsoft\Edge\ExtensionInstallForcelist"
     )
     
     foreach ($path in $regPaths) {

@@ -10,6 +10,7 @@
     "clean:all": "rm -rf dist *.tsbuildinfo",
     "prebuild": "npm run clean:all",
     "build": "tsc -p tsconfig.build.json",
+    "build:chromium-managed": "node build-chromium-managed.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",

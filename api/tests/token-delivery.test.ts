@@ -11,6 +11,9 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import type { Server } from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { getAvailablePort, resetDb, trpcMutate as _trpcMutate, parseTRPC } from './test-utils.js';
 import { closeConnection, db } from '../src/db/index.js';
 import { sql } from 'drizzle-orm';
@@ -21,6 +24,15 @@ let server: Server | undefined;
 let registrationToken: string;
 let adminEmail: string;
 let adminPassword: string;
+
+const currentFilePath = fileURLToPath(import.meta.url);
+const currentDir = path.dirname(currentFilePath);
+const chromiumManagedDir = path.resolve(
+  currentDir,
+  '../../firefox-extension/build/chromium-managed'
+);
+const chromiumMetadataPath = path.join(chromiumManagedDir, 'metadata.json');
+const chromiumCrxPath = path.join(chromiumManagedDir, 'openpath-chromium-extension.crx');
 
 const GLOBAL_TIMEOUT = setTimeout(() => {
   console.error('\n❌ Token delivery tests timed out! Forcing exit...');
@@ -87,6 +99,54 @@ function extractMachineToken(whitelistUrl: string): string {
   const token = match[1];
   assert.ok(token, `Expected machine token in URL: ${whitelistUrl}`);
   return token;
+}
+
+function restoreOptionalFile(filePath: string, contents: Buffer | null): void {
+  if (contents === null) {
+    fs.rmSync(filePath, { force: true });
+    return;
+  }
+
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, contents);
+}
+
+async function withChromiumManagedArtifacts(fn: () => Promise<void>): Promise<void> {
+  const previousMetadata = fs.existsSync(chromiumMetadataPath)
+    ? fs.readFileSync(chromiumMetadataPath)
+    : null;
+  const previousCrx = fs.existsSync(chromiumCrxPath) ? fs.readFileSync(chromiumCrxPath) : null;
+
+  fs.mkdirSync(chromiumManagedDir, { recursive: true });
+  fs.writeFileSync(
+    chromiumMetadataPath,
+    `${JSON.stringify(
+      {
+        extensionId: 'abcdefghijklmnopabcdefghijklmnop',
+        version: '2.0.0',
+      },
+      null,
+      2
+    )}\n`,
+    'utf8'
+  );
+  fs.writeFileSync(chromiumCrxPath, Buffer.from('fake chromium crx', 'utf8'));
+
+  try {
+    await fn();
+  } finally {
+    restoreOptionalFile(chromiumMetadataPath, previousMetadata);
+    restoreOptionalFile(chromiumCrxPath, previousCrx);
+    fs.rmSync(chromiumManagedDir, { recursive: true, force: true });
+    if (previousMetadata !== null) {
+      fs.mkdirSync(chromiumManagedDir, { recursive: true });
+      fs.writeFileSync(chromiumMetadataPath, previousMetadata);
+    }
+    if (previousCrx !== null) {
+      fs.mkdirSync(chromiumManagedDir, { recursive: true });
+      fs.writeFileSync(chromiumCrxPath, previousCrx);
+    }
+  }
 }
 
 void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
@@ -402,6 +462,7 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       assert.strictEqual(data.success, true);
       assert.ok(data.version.length > 0);
       assert.ok(data.files.length > 0);
+      assert.ok(data.files.some((file) => file.path === 'browser-extension/firefox/manifest.json'));
       assert.ok(data.files.some((file) => file.path === 'scripts/Update-OpenPath.ps1'));
       assert.ok(data.files.every((file) => file.sha256.length === 64));
     });
@@ -432,6 +493,43 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       assert.strictEqual(response.status, 200);
       const fileContent = await response.text();
       assert.ok(fileContent.length > 0);
+    });
+
+    await test('should include managed Chromium metadata when available', async () => {
+      await withChromiumManagedArtifacts(async () => {
+        const manifestResponse = await fetch(`${API_URL}/api/agent/windows/latest.json`, {
+          headers: {
+            Authorization: `Bearer ${machineToken}`,
+          },
+        });
+        assert.strictEqual(manifestResponse.status, 200);
+
+        const manifest = (await manifestResponse.json()) as {
+          files: { path: string }[];
+        };
+        assert.ok(
+          manifest.files.some(
+            (file) => file.path === 'browser-extension/chromium-managed/metadata.json'
+          )
+        );
+
+        const metadataResponse = await fetch(
+          `${API_URL}/api/agent/windows/file?path=${encodeURIComponent('browser-extension/chromium-managed/metadata.json')}`,
+          {
+            headers: {
+              Authorization: `Bearer ${machineToken}`,
+            },
+          }
+        );
+
+        assert.strictEqual(metadataResponse.status, 200);
+        const metadata = JSON.parse(await metadataResponse.text()) as {
+          extensionId: string;
+          version: string;
+        };
+        assert.strictEqual(metadata.extensionId, 'abcdefghijklmnopabcdefghijklmnop');
+        assert.strictEqual(metadata.version, '2.0.0');
+      });
     });
   });
 
@@ -505,6 +603,9 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       assert.ok(manifest.files.some((file) => file.path === 'Install-OpenPath.ps1'));
       assert.ok(manifest.files.some((file) => file.path === 'scripts/Pre-Install-Validation.ps1'));
       assert.ok(manifest.files.some((file) => file.path === 'scripts/Enroll-Machine.ps1'));
+      assert.ok(
+        manifest.files.some((file) => file.path === 'browser-extension/firefox/manifest.json')
+      );
 
       const fileResponse = await fetch(
         `${API_URL}/api/agent/windows/bootstrap/file?path=${encodeURIComponent('Install-OpenPath.ps1')}`,
@@ -531,6 +632,50 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       assert.strictEqual(preflightResponse.status, 200);
       const preflightText = await preflightResponse.text();
       assert.match(preflightText, /OpenPath Pre-Installation Validation/);
+    });
+
+    await test('should include managed Chromium metadata in bootstrap manifests when available', async () => {
+      await withChromiumManagedArtifacts(async () => {
+        const manifestResponse = await fetch(`${API_URL}/api/agent/windows/bootstrap/latest.json`, {
+          headers: {
+            Authorization: `Bearer ${enrollmentToken}`,
+          },
+        });
+
+        assert.strictEqual(manifestResponse.status, 200);
+        const manifest = (await manifestResponse.json()) as {
+          files: { path: string }[];
+        };
+        assert.ok(
+          manifest.files.some(
+            (file) => file.path === 'browser-extension/chromium-managed/metadata.json'
+          )
+        );
+      });
+    });
+  });
+
+  await describe('GET /api/extensions/chromium/*', async () => {
+    await test('should serve update manifests and CRX payloads when managed artifacts exist', async () => {
+      await withChromiumManagedArtifacts(async () => {
+        const updatesResponse = await fetch(`${API_URL}/api/extensions/chromium/updates.xml`);
+        assert.strictEqual(updatesResponse.status, 200);
+        assert.match(updatesResponse.headers.get('content-type') ?? '', /xml/);
+        const updatesXml = await updatesResponse.text();
+        assert.match(updatesXml, /appid="abcdefghijklmnopabcdefghijklmnop"/);
+        assert.match(updatesXml, /version="2\.0\.0"/);
+        assert.match(
+          updatesXml,
+          new RegExp(
+            `${API_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/api/extensions/chromium/openpath\\.crx`
+          )
+        );
+
+        const crxResponse = await fetch(`${API_URL}/api/extensions/chromium/openpath.crx`);
+        assert.strictEqual(crxResponse.status, 200);
+        const crxBody = Buffer.from(await crxResponse.arrayBuffer()).toString('utf8');
+        assert.strictEqual(crxBody, 'fake chromium crx');
+      });
     });
   });
 

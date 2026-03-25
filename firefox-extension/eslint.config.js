@@ -36,6 +36,13 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', 'blocked/*.js', 'eslint.config.js'],
+    ignores: [
+      'build/',
+      'dist/',
+      'node_modules/',
+      'blocked/*.js',
+      'build-chromium-managed.mjs',
+      'eslint.config.js',
+    ],
   }
 );

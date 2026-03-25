@@ -76,7 +76,7 @@ Get-NetFirewallRule -DisplayName "OpenPath-*"
 ## Browser Extension Notes
 
 - Firefox: when the installer has access to the extension assets, it stages them under `C:\OpenPath\browser-extension\firefox` and force-installs the extension through `policies.json`.
-- Chrome and Edge: OpenPath keeps managing browser blocking policies, but self-hosted force-install flows for Chromium browsers on Windows remain subject to browser enterprise restrictions. A managed CRX/update-manifest pipeline is still required for unattended Chrome/Edge rollout on Windows.
+- Chrome and Edge: when `C:\OpenPath\browser-extension\chromium-managed\metadata.json` is present and `apiUrl` is configured, OpenPath writes `ExtensionInstallForcelist` pointing at the API-hosted `updates.xml`/`CRX` rollout. Self-hosted force-install still depends on the browser accepting enterprise-managed extension policies on that Windows device.
 
 ## Structure
 
