@@ -49,6 +49,22 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "stable deb publish workflow re-signs existing APT suites before exporting the public key" {
+    run grep -n 'for suite in stable unstable; do' "$PROJECT_DIR/.github/workflows/build-deb.yml"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'reprepro export "\$suite"' "$PROJECT_DIR/.github/workflows/build-deb.yml"
+    [ "$status" -eq 0 ]
+}
+
+@test "prerelease deb publish workflow re-signs existing APT suites before exporting the public key" {
+    run grep -n 'for suite in stable unstable; do' "$PROJECT_DIR/.github/workflows/prerelease-deb.yml"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'reprepro export "\$suite"' "$PROJECT_DIR/.github/workflows/prerelease-deb.yml"
+    [ "$status" -eq 0 ]
+}
+
 @test "debconf templates use openpath-dnsmasq namespace" {
     run grep -n "^Template: openpath-dnsmasq/whitelist-url" "$PROJECT_DIR/linux/debian-package/DEBIAN/templates"
     [ "$status" -eq 0 ]

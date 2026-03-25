@@ -128,6 +128,16 @@ jobs:
           echo "Adding package to unstable suite..."
           reprepro includedeb unstable ../../build/*.deb
 
+      - name: Re-sign published suites
+        working-directory: gh-pages/apt
+        run: |
+          for suite in stable unstable; do
+            if [ -d "dists/$suite" ]; then
+              echo "Re-signing $suite metadata with ${{ env.GPG_KEY_ID }}..."
+              reprepro export "$suite"
+            fi
+          done
+
       - name: Export GPG public key
         run: |
           gpg --armor --export ${{ env.GPG_KEY_ID }} > gh-pages/apt/pubkey.gpg
