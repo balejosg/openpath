@@ -1547,6 +1547,29 @@ Describe "SSE Listener" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Start-SSEListener.ps1"
             Test-Path $scriptPath | Should -BeTrue
         }
+
+        It "Keeps parser-sensitive messages ASCII-only" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Start-SSEListener.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content.Contains('—') | Should -BeFalse
+        }
+
+        It "Uses the shared standalone bootstrap helper and loads HTTP assembly support" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Start-SSEListener.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Import-Module "$OpenPathRoot\lib\ScriptBootstrap.psm1" -Force',
+                'Initialize-OpenPathScriptSession `',
+                '-OpenPathRoot $OpenPathRoot',
+                '-RequiredCommands @(',
+                '-ScriptName ''Start-SSEListener.ps1''',
+                "Add-Type -AssemblyName 'System.Net.Http' -ErrorAction Stop",
+                "[System.Reflection.Assembly]::Load('System.Net.Http')",
+                '[System.Net.Http.HttpClientHandler]::new()'
+            )
+        }
     }
 
     Context "Update job deduplication" {
@@ -1842,6 +1865,18 @@ Describe "Watchdog Script" {
                 'Checkpoint rollback restored DNS state'
             )
         }
+
+        It "Does not let SSE listener failures alone trigger checkpoint rollback" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Test-DNSHealth.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '$recoveryEligibleIssues = @()',
+                '$shouldIncrementFailCount = $status -eq ''DEGRADED'' -and $recoveryEligibleIssues.Count -gt 0',
+                '$issues += "SSE listener not running"'
+            )
+            $content.Contains('$recoveryEligibleIssues += "SSE listener not running"') | Should -BeFalse
+        }
     }
 }
 
@@ -1992,6 +2027,18 @@ Describe "Installer" {
             )
             $content.Contains('Test-DNSResolution -Domain "google.com"') | Should -BeFalse
             $content.Contains('nslookup google.com 127.0.0.1') | Should -BeFalse
+        }
+    }
+
+    Context "SSE bootstrap" {
+        It "Starts the SSE listener immediately after registering scheduled tasks" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Register-OpenPathTask -UpdateIntervalMinutes 15 -WatchdogIntervalMinutes 1',
+                'Start-OpenPathTask -TaskType SSE'
+            )
         }
     }
 }

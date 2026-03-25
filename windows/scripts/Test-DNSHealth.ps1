@@ -55,6 +55,7 @@ Initialize-OpenPathScriptSession `
     -ScriptName 'Test-DNSHealth.ps1' | Out-Null
 
 $issues = @()
+$recoveryEligibleIssues = @()
 $watchdogFailCountPath = "$OpenPathRoot\data\watchdog-fails.txt"
 $staleFailsafeStatePath = "$OpenPathRoot\data\stale-failsafe-state.json"
 $config = $null
@@ -64,6 +65,7 @@ try {
 }
 catch {
     $issues += "Configuration load failed"
+    $recoveryEligibleIssues += "Configuration load failed"
     Write-OpenPathLog "Watchdog: Error loading configuration: $_" -Level ERROR
 }
 
@@ -163,6 +165,7 @@ try {
     $acrylicService = Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $acrylicService -or $acrylicService.Status -ne 'Running') {
         $issues += "Acrylic service not running"
+        $recoveryEligibleIssues += "Acrylic service not running"
         Write-OpenPathLog "Watchdog: Acrylic service not running, attempting restart..." -Level WARN
         Start-AcrylicService
     }
@@ -175,6 +178,7 @@ catch {
 try {
     if (-not $portalModeActive -and -not (Test-DNSResolution)) {
         $issues += "DNS resolution failed for allowed domain"
+        $recoveryEligibleIssues += "DNS resolution failed for allowed domain"
         Write-OpenPathLog "Watchdog: DNS resolution failed, restarting Acrylic..." -Level WARN
         Restart-AcrylicService
         Start-Sleep -Seconds 3
@@ -188,6 +192,7 @@ catch {
 try {
     if (-not $portalModeActive -and -not (Test-DNSSinkhole -Domain "this-should-be-blocked-test-12345.com")) {
         $issues += "DNS sinkhole not working"
+        $recoveryEligibleIssues += "DNS sinkhole not working"
         Write-OpenPathLog "Watchdog: Sinkhole not working properly" -Level WARN
     }
 }
@@ -199,6 +204,7 @@ catch {
 try {
     if (-not $portalModeActive -and -not (Test-FirewallActive)) {
         $issues += "Firewall rules not active"
+        $recoveryEligibleIssues += "Firewall rules not active"
         Write-OpenPathLog "Watchdog: Firewall rules missing, reconfiguring..." -Level WARN
         if (-not $config) {
             $config = Get-OpenPathConfig
@@ -218,6 +224,7 @@ try {
 
     if (-not $portalModeActive -and -not $dnsServers) {
         $issues += "Local DNS not configured"
+        $recoveryEligibleIssues += "Local DNS not configured"
         Write-OpenPathLog "Watchdog: Local DNS not configured, fixing..." -Level WARN
         Set-LocalDNS
     }
@@ -297,7 +304,13 @@ elseif ($issues.Count -gt 0) {
 }
 
 $watchdogFailCount = 0
-if ($status -eq 'HEALTHY' -or $status -eq 'STALE_FAILSAFE' -or ($portalModeActive -and $status -eq 'DEGRADED')) {
+$shouldIncrementFailCount = $status -eq 'DEGRADED' -and $recoveryEligibleIssues.Count -gt 0
+if (
+    $status -eq 'HEALTHY' -or
+    $status -eq 'STALE_FAILSAFE' -or
+    ($portalModeActive -and $status -eq 'DEGRADED') -or
+    (-not $shouldIncrementFailCount)
+) {
     Reset-WatchdogFailCount
 }
 else {

@@ -30,8 +30,15 @@
 $ErrorActionPreference = "Stop"
 $OpenPathRoot = "C:\OpenPath"
 
-# Import common module
-Import-Module "$OpenPathRoot\lib\Common.psm1" -Force
+# Initialize standalone script session via the shared bootstrap helper.
+Import-Module "$OpenPathRoot\lib\ScriptBootstrap.psm1" -Force
+Initialize-OpenPathScriptSession `
+    -OpenPathRoot $OpenPathRoot `
+    -RequiredCommands @(
+    'Write-OpenPathLog',
+    'Get-OpenPathConfig'
+) `
+    -ScriptName 'Start-SSEListener.ps1' | Out-Null
 
 # =============================================================================
 # Configuration
@@ -73,7 +80,7 @@ function Get-MachineToken {
     }
 
     Write-OpenPathLog "Cannot extract machine token from whitelist URL" -Level ERROR
-    throw "Invalid whitelist URL format — cannot extract machine token"
+    throw "Invalid whitelist URL format - cannot extract machine token"
 }
 
 function Get-SSEUrl {
@@ -163,7 +170,7 @@ function Start-SSEConnection {
     $sseConfig = Get-SSEConfig
 
     if (-not $sseConfig.WhitelistUrl) {
-        Write-OpenPathLog "SSE: No whitelist URL configured — cannot start SSE listener" -Level ERROR
+        Write-OpenPathLog "SSE: No whitelist URL configured - cannot start SSE listener" -Level ERROR
         exit 1
     }
 
@@ -182,6 +189,15 @@ function Start-SSEConnection {
         $reader = $null
 
         try {
+            if (-not ('System.Net.Http.HttpClientHandler' -as [type])) {
+                try {
+                    Add-Type -AssemblyName 'System.Net.Http' -ErrorAction Stop
+                }
+                catch {
+                    [void][System.Reflection.Assembly]::Load('System.Net.Http')
+                }
+            }
+
             # Use HttpClient for streaming SSE (Invoke-WebRequest buffers the whole response)
             $handler = [System.Net.Http.HttpClientHandler]::new()
             $client = [System.Net.Http.HttpClient]::new($handler)

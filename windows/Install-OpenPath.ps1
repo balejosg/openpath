@@ -460,6 +460,12 @@ Write-Host "  DNS configurado a 127.0.0.1" -ForegroundColor Green
 # Step 6: Register scheduled tasks
 Write-Host "[6/7] Registrando tareas programadas..." -ForegroundColor Yellow
 Register-OpenPathTask -UpdateIntervalMinutes 15 -WatchdogIntervalMinutes 1
+if (Start-OpenPathTask -TaskType SSE) {
+    Write-Host "  Listener SSE iniciado" -ForegroundColor Green
+}
+else {
+    Write-Host "  ADVERTENCIA: No se pudo iniciar el listener SSE automaticamente" -ForegroundColor Yellow
+}
 Write-Host "  Tareas registradas" -ForegroundColor Green
 
 # Register machine in classroom mode
