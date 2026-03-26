@@ -310,26 +310,18 @@ else {
     Write-Host "  ADVERTENCIA: Browser extension source not found; Firefox extension auto-install skipped" -ForegroundColor Yellow
 }
 
-$chromiumManagedCandidates = @(
-    (Join-Path $scriptDir 'browser-extension\chromium-managed'),
-    (Join-Path $scriptDir 'firefox-extension\build\chromium-managed'),
-    (Join-Path (Split-Path $scriptDir -Parent) 'firefox-extension\build\chromium-managed')
-)
-$chromiumManagedSource = $chromiumManagedCandidates |
-    Where-Object { Test-Path (Join-Path $_ 'metadata.json') } |
-    Select-Object -First 1
-
-if ($chromiumManagedSource) {
+$chromiumManagedMetadataSource = Join-Path $scriptDir 'browser-extension\chromium-managed\metadata.json'
+if (Test-Path $chromiumManagedMetadataSource) {
     $chromiumManagedTarget = "$OpenPathRoot\browser-extension\chromium-managed"
     New-Item -ItemType Directory -Path $chromiumManagedTarget -Force | Out-Null
-    Copy-Item (Join-Path $chromiumManagedSource 'metadata.json') -Destination $chromiumManagedTarget -Force
-    Write-Host "  Chromium managed metadata staged in $OpenPathRoot\browser-extension\chromium-managed" -ForegroundColor Green
-    Write-Host "  Chrome/Edge auto-install will use the API-hosted CRX/update manifest when managed browser policies allow it." -ForegroundColor Green
+    Copy-Item $chromiumManagedMetadataSource -Destination (Join-Path $chromiumManagedTarget 'metadata.json') -Force
+    Write-Host "  Chromium managed rollout metadata staged in $OpenPathRoot\browser-extension\chromium-managed" -ForegroundColor Green
 }
 else {
-    Write-Host "  ADVERTENCIA: Chromium managed metadata not found; Chrome/Edge auto-install remains disabled" -ForegroundColor Yellow
-    Write-Host "  Nota: unattended Chrome/Edge rollout on Windows requires a managed CRX + update manifest pipeline." -ForegroundColor Yellow
+    Write-Host "  ADVERTENCIA: Chromium managed rollout metadata not found; Edge/Chrome managed extension install skipped" -ForegroundColor Yellow
 }
+
+Write-Host "  Chrome/Edge extension auto-install is not available on unmanaged Windows; use Firefox auto-install or a managed CRX/update-manifest rollout." -ForegroundColor Yellow
 
 Write-Host "  Modulos copiados" -ForegroundColor Green
 

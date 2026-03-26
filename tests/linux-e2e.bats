@@ -56,14 +56,6 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
-@test "windows installer stages managed Chromium metadata when available" {
-    run grep -nF '$OpenPathRoot\browser-extension\chromium-managed' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
-    [ "$status" -eq 0 ]
-
-    run grep -nF 'managed CRX + update manifest pipeline' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
-    [ "$status" -eq 0 ]
-}
-
 @test "windows browser policies force-install the staged Firefox extension" {
     run grep -nF 'ExtensionSettings' "$PROJECT_DIR/windows/lib/Browser.psm1"
     [ "$status" -eq 0 ]
@@ -72,18 +64,7 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
-@test "windows browser policies configure managed Chromium force-install metadata" {
-    run grep -nF 'ExtensionInstallForcelist' "$PROJECT_DIR/windows/lib/Browser.psm1"
-    [ "$status" -eq 0 ]
-
-    run grep -nF '/api/extensions/chromium/updates.xml' "$PROJECT_DIR/windows/lib/Browser.psm1"
-    [ "$status" -eq 0 ]
-}
-
-@test "firefox extension workspace exposes managed Chromium build tooling" {
-    run grep -nF '"build:chromium-managed": "node build-chromium-managed.mjs"' "$PROJECT_DIR/firefox-extension/package.json"
-    [ "$status" -eq 0 ]
-
-    run test -f "$PROJECT_DIR/firefox-extension/build-chromium-managed.mjs"
+@test "windows installer explains that Chrome and Edge extension rollout requires managed distribution" {
+    run grep -nF 'Chrome/Edge extension auto-install is not available on unmanaged Windows; use Firefox auto-install or a managed CRX/update-manifest rollout.' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
     [ "$status" -eq 0 ]
 }

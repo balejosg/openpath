@@ -30,25 +30,30 @@ function Get-OpenPathChromiumManagedPolicy {
         return $null
     }
 
+    $config = Get-OpenPathConfig
+    if (-not $config -or -not $config.PSObject.Properties['apiUrl'] -or -not $config.apiUrl) {
+        Write-OpenPathLog 'Chromium managed extension metadata found but apiUrl is not configured' -Level WARN
+        return $null
+    }
+
     try {
         $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
-        $config = Get-OpenPathConfig
     }
     catch {
-        Write-OpenPathLog "Failed to load Chromium managed extension metadata: $_" -Level WARN
+        Write-OpenPathLog "Failed to parse Chromium managed extension metadata: $_" -Level WARN
         return $null
     }
 
-    $extensionId = if ($metadata.PSObject.Properties['extensionId']) { [string]$metadata.extensionId } else { '' }
-    $apiUrl = if ($config.PSObject.Properties['apiUrl']) { [string]$config.apiUrl } else { '' }
-
-    if (-not $extensionId -or -not $apiUrl) {
+    if (-not $metadata.extensionId -or -not $metadata.version) {
+        Write-OpenPathLog 'Chromium managed extension metadata is incomplete' -Level WARN
         return $null
     }
 
+    $apiBaseUrl = ([string]$config.apiUrl).TrimEnd('/')
     return [PSCustomObject]@{
-        ExtensionId = $extensionId.Trim()
-        UpdateUrl = "$($apiUrl.TrimEnd('/'))/api/extensions/chromium/updates.xml"
+        ExtensionId = [string]$metadata.extensionId
+        Version = [string]$metadata.version
+        UpdateUrl = "$apiBaseUrl/api/extensions/chromium/updates.xml"
     }
 }
 
@@ -188,8 +193,7 @@ function Set-ChromePolicy {
     }
 
     Write-OpenPathLog "Configuring Chrome/Edge policies..."
-
-    $managedChromiumPolicy = Get-OpenPathChromiumManagedPolicy
+    $managedExtensionPolicy = Get-OpenPathChromiumManagedPolicy
     
     # Policy registry paths
     $regPaths = @(
@@ -226,18 +230,17 @@ function Set-ChromePolicy {
             Set-ItemProperty -Path $regPath -Name "DefaultSearchProviderEnabled" -Value 1 -Type DWord
             Set-ItemProperty -Path $regPath -Name "DefaultSearchProviderName" -Value "DuckDuckGo"
             Set-ItemProperty -Path $regPath -Name "DefaultSearchProviderSearchURL" -Value "https://duckduckgo.com/?q={searchTerms}"
-            
+
             # Block DNS-over-HTTPS to prevent DNS sinkhole bypass
             Set-ItemProperty -Path $regPath -Name "DnsOverHttpsMode" -Value "off" -Type String
 
-            $forceInstallPath = "$regPath\ExtensionInstallForcelist"
-            if (Test-Path $forceInstallPath) {
-                Remove-Item $forceInstallPath -Recurse -Force
-            }
-
-            if ($managedChromiumPolicy) {
-                New-Item -Path $forceInstallPath -Force | Out-Null
-                Set-ItemProperty -Path $forceInstallPath -Name 1 -Value "$($managedChromiumPolicy.ExtensionId);$($managedChromiumPolicy.UpdateUrl)" -Type String
+            if ($managedExtensionPolicy) {
+                $forcelistPath = "$regPath\ExtensionInstallForcelist"
+                if (Test-Path $forcelistPath) {
+                    Remove-Item $forcelistPath -Recurse -Force
+                }
+                New-Item -Path $forcelistPath -Force | Out-Null
+                Set-ItemProperty -Path $forcelistPath -Name 1 -Value "$($managedExtensionPolicy.ExtensionId);$($managedExtensionPolicy.UpdateUrl)"
             }
             
             Write-OpenPathLog "Policies written to: $regPath"

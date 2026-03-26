@@ -73,7 +73,8 @@ Get-NetFirewallRule -DisplayName "OpenPath-*"
 ## Notas Sobre La Extensión Del Navegador
 
 - Firefox: cuando el instalador tiene acceso a los assets de la extensión, los copia en `C:\OpenPath\browser-extension\firefox` y fuerza su instalación mediante `policies.json`.
-- Chrome y Edge: cuando existe `C:\OpenPath\browser-extension\chromium-managed\metadata.json` y `apiUrl` está configurado, OpenPath escribe `ExtensionInstallForcelist` apuntando al despliegue `updates.xml`/`CRX` servido por la API. La instalación forzada self-hosted sigue dependiendo de que ese Windows acepte políticas empresariales de extensiones gestionadas.
+- Chrome y Edge: OpenPath ahora deja la metadata del rollout gestionado en `C:\OpenPath\browser-extension\chromium-managed` y puede publicar un pipeline `CRX + manifiesto de actualización` cuando `firefox-extension/build/chromium-managed/` exista en el servidor. Genera esos artefactos con `npm run build:chromium-managed --workspace=@openpath/firefox-extension`.
+- El despliegue en Edge/Chrome sigue dependiendo de las restricciones de política enterprise del navegador en Windows. Si faltan los artefactos Chromium gestionados, OpenPath omite la instalación forzada y mantiene solo las políticas de bloqueo del navegador.
 
 ## Estructura
 

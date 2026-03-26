@@ -37,8 +37,8 @@ export default tseslint.config(
   },
   {
     ignores: [
-      'build/',
       'dist/',
+      'build/',
       'node_modules/',
       'blocked/*.js',
       'build-chromium-managed.mjs',

@@ -115,15 +115,14 @@ const HOST = config.host;
 
 const WINDOWS_AGENT_ROOT = path.resolve(process.cwd(), '../windows');
 const WINDOWS_AGENT_VERSION_FILE = path.resolve(process.cwd(), '../VERSION');
-const WINDOWS_AGENT_DIRECTORIES = ['lib', 'scripts'] as const;
 const FIREFOX_EXTENSION_ROOT = path.resolve(process.cwd(), '../firefox-extension');
-const FIREFOX_EXTENSION_DIRECTORIES = ['dist', 'popup', 'icons', 'blocked', 'native'] as const;
-const CHROMIUM_MANAGED_ROOT = path.resolve(FIREFOX_EXTENSION_ROOT, 'build/chromium-managed');
+const CHROMIUM_MANAGED_ROOT = path.join(FIREFOX_EXTENSION_ROOT, 'build', 'chromium-managed');
 const CHROMIUM_MANAGED_METADATA_FILE = path.join(CHROMIUM_MANAGED_ROOT, 'metadata.json');
 const CHROMIUM_MANAGED_CRX_FILE = path.join(
   CHROMIUM_MANAGED_ROOT,
   'openpath-chromium-extension.crx'
 );
+const WINDOWS_AGENT_DIRECTORIES = ['lib', 'scripts'] as const;
 const WINDOWS_AGENT_RUNTIME_ROOT_FILES = ['OpenPath.ps1', 'Rotate-Token.ps1'] as const;
 const WINDOWS_AGENT_BOOTSTRAP_ROOT_FILES = [
   'Install-OpenPath.ps1',
@@ -131,6 +130,12 @@ const WINDOWS_AGENT_BOOTSTRAP_ROOT_FILES = [
   'OpenPath.ps1',
   'Rotate-Token.ps1',
 ] as const;
+const FIREFOX_EXTENSION_DIRECTORIES = ['dist', 'popup', 'icons', 'blocked', 'native'] as const;
+
+interface ChromiumManagedMetadata {
+  extensionId: string;
+  version: string;
+}
 
 function parseCookieValue(cookieHeader: string | undefined, name: string): string | null {
   if (!cookieHeader) return null;
@@ -181,11 +186,6 @@ interface WindowsAgentFileEntry {
   size: number;
 }
 
-interface ChromiumManagedMetadata {
-  extensionId: string;
-  version: string;
-}
-
 type MachineByToken = Awaited<ReturnType<typeof classroomStorage.getMachineByDownloadTokenHash>>;
 type AuthenticatedMachine = NonNullable<MachineByToken>;
 
@@ -211,95 +211,6 @@ function listFilesRecursively(directoryPath: string): string[] {
   return files;
 }
 
-function normalizeManifestRelativePath(relativePath: string): string | null {
-  const normalized = relativePath
-    .replaceAll('\\', '/')
-    .replace(/^\.?\//, '')
-    .replace(/\/+/g, '/');
-  if (
-    !normalized ||
-    normalized === '.' ||
-    normalized.startsWith('../') ||
-    path.isAbsolute(normalized)
-  ) {
-    return null;
-  }
-
-  return normalized;
-}
-
-function addManifestFileEntry(
-  manifestFiles: Map<string, string>,
-  relativePath: string,
-  absolutePath: string
-): void {
-  const normalizedRelativePath = normalizeManifestRelativePath(relativePath);
-  if (!normalizedRelativePath || !fs.existsSync(absolutePath)) {
-    return;
-  }
-
-  manifestFiles.set(normalizedRelativePath, path.resolve(absolutePath));
-}
-
-function addManifestDirectoryEntries(
-  manifestFiles: Map<string, string>,
-  absoluteDirectory: string,
-  relativePrefix: string,
-  filter?: (absolutePath: string) => boolean
-): void {
-  for (const absolutePath of listFilesRecursively(absoluteDirectory)) {
-    if (filter && !filter(absolutePath)) {
-      continue;
-    }
-
-    const relativeSuffix = path.relative(absoluteDirectory, absolutePath).replaceAll('\\', '/');
-    addManifestFileEntry(manifestFiles, `${relativePrefix}/${relativeSuffix}`, absolutePath);
-  }
-}
-
-function readChromiumManagedMetadata(): ChromiumManagedMetadata | null {
-  if (!fs.existsSync(CHROMIUM_MANAGED_METADATA_FILE)) {
-    return null;
-  }
-
-  try {
-    const raw = JSON.parse(fs.readFileSync(CHROMIUM_MANAGED_METADATA_FILE, 'utf8')) as Partial<{
-      extensionId: unknown;
-      version: unknown;
-    }>;
-    if (typeof raw.extensionId !== 'string' || raw.extensionId.trim().length === 0) {
-      return null;
-    }
-    if (typeof raw.version !== 'string' || raw.version.trim().length === 0) {
-      return null;
-    }
-
-    return {
-      extensionId: raw.extensionId.trim(),
-      version: raw.version.trim(),
-    };
-  } catch (error) {
-    logger.warn('Ignoring invalid Chromium managed metadata', {
-      error: getErrorMessage(error),
-    });
-    return null;
-  }
-}
-
-function getPublicBaseUrl(req: Pick<Request, 'protocol' | 'get'>): string {
-  const configured = config.publicUrl?.trim();
-  if (configured) {
-    return configured.replace(/\/+$/, '');
-  }
-
-  const host = req.get('host');
-  if (host) {
-    return `${req.protocol}://${host}`;
-  }
-
-  return `http://${HOST}:${String(PORT)}`;
-}
-
 function readServerVersion(): string {
   const envVersion = process.env.OPENPATH_VERSION?.trim();
   if (envVersion) {
@@ -318,46 +229,106 @@ function readServerVersion(): string {
   return '0.0.0';
 }
 
+function normalizeManifestRelativePath(relativePath: string): string | null {
+  const normalizedPath = relativePath.replaceAll('\\', '/');
+  if (!normalizedPath || normalizedPath.startsWith('..') || path.isAbsolute(normalizedPath)) {
+    return null;
+  }
+
+  return normalizedPath;
+}
+
+function readChromiumManagedMetadata(): ChromiumManagedMetadata | null {
+  if (!fs.existsSync(CHROMIUM_MANAGED_METADATA_FILE) || !fs.existsSync(CHROMIUM_MANAGED_CRX_FILE)) {
+    return null;
+  }
+
+  try {
+    const raw = fs.readFileSync(CHROMIUM_MANAGED_METADATA_FILE, 'utf8');
+    const parsed = JSON.parse(raw) as Partial<ChromiumManagedMetadata>;
+    if (!parsed.extensionId || !parsed.version) {
+      return null;
+    }
+
+    return {
+      extensionId: parsed.extensionId,
+      version: parsed.version,
+    };
+  } catch (error) {
+    logger.warn('Failed to read Chromium managed extension metadata', {
+      error: getErrorMessage(error),
+      path: CHROMIUM_MANAGED_METADATA_FILE,
+    });
+    return null;
+  }
+}
+
 function buildWindowsAgentFileManifest(options?: {
   includeBootstrapFiles?: boolean;
 }): WindowsAgentFileEntry[] {
   const rootFiles = options?.includeBootstrapFiles
     ? WINDOWS_AGENT_BOOTSTRAP_ROOT_FILES
     : WINDOWS_AGENT_RUNTIME_ROOT_FILES;
-  const manifestFiles = new Map<string, string>();
+  const manifestSources = new Map<string, string>();
+
+  const addManifestFile = (relativePath: string, absolutePath: string): void => {
+    if (!fs.existsSync(absolutePath)) {
+      return;
+    }
+
+    const normalizedRelativePath = normalizeManifestRelativePath(relativePath);
+    if (!normalizedRelativePath) {
+      return;
+    }
+
+    manifestSources.set(normalizedRelativePath, path.resolve(absolutePath));
+  };
+
+  const addManifestDirectory = (
+    sourceRoot: string,
+    targetRoot: string,
+    allowedExtensions?: RegExp
+  ): void => {
+    for (const absolutePath of listFilesRecursively(sourceRoot)) {
+      if (allowedExtensions && !allowedExtensions.exec(absolutePath)) {
+        continue;
+      }
+
+      const relativePath = path.relative(sourceRoot, absolutePath).replaceAll('\\', '/');
+      if (!relativePath || relativePath.startsWith('..')) {
+        continue;
+      }
+
+      addManifestFile(path.posix.join(targetRoot, relativePath), absolutePath);
+    }
+  };
 
   for (const fileName of rootFiles) {
-    addManifestFileEntry(manifestFiles, fileName, path.join(WINDOWS_AGENT_ROOT, fileName));
+    addManifestFile(fileName, path.join(WINDOWS_AGENT_ROOT, fileName));
   }
 
   for (const relativeDirectory of WINDOWS_AGENT_DIRECTORIES) {
-    addManifestDirectoryEntries(
-      manifestFiles,
-      path.join(WINDOWS_AGENT_ROOT, relativeDirectory),
-      relativeDirectory,
-      (absolutePath) => /\.(ps1|psm1)$/i.test(absolutePath)
-    );
+    const absoluteDirectory = path.join(WINDOWS_AGENT_ROOT, relativeDirectory);
+    addManifestDirectory(absoluteDirectory, relativeDirectory, /\.(ps1|psm1)$/i);
   }
 
-  addManifestFileEntry(
-    manifestFiles,
+  addManifestFile(
     'browser-extension/firefox/manifest.json',
     path.join(FIREFOX_EXTENSION_ROOT, 'manifest.json')
   );
   for (const relativeDirectory of FIREFOX_EXTENSION_DIRECTORIES) {
-    addManifestDirectoryEntries(
-      manifestFiles,
+    addManifestDirectory(
       path.join(FIREFOX_EXTENSION_ROOT, relativeDirectory),
-      `browser-extension/firefox/${relativeDirectory}`
+      path.posix.join('browser-extension/firefox', relativeDirectory)
     );
   }
-  addManifestFileEntry(
-    manifestFiles,
+
+  addManifestFile(
     'browser-extension/chromium-managed/metadata.json',
     CHROMIUM_MANAGED_METADATA_FILE
   );
 
-  return Array.from(manifestFiles.entries())
+  return Array.from(manifestSources.entries())
     .map(([relativePath, absolutePath]) => {
       const fileBuffer = fs.readFileSync(absolutePath);
       return {
@@ -368,6 +339,15 @@ function buildWindowsAgentFileManifest(options?: {
       };
     })
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+}
+
+function getPublicBaseUrl(req: Request): string {
+  const configuredBaseUrl = config.publicUrl?.trim();
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/+$/, '');
+  }
+
+  return `${req.protocol}://${req.get('host') ?? `${HOST}:${String(PORT)}`}`.replace(/\/+$/, '');
 }
 
 async function authenticateMachineToken(
@@ -627,6 +607,34 @@ app.get('/api/config', (_req, res) => {
   res.json({
     googleClientId: config.googleClientId,
   });
+});
+
+app.get('/api/extensions/chromium/updates.xml', (req: Request, res: Response): void => {
+  const metadata = readChromiumManagedMetadata();
+  if (!metadata) {
+    res.status(404).type('text/plain').send('Chromium managed extension unavailable');
+    return;
+  }
+
+  const codebase = `${getPublicBaseUrl(req)}/api/extensions/chromium/openpath.crx`;
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<gupdate xmlns="http://www.google.com/update2/response" protocol="2.0">
+  <app appid="${metadata.extensionId}">
+    <updatecheck codebase="${codebase}" version="${metadata.version}" />
+  </app>
+</gupdate>
+`;
+
+  res.type('application/xml').send(xml);
+});
+
+app.get('/api/extensions/chromium/openpath.crx', (_req, res) => {
+  if (!fs.existsSync(CHROMIUM_MANAGED_CRX_FILE)) {
+    res.status(404).type('text/plain').send('Chromium managed extension package unavailable');
+    return;
+  }
+
+  res.type('application/x-chrome-extension').send(fs.readFileSync(CHROMIUM_MANAGED_CRX_FILE));
 });
 
 registerPublicRequestRoutes(app);
@@ -1371,61 +1379,6 @@ app.get('/api/agent/windows/file', (req: Request, res: Response): void => {
       }
     }
   })();
-});
-
-app.get('/api/extensions/chromium/updates.xml', (req: Request, res: Response): void => {
-  try {
-    const metadata = readChromiumManagedMetadata();
-    if (!metadata || !fs.existsSync(CHROMIUM_MANAGED_CRX_FILE)) {
-      res.status(404).type('text/plain').send('Chromium extension package unavailable');
-      return;
-    }
-
-    const baseUrl = getPublicBaseUrl(req);
-    const crxUrl = `${baseUrl}/api/extensions/chromium/openpath.crx`;
-    const updateManifest = [
-      '<?xml version="1.0" encoding="UTF-8"?>',
-      '<gupdate xmlns="http://www.google.com/update2/response" protocol="2.0">',
-      `  <app appid="${metadata.extensionId}">`,
-      `    <updatecheck codebase="${crxUrl}" version="${metadata.version}" />`,
-      '  </app>',
-      '</gupdate>',
-      '',
-    ].join('\n');
-
-    res.setHeader('Cache-Control', 'no-store, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.type('application/xml').send(updateManifest);
-  } catch (error) {
-    logger.error('Error serving Chromium extension update manifest', {
-      error: getErrorMessage(error),
-    });
-    if (!res.headersSent) {
-      res.status(500).json({ success: false, error: 'Internal error' });
-    }
-  }
-});
-
-app.get('/api/extensions/chromium/openpath.crx', (_req: Request, res: Response): void => {
-  try {
-    const metadata = readChromiumManagedMetadata();
-    if (!metadata || !fs.existsSync(CHROMIUM_MANAGED_CRX_FILE)) {
-      res.status(404).type('text/plain').send('Chromium extension package unavailable');
-      return;
-    }
-
-    const fileContents = fs.readFileSync(CHROMIUM_MANAGED_CRX_FILE);
-    res.setHeader('Cache-Control', 'no-store, max-age=0');
-    res.setHeader('Pragma', 'no-cache');
-    res.type('application/x-chrome-extension').send(fileContents);
-  } catch (error) {
-    logger.error('Error serving Chromium extension package', {
-      error: getErrorMessage(error),
-    });
-    if (!res.headersSent) {
-      res.status(500).json({ success: false, error: 'Internal error' });
-    }
-  }
 });
 
 app.get('/w/whitelist.txt', (_req: Request, res: Response): void => {
