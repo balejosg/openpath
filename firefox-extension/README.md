@@ -35,6 +35,40 @@ Para instalar el XPI:
 
 > **Nota**: La extensión no está firmada. Solo funciona en Firefox Developer Edition/Nightly con `xpinstall.signatures.required = false` en `about:config`.
 
+### Firefox Release (XPI firmado)
+
+Firefox Release no puede depender del árbol local descomprimido ni del XPI generado por
+`./build-xpi.sh`. Para el rollout administrado de OpenPath en Windows necesitas una
+distribución firmada y uno de estos dos caminos:
+
+1. Configurar el agente con `firefoxExtensionId` y `firefoxExtensionInstallUrl`.
+2. Copiar artefactos firmados en `build/firefox-release/` para que el bootstrap de Windows los
+   distribuya como parte del paquete del agente.
+
+Estructura esperada para `build/firefox-release/`:
+
+```text
+build/firefox-release/
+├── metadata.json
+└── openpath-firefox-extension.xpi
+```
+
+`metadata.json` debe incluir al menos el ID de la extensión y la versión:
+
+```json
+{
+  "extensionId": "monitor-bloqueos@openpath",
+  "version": "1.0.0",
+  "installUrl": "https://addons.mozilla.org/firefox/downloads/latest/monitor-bloqueos@openpath/latest.xpi"
+}
+```
+
+- `installUrl` es opcional cuando también existe `openpath-firefox-extension.xpi`.
+- Si `installUrl` no está presente, OpenPath usa el XPI firmado copiado mediante una URL
+  `file:///`.
+- Si no existe ninguna distribución firmada, Windows mantiene las políticas de navegador pero
+  omite la auto-instalación en Firefox Release.
+
 ### Chromium Gestionado (Edge/Chrome)
 
 ```bash
@@ -56,6 +90,42 @@ Para publicar la extensión en [addons.mozilla.org](https://addons.mozilla.org):
 6. Enlaza la política de privacidad: [PRIVACY.md](./PRIVACY.md)
 
 > **Tiempo de revisión**: Las extensiones nuevas suelen tardar 1-7 días en ser aprobadas.
+
+Una vez aprobada en AMO, la URL de instalación administrada recomendada para OpenPath es:
+
+```text
+https://addons.mozilla.org/firefox/downloads/latest/monitor-bloqueos@openpath/latest.xpi
+```
+
+### Flujo Self-Distribution recomendado
+
+Si quieres distribuir el complemento fuera de AMO pero seguir siendo compatible con Firefox
+Release, el flujo recomendado es:
+
+1. Firmar la extensión con Mozilla en canal `unlisted`.
+2. Preparar `build/firefox-release/` con el XPI firmado y su `metadata.json`.
+3. Dejar que el bootstrap de Windows copie esos artefactos al agente.
+
+OpenPath ahora automatiza los pasos locales:
+
+```bash
+# Opción A: firmar con Mozilla y preparar el bundle final
+WEB_EXT_API_KEY=...
+WEB_EXT_API_SECRET=...
+npm run sign:firefox-release
+
+# Opción B: si ya descargaste un XPI firmado desde AMO
+npm run build:firefox-release -- --signed-xpi /ruta/al/openpath-signed.xpi
+```
+
+Opcionalmente puedes fijar la URL gestionada que se escribirá en `metadata.json`:
+
+```bash
+npm run sign:firefox-release -- --install-url https://downloads.example/openpath-firefox-extension.xpi
+```
+
+Si no pasas `--install-url`, OpenPath usará el XPI firmado copiado localmente mediante
+`file:///` cuando el agente de Windows lo stagee en `C:\OpenPath\browser-extension\firefox-release\`.
 
 ## Uso
 

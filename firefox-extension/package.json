@@ -11,6 +11,8 @@
     "prebuild": "npm run clean:all",
     "build": "tsc -p tsconfig.build.json",
     "build:chromium-managed": "node build-chromium-managed.mjs",
+    "build:firefox-release": "node build-firefox-release.mjs",
+    "sign:firefox-release": "node sign-firefox-release.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "lint:fix": "eslint . --fix",

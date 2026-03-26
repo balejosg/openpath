@@ -29,6 +29,9 @@ const currentFilePath = fileURLToPath(import.meta.url);
 const apiTestsDir = dirname(currentFilePath);
 const apiRoot = resolve(apiTestsDir, '..');
 const firefoxExtensionRoot = resolve(apiRoot, '../firefox-extension');
+const firefoxReleaseBuildRoot = resolve(firefoxExtensionRoot, 'build/firefox-release');
+const firefoxReleaseMetadataPath = resolve(firefoxReleaseBuildRoot, 'metadata.json');
+const firefoxReleaseXpiPath = resolve(firefoxReleaseBuildRoot, 'openpath-firefox-extension.xpi');
 const chromiumManagedBuildRoot = resolve(firefoxExtensionRoot, 'build/chromium-managed');
 const chromiumManagedMetadataPath = resolve(chromiumManagedBuildRoot, 'metadata.json');
 const chromiumManagedCrxPath = resolve(chromiumManagedBuildRoot, 'openpath-chromium-extension.crx');
@@ -132,6 +135,7 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
 
   after(async () => {
     await resetDb();
+    rmSync(firefoxReleaseBuildRoot, { recursive: true, force: true });
     rmSync(chromiumManagedBuildRoot, { recursive: true, force: true });
 
     if (server !== undefined) {
@@ -587,6 +591,42 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       );
       assert.ok(
         manifest.files.some((file) => file.path === 'browser-extension/firefox/dist/background.js')
+      );
+    });
+
+    await test('should include signed Firefox release artifacts in the Windows bootstrap manifest when available', async () => {
+      mkdirSync(firefoxReleaseBuildRoot, { recursive: true });
+      writeFileSync(
+        firefoxReleaseMetadataPath,
+        JSON.stringify({
+          extensionId: 'monitor-bloqueos@openpath',
+          version: '2.0.0',
+        })
+      );
+      writeFileSync(firefoxReleaseXpiPath, 'fake-signed-firefox-xpi');
+
+      const manifestResponse = await fetch(`${API_URL}/api/agent/windows/bootstrap/latest.json`, {
+        headers: {
+          Authorization: `Bearer ${enrollmentToken}`,
+        },
+      });
+
+      assert.strictEqual(manifestResponse.status, 200);
+      const manifest = (await manifestResponse.json()) as {
+        success: boolean;
+        files: { path: string; sha256: string; size: number }[];
+      };
+
+      assert.strictEqual(manifest.success, true);
+      assert.ok(
+        manifest.files.some(
+          (file) => file.path === 'browser-extension/firefox-release/metadata.json'
+        )
+      );
+      assert.ok(
+        manifest.files.some(
+          (file) => file.path === 'browser-extension/firefox-release/openpath-firefox-extension.xpi'
+        )
       );
     });
 

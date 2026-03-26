@@ -9,15 +9,114 @@ function Get-OpenPathFirefoxExtensionRoot {
     return "$script:OpenPathRoot\browser-extension\firefox"
 }
 
-function Get-OpenPathFirefoxExtensionInstallUrl {
+function Get-OpenPathFirefoxReleaseMetadataPath {
+    return "$script:OpenPathRoot\browser-extension\firefox-release\metadata.json"
+}
+
+function Get-OpenPathFirefoxReleaseXpiPath {
+    return "$script:OpenPathRoot\browser-extension\firefox-release\openpath-firefox-extension.xpi"
+}
+
+function ConvertTo-OpenPathFileUrl {
     param(
-        [string]$ExtensionRoot = (Get-OpenPathFirefoxExtensionRoot)
+        [Parameter(Mandatory = $true)]
+        [string]$Path
     )
 
-    $resolvedRoot = Resolve-Path $ExtensionRoot -ErrorAction SilentlyContinue
-    $path = if ($resolvedRoot) { $resolvedRoot.ProviderPath } else { $ExtensionRoot }
-    $uri = [System.Uri]::new($path)
-    return ($uri.AbsoluteUri.TrimEnd('/') + '/')
+    $resolvedPath = Resolve-Path $Path -ErrorAction SilentlyContinue
+    $providerPath = if ($resolvedPath) { $resolvedPath.ProviderPath } else { $Path }
+    $uri = [System.Uri]::new($providerPath)
+    return $uri.AbsoluteUri
+}
+
+function Get-OpenPathFirefoxManagedExtensionPolicy {
+    $config = $null
+    try {
+        $config = Get-OpenPathConfig
+    }
+    catch {
+        # Allow policy generation to proceed without a persisted config.
+    }
+
+    if ($config) {
+        $configuredExtensionId = if (
+            $config.PSObject.Properties['firefoxExtensionId'] -and $config.firefoxExtensionId
+        ) {
+            ([string]$config.firefoxExtensionId).Trim()
+        }
+        else {
+            ''
+        }
+        $configuredInstallUrl = if (
+            $config.PSObject.Properties['firefoxExtensionInstallUrl'] -and $config.firefoxExtensionInstallUrl
+        ) {
+            ([string]$config.firefoxExtensionInstallUrl).Trim()
+        }
+        else {
+            ''
+        }
+
+        if ($configuredExtensionId -and $configuredInstallUrl) {
+            return [PSCustomObject]@{
+                ExtensionId = $configuredExtensionId
+                InstallUrl = $configuredInstallUrl
+                Source = 'config'
+            }
+        }
+
+        if ($configuredExtensionId -or $configuredInstallUrl) {
+            Write-OpenPathLog 'Firefox signed extension config is incomplete; both firefoxExtensionId and firefoxExtensionInstallUrl are required' -Level WARN
+        }
+    }
+
+    $metadataPath = Get-OpenPathFirefoxReleaseMetadataPath
+    if (-not (Test-Path $metadataPath)) {
+        return $null
+    }
+
+    try {
+        $metadata = Get-Content $metadataPath -Raw | ConvertFrom-Json
+    }
+    catch {
+        Write-OpenPathLog "Failed to parse Firefox release extension metadata: $_" -Level WARN
+        return $null
+    }
+
+    $extensionId = if ($metadata.PSObject.Properties['extensionId'] -and $metadata.extensionId) {
+        ([string]$metadata.extensionId).Trim()
+    }
+    else {
+        ''
+    }
+    if (-not $extensionId) {
+        Write-OpenPathLog 'Firefox release extension metadata is incomplete' -Level WARN
+        return $null
+    }
+
+    $installUrl = if ($metadata.PSObject.Properties['installUrl'] -and $metadata.installUrl) {
+        ([string]$metadata.installUrl).Trim()
+    }
+    else {
+        ''
+    }
+
+    if (-not $installUrl) {
+        $signedXpiPath = Get-OpenPathFirefoxReleaseXpiPath
+        if (Test-Path $signedXpiPath) {
+            $installUrl = ConvertTo-OpenPathFileUrl -Path $signedXpiPath
+        }
+    }
+
+    if (-not $installUrl) {
+        Write-OpenPathLog 'Firefox release extension metadata did not resolve to a signed XPI source' -Level WARN
+        return $null
+    }
+
+    return [PSCustomObject]@{
+        ExtensionId = $extensionId
+        InstallUrl = $installUrl
+        Source = 'staged-release'
+    }
 }
 
 function Get-OpenPathChromiumManagedMetadataPath {
@@ -83,6 +182,10 @@ function Set-FirefoxPolicy {
     
     $policiesSet = $false
     
+    $unsignedExtensionManifest = Join-Path (Get-OpenPathFirefoxExtensionRoot) 'manifest.json'
+    $managedExtensionPolicy = Get-OpenPathFirefoxManagedExtensionPolicy
+    $signedExtensionWarningWritten = $false
+
     foreach ($firefoxPath in $firefoxPaths) {
         $firefoxExe = Split-Path $firefoxPath -Parent
         if (-not (Test-Path "$firefoxExe\firefox.exe")) {
@@ -151,15 +254,23 @@ function Set-FirefoxPolicy {
             }
         }
 
-        $extensionRoot = Get-OpenPathFirefoxExtensionRoot
-        $extensionManifest = Join-Path $extensionRoot 'manifest.json'
-        if (Test-Path $extensionManifest) {
+        if ($managedExtensionPolicy) {
             $policies.policies.ExtensionSettings = @{
-                'monitor-bloqueos@openpath' = @{
+                $managedExtensionPolicy.ExtensionId = @{
                     installation_mode = 'force_installed'
-                    install_url = (Get-OpenPathFirefoxExtensionInstallUrl -ExtensionRoot $extensionRoot)
+                    install_url = $managedExtensionPolicy.InstallUrl
                 }
             }
+        }
+        elseif (-not $signedExtensionWarningWritten) {
+            if (Test-Path $unsignedExtensionManifest) {
+                Write-OpenPathLog 'Unsigned Firefox extension bundle detected, but Firefox Release requires a signed XPI distribution; skipping extension auto-install' -Level WARN
+            }
+            else {
+                Write-OpenPathLog 'No signed Firefox extension distribution configured; applying Firefox policies without extension auto-install' -Level WARN
+            }
+
+            $signedExtensionWarningWritten = $true
         }
         
         $policiesPath = "$firefoxPath\policies.json"

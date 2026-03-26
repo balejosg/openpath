@@ -42,7 +42,9 @@ export default tseslint.config(
       'node_modules/',
       'blocked/*.js',
       'build-chromium-managed.mjs',
+      'build-firefox-release.mjs',
       'eslint.config.js',
+      'sign-firefox-release.mjs',
     ],
   }
 );

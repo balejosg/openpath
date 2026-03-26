@@ -75,7 +75,9 @@ Get-NetFirewallRule -DisplayName "OpenPath-*"
 
 ## Browser Extension Notes
 
-- Firefox: when the installer has access to the extension assets, it stages them under `C:\OpenPath\browser-extension\firefox` and force-installs the extension through `policies.json`.
+- Firefox Release: OpenPath only force-installs the extension when a signed distribution is available. Supported sources are `firefoxExtensionId` + `firefoxExtensionInstallUrl` in `config.json` (for example an AMO `latest.xpi` URL) or staged signed artifacts under `C:\OpenPath\browser-extension\firefox-release\`.
+- Firefox development assets can still be staged under `C:\OpenPath\browser-extension\firefox`, but they are not used for Firefox Release auto-install because the unpacked bundle is unsigned.
+- If no signed Firefox distribution is configured, OpenPath keeps the browser blocking policies and skips extension auto-install with a warning in `C:\OpenPath\data\logs\openpath.log`.
 - Chrome and Edge: OpenPath now stages managed rollout metadata under `C:\OpenPath\browser-extension\chromium-managed` and can publish a managed `CRX + update manifest` pipeline when `firefox-extension/build/chromium-managed/` exists on the server. Build those artifacts with `npm run build:chromium-managed --workspace=@openpath/firefox-extension`.
 - Edge/Chrome rollout still depends on browser enterprise policy restrictions on Windows. If managed Chromium artifacts are absent, OpenPath skips the forced install and keeps only the browser blocking policies.
 
@@ -125,9 +127,16 @@ Edit `C:\OpenPath\data\config.json`:
   "sseReconnectMin": 5,
   "sseReconnectMax": 60,
   "sseUpdateCooldown": 10,
-  "healthApiSecret": "optional-shared-secret"
+  "healthApiSecret": "optional-shared-secret",
+  "firefoxExtensionId": "monitor-bloqueos@openpath",
+  "firefoxExtensionInstallUrl": "https://addons.mozilla.org/firefox/downloads/latest/monitor-bloqueos@openpath/latest.xpi"
 }
 ```
+
+If you prefer to stage a signed XPI locally for Firefox Release, place `metadata.json` and
+`openpath-firefox-extension.xpi` under `C:\OpenPath\browser-extension\firefox-release\`.
+When `metadata.json` omits `installUrl`, OpenPath uses the staged XPI through a `file:///`
+policy URL.
 
 ## Uninstallation
 

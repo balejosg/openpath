@@ -1383,6 +1383,161 @@ Describe "Browser Module" {
             $result = Set-FirefoxPolicy -BlockedPaths @()
             $result | Should -BeOfType [bool]
         }
+
+        It "Skips Firefox extension force-install when only the unsigned staged bundle is available" {
+            $script:capturedFirefoxPolicyJson = $null
+
+            Mock Test-Path {
+                param([string]$Path)
+                if ($Path -like '*firefox.exe') {
+                    return $true
+                }
+
+                if ($Path -like '*browser-extension\firefox\manifest.json') {
+                    return $true
+                }
+
+                return $false
+            } -ModuleName Browser
+
+            Mock New-Item {
+                [PSCustomObject]@{ FullName = 'mock-path' }
+            } -ModuleName Browser
+
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{}
+            } -ModuleName Browser
+
+            Mock Set-Content {
+                param(
+                    [string]$Path,
+                    [string]$Value,
+                    [string]$Encoding
+                )
+
+                if ($Path -like '*policies.json') {
+                    $script:capturedFirefoxPolicyJson = $Value
+                }
+            } -ModuleName Browser
+
+            Mock Write-OpenPathLog { } -ModuleName Browser
+
+            $result = Set-FirefoxPolicy -BlockedPaths @()
+            $result | Should -BeTrue
+            $script:capturedFirefoxPolicyJson | Should -Not -BeNullOrEmpty
+
+            $policy = $script:capturedFirefoxPolicyJson | ConvertFrom-Json
+            $policy.policies.PSObject.Properties.Name | Should -Not -Contain 'ExtensionSettings'
+        }
+
+        It "Uses explicit signed Firefox extension config when available" {
+            $script:capturedFirefoxPolicyJson = $null
+
+            Mock Test-Path {
+                param([string]$Path)
+                if ($Path -like '*firefox.exe') {
+                    return $true
+                }
+
+                return $false
+            } -ModuleName Browser
+
+            Mock New-Item {
+                [PSCustomObject]@{ FullName = 'mock-path' }
+            } -ModuleName Browser
+
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    firefoxExtensionId = 'monitor-bloqueos@openpath'
+                    firefoxExtensionInstallUrl = 'https://addons.mozilla.org/firefox/downloads/latest/monitor-bloqueos@openpath/latest.xpi'
+                }
+            } -ModuleName Browser
+
+            Mock Set-Content {
+                param(
+                    [string]$Path,
+                    [string]$Value,
+                    [string]$Encoding
+                )
+
+                if ($Path -like '*policies.json') {
+                    $script:capturedFirefoxPolicyJson = $Value
+                }
+            } -ModuleName Browser
+
+            Mock Write-OpenPathLog { } -ModuleName Browser
+
+            $result = Set-FirefoxPolicy -BlockedPaths @()
+            $result | Should -BeTrue
+
+            $policy = $script:capturedFirefoxPolicyJson | ConvertFrom-Json
+            $policy.policies.ExtensionSettings.'monitor-bloqueos@openpath'.installation_mode | Should -Be 'force_installed'
+            $policy.policies.ExtensionSettings.'monitor-bloqueos@openpath'.install_url | Should -Be 'https://addons.mozilla.org/firefox/downloads/latest/monitor-bloqueos@openpath/latest.xpi'
+        }
+
+        It "Uses staged signed Firefox XPI metadata when available" {
+            $script:capturedFirefoxPolicyJson = $null
+
+            Mock Test-Path {
+                param([string]$Path)
+                if ($Path -like '*firefox.exe') {
+                    return $true
+                }
+
+                if ($Path -like '*browser-extension\firefox-release\metadata.json') {
+                    return $true
+                }
+
+                if ($Path -like '*browser-extension\firefox-release\openpath-firefox-extension.xpi') {
+                    return $true
+                }
+
+                return $false
+            } -ModuleName Browser
+
+            Mock New-Item {
+                [PSCustomObject]@{ FullName = 'mock-path' }
+            } -ModuleName Browser
+
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{}
+            } -ModuleName Browser
+
+            Mock Get-Content {
+                param(
+                    [string]$Path,
+                    [switch]$Raw
+                )
+
+                if ($Path -like '*browser-extension\firefox-release\metadata.json') {
+                    return '{"extensionId":"monitor-bloqueos@openpath","version":"2.0.0"}'
+                }
+
+                throw "Unexpected path: $Path"
+            } -ModuleName Browser
+
+            Mock Set-Content {
+                param(
+                    [string]$Path,
+                    [string]$Value,
+                    [string]$Encoding
+                )
+
+                if ($Path -like '*policies.json') {
+                    $script:capturedFirefoxPolicyJson = $Value
+                }
+            } -ModuleName Browser
+
+            Mock Write-OpenPathLog { } -ModuleName Browser
+
+            $result = Set-FirefoxPolicy -BlockedPaths @()
+            $result | Should -BeTrue
+
+            $policy = $script:capturedFirefoxPolicyJson | ConvertFrom-Json
+            $policy.policies.ExtensionSettings.'monitor-bloqueos@openpath'.installation_mode | Should -Be 'force_installed'
+            $policy.policies.ExtensionSettings.'monitor-bloqueos@openpath'.install_url | Should -Match '^file:///'
+            $policy.policies.ExtensionSettings.'monitor-bloqueos@openpath'.install_url | Should -Match 'openpath-firefox-extension\.xpi$'
+        }
     }
 
     Context "Set-ChromePolicy" {

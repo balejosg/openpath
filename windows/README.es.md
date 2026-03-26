@@ -72,7 +72,9 @@ Get-NetFirewallRule -DisplayName "OpenPath-*"
 
 ## Notas Sobre La Extensión Del Navegador
 
-- Firefox: cuando el instalador tiene acceso a los assets de la extensión, los copia en `C:\OpenPath\browser-extension\firefox` y fuerza su instalación mediante `policies.json`.
+- Firefox Release: OpenPath solo fuerza la instalación cuando existe una distribución firmada. Las fuentes soportadas son `firefoxExtensionId` + `firefoxExtensionInstallUrl` en `config.json` (por ejemplo una URL `latest.xpi` de AMO) o artefactos firmados copiados en `C:\OpenPath\browser-extension\firefox-release\`.
+- Los assets de desarrollo de Firefox se pueden seguir copiando en `C:\OpenPath\browser-extension\firefox`, pero no se usan para la auto-instalación en Firefox Release porque el bundle descomprimido no está firmado.
+- Si no hay una distribución firmada de Firefox configurada, OpenPath mantiene las políticas de bloqueo del navegador y omite la auto-instalación de la extensión dejando una advertencia en `C:\OpenPath\data\logs\openpath.log`.
 - Chrome y Edge: OpenPath ahora deja la metadata del rollout gestionado en `C:\OpenPath\browser-extension\chromium-managed` y puede publicar un pipeline `CRX + manifiesto de actualización` cuando `firefox-extension/build/chromium-managed/` exista en el servidor. Genera esos artefactos con `npm run build:chromium-managed --workspace=@openpath/firefox-extension`.
 - El despliegue en Edge/Chrome sigue dependiendo de las restricciones de política enterprise del navegador en Windows. Si faltan los artefactos Chromium gestionados, OpenPath omite la instalación forzada y mantiene solo las políticas de bloqueo del navegador.
 
@@ -118,9 +120,16 @@ Editar `C:\OpenPath\data\config.json`:
   "enableDohIpBlocking": true,
   "enableCheckpointRollback": true,
   "maxCheckpoints": 3,
-  "healthApiSecret": "secreto-compartido-opcional"
+  "healthApiSecret": "secreto-compartido-opcional",
+  "firefoxExtensionId": "monitor-bloqueos@openpath",
+  "firefoxExtensionInstallUrl": "https://addons.mozilla.org/firefox/downloads/latest/monitor-bloqueos@openpath/latest.xpi"
 }
 ```
+
+Si prefieres copiar un XPI firmado local para Firefox Release, coloca `metadata.json` y
+`openpath-firefox-extension.xpi` en `C:\OpenPath\browser-extension\firefox-release\`.
+Cuando `metadata.json` no incluye `installUrl`, OpenPath usa el XPI copiado mediante una URL
+de política `file:///`.
 
 ## Desinstalación
 

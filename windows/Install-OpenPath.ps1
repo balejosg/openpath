@@ -51,6 +51,8 @@ param(
     [string]$EnrollmentToken = "",
     [string]$ClassroomId = "",
     [string]$MachineName = "",
+    [string]$FirefoxExtensionId = "",
+    [string]$FirefoxExtensionInstallUrl = "",
     [switch]$Unattended,
     [string]$HealthApiSecret = ""
 )
@@ -156,6 +158,19 @@ if (-not $HealthApiSecret -and $env:OPENPATH_HEALTH_API_SECRET) {
     $HealthApiSecret = $env:OPENPATH_HEALTH_API_SECRET
 }
 
+if (-not $FirefoxExtensionId -and $env:OPENPATH_FIREFOX_EXTENSION_ID) {
+    $FirefoxExtensionId = [string]$env:OPENPATH_FIREFOX_EXTENSION_ID
+}
+
+if (-not $FirefoxExtensionInstallUrl -and $env:OPENPATH_FIREFOX_EXTENSION_INSTALL_URL) {
+    $FirefoxExtensionInstallUrl = [string]$env:OPENPATH_FIREFOX_EXTENSION_INSTALL_URL
+}
+
+if (($FirefoxExtensionId -and -not $FirefoxExtensionInstallUrl) -or ($FirefoxExtensionInstallUrl -and -not $FirefoxExtensionId)) {
+    Write-Host "ERROR: -FirefoxExtensionId and -FirefoxExtensionInstallUrl must be provided together" -ForegroundColor Red
+    exit 1
+}
+
 $usesEnrollmentToken = [bool]$EnrollmentToken
 $usesRegistrationToken = [bool]$RegistrationToken
 
@@ -181,12 +196,19 @@ if ($classroomModeRequested) {
     if ($HealthApiSecret) {
         Write-Host "Health API secret: configured"
     }
+    if ($FirefoxExtensionId -and $FirefoxExtensionInstallUrl) {
+        Write-Host "Firefox signed extension: configured via install URL"
+    }
 }
 elseif ($WhitelistUrl) {
     Write-Host "URL: $WhitelistUrl"
 }
 else {
     Write-Host "Mode: Standalone (no whitelist URL configured)"
+}
+
+if (-not $classroomModeRequested -and $FirefoxExtensionId -and $FirefoxExtensionInstallUrl) {
+    Write-Host "Firefox signed extension: configured via install URL"
 }
 Write-Host ""
 
@@ -219,6 +241,7 @@ $dirs = @(
     "$OpenPathRoot\scripts",
     "$OpenPathRoot\data\logs",
     "$OpenPathRoot\browser-extension\firefox",
+    "$OpenPathRoot\browser-extension\firefox-release",
     "$OpenPathRoot\browser-extension\chromium-managed"
 )
 
@@ -300,14 +323,42 @@ if ($browserExtensionSource) {
             Copy-Item (Join-Path $browserExtensionSource 'native') -Destination $browserExtensionTarget -Recurse -Force
         }
 
-        Write-Host "  Browser extension assets staged in $OpenPathRoot\browser-extension\firefox" -ForegroundColor Green
+        Write-Host "  Firefox development extension assets staged in $OpenPathRoot\browser-extension\firefox" -ForegroundColor Green
     }
     else {
-        Write-Host "  ADVERTENCIA: Browser extension source incomplete ($($missingItems -join ', '))" -ForegroundColor Yellow
+        Write-Host "  ADVERTENCIA: Firefox development extension source incomplete ($($missingItems -join ', '))" -ForegroundColor Yellow
     }
 }
 else {
-    Write-Host "  ADVERTENCIA: Browser extension source not found; Firefox extension auto-install skipped" -ForegroundColor Yellow
+    Write-Host "  ADVERTENCIA: Firefox development extension source not found; local unsigned bundle staging skipped" -ForegroundColor Yellow
+}
+
+$firefoxReleaseCandidates = @(
+    (Join-Path $scriptDir 'browser-extension\firefox-release'),
+    (Join-Path $scriptDir 'firefox-extension\build\firefox-release'),
+    (Join-Path (Split-Path $scriptDir -Parent) 'firefox-extension\build\firefox-release')
+)
+$firefoxReleaseSource = $firefoxReleaseCandidates |
+    Where-Object { Test-Path (Join-Path $_ 'metadata.json') } |
+    Select-Object -First 1
+
+if ($firefoxReleaseSource) {
+    $firefoxReleaseTarget = "$OpenPathRoot\browser-extension\firefox-release"
+    Remove-Item $firefoxReleaseTarget -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Path $firefoxReleaseTarget -Force | Out-Null
+
+    Copy-Item (Join-Path $firefoxReleaseSource 'metadata.json') -Destination (Join-Path $firefoxReleaseTarget 'metadata.json') -Force
+
+    $firefoxReleaseXpiSource = Join-Path $firefoxReleaseSource 'openpath-firefox-extension.xpi'
+    if (Test-Path $firefoxReleaseXpiSource) {
+        Copy-Item $firefoxReleaseXpiSource -Destination (Join-Path $firefoxReleaseTarget 'openpath-firefox-extension.xpi') -Force
+    }
+
+    Write-Host "  Signed Firefox Release artifacts staged in $OpenPathRoot\browser-extension\firefox-release" -ForegroundColor Green
+}
+elseif (-not ($FirefoxExtensionId -and $FirefoxExtensionInstallUrl)) {
+    Write-Host "  ADVERTENCIA: Firefox Release extension auto-install requires a signed XPI distribution (AMO, HTTPS URL, or staged signed artifact)." -ForegroundColor Yellow
+    Write-Host "  Firefox browser policies will be applied without extension auto-install until a signed distribution is configured." -ForegroundColor Yellow
 }
 
 $chromiumManagedMetadataSource = Join-Path $scriptDir 'browser-extension\chromium-managed\metadata.json'
@@ -472,6 +523,10 @@ if ($ClassroomId) {
 }
 if ($HealthApiSecret) {
     $config.healthApiSecret = $HealthApiSecret
+}
+if ($FirefoxExtensionId -and $FirefoxExtensionInstallUrl) {
+    $config.firefoxExtensionId = $FirefoxExtensionId
+    $config.firefoxExtensionInstallUrl = $FirefoxExtensionInstallUrl
 }
 
 $config | ConvertTo-Json -Depth 10 | Set-Content "$OpenPathRoot\data\config.json" -Encoding UTF8

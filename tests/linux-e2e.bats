@@ -51,16 +51,30 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
-@test "windows installer stages browser extension assets when available" {
+@test "windows installer stages Firefox release extension artifacts when available" {
     run grep -nF '$OpenPathRoot\browser-extension\firefox' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '$OpenPathRoot\browser-extension\firefox-release' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
     [ "$status" -eq 0 ]
 }
 
-@test "windows browser policies force-install the staged Firefox extension" {
-    run grep -nF 'ExtensionSettings' "$PROJECT_DIR/windows/lib/Browser.psm1"
+@test "windows browser policies only force-install Firefox from signed distribution settings" {
+    run grep -nF 'function Get-OpenPathFirefoxManagedExtensionPolicy' "$PROJECT_DIR/windows/lib/Browser.psm1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'firefoxExtensionInstallUrl' "$PROJECT_DIR/windows/lib/Browser.psm1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'browser-extension\firefox-release' "$PROJECT_DIR/windows/lib/Browser.psm1"
     [ "$status" -eq 0 ]
 
     run grep -nF 'install_url' "$PROJECT_DIR/windows/lib/Browser.psm1"
+    [ "$status" -eq 0 ]
+}
+
+@test "windows installer explains Firefox Release requires a signed extension distribution" {
+    run grep -nF 'Firefox Release extension auto-install requires a signed XPI distribution (AMO, HTTPS URL, or staged signed artifact).' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
     [ "$status" -eq 0 ]
 }
 

@@ -116,6 +116,9 @@ const HOST = config.host;
 const WINDOWS_AGENT_ROOT = path.resolve(process.cwd(), '../windows');
 const WINDOWS_AGENT_VERSION_FILE = path.resolve(process.cwd(), '../VERSION');
 const FIREFOX_EXTENSION_ROOT = path.resolve(process.cwd(), '../firefox-extension');
+const FIREFOX_RELEASE_ROOT = path.join(FIREFOX_EXTENSION_ROOT, 'build', 'firefox-release');
+const FIREFOX_RELEASE_METADATA_FILE = path.join(FIREFOX_RELEASE_ROOT, 'metadata.json');
+const FIREFOX_RELEASE_XPI_FILE = path.join(FIREFOX_RELEASE_ROOT, 'openpath-firefox-extension.xpi');
 const CHROMIUM_MANAGED_ROOT = path.join(FIREFOX_EXTENSION_ROOT, 'build', 'chromium-managed');
 const CHROMIUM_MANAGED_METADATA_FILE = path.join(CHROMIUM_MANAGED_ROOT, 'metadata.json');
 const CHROMIUM_MANAGED_CRX_FILE = path.join(
@@ -322,6 +325,11 @@ function buildWindowsAgentFileManifest(options?: {
       path.posix.join('browser-extension/firefox', relativeDirectory)
     );
   }
+  addManifestFile('browser-extension/firefox-release/metadata.json', FIREFOX_RELEASE_METADATA_FILE);
+  addManifestFile(
+    'browser-extension/firefox-release/openpath-firefox-extension.xpi',
+    FIREFOX_RELEASE_XPI_FILE
+  );
 
   addManifestFile(
     'browser-extension/chromium-managed/metadata.json',
