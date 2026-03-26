@@ -62,11 +62,32 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "stable deb publish workflow requires a persistent APT signing key" {
+    run grep -n 'Missing APT_GPG_PRIVATE_KEY' "$PROJECT_DIR/.github/workflows/build-deb.yml"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'No GPG secret found, creating ephemeral key' "$PROJECT_DIR/.github/workflows/build-deb.yml"
+    [ "$status" -ne 0 ]
+}
+
 @test "prerelease deb publish workflow re-signs existing APT suites before exporting the public key" {
     run grep -n 'for suite in stable unstable; do' "$PROJECT_DIR/.github/workflows/prerelease-deb.yml"
     [ "$status" -eq 0 ]
 
     run grep -n 'reprepro export "\$suite"' "$PROJECT_DIR/.github/workflows/prerelease-deb.yml"
+    [ "$status" -eq 0 ]
+}
+
+@test "prerelease deb publish workflow requires a persistent APT signing key" {
+    run grep -n 'Missing APT_GPG_PRIVATE_KEY' "$PROJECT_DIR/.github/workflows/prerelease-deb.yml"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'No GPG secret found, creating ephemeral key' "$PROJECT_DIR/.github/workflows/prerelease-deb.yml"
+    [ "$status" -ne 0 ]
+}
+
+@test "APT signing key maintainer runbook documents the repository secret" {
+    run grep -n 'gh secret set APT_GPG_PRIVATE_KEY --repo balejosg/openpath' "$PROJECT_DIR/docs/apt-signing-key.md"
     [ "$status" -eq 0 ]
 }
 

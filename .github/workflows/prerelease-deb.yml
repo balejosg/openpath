@@ -70,27 +70,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y reprepro gnupg
 
-      - name: Setup GPG key
+      - name: Require persistent APT signing key
         run: |
-          if [ -n "${{ secrets.APT_GPG_PRIVATE_KEY }}" ]; then
-            echo "${{ secrets.APT_GPG_PRIVATE_KEY }}" | gpg --batch --import
-            GPG_KEY_ID=$(gpg --list-keys --keyid-format SHORT | grep -oP '(?<=rsa4096/)[A-F0-9]+' | head -1)
-          else
-            echo "No GPG secret found, creating ephemeral key..."
-            cat > /tmp/gpg-batch.txt << 'GPGEOF'
-          %no-protection
-          Key-Type: RSA
-          Key-Length: 4096
-          Name-Real: OpenPath System APT
-          Name-Email: apt@openpath.local
-          Expire-Date: 1y
-          %commit
-          GPGEOF
-            gpg --batch --gen-key /tmp/gpg-batch.txt
-            GPG_KEY_ID=$(gpg --list-keys --keyid-format SHORT | grep -oP '(?<=rsa4096/)[A-F0-9]+' | head -1)
+          if [ -z "${{ secrets.APT_GPG_PRIVATE_KEY }}" ]; then
+            echo "::error title=Missing APT_GPG_PRIVATE_KEY::Configure the persistent APT signing key secret before publishing packages."
+            exit 1
+          fi
+
+      - name: Setup GPG key
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
+          GPG_KEY_ID=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
+          if [ -z "$GPG_KEY_ID" ]; then
+            echo "::error title=APT signing key import failed::Unable to extract a secret key fingerprint after import."
+            exit 1
           fi
           echo "GPG_KEY_ID=$GPG_KEY_ID" >> $GITHUB_ENV
-          echo "Using GPG key: $GPG_KEY_ID"
+          echo "Using persistent GPG key fingerprint: $GPG_KEY_ID"
 
       - name: Setup APT repository structure
         run: |
