@@ -58,3 +58,6 @@ blob-report/
 # Caches (local dev acceleration)
 .eslintcache
 .turbo/
+
+# AMO signing state
+firefox-extension/.amo-upload-uuid
