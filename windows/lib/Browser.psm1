@@ -2,6 +2,7 @@
 # Manages Firefox and Chrome/Edge policies
 
 # Import common functions
+$script:OpenPathRoot = "C:\OpenPath"
 $modulePath = Split-Path $PSScriptRoot -Parent
 Import-Module "$modulePath\lib\Common.psm1" -Force -ErrorAction SilentlyContinue
 
