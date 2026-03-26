@@ -274,6 +274,21 @@ catch {
     Write-Host "  ADVERTENCIA: No se pudieron restringir permisos: $_" -ForegroundColor Yellow
 }
 
+$browserExtensionAclPath = "$OpenPathRoot\browser-extension"
+if (Test-Path $browserExtensionAclPath) {
+    try {
+        $browserExtensionAcl = Get-Acl $browserExtensionAclPath
+        $usersReadRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            "BUILTIN\Users", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
+        $browserExtensionAcl.AddAccessRule($usersReadRule)
+        Set-Acl $browserExtensionAclPath $browserExtensionAcl
+        Write-Host "  Read access granted for browser extension artifacts" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "  ADVERTENCIA: No se pudo habilitar lectura para browser-extension: $_" -ForegroundColor Yellow
+    }
+}
+
 # Step 2: Copy modules and scripts
 Write-Host "[2/7] Copiando modulos y scripts..." -ForegroundColor Yellow
 

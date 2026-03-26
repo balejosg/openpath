@@ -2172,6 +2172,18 @@ Describe "Installer" {
                 'BUILTIN\Administrators'
             )
         }
+
+        It "Grants local users read access to staged browser extension artifacts" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '$browserExtensionAclPath = "$OpenPathRoot\browser-extension"',
+                'BUILTIN\Users',
+                '"ReadAndExecute"',
+                'Read access granted for browser extension artifacts'
+            )
+        }
     }
 
     Context "Source path validation" {
