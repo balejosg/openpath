@@ -24,9 +24,15 @@ function ConvertTo-OpenPathFileUrl {
         [string]$Path
     )
 
-    $resolvedPath = Resolve-Path $Path -ErrorAction SilentlyContinue
-    $providerPath = if ($resolvedPath) { $resolvedPath.ProviderPath } else { $Path }
-    $absolutePath = [System.IO.Path]::GetFullPath($providerPath)
+    $absolutePath = ''
+    if ($Path -match '^[A-Za-z]:[\\/]') {
+        $absolutePath = $Path
+    }
+    else {
+        $resolvedPath = Resolve-Path $Path -ErrorAction SilentlyContinue
+        $providerPath = if ($resolvedPath) { $resolvedPath.ProviderPath } else { $Path }
+        $absolutePath = [System.IO.Path]::GetFullPath($providerPath)
+    }
 
     if ($absolutePath.StartsWith('\\')) {
         $uncParts = $absolutePath.TrimStart('\') -split '\\', 2
@@ -108,18 +114,13 @@ function Get-OpenPathFirefoxManagedExtensionPolicy {
         return $null
     }
 
-    $installUrl = if ($metadata.PSObject.Properties['installUrl'] -and $metadata.installUrl) {
-        ([string]$metadata.installUrl).Trim()
+    $installUrl = ''
+    $signedXpiPath = Get-OpenPathFirefoxReleaseXpiPath
+    if (Test-Path $signedXpiPath) {
+        $installUrl = ConvertTo-OpenPathFileUrl -Path $signedXpiPath
     }
-    else {
-        ''
-    }
-
-    if (-not $installUrl) {
-        $signedXpiPath = Get-OpenPathFirefoxReleaseXpiPath
-        if (Test-Path $signedXpiPath) {
-            $installUrl = ConvertTo-OpenPathFileUrl -Path $signedXpiPath
-        }
+    elseif ($metadata.PSObject.Properties['installUrl'] -and $metadata.installUrl) {
+        $installUrl = ([string]$metadata.installUrl).Trim()
     }
 
     if (-not $installUrl) {

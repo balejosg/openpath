@@ -1503,6 +1503,11 @@ Describe "Browser Module" {
                 [PSCustomObject]@{}
             } -ModuleName Browser
 
+            Mock Resolve-Path { $null } -ModuleName Browser
+            Mock ConvertTo-OpenPathFileUrl {
+                'file:///C:/OpenPath/browser-extension/firefox-release/openpath-firefox-extension.xpi'
+            } -ModuleName Browser
+
             Mock Get-Content {
                 param(
                     [string]$Path,
@@ -1539,6 +1544,74 @@ Describe "Browser Module" {
             $policy.policies.ExtensionSettings.'monitor-bloqueos@openpath'.install_url | Should -Match 'openpath-firefox-extension\.xpi$'
         }
 
+        It "Prefers the staged signed Firefox XPI over metadata installUrl when both exist" {
+            $script:capturedFirefoxPolicyJson = $null
+
+            Mock Test-Path {
+                param([string]$Path)
+                if ($Path -like '*firefox.exe') {
+                    return $true
+                }
+
+                if ($Path -like '*browser-extension\firefox-release\metadata.json') {
+                    return $true
+                }
+
+                if ($Path -like '*browser-extension\firefox-release\openpath-firefox-extension.xpi') {
+                    return $true
+                }
+
+                return $false
+            } -ModuleName Browser
+
+            Mock New-Item {
+                [PSCustomObject]@{ FullName = 'mock-path' }
+            } -ModuleName Browser
+
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{}
+            } -ModuleName Browser
+
+            Mock Resolve-Path { $null } -ModuleName Browser
+            Mock ConvertTo-OpenPathFileUrl {
+                'file:///C:/OpenPath/browser-extension/firefox-release/openpath-firefox-extension.xpi'
+            } -ModuleName Browser
+
+            Mock Get-Content {
+                param(
+                    [string]$Path,
+                    [switch]$Raw
+                )
+
+                if ($Path -like '*browser-extension\firefox-release\metadata.json') {
+                    return '{"extensionId":"monitor-bloqueos@openpath","version":"2.0.0","installUrl":"https://downloads.example/openpath-firefox-extension.xpi"}'
+                }
+
+                throw "Unexpected path: $Path"
+            } -ModuleName Browser
+
+            Mock Set-Content {
+                param(
+                    [string]$Path,
+                    [string]$Value,
+                    [string]$Encoding
+                )
+
+                if ($Path -like '*policies.json') {
+                    $script:capturedFirefoxPolicyJson = $Value
+                }
+            } -ModuleName Browser
+
+            Mock Write-OpenPathLog { } -ModuleName Browser
+
+            $result = Set-FirefoxPolicy -BlockedPaths @()
+            $result | Should -BeTrue
+
+            $policy = $script:capturedFirefoxPolicyJson | ConvertFrom-Json
+            $policy.policies.ExtensionSettings.'monitor-bloqueos@openpath'.installation_mode | Should -Be 'force_installed'
+            $policy.policies.ExtensionSettings.'monitor-bloqueos@openpath'.install_url | Should -Be 'file:///C:/OpenPath/browser-extension/firefox-release/openpath-firefox-extension.xpi'
+        }
+
         It "Resolves staged Firefox release artifacts from the default OpenPath root" {
             $script:capturedFirefoxPolicyJson = $null
 
@@ -1558,6 +1631,11 @@ Describe "Browser Module" {
 
             Mock Get-OpenPathConfig {
                 [PSCustomObject]@{}
+            } -ModuleName Browser
+
+            Mock Resolve-Path { $null } -ModuleName Browser
+            Mock ConvertTo-OpenPathFileUrl {
+                'file:///C:/OpenPath/browser-extension/firefox-release/openpath-firefox-extension.xpi'
             } -ModuleName Browser
 
             Mock Get-Content {
