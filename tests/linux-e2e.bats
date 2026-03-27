@@ -95,6 +95,17 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "windows installer supports unmanaged Chromium store guidance" {
+    run grep -nF '[string]$ChromeExtensionStoreUrl = ""' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '[string]$EdgeExtensionStoreUrl = ""' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '$OpenPathRoot\browser-extension\chromium-unmanaged' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows browser policies only force-install Firefox from signed distribution settings" {
     run grep -nF 'function Get-OpenPathFirefoxManagedExtensionPolicy' "$PROJECT_DIR/windows/lib/Browser.psm1"
     [ "$status" -eq 0 ]
@@ -115,6 +126,6 @@ load 'test_helper'
 }
 
 @test "windows installer explains that Chrome and Edge extension rollout requires managed distribution" {
-    run grep -nF 'Chrome/Edge extension auto-install is not available on unmanaged Windows; use Firefox auto-install or a managed CRX/update-manifest rollout.' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF 'Chrome/Edge force-install is not available on unmanaged Windows; use store guidance, Firefox auto-install, or a managed CRX/update-manifest rollout.' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
     [ "$status" -eq 0 ]
 }

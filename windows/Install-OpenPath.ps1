@@ -37,6 +37,10 @@
     Classroom ID used with EnrollmentToken mode
 .PARAMETER Unattended
     Fail fast if required parameters are missing (no prompts)
+.PARAMETER ChromeExtensionStoreUrl
+    Optional Chrome Web Store URL used for non-managed guided installs
+.PARAMETER EdgeExtensionStoreUrl
+    Optional Microsoft Edge Add-ons URL used for non-managed guided installs
 .EXAMPLE
     .\Install-Whitelist.ps1 -WhitelistUrl "http://server:3000/export/grupo.txt"
 #>
@@ -53,6 +57,8 @@ param(
     [string]$MachineName = "",
     [string]$FirefoxExtensionId = "",
     [string]$FirefoxExtensionInstallUrl = "",
+    [string]$ChromeExtensionStoreUrl = "",
+    [string]$EdgeExtensionStoreUrl = "",
     [switch]$Unattended,
     [string]$HealthApiSecret = ""
 )
@@ -166,6 +172,14 @@ if (-not $FirefoxExtensionInstallUrl -and $env:OPENPATH_FIREFOX_EXTENSION_INSTAL
     $FirefoxExtensionInstallUrl = [string]$env:OPENPATH_FIREFOX_EXTENSION_INSTALL_URL
 }
 
+if (-not $ChromeExtensionStoreUrl -and $env:OPENPATH_CHROME_EXTENSION_STORE_URL) {
+    $ChromeExtensionStoreUrl = [string]$env:OPENPATH_CHROME_EXTENSION_STORE_URL
+}
+
+if (-not $EdgeExtensionStoreUrl -and $env:OPENPATH_EDGE_EXTENSION_STORE_URL) {
+    $EdgeExtensionStoreUrl = [string]$env:OPENPATH_EDGE_EXTENSION_STORE_URL
+}
+
 if (($FirefoxExtensionId -and -not $FirefoxExtensionInstallUrl) -or ($FirefoxExtensionInstallUrl -and -not $FirefoxExtensionId)) {
     Write-Host "ERROR: -FirefoxExtensionId and -FirefoxExtensionInstallUrl must be provided together" -ForegroundColor Red
     exit 1
@@ -199,6 +213,9 @@ if ($classroomModeRequested) {
     if ($FirefoxExtensionId -and $FirefoxExtensionInstallUrl) {
         Write-Host "Firefox signed extension: configured via install URL"
     }
+    if ($ChromeExtensionStoreUrl -or $EdgeExtensionStoreUrl) {
+        Write-Host "Chromium store guidance: configured for unmanaged installs"
+    }
 }
 elseif ($WhitelistUrl) {
     Write-Host "URL: $WhitelistUrl"
@@ -209,6 +226,9 @@ else {
 
 if (-not $classroomModeRequested -and $FirefoxExtensionId -and $FirefoxExtensionInstallUrl) {
     Write-Host "Firefox signed extension: configured via install URL"
+}
+if (-not $classroomModeRequested -and ($ChromeExtensionStoreUrl -or $EdgeExtensionStoreUrl)) {
+    Write-Host "Chromium store guidance: configured for unmanaged installs"
 }
 Write-Host ""
 
@@ -242,7 +262,8 @@ $dirs = @(
     "$OpenPathRoot\data\logs",
     "$OpenPathRoot\browser-extension\firefox",
     "$OpenPathRoot\browser-extension\firefox-release",
-    "$OpenPathRoot\browser-extension\chromium-managed"
+    "$OpenPathRoot\browser-extension\chromium-managed",
+    "$OpenPathRoot\browser-extension\chromium-unmanaged"
 )
 
 foreach ($dir in $dirs) {
@@ -417,7 +438,121 @@ else {
     Write-Host "  ADVERTENCIA: Chromium managed rollout metadata not found in browser-extension\chromium-managed or firefox-extension\build\chromium-managed; Edge/Chrome managed extension install skipped" -ForegroundColor Yellow
 }
 
-Write-Host "  Chrome/Edge extension auto-install is not available on unmanaged Windows; use Firefox auto-install or a managed CRX/update-manifest rollout." -ForegroundColor Yellow
+function New-OpenPathInternetShortcut {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Url
+    )
+
+    $shortcutContent = @(
+        '[InternetShortcut]',
+        "URL=$Url"
+    ) -join [Environment]::NewLine
+
+    Set-Content -Path $Path -Value $shortcutContent -Encoding ASCII
+}
+
+function Get-OpenPathChromiumBrowserTargets {
+    param(
+        [string]$ChromeStoreUrl = '',
+        [string]$EdgeStoreUrl = ''
+    )
+
+    $browserTargets = @()
+
+    if ($ChromeStoreUrl) {
+        $chromeExecutablePath = @(
+            "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+            "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+            "$env:LocalAppData\Google\Chrome\Application\chrome.exe"
+        ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+        $browserTargets += [PSCustomObject]@{
+            Name = 'Google Chrome'
+            ExecutablePath = [string]$chromeExecutablePath
+            StoreUrl = [string]$ChromeStoreUrl
+            ShortcutName = 'Install OpenPath for Google Chrome.url'
+        }
+    }
+
+    if ($EdgeStoreUrl) {
+        $edgeExecutablePath = @(
+            "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+            "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+            "$env:LocalAppData\Microsoft\Edge\Application\msedge.exe"
+        ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+        $browserTargets += [PSCustomObject]@{
+            Name = 'Microsoft Edge'
+            ExecutablePath = [string]$edgeExecutablePath
+            StoreUrl = [string]$EdgeStoreUrl
+            ShortcutName = 'Install OpenPath for Microsoft Edge.url'
+        }
+    }
+
+    return @($browserTargets)
+}
+
+function Install-OpenPathChromiumUnmanagedGuidance {
+    param(
+        [string]$ChromeStoreUrl = '',
+        [string]$EdgeStoreUrl = '',
+        [switch]$Unattended
+    )
+
+    $browserTargets = Get-OpenPathChromiumBrowserTargets `
+        -ChromeStoreUrl $ChromeStoreUrl `
+        -EdgeStoreUrl $EdgeStoreUrl
+
+    if ($browserTargets.Count -eq 0) {
+        return $false
+    }
+
+    $guidanceRoot = "$OpenPathRoot\browser-extension\chromium-unmanaged"
+    Remove-Item $guidanceRoot -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Path $guidanceRoot -Force | Out-Null
+
+    foreach ($browserTarget in $browserTargets) {
+        $shortcutPath = Join-Path $guidanceRoot $browserTarget.ShortcutName
+        New-OpenPathInternetShortcut -Path $shortcutPath -Url $browserTarget.StoreUrl
+        Write-Host "  Chromium store guidance staged in $shortcutPath" -ForegroundColor Green
+
+        if (-not $Unattended) {
+            if ($browserTarget.ExecutablePath) {
+                try {
+                    Start-Process -FilePath $browserTarget.ExecutablePath -ArgumentList $browserTarget.StoreUrl | Out-Null
+                    Write-Host "  Opened $($browserTarget.Name) store page for OpenPath extension" -ForegroundColor Green
+                }
+                catch {
+                    Write-Host "  ADVERTENCIA: No se pudo abrir $($browserTarget.Name) automáticamente: $_" -ForegroundColor Yellow
+                }
+            }
+            else {
+                Write-Host "  ADVERTENCIA: $($browserTarget.Name) no se detecto localmente; abre manualmente $shortcutPath" -ForegroundColor Yellow
+            }
+        }
+    }
+
+    if ($Unattended) {
+        Write-Host "  Chromium store guidance staged for unattended install" -ForegroundColor Yellow
+    }
+
+    return $true
+}
+
+if (-not $chromiumManagedSource) {
+    if (-not (Install-OpenPathChromiumUnmanagedGuidance `
+        -ChromeStoreUrl $ChromeExtensionStoreUrl `
+        -EdgeStoreUrl $EdgeExtensionStoreUrl `
+        -Unattended:$Unattended)) {
+        Write-Host "  ADVERTENCIA: No Chromium store URLs configured; non-managed Chrome/Edge installs require user-initiated store install." -ForegroundColor Yellow
+    }
+}
+
+Write-Host "  Chrome/Edge force-install is not available on unmanaged Windows; use store guidance, Firefox auto-install, or a managed CRX/update-manifest rollout." -ForegroundColor Yellow
 
 Write-Host "  Modulos copiados" -ForegroundColor Green
 
@@ -572,6 +707,12 @@ if ($HealthApiSecret) {
 if ($FirefoxExtensionId -and $FirefoxExtensionInstallUrl) {
     $config.firefoxExtensionId = $FirefoxExtensionId
     $config.firefoxExtensionInstallUrl = $FirefoxExtensionInstallUrl
+}
+if ($ChromeExtensionStoreUrl) {
+    $config.chromeExtensionStoreUrl = $ChromeExtensionStoreUrl
+}
+if ($EdgeExtensionStoreUrl) {
+    $config.edgeExtensionStoreUrl = $EdgeExtensionStoreUrl
 }
 
 $config | ConvertTo-Json -Depth 10 | Set-Content "$OpenPathRoot\data\config.json" -Encoding UTF8

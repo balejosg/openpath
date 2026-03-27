@@ -110,6 +110,9 @@ Flujo recomendado para Windows:
 - Si falta `apiUrl`, Windows no puede resolver la URL del manifiesto de actualización.
 - Si faltan `metadata.json` o el CRX publicado por la API, OpenPath mantiene las políticas de
   bloqueo del navegador pero omite la auto-instalación en Edge/Chrome.
+- Si el equipo Windows no está gestionado, OpenPath puede usar `chromeExtensionStoreUrl` y
+  `edgeExtensionStoreUrl` para abrir la tienda correspondiente y dejar accesos `.url` de
+  instalación guiada en vez de intentar un `force install`.
 
 ### Publicar en Firefox Add-ons (AMO)
 

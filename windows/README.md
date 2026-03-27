@@ -80,6 +80,7 @@ Get-NetFirewallRule -DisplayName "OpenPath-*"
 - If no signed Firefox distribution is configured, OpenPath keeps the browser blocking policies and skips extension auto-install with a warning in `C:\OpenPath\data\logs\openpath.log`.
 - Chrome and Edge: OpenPath now stages managed rollout metadata under `C:\OpenPath\browser-extension\chromium-managed` and can publish a managed `CRX + update manifest` pipeline when `firefox-extension/build/chromium-managed/` exists on the server. Build those artifacts with `npm run build:chromium-managed --workspace=@openpath/firefox-extension`.
 - Edge/Chrome rollout still depends on browser enterprise policy restrictions on Windows. If managed Chromium artifacts are absent, OpenPath skips the forced install and keeps only the browser blocking policies.
+- Chrome and Edge unmanaged: if you configure `chromeExtensionStoreUrl` and/or `edgeExtensionStoreUrl`, the installer stages `.url` shortcuts in `C:\OpenPath\browser-extension\chromium-unmanaged\` and, during interactive installs, opens the matching store page so the user can complete the install manually.
 
 ### Managed Edge/Chrome rollout on Windows
 
@@ -106,6 +107,30 @@ Microsoft Edge and Google Chrome:
 The browsers then download the CRX from the OpenPath API (`/api/extensions/chromium/openpath.crx`)
 using the managed update manifest. If `apiUrl` or the managed Chromium artifacts are missing,
 OpenPath keeps the browser blocking policies but skips extension auto-install.
+
+### Guided install on unmanaged Edge/Chrome
+
+If the Windows device is not enterprise-managed, OpenPath does not attempt a forced Chromium
+extension install. Instead:
+
+1. Configure one or both store URLs in `config.json` or at install time:
+
+   ```powershell
+   .\Install-OpenPath.ps1 `
+     -ChromeExtensionStoreUrl "https://chromewebstore.google.com/detail/..." `
+     -EdgeExtensionStoreUrl "https://microsoftedge.microsoft.com/addons/detail/..."
+   ```
+
+2. OpenPath creates:
+   - `C:\OpenPath\browser-extension\chromium-unmanaged\Install OpenPath for Google Chrome.url`
+   - `C:\OpenPath\browser-extension\chromium-unmanaged\Install OpenPath for Microsoft Edge.url`
+3. In interactive mode, OpenPath opens those store pages automatically when it detects
+   `chrome.exe` or `msedge.exe`.
+4. In `-Unattended` mode, OpenPath leaves the shortcuts in place and skips opening any browser
+   windows.
+
+This keeps the final extension install user-initiated, which is the supported path outside managed
+browser environments.
 
 ## Structure
 
@@ -156,7 +181,9 @@ Edit `C:\OpenPath\data\config.json`:
   "sseUpdateCooldown": 10,
   "healthApiSecret": "optional-shared-secret",
   "firefoxExtensionId": "monitor-bloqueos@openpath",
-  "firefoxExtensionInstallUrl": "https://addons.mozilla.org/firefox/downloads/latest/monitor-bloqueos@openpath/latest.xpi"
+  "firefoxExtensionInstallUrl": "https://addons.mozilla.org/firefox/downloads/latest/monitor-bloqueos@openpath/latest.xpi",
+  "chromeExtensionStoreUrl": "https://chromewebstore.google.com/detail/<extension-id>",
+  "edgeExtensionStoreUrl": "https://microsoftedge.microsoft.com/addons/detail/<extension-id>"
 }
 ```
 

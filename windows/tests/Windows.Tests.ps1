@@ -2541,6 +2541,18 @@ Describe "Installer" {
                 '-Unattended'
             )
         }
+
+        It "Supports optional Chromium store URLs for unmanaged browser installs" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '[string]$ChromeExtensionStoreUrl = ""',
+                '[string]$EdgeExtensionStoreUrl = ""',
+                'chromeExtensionStoreUrl',
+                'edgeExtensionStoreUrl'
+            )
+        }
     }
 
     Context "Enrollment before first update" {
@@ -2561,6 +2573,29 @@ Describe "Installer" {
             $content = Get-Content $scriptPath -Raw
 
             $content.Contains("'OpenPath.ps1', 'Rotate-Token.ps1'") | Should -BeTrue
+        }
+
+        It "Stages Chromium unmanaged browser install guidance when store URLs are configured" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '$OpenPathRoot\browser-extension\chromium-unmanaged',
+                '[InternetShortcut]',
+                'Install OpenPath for Google Chrome.url',
+                'Install OpenPath for Microsoft Edge.url'
+            )
+        }
+
+        It "Opens unmanaged Chromium store guidance only during interactive installs" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'if (-not $Unattended)',
+                'Start-Process -FilePath $browserTarget.ExecutablePath -ArgumentList $browserTarget.StoreUrl',
+                'Chromium store guidance staged for unattended install'
+            )
         }
     }
 
