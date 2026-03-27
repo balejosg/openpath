@@ -176,21 +176,6 @@ jobs:
     needs: detect-relevant-changes
     if: needs.detect-relevant-changes.outputs.delivery_contracts == 'true'
 
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: openpath
-          POSTGRES_PASSWORD: openpath_dev
-          POSTGRES_DB: openpath
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -199,6 +184,26 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '20'
+
+      - name: Start local PostgreSQL
+        run: |
+          sudo systemctl start postgresql.service || sudo service postgresql start
+          sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'openpath') THEN
+              CREATE ROLE openpath LOGIN PASSWORD 'openpath_dev';
+            ELSE
+              ALTER ROLE openpath WITH LOGIN PASSWORD 'openpath_dev';
+            END IF;
+          END
+          $$;
+          SELECT pg_terminate_backend(pid)
+          FROM pg_stat_activity
+          WHERE datname = 'openpath' AND pid <> pg_backend_pid();
+          DROP DATABASE IF EXISTS openpath;
+          CREATE DATABASE openpath OWNER openpath;
+          SQL
 
       - name: Install dependencies
         run: npm ci
