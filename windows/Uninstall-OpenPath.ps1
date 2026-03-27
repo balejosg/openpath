@@ -41,6 +41,31 @@ param(
 $ErrorActionPreference = "Stop"
 $OpenPathRoot = "C:\OpenPath"
 
+function Convert-ToRegistryProviderPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RegistryPath
+    )
+
+    if ($RegistryPath -match '^HKLM\\') {
+        return "Registry::HKEY_LOCAL_MACHINE\\$($RegistryPath.Substring(5))"
+    }
+
+    throw "Unsupported registry hive path: $RegistryPath"
+}
+
+function Remove-RegistryKeyIfPresent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RegistryPath
+    )
+
+    $providerPath = Convert-ToRegistryProviderPath -RegistryPath $RegistryPath
+    if (Test-Path $providerPath) {
+        Remove-Item -Path $providerPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "  OpenPath DNS para Windows - Desinstalador" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
@@ -102,7 +127,7 @@ $firefoxNativeHostRegistryPaths = @(
     'HKLM\SOFTWARE\WOW6432Node\Mozilla\NativeMessagingHosts\whitelist_native_host'
 )
 foreach ($registryPath in $firefoxNativeHostRegistryPaths) {
-    & reg.exe DELETE $registryPath /f 2>$null | Out-Null
+    Remove-RegistryKeyIfPresent -RegistryPath $registryPath
 }
 
 $firefoxNativeHostArtifacts = @(

@@ -57,6 +57,31 @@ function Get-OpenPathFirefoxNativeHostRegistryPaths {
     )
 }
 
+function ConvertTo-OpenPathRegistryProviderPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RegistryPath
+    )
+
+    if ($RegistryPath -match '^HKLM\\') {
+        return "Registry::HKEY_LOCAL_MACHINE\\$($RegistryPath.Substring(5))"
+    }
+
+    throw "Unsupported registry hive path: $RegistryPath"
+}
+
+function Remove-OpenPathRegistryKeyIfPresent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RegistryPath
+    )
+
+    $providerPath = ConvertTo-OpenPathRegistryProviderPath -RegistryPath $RegistryPath
+    if (Test-Path $providerPath) {
+        Remove-Item -Path $providerPath -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Sync-OpenPathFirefoxNativeHostArtifacts {
     param(
         [string]$SourceRoot = "$script:OpenPathRoot\scripts"
@@ -73,7 +98,7 @@ function Sync-OpenPathFirefoxNativeHostArtifacts {
     )
 
     if ($missingArtifacts.Count -gt 0) {
-        throw "Firefox native host artifacts not found in $SourceRoot: $($missingArtifacts -join ', ')"
+        throw "Firefox native host artifacts not found in ${SourceRoot}: $($missingArtifacts -join ', ')"
     }
 
     foreach ($artifactName in $artifactNames) {
@@ -347,7 +372,7 @@ function Register-OpenPathFirefoxNativeHost {
 
 function Unregister-OpenPathFirefoxNativeHost {
     foreach ($registryPath in Get-OpenPathFirefoxNativeHostRegistryPaths) {
-        & reg.exe DELETE $registryPath /f 2>$null | Out-Null
+        Remove-OpenPathRegistryKeyIfPresent -RegistryPath $registryPath
     }
 
     $paths = @(

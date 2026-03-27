@@ -2419,6 +2419,27 @@ Describe "Installer" {
                 'name = Get-OpenPathFirefoxNativeHostName'
             )
         }
+
+        It "Uses braced interpolation for SourceRoot error messages before a colon" {
+            $browserModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
+            $content = Get-Content $browserModulePath -Raw
+
+            $content.Contains('Firefox native host artifacts not found in ${SourceRoot}:') | Should -BeTrue
+            $content.Contains('Firefox native host artifacts not found in $SourceRoot:') | Should -BeFalse
+        }
+
+        It "Skips registry deletion when Firefox native host keys are already absent in the browser module" {
+            $browserModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
+            $content = Get-Content $browserModulePath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Mozilla\NativeMessagingHosts\whitelist_native_host',
+                'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Mozilla\NativeMessagingHosts\whitelist_native_host',
+                'Remove-OpenPathRegistryKeyIfPresent -RegistryPath $registryPath',
+                'if (Test-Path $providerPath)'
+            )
+            $content.Contains('& reg.exe DELETE $registryPath /f 2>$null | Out-Null') | Should -BeFalse
+        }
     }
 
     Context "Source path validation" {
@@ -2582,6 +2603,19 @@ Describe "Uninstaller" {
                 'OpenPath-NativeHost.ps1',
                 'OpenPath-NativeHost.cmd'
             )
+        }
+
+        It "Skips registry deletion when Firefox native host keys are already absent" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Uninstall-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Mozilla\NativeMessagingHosts\whitelist_native_host',
+                'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Mozilla\NativeMessagingHosts\whitelist_native_host',
+                'if (Test-Path $providerPath)',
+                'Remove-Item -Path $providerPath -Recurse -Force -ErrorAction SilentlyContinue'
+            )
+            $content.Contains('& reg.exe DELETE $registryPath /f 2>$null | Out-Null') | Should -BeFalse
         }
     }
 }
