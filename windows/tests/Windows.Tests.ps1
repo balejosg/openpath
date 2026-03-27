@@ -1408,11 +1408,10 @@ Describe "Browser Module" {
                 [PSCustomObject]@{}
             } -ModuleName Browser
 
-            Mock Set-Content {
+            Mock Write-OpenPathUtf8NoBomFile {
                 param(
                     [string]$Path,
-                    [string]$Value,
-                    [string]$Encoding
+                    [string]$Value
                 )
 
                 if ($Path -like '*policies.json') {
@@ -1453,11 +1452,10 @@ Describe "Browser Module" {
                 }
             } -ModuleName Browser
 
-            Mock Set-Content {
+            Mock Write-OpenPathUtf8NoBomFile {
                 param(
                     [string]$Path,
-                    [string]$Value,
-                    [string]$Encoding
+                    [string]$Value
                 )
 
                 if ($Path -like '*policies.json') {
@@ -1521,11 +1519,10 @@ Describe "Browser Module" {
                 throw "Unexpected path: $Path"
             } -ModuleName Browser
 
-            Mock Set-Content {
+            Mock Write-OpenPathUtf8NoBomFile {
                 param(
                     [string]$Path,
-                    [string]$Value,
-                    [string]$Encoding
+                    [string]$Value
                 )
 
                 if ($Path -like '*policies.json') {
@@ -1590,11 +1587,10 @@ Describe "Browser Module" {
                 throw "Unexpected path: $Path"
             } -ModuleName Browser
 
-            Mock Set-Content {
+            Mock Write-OpenPathUtf8NoBomFile {
                 param(
                     [string]$Path,
-                    [string]$Value,
-                    [string]$Encoding
+                    [string]$Value
                 )
 
                 if ($Path -like '*policies.json') {
@@ -1651,11 +1647,10 @@ Describe "Browser Module" {
                 throw "Unexpected path: $Path"
             } -ModuleName Browser
 
-            Mock Set-Content {
+            Mock Write-OpenPathUtf8NoBomFile {
                 param(
                     [string]$Path,
-                    [string]$Value,
-                    [string]$Encoding
+                    [string]$Value
                 )
 
                 if ($Path -like '*policies.json') {
@@ -1682,6 +1677,23 @@ Describe "Browser Module" {
                 $result | Should -Be 'file:///C:/OpenPath/browser-extension/firefox-release/openpath-firefox-extension.xpi'
             }
         }
+
+        It "Writes UTF-8 text files without a BOM" {
+            $tempFile = Join-Path $TestDrive 'policies.json'
+            $json = '{"policies":{"DisableTelemetry":true}}'
+            $browserModule = Get-Module Browser
+
+            & $browserModule {
+                param($Path, $Value)
+                Write-OpenPathUtf8NoBomFile -Path $Path -Value $Value
+            } $tempFile $json
+
+            $bytes = [System.IO.File]::ReadAllBytes($tempFile)
+            $hasUtf8Bom = $bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191
+
+            $hasUtf8Bom | Should -BeFalse
+            [System.IO.File]::ReadAllText($tempFile, [System.Text.UTF8Encoding]::new($false)) | Should -Be $json
+        }
     }
 
     Context "Set-ChromePolicy" {
@@ -1706,11 +1718,10 @@ Describe "Browser Module" {
                 [PSCustomObject]@{ FullName = 'mock-path' }
             } -ModuleName Browser
 
-            Mock Set-Content {
+            Mock Write-OpenPathUtf8NoBomFile {
                 param(
                     [string]$Path,
-                    [string]$Value,
-                    [string]$Encoding
+                    [string]$Value
                 )
 
                 if ($Path -like '*policies.json') {

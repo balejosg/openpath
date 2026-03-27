@@ -50,6 +50,23 @@ function ConvertTo-OpenPathFileUrl {
     return $uriBuilder.Uri.AbsoluteUri
 }
 
+function Write-OpenPathUtf8NoBomFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+        [AllowNull()]
+        [string]$Value
+    )
+
+    $parent = Split-Path $Path -Parent
+    if ($parent -and -not (Test-Path $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($Path, $Value, $utf8NoBom)
+}
+
 function Get-OpenPathFirefoxManagedExtensionPolicy {
     $config = $null
     try {
@@ -290,8 +307,9 @@ function Set-FirefoxPolicy {
         }
         
         $policiesPath = "$firefoxPath\policies.json"
-        $policies | ConvertTo-Json -Depth 10 | Set-Content $policiesPath -Encoding UTF8
-        
+        $policiesJson = $policies | ConvertTo-Json -Depth 10
+        Write-OpenPathUtf8NoBomFile -Path $policiesPath -Value $policiesJson
+
         Write-OpenPathLog "Firefox policies written to: $policiesPath"
         $policiesSet = $true
     }
