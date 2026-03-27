@@ -248,35 +248,44 @@ test_installer_extension_paths() {
     test_section "6/6" "Firefox installer path consistency"
 
     local browser_sh="$PROJECT_ROOT/linux/lib/browser.sh"
+    local asset_helper="$PROJECT_ROOT/linux/lib/firefox-extension-assets.sh"
 
-    if grep -Fq 'cp "$ext_source/dist/background.js" "$ext_dir/$ext_id/dist/"' "$browser_sh"; then
-        test_pass "installer copies dist/background.js"
+    if grep -Fq 'stage_firefox_unpacked_extension_assets "$ext_source" "$ext_dir" || return 1' "$browser_sh"; then
+        test_pass "installer delegates unpacked Firefox asset staging to the shared helper"
     else
-        test_fail "installer does not copy dist/background.js"
+        test_fail "installer does not call the shared Firefox asset staging helper"
     fi
 
-    if grep -Fq 'cp "$ext_source/dist/popup.js" "$ext_dir/$ext_id/dist/"' "$browser_sh"; then
-        test_pass "installer copies dist/popup.js"
+    if grep -Fq 'dist/background.js|file|extension build artifact' "$asset_helper"; then
+        test_pass "Firefox asset helper requires dist/background.js"
     else
-        test_fail "installer does not copy dist/popup.js"
+        test_fail "Firefox asset helper does not require dist/background.js"
     fi
 
-    if grep -Fq 'dist/config.js' "$browser_sh"; then
-        test_fail "installer still references dist/config.js"
+    if grep -Fq 'dist/popup.js|file|extension build artifact' "$asset_helper"; then
+        test_pass "Firefox asset helper requires dist/popup.js"
     else
-        test_pass "installer no longer requires dist/config.js"
+        test_fail "Firefox asset helper does not require dist/popup.js"
     fi
 
-    if grep -Fq 'cp -r "$ext_source/dist/lib" "$ext_dir/$ext_id/dist/"' "$browser_sh"; then
-        test_pass "installer copies dist/lib"
+    if grep -Fq 'dist/lib|dir|extension build artifact directory' "$asset_helper"; then
+        test_pass "Firefox asset helper requires dist/lib"
     else
-        test_fail "installer does not copy dist/lib"
+        test_fail "Firefox asset helper does not require dist/lib"
     fi
 
-    if grep -Fq 'cp -r "$ext_source/blocked" "$ext_dir/$ext_id/"' "$browser_sh"; then
-        test_pass "installer copies blocked screen assets"
+    if grep -Fq 'blocked/blocked.html|file|extension blocked screen' "$asset_helper" && \
+       grep -Fq 'blocked/blocked.css|file|extension blocked screen' "$asset_helper" && \
+       grep -Fq 'blocked/blocked.js|file|extension blocked screen' "$asset_helper"; then
+        test_pass "Firefox asset helper requires blocked screen assets"
     else
-        test_fail "installer does not copy blocked screen assets"
+        test_fail "Firefox asset helper does not require blocked screen assets"
+    fi
+
+    if grep -Fq 'dist/config.js' "$asset_helper"; then
+        test_fail "Firefox asset helper still references dist/config.js"
+    else
+        test_pass "Firefox asset helper no longer requires dist/config.js"
     fi
 
     if grep -q 'cp "\$ext_source/background.js"' "$browser_sh"; then

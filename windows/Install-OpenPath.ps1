@@ -527,7 +527,7 @@ function Install-OpenPathChromiumUnmanagedGuidance {
                     Write-Host "  Opened $($browserTarget.Name) store page for OpenPath extension" -ForegroundColor Green
                 }
                 catch {
-                    Write-Host "  ADVERTENCIA: No se pudo abrir $($browserTarget.Name) automáticamente: $_" -ForegroundColor Yellow
+                    Write-Host "  ADVERTENCIA: No se pudo abrir $($browserTarget.Name) automaticamente: $_" -ForegroundColor Yellow
                 }
             }
             else {

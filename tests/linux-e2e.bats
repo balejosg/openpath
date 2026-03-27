@@ -60,6 +60,29 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "linux pre-install validation follows shared Firefox asset staging helpers" {
+    run grep -nF 'stage_firefox_unpacked_extension_assets "$ext_source" "$ext_dir" || return 1' "$PROJECT_DIR/linux/lib/browser.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'dist/background.js|file|extension build artifact' "$PROJECT_DIR/linux/lib/firefox-extension-assets.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'dist/popup.js|file|extension build artifact' "$PROJECT_DIR/linux/lib/firefox-extension-assets.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'dist/lib|dir|extension build artifact directory' "$PROJECT_DIR/linux/lib/firefox-extension-assets.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'blocked/blocked.html|file|extension blocked screen' "$PROJECT_DIR/linux/lib/firefox-extension-assets.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'installer delegates unpacked Firefox asset staging to the shared helper' "$PROJECT_DIR/tests/e2e/pre-install-validation.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Firefox asset helper no longer requires dist/config.js' "$PROJECT_DIR/tests/e2e/pre-install-validation.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "linux uninstall restores resolv.conf with a copy fallback when symlink replacement is blocked" {
     run grep -nF 'cp /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf' "$PROJECT_DIR/linux/uninstall.sh"
     [ "$status" -eq 0 ]
