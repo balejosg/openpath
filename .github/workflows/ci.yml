@@ -208,6 +208,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build required workspaces
+        uses: ./.github/actions/build-workspaces
+        with:
+          build-shared: 'true'
+          build-api: 'true'
+
       - name: Run database migrations
         run: |
           npm run drizzle:push --workspace=@openpath/api
