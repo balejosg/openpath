@@ -1694,11 +1694,47 @@ Describe "Browser Module" {
             $hasUtf8Bom | Should -BeFalse
             [System.IO.File]::ReadAllText($tempFile, [System.Text.UTF8Encoding]::new($false)) | Should -Be $json
         }
+
+        It "Guards Firefox policy output against Set-Content -Encoding UTF8 regressions" {
+            $browserModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
+            $content = Get-Content $browserModulePath -Raw
+
+            $content | Should -Not -Match 'Set-Content\s+[^\r\n]*-Encoding\s+UTF8'
+            $content | Should -Match 'Write-OpenPathUtf8NoBomFile -Path \$policiesPath -Value \$policiesJson'
+        }
     }
 
     Context "Set-ChromePolicy" {
         It "Does not throw with empty blocked paths" -Skip:(-not ((Test-FunctionExists 'Set-ChromePolicy') -and (Test-IsAdmin))) {
             { Set-ChromePolicy -BlockedPaths @() } | Should -Not -Throw
+        }
+    }
+
+    Context "Browser doctor" {
+        It "Exports a focused browser doctor report helper" {
+            $browserModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
+            $content = Get-Content $browserModulePath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'function Get-OpenPathBrowserDoctorReport',
+                'Firefox metadata path:',
+                'Firefox XPI ACL summary:',
+                'Resolved install_url:',
+                'Policy JSON parse:'
+            )
+        }
+
+        It "OpenPath.ps1 routes doctor browser to the browser report" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                "Write-Host '  doctor        Print focused diagnostics (for example: browser)'",
+                "Write-Host '  .\\OpenPath.ps1 doctor browser'",
+                "'doctor' {",
+                "'browser' {",
+                'Get-OpenPathBrowserDoctorReport'
+            )
         }
     }
 
@@ -2271,6 +2307,17 @@ Describe "Installer" {
                 'BUILTIN\Users',
                 '"ReadAndExecute"',
                 'Read access granted for browser extension artifacts'
+            )
+        }
+
+        It "Stages Firefox release assets beneath the user-readable browser-extension ACL root" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '$browserExtensionAclPath = "$OpenPathRoot\browser-extension"',
+                '$firefoxReleaseTarget = "$OpenPathRoot\browser-extension\firefox-release"',
+                'Signed Firefox Release artifacts staged in $OpenPathRoot\browser-extension\firefox-release'
             )
         }
     }

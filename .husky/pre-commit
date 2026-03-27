@@ -2,31 +2,25 @@ set -e
 
 bash scripts/require-main-branch.sh pre-commit OpenPath
 
-# Pre-commit hook: Full verification before every commit
-# This enforces the mandatory test policy.
-
 echo ""
 echo "=========================================="
-echo "  Pre-commit Verification Starting"
+echo "  Pre-commit Fast Verification Starting"
 echo "=========================================="
 echo ""
 
-# 1. FAST: Check for sensitive files
 echo "[1/3] Checking for sensitive files..."
 npm run security:files
 
-# 2. FAST: Check test files exist for all source files
 echo ""
 echo "[2/3] Checking test file coverage..."
 bash scripts/check-test-files.sh
 
-# 3. SLOW: Full verification suite (typecheck, lint, coverage, tests, e2e)
 echo ""
-echo "[3/3] Running full verification suite..."
-npm run verify:full
+echo "[3/3] Running staged verification..."
+node scripts/agent-verify.js --staged
 
 echo ""
 echo "=========================================="
-echo "  All Checks Passed!"
+echo "  Fast Checks Passed!"
 echo "=========================================="
 echo ""

@@ -23,7 +23,7 @@
     Unified operational command for OpenPath Windows agent.
 .DESCRIPTION
     Provides a Linux-like command entrypoint for common operations:
-    status, update, health, enroll, rotate-token, restart.
+    status, update, health, doctor, enroll, rotate-token, restart.
 #>
 
 param(
@@ -57,6 +57,7 @@ function Show-OpenPathHelp {
     Write-Host '  status        Show runtime status summary'
     Write-Host '  update        Trigger immediate whitelist update'
     Write-Host '  health        Run watchdog health check now'
+    Write-Host '  doctor        Print focused diagnostics (for example: browser)'
     Write-Host '  self-update   Update Windows agent software from server'
     Write-Host '  enroll        Register machine in classroom mode'
     Write-Host '  rotate-token  Rotate tokenized whitelist URL'
@@ -66,6 +67,7 @@ function Show-OpenPathHelp {
     Write-Host 'Examples:'
     Write-Host '  .\OpenPath.ps1 status'
     Write-Host '  .\OpenPath.ps1 update'
+    Write-Host '  .\OpenPath.ps1 doctor browser'
     Write-Host '  .\OpenPath.ps1 self-update --check'
     Write-Host '  .\OpenPath.ps1 enroll -Classroom Aula1 -ApiUrl https://api.example.com -RegistrationToken <token>'
     Write-Host '  .\OpenPath.ps1 enroll -ApiUrl https://api.example.com -ClassroomId <id> -EnrollmentToken <token> -Unattended'
@@ -250,6 +252,7 @@ try {
     Import-Module "$openPathRoot\lib\DNS.psm1" -Force
     Import-Module "$openPathRoot\lib\Firewall.psm1" -Force
     Import-Module "$openPathRoot\lib\Services.psm1" -Force
+    Import-Module "$openPathRoot\lib\Browser.psm1" -Force -Global
     Import-Module "$openPathRoot\lib\Common.psm1" -Force -Global
 
     $requiredCommonCommands = @(
@@ -278,6 +281,18 @@ try {
         }
         'health' {
             Invoke-OpenPathScript -ScriptPath "$scriptsPath\Test-DNSHealth.ps1" -ScriptArguments $Arguments
+        }
+        'doctor' {
+            $doctorTarget = if ($Arguments.Count -gt 0) { [string]$Arguments[0] } else { '' }
+
+            switch ($doctorTarget.ToLowerInvariant()) {
+                'browser' {
+                    Write-Host (Get-OpenPathBrowserDoctorReport)
+                }
+                default {
+                    throw "Unknown doctor target: $doctorTarget. Supported targets: browser"
+                }
+            }
         }
         'self-update' {
             $checkOnly = $Arguments -contains '--check' -or $Arguments -contains '-check'

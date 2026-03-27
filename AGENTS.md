@@ -39,18 +39,22 @@ The dependency flows ONE direction only: `ClassroomPath → OpenPath`
 ### Proceso de Commit
 
 ```bash
-# 1. COMMIT NORMAL (el pre-commit hook ejecuta verify:full automáticamente)
+# 1. COMMIT NORMAL (el pre-commit hook ejecuta la verificación rápida)
 git add <files>
 git commit -m "mensaje"
 
-# 2. SI EL HOOK FALLA:
+# 2. ANTES DE COMPARTIR/PUSH:
+#    El pre-push ejecuta verify:full automáticamente
+git push origin main
+
+# 3. SI ALGÚN HOOK FALLA:
 #    - NO usar --no-verify
 #    - ARREGLAR el problema
-#    - REINTENTAR el commit
+#    - REINTENTAR el commit/push
 #    - REPETIR hasta que PASE
 ```
 
-**⚠️ NO ejecutar `npm run verify:full` manualmente antes de commit** - el hook lo hace automáticamente. Ejecutarlo dos veces es redundante.
+**⚠️ NO ejecutar `npm run verify:full` manualmente antes de push** - el hook `pre-push` ya lo hace automáticamente. Ejecutarlo dos veces es redundante.
 
 ### ¿Por Qué Esta Política Existe?
 
@@ -199,18 +203,24 @@ CI runs `@smoke` tests on every PR. Full suite runs on main/nightly/`e2e` label.
 
 ## ⛔ MANDATORY LOCAL VERIFICATION (CRITICAL - READ THIS)
 
-**All agents MUST run full verification locally before ANY commit.**
+**All agents MUST pass a fast local guard on commit and the full local suite before ANY push to `main`.**
+
+Remote CI adds only a small contract layer on top of that local policy:
+
+- Linux dnsmasq agent tests
+- Windows Pester agent tests
+- a lightweight Firefox delivery contract lane (`test:token-delivery` + Firefox extension tests)
 
 ### Verification Layers (Use the Right Level)
 
 For **fast feedback during development**, use the layered verification system:
 
-| Command                   | Time    | What It Runs                                  | When to Use                           |
-| ------------------------- | ------- | --------------------------------------------- | ------------------------------------- |
-| `npm run verify:agent`    | ~5-30s  | Auto-detects changes, runs minimal checks     | **Default for iterative development** |
-| `npm run verify:quick`    | ~15-30s | Typecheck + ESLint + Prettier                 | After code changes, before deep dive  |
-| `npm run verify:affected` | ~30-60s | Quick + tests for affected workspaces         | After changing tests or shared/       |
-| `npm run verify:full`     | ~3-5min | **COMPLETE suite (runs via pre-commit hook)** | **Automatic on commit**               |
+| Command                   | Time    | What It Runs                              | When to Use                           |
+| ------------------------- | ------- | ----------------------------------------- | ------------------------------------- |
+| `npm run verify:agent`    | ~5-30s  | Auto-detects changes, runs minimal checks | **Default for iterative development** |
+| `npm run verify:quick`    | ~15-30s | Typecheck + ESLint + Prettier             | After code changes, before deep dive  |
+| `npm run verify:affected` | ~30-60s | Quick + tests for affected workspaces     | After changing tests or shared/       |
+| `npm run verify:full`     | ~3-5min | **COMPLETE suite (full local gate)**      | **Final local guard before sharing**  |
 
 #### verify:agent (Recommended for Agents)
 
@@ -224,7 +234,8 @@ Automatically chooses the fastest verification based on what changed:
 # During iterative development:
 npm run verify:agent
 
-# On commit: verify:full runs automatically via pre-commit hook
+# On commit: pre-commit runs the fast staged guard
+# On push: pre-push runs verify:full
 ```
 
 #### Watch Mode (Continuous Feedback)
@@ -241,9 +252,9 @@ npm run test:watch:spa    # Vitest watch for react-spa
 npm run test:e2e:smoke    # Only @smoke tagged tests (~20s vs ~2min)
 ```
 
-### What verify:full Runs (via pre-commit hook)
+### What verify:full Runs (via pre-push hook)
 
-The pre-commit hook automatically runs `verify:full`, which includes:
+The pre-push hook automatically runs `verify:full`, which includes:
 
 1. `npm run verify` - Typecheck + ESLint (all workspaces)
 2. `npm run lint:shell` - Shellcheck for bash scripts
@@ -300,24 +311,27 @@ Everything else (lint, typecheck, unit tests, E2E) runs **locally only**.
 
 ```bash
 # 1. Make changes
-# 2. Commit (pre-commit hook runs verify:full automatically)
+# 2. Commit (pre-commit runs the fast staged guard)
 git add .
 git commit -m "your message"
 
-# 3. If hook fails:
+# 3. Push (pre-push runs verify:full automatically)
+git push origin main
+
+# 4. If hook fails:
 #    - Fix the issue
-#    - Retry the commit
+#    - Retry the commit/push
 #    - Repeat until hook passes
 ```
 
-**DO NOT run `npm run verify:full` manually before commit** - the hook does it automatically.
+**DO NOT run `npm run verify:full` manually before push** - the hook does it automatically.
 
 ## Git Hooks (Enforced)
 
 - **branch gate**: `scripts/require-main-branch.sh` blocks commits/pushes outside `main`
-- **pre-commit**: `.husky/pre-commit` runs `npm run verify:full` (full verification suite)
+- **pre-commit**: `.husky/pre-commit` runs the fast staged guard (`security:files`, `check-test-files`, `agent-verify --staged`)
 - **commit-msg**: `.husky/commit-msg` runs `commitlint` (conventional commits format)
-- **pre-push**: `.husky/pre-push` re-checks trunk policy before pushing
+- **pre-push**: `.husky/pre-push` re-checks trunk policy and runs `npm run verify:full`
 
 **NEVER use `--no-verify`.** If the hook fails, fix the issue.
 

@@ -18,6 +18,7 @@ export default tseslint.config(
       '**/shared/tests/**',
       'react-spa/e2e/**',
       'firefox-extension/blocked/**',
+      'tests/repo-config.test.mjs',
       'tests/selenium/**',
       'scripts/**',
     ],

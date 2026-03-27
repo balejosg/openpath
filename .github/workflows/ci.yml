@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
     paths:
+      - 'api/**'
+      - 'firefox-extension/**'
       - 'linux/**'
       - 'windows/**'
       - 'tests/**'
@@ -11,6 +13,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'api/**'
+      - 'firefox-extension/**'
       - 'linux/**'
       - 'windows/**'
       - 'tests/**'
@@ -26,20 +30,83 @@ permissions:
 # All lint, typecheck, unit tests, and E2E tests MUST be run locally
 # before pushing (via `npm run verify:full`).
 #
-# This CI ONLY runs tests that REQUIRE specific OS environments:
+# This CI ONLY runs tests that REQUIRE specific OS environments plus
+# a small Firefox delivery contract lane:
 # - Linux dnsmasq tests (require Ubuntu with dnsmasq/systemd)
 # - Windows agent tests (require Windows with Pester)
+# - Token/Firefox delivery contract tests (Linux + Node)
 #
 # Local verification is MANDATORY before commit. See AGENTS.md.
 # ============================================
 
 jobs:
+  detect-relevant-changes:
+    name: Detect Relevant Changes
+    runs-on: ubuntu-latest
+    outputs:
+      os_bound: ${{ steps.filter.outputs.os_bound }}
+      delivery_contracts: ${{ steps.filter.outputs.delivery_contracts }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "os_bound=true" >> "$GITHUB_OUTPUT"
+            echo "delivery_contracts=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            head_sha="${{ github.event.pull_request.head.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+            head_sha="${{ github.sha }}"
+          fi
+
+          changed_files="$(git diff --name-only "$base_sha" "$head_sha" || true)"
+          if [ -z "$changed_files" ]; then
+            changed_files="$(git show --pretty='' --name-only "$head_sha")"
+          fi
+
+          echo "Changed files:"
+          if [ -n "$changed_files" ]; then
+            echo "$changed_files"
+          else
+            echo "(none)"
+          fi
+
+          os_bound=false
+          delivery_contracts=false
+
+          if echo "$changed_files" | grep -Eq '^(linux/|windows/|tests/|\.github/workflows/ci\.yml$)'; then
+            os_bound=true
+          fi
+
+          if echo "$changed_files" | grep -Eq '^(api/|firefox-extension/|windows/|tests/|\.github/workflows/ci\.yml$)'; then
+            delivery_contracts=true
+          fi
+
+          echo "os_bound=$os_bound" >> "$GITHUB_OUTPUT"
+          echo "delivery_contracts=$delivery_contracts" >> "$GITHUB_OUTPUT"
+
   # ============================================
   # Job 1: Linux dnsmasq Agent Tests
   # ============================================
   test-linux-dnsmasq:
     name: Linux Agent Tests (BATS)
     runs-on: ubuntu-latest
+    needs: detect-relevant-changes
+    if: needs.detect-relevant-changes.outputs.os_bound == 'true'
 
     steps:
       - name: Checkout code
@@ -68,6 +135,8 @@ jobs:
   test-windows:
     name: Windows Agent Tests (Pester)
     runs-on: windows-latest
+    needs: detect-relevant-changes
+    if: needs.detect-relevant-changes.outputs.os_bound == 'true'
 
     steps:
       - name: Checkout code
@@ -99,19 +168,47 @@ jobs:
           retention-days: 7
 
   # ============================================
+  # Job 3: Firefox Delivery Contracts
+  # ============================================
+  test-delivery-contracts:
+    name: Delivery Contracts (Node)
+    runs-on: ubuntu-latest
+    needs: detect-relevant-changes
+    if: needs.detect-relevant-changes.outputs.delivery_contracts == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run token delivery contracts
+        run: npm run test:token-delivery --workspace=@openpath/api
+
+      - name: Run Firefox extension tests
+        run: npm test --workspace=@openpath/firefox-extension
+
+  # ============================================
   # Summary Job
   # ============================================
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [test-linux-dnsmasq, test-windows]
+    needs: [detect-relevant-changes, test-linux-dnsmasq, test-windows, test-delivery-contracts]
     if: always()
 
     steps:
       - name: Check all jobs
         run: |
           if [[ "${{ needs.test-linux-dnsmasq.result }}" == "failure" ]] || \
-             [[ "${{ needs.test-windows.result }}" == "failure" ]]; then
+             [[ "${{ needs.test-windows.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-delivery-contracts.result }}" == "failure" ]]; then
             echo "CI Failed"
             exit 1
           fi

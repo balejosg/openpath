@@ -80,7 +80,7 @@ describe('parseApiResponse', () => {
 
   it('parses json() output with the provided schema', async () => {
     const response = {
-      json: async () => ({ value: 'ok' }),
+      json: () => Promise.resolve({ value: 'ok' }),
     };
 
     await assert.doesNotReject(async () => {
@@ -91,7 +91,7 @@ describe('parseApiResponse', () => {
 
   it('throws when the response payload does not match the schema', async () => {
     const response = {
-      json: async () => ({ value: 123 }),
+      json: () => Promise.resolve({ value: 123 }),
     };
 
     await assert.rejects(() => parseApiResponse(response, schema), z.ZodError);

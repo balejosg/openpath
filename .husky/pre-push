@@ -2,4 +2,16 @@ set -e
 
 bash scripts/require-main-branch.sh pre-push OpenPath
 
-echo "Pre-push: trunk policy verified; verification already done in pre-commit"
+echo ""
+echo "=========================================="
+echo "  Pre-push Full Verification Starting"
+echo "=========================================="
+echo ""
+
+npm run verify:full
+
+echo ""
+echo "=========================================="
+echo "  Full Verification Passed!"
+echo "=========================================="
+echo ""
