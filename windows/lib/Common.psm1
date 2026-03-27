@@ -635,6 +635,56 @@ function Get-ValidWhitelistDomainsFromFile {
     )
 }
 
+function ConvertTo-OpenPathWhitelistFileContent {
+    <#
+    .SYNOPSIS
+        Serializes the effective whitelist policy file with all supported sections.
+    #>
+    param(
+        [string[]]$Whitelist = @(),
+
+        [string[]]$BlockedSubdomains = @(),
+
+        [string[]]$BlockedPaths = @(),
+
+        [switch]$Disabled
+    )
+
+    $lines = [System.Collections.Generic.List[string]]::new()
+
+    if ($Disabled) {
+        $lines.Add('#DESACTIVADO') | Out-Null
+    }
+
+    $lines.Add('## WHITELIST') | Out-Null
+    foreach ($domain in @($Whitelist)) {
+        $trimmed = ([string]$domain).Trim()
+        if ($trimmed) {
+            $lines.Add($trimmed) | Out-Null
+        }
+    }
+
+    $lines.Add('') | Out-Null
+    $lines.Add('## BLOCKED-SUBDOMAINS') | Out-Null
+    foreach ($subdomain in @($BlockedSubdomains)) {
+        $trimmed = ([string]$subdomain).Trim()
+        if ($trimmed) {
+            $lines.Add($trimmed) | Out-Null
+        }
+    }
+
+    $lines.Add('') | Out-Null
+    $lines.Add('## BLOCKED-PATHS') | Out-Null
+    foreach ($pathRule in @($BlockedPaths)) {
+        $trimmed = ([string]$pathRule).Trim()
+        if ($trimmed) {
+            $lines.Add($trimmed) | Out-Null
+        }
+    }
+
+    return ($lines -join [Environment]::NewLine).TrimEnd()
+}
+
 function Save-OpenPathWhitelistCheckpoint {
     <#
     .SYNOPSIS
@@ -1886,6 +1936,9 @@ function Invoke-OpenPathAgentSelfUpdate {
         if (Get-Command -Name 'Enable-OpenPathTask' -ErrorAction SilentlyContinue) {
             Enable-OpenPathTask | Out-Null
         }
+        if (Get-Command -Name 'Register-OpenPathFirefoxNativeHost' -ErrorAction SilentlyContinue) {
+            Register-OpenPathFirefoxNativeHost -Config $config | Out-Null
+        }
         if (Get-Command -Name 'Restart-AcrylicService' -ErrorAction SilentlyContinue) {
             Restart-AcrylicService | Out-Null
         }
@@ -1946,6 +1999,7 @@ Export-ModuleMember -Function @(
     'Restore-OpenPathProtectedMode',
     'Get-OpenPathDnsProbeDomains',
     'Get-ValidWhitelistDomainsFromFile',
+    'ConvertTo-OpenPathWhitelistFileContent',
     'Save-OpenPathWhitelistCheckpoint',
     'Get-OpenPathLatestCheckpoint',
     'Restore-OpenPathLatestCheckpoint',

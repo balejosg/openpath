@@ -57,6 +57,32 @@ function Get-OpenPathFirefoxNativeHostRegistryPaths {
     )
 }
 
+function Sync-OpenPathFirefoxNativeHostArtifacts {
+    param(
+        [string]$SourceRoot = "$script:OpenPathRoot\scripts"
+    )
+
+    $nativeRoot = Get-OpenPathFirefoxNativeHostRoot
+    if (-not (Test-Path $nativeRoot)) {
+        New-Item -ItemType Directory -Path $nativeRoot -Force | Out-Null
+    }
+
+    $artifactNames = @('OpenPath-NativeHost.ps1', 'OpenPath-NativeHost.cmd')
+    $missingArtifacts = @(
+        $artifactNames | Where-Object { -not (Test-Path (Join-Path $SourceRoot $_)) }
+    )
+
+    if ($missingArtifacts.Count -gt 0) {
+        throw "Firefox native host artifacts not found in $SourceRoot: $($missingArtifacts -join ', ')"
+    }
+
+    foreach ($artifactName in $artifactNames) {
+        Copy-Item (Join-Path $SourceRoot $artifactName) -Destination (Join-Path $nativeRoot $artifactName) -Force
+    }
+
+    return $true
+}
+
 function Get-OpenPathScheduledTaskSecurityDescriptor {
     param(
         [Parameter(Mandatory = $true)]
@@ -297,6 +323,8 @@ function Register-OpenPathFirefoxNativeHost {
     if (-not (Test-Path $nativeRoot)) {
         New-Item -ItemType Directory -Path $nativeRoot -Force | Out-Null
     }
+
+    Sync-OpenPathFirefoxNativeHostArtifacts | Out-Null
 
     $manifestPath = Get-OpenPathFirefoxNativeHostManifestPath
     $wrapperPath = Get-OpenPathFirefoxNativeHostWrapperPath
@@ -889,6 +917,7 @@ function Set-AllBrowserPolicy {
 Export-ModuleMember -Function @(
     'Get-OpenPathBrowserDoctorReport',
     'Register-OpenPathFirefoxNativeHost',
+    'Sync-OpenPathFirefoxNativeHostArtifacts',
     'Sync-OpenPathFirefoxNativeHostState',
     'Unregister-OpenPathFirefoxNativeHost',
     'Set-FirefoxPolicy',

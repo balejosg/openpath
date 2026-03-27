@@ -40,6 +40,7 @@ Initialize-OpenPathScriptSession `
     'Get-OpenPathFromUrl',
     'Get-OpenPathRuntimeHealth',
     'Get-ValidWhitelistDomainsFromFile',
+    'ConvertTo-OpenPathWhitelistFileContent',
     'Restore-OpenPathLatestCheckpoint',
     'Restore-OpenPathProtectedMode',
     'Save-OpenPathWhitelistCheckpoint',
@@ -329,7 +330,11 @@ try {
             }
             else {
                 # Save whitelist to local file
-                $whitelist.Whitelist | Set-Content $whitelistPath -Encoding UTF8
+                $serializedWhitelist = ConvertTo-OpenPathWhitelistFileContent `
+                    -Whitelist $whitelist.Whitelist `
+                    -BlockedSubdomains $whitelist.BlockedSubdomains `
+                    -BlockedPaths $whitelist.BlockedPaths
+                $serializedWhitelist | Set-Content $whitelistPath -Encoding UTF8
                 Sync-FirefoxNativeHostMirror -Config $config
 
                 # Update Acrylic DNS hosts

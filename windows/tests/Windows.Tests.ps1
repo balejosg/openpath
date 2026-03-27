@@ -308,6 +308,24 @@ Describe "Common Module" {
         }
     }
 
+    Context "ConvertTo-OpenPathWhitelistFileContent" {
+        It "Serializes whitelist, blocked subdomains, and blocked paths sections" {
+            $content = ConvertTo-OpenPathWhitelistFileContent `
+                -Whitelist @('allowed.example') `
+                -BlockedSubdomains @('ads.allowed.example') `
+                -BlockedPaths @('allowed.example/private')
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '## WHITELIST',
+                'allowed.example',
+                '## BLOCKED-SUBDOMAINS',
+                'ads.allowed.example',
+                '## BLOCKED-PATHS',
+                'allowed.example/private'
+            )
+        }
+    }
+
     Context "Get-HostFromUrl" {
         It "Returns host for a valid URL" {
             $parsedHost = Get-HostFromUrl -Url 'https://api.example.com/path?x=1'
@@ -1753,6 +1771,18 @@ Describe "Browser Module" {
                 'Native host update task user access:'
             )
         }
+
+        It "Re-stages native host artifacts before writing the Firefox manifest" {
+            $browserModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
+            $content = Get-Content $browserModulePath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'function Sync-OpenPathFirefoxNativeHostArtifacts',
+                "OpenPath-NativeHost.ps1",
+                "OpenPath-NativeHost.cmd",
+                'Sync-OpenPathFirefoxNativeHostArtifacts | Out-Null'
+            )
+        }
     }
 
     Context "Task scheduler permissions" {
@@ -1944,6 +1974,18 @@ Describe "Services Module" {
             )
 
             $content.Contains('RepetitionDuration ([TimeSpan]::MaxValue)') | Should -BeFalse
+        }
+    }
+
+    Context "Agent self-update" {
+        It "Re-registers the Firefox native host after applying updated files" {
+            $commonPath = Join-Path $PSScriptRoot ".." "lib" "Common.psm1"
+            $content = Get-Content $commonPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                "Copy-Item -Path \$download.StagedPath -Destination \$download.DestinationPath -Force",
+                "Register-OpenPathFirefoxNativeHost -Config \$config | Out-Null"
+            )
         }
     }
 
