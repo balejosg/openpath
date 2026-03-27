@@ -176,6 +176,21 @@ jobs:
     needs: detect-relevant-changes
     if: needs.detect-relevant-changes.outputs.delivery_contracts == 'true'
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: openpath
+          POSTGRES_PASSWORD: openpath_dev
+          POSTGRES_DB: openpath
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -188,8 +203,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run database migrations
+        run: |
+          npm run drizzle:push --workspace=@openpath/api
+          npm run db:migrate --workspace=@openpath/api
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: openpath
+          DB_USER: openpath
+          DB_PASSWORD: openpath_dev
+
       - name: Run token delivery contracts
         run: npm run test:token-delivery --workspace=@openpath/api
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: openpath
+          DB_USER: openpath
+          DB_PASSWORD: openpath_dev
+          JWT_SECRET: test-jwt-secret-for-ci-testing
+          ADMIN_TOKEN: test-admin-token-for-ci
+          SHARED_SECRET: test-shared-secret-for-ci
 
       - name: Run Firefox extension tests
         run: npm test --workspace=@openpath/firefox-extension
