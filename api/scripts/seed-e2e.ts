@@ -11,6 +11,8 @@ import { eq } from 'drizzle-orm';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { users, roles, whitelistGroups, whitelistRules } from '../src/db/schema.js';
 
 const { Pool } = pg;
@@ -150,7 +152,9 @@ export async function seedE2E(): Promise<void> {
   }
 }
 
-const isMainModule = import.meta.url === `file://${process.argv[1] ?? ''}`;
+const isMainModule =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 
 if (isMainModule) {
   seedE2E().catch((error: unknown) => {
