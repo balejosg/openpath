@@ -8,6 +8,8 @@ import assert from 'node:assert';
 import { Builder, By, until, type WebDriver, type WebElement } from 'selenium-webdriver';
 import * as firefox from 'selenium-webdriver/firefox';
 
+import { waitForFirefoxExtensionUuid } from '../e2e/student-flow/firefox-extension-uuid.js';
+
 const exec = promisify(execCallback);
 
 const FIREFOX_EXTENSION_ID = 'monitor-bloqueos@openpath';
@@ -220,22 +222,11 @@ function escapeRegExp(value: string): string {
 }
 
 async function discoverFirefoxExtensionUuid(profileDir: string): Promise<string> {
-  const prefsPath = path.join(profileDir, 'prefs.js');
-  const prefsContent = await fs.readFile(prefsPath, 'utf8');
-  const regex = /user_pref\("extensions\.webextensions\.uuids",\s*"(.+)"\);/;
-  const match = regex.exec(prefsContent);
-  if (match?.[1] === undefined) {
-    throw new Error(`Could not find extensions.webextensions.uuids in ${prefsPath}`);
-  }
-
-  const rawJson = match[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-  const mapping = JSON.parse(rawJson) as Record<string, string>;
-  const uuid = mapping[FIREFOX_EXTENSION_ID];
-  if (uuid === undefined || uuid === '') {
-    throw new Error(`Could not resolve extension UUID for ${FIREFOX_EXTENSION_ID}`);
-  }
-
-  return uuid;
+  return waitForFirefoxExtensionUuid({
+    profileDir,
+    extensionId: FIREFOX_EXTENSION_ID,
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+  });
 }
 
 function buildPopupUrl(extensionUuid: string): string {
