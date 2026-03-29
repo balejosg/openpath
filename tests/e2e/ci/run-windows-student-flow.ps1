@@ -544,6 +544,18 @@ function Install-AndEnrollClient {
     if ($LASTEXITCODE -ne 0) {
         throw "Update-OpenPath.ps1 failed with exit code $LASTEXITCODE"
     }
+
+    $scenarioPath = Join-Path $script:ArtifactsRoot 'student-scenario.json'
+    $config = Get-Content 'C:\OpenPath\data\config.json' -Raw | ConvertFrom-Json
+    $nodeCommand = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
+    if (-not $nodeCommand) {
+        throw 'node.exe was not found on PATH.'
+    }
+
+    & $nodeCommand --import tsx tests/e2e/student-flow/reconcile-student-scenario.ts `
+        --scenario-file $scenarioPath `
+        --whitelist-url $config.whitelistUrl
+    Assert-LastExitCode 'student scenario reconciliation'
 }
 
 function Invoke-SeleniumStudentSuite {
