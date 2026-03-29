@@ -2131,8 +2131,9 @@ const gracefulShutdown = (signal: string): void => {
 const isMainModule =
   process.argv[1] !== undefined &&
   import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+const shouldStartServer = isMainModule || process.env.OPENPATH_FORCE_SERVER_START === 'true';
 
-if (isMainModule) {
+if (shouldStartServer) {
   const serverStartTime = new Date();
 
   // Initialize database schema before accepting connections
