@@ -197,12 +197,15 @@ function Start-TestPostgresProcess {
         throw 'Could not locate PostgreSQL binaries after installation.'
     }
 
-    $script:PostgresDataDir = Join-Path $script:ArtifactsRoot 'postgres-data'
-    $script:PostgresLogPath = Join-Path $script:ArtifactsRoot 'postgres.log'
-
-    if (Test-Path $script:PostgresDataDir) {
-        Remove-Item $script:PostgresDataDir -Recurse -Force
+    $tempRoot = if ($env:RUNNER_TEMP) {
+        $env:RUNNER_TEMP
     }
+    else {
+        [System.IO.Path]::GetTempPath()
+    }
+
+    $script:PostgresDataDir = Join-Path $tempRoot ("openpath-postgres-" + [System.Guid]::NewGuid().ToString('N'))
+    $script:PostgresLogPath = Join-Path $script:ArtifactsRoot 'postgres.log'
 
     New-Item -ItemType Directory -Path $script:PostgresDataDir -Force | Out-Null
 
@@ -514,6 +517,10 @@ function Cleanup-TestPostgres {
         $pgCtl = Join-Path $script:PostgresBinDir 'pg_ctl.exe'
         if (Test-Path $pgCtl) {
             & $pgCtl -D $script:PostgresDataDir -m fast stop | Out-Null
+        }
+
+        if (Test-Path $script:PostgresDataDir) {
+            Remove-Item $script:PostgresDataDir -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 }
