@@ -271,7 +271,7 @@ function Start-TestPostgresProcess {
         -OutputPath (Join-Path $script:ArtifactsRoot 'postgres-initdb.log')
 
     Invoke-ProcessWithTimeout -FilePath $pgCtl `
-        -ArgumentList @('start', '-D', $script:PostgresDataDir, '-l', $script:PostgresLogPath, '-o', "-p $($script:PostgresPort)", '-w') `
+        -ArgumentList @('start', '-D', $script:PostgresDataDir, '-l', $script:PostgresLogPath, "--options=-p $($script:PostgresPort)", '-w') `
         -TimeoutMs 120000 `
         -Context 'pg_ctl start' `
         -OutputPath (Join-Path $script:ArtifactsRoot 'postgres-start.log')
