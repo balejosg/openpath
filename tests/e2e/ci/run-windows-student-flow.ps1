@@ -174,9 +174,34 @@ function Invoke-PostgresSql {
     }
 
     $psql = Join-Path $script:PostgresBinDir 'psql.exe'
-    $env:PGPASSWORD = 'openpath_test'
-    & $psql -h 127.0.0.1 -p $script:PostgresPort -U postgres -d postgres -v ON_ERROR_STOP=1 -c $Sql | Out-Host
-    Assert-LastExitCode 'psql'
+    $outputPath = Join-Path $script:ArtifactsRoot 'psql-last.log'
+
+    $process = Start-Process -FilePath $psql `
+        -ArgumentList @('-w', '-h', '127.0.0.1', '-p', [string]$script:PostgresPort, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', $Sql) `
+        -NoNewWindow `
+        -RedirectStandardOutput $outputPath `
+        -RedirectStandardError $outputPath `
+        -PassThru
+
+    if (-not $process.WaitForExit(30000)) {
+        try {
+            $process.Kill($true)
+        }
+        catch {
+            # Best effort.
+        }
+
+        $psqlOutput = if (Test-Path $outputPath) { Get-Content $outputPath -Raw } else { '' }
+        throw "psql timed out after 30s. Output: $psqlOutput"
+    }
+
+    if (Test-Path $outputPath) {
+        Get-Content $outputPath -Raw | Out-Host
+    }
+
+    if ($process.ExitCode -ne 0) {
+        throw "psql failed with exit code $($process.ExitCode)"
+    }
 }
 
 function Start-TestPostgresProcess {
@@ -217,10 +242,12 @@ function Start-TestPostgresProcess {
     & $pgCtl -D $script:PostgresDataDir -l $script:PostgresLogPath -o "-p $($script:PostgresPort)" -w start | Out-Host
     Assert-LastExitCode 'pg_ctl start'
 
+    Write-Step 'Verifying PostgreSQL readiness and bootstrap SQL...'
     for ($attempt = 1; $attempt -le 30; $attempt += 1) {
         try {
             & $pgIsReady -h 127.0.0.1 -p $script:PostgresPort -U postgres -d postgres | Out-Null
             if ($LASTEXITCODE -eq 0) {
+                Write-Host "PostgreSQL ready on attempt $attempt" -ForegroundColor DarkGray
                 Invoke-PostgresSql -Sql "DO `$`$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openpath') THEN CREATE ROLE openpath LOGIN PASSWORD 'openpath_test'; ELSE ALTER ROLE openpath WITH LOGIN PASSWORD 'openpath_test'; END IF; END `$`$;"
                 Invoke-PostgresSql -Sql "DROP DATABASE IF EXISTS openpath_test WITH (FORCE);"
                 Invoke-PostgresSql -Sql "CREATE DATABASE openpath_test OWNER openpath;"
@@ -229,6 +256,7 @@ function Start-TestPostgresProcess {
             }
         }
         catch {
+            Write-Host "PostgreSQL not ready yet (attempt $attempt): $_" -ForegroundColor DarkGray
             Start-Sleep -Seconds 1
         }
     }
