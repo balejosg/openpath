@@ -51,6 +51,14 @@ function Assert-LastExitCode {
     }
 }
 
+function Quote-Argument {
+    param(
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+
+    '"' + $Value.Replace('"', '""') + '"'
+}
+
 function Invoke-ProcessWithTimeout {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
@@ -271,7 +279,16 @@ function Start-TestPostgresProcess {
         -OutputPath (Join-Path $script:ArtifactsRoot 'postgres-initdb.log')
 
     Invoke-ProcessWithTimeout -FilePath $pgCtl `
-        -ArgumentList @('start', '-D', $script:PostgresDataDir, '-l', $script:PostgresLogPath, "--options=-p $($script:PostgresPort)", '-w') `
+        -ArgumentList @(
+            'start',
+            '-D',
+            (Quote-Argument -Value $script:PostgresDataDir),
+            '-l',
+            (Quote-Argument -Value $script:PostgresLogPath),
+            '-o',
+            (Quote-Argument -Value "-p $($script:PostgresPort)"),
+            '-w'
+        ) `
         -TimeoutMs 120000 `
         -Context 'pg_ctl start' `
         -OutputPath (Join-Path $script:ArtifactsRoot 'postgres-start.log')
