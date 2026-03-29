@@ -232,9 +232,12 @@ function Invoke-PostgresSql {
 
     $psql = Join-Path $script:PostgresBinDir 'psql.exe'
     $outputPath = Join-Path $script:ArtifactsRoot 'psql-last.log'
+    $sqlPath = Join-Path $script:ArtifactsRoot 'psql-last.sql'
+
+    [System.IO.File]::WriteAllText($sqlPath, "$Sql`n", [System.Text.UTF8Encoding]::new($false))
 
     Invoke-ProcessWithTimeout -FilePath $psql `
-        -ArgumentList @('-w', '-h', '127.0.0.1', '-p', [string]$script:PostgresPort, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', $Sql) `
+        -ArgumentList @('-w', '-h', '127.0.0.1', '-p', [string]$script:PostgresPort, '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-f', $sqlPath) `
         -TimeoutMs 30000 `
         -Context 'psql' `
         -OutputPath $outputPath
