@@ -2129,7 +2129,8 @@ const gracefulShutdown = (signal: string): void => {
 
 // Start server when run directly
 const isMainModule =
-  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 
 if (isMainModule) {
   const serverStartTime = new Date();
