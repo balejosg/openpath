@@ -48,3 +48,11 @@ These tests are automatically run by `.github/workflows/e2e-tests.yml` on:
 - Push to main/master (when relevant files change)
 - Pull requests
 - Manual dispatch
+
+## Implementation References
+
+The planned student-policy expansion for real Linux/Windows client coverage is documented in:
+
+- `docs/plans/2026-03-28-student-policy-e2e.md`
+- `docs/plans/2026-03-28-student-policy-e2e-matrix.md`
+- `docs/plans/2026-03-28-student-policy-e2e-checklist.md`

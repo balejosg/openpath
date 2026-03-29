@@ -201,6 +201,52 @@ function Handle-Message {
             }
         }
 
+        'get-config' {
+            $hostname = if ($state.PSObject.Properties['machineName'] -and $state.machineName) {
+                [string]$state.machineName
+            }
+            else {
+                [string]$env:COMPUTERNAME
+            }
+
+            $apiUrl = if ($state.PSObject.Properties['requestApiUrl'] -and $state.requestApiUrl) {
+                ([string]$state.requestApiUrl).TrimEnd('/')
+            }
+            elseif ($state.PSObject.Properties['apiUrl'] -and $state.apiUrl) {
+                ([string]$state.apiUrl).TrimEnd('/')
+            }
+            else {
+                ''
+            }
+
+            $whitelistUrl = if ($state.PSObject.Properties['whitelistUrl']) {
+                [string]$state.whitelistUrl
+            }
+            else {
+                ''
+            }
+
+            $machineToken = Get-MachineTokenFromWhitelistUrl -WhitelistUrl $whitelistUrl
+            if (-not $apiUrl) {
+                return @{
+                    success = $false
+                    action = 'get-config'
+                    error = 'API URL is not configured'
+                }
+            }
+
+            return @{
+                success = $true
+                action = 'get-config'
+                apiUrl = $apiUrl
+                requestApiUrl = $apiUrl
+                fallbackApiUrls = @()
+                hostname = $hostname
+                machineToken = if ($machineToken) { $machineToken } else { '' }
+                whitelistUrl = $whitelistUrl
+            }
+        }
+
         'get-blocked-paths' {
             $paths = @($sections.BlockedPaths)
             $digest = ''

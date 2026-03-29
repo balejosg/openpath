@@ -19,6 +19,8 @@
     "test:react-spa": "npm test --workspace=@openpath/react-spa",
     "test:e2e": "npm run test:e2e --workspace=@openpath/react-spa",
     "test:e2e:smoke": "npm run test:e2e --workspace=@openpath/react-spa -- --grep @smoke",
+    "test:student-policy:linux": "bash tests/e2e/ci/run-linux-student-flow.sh",
+    "test:student-policy:windows": "pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/run-windows-student-flow.ps1",
     "test:repo-config": "node --test tests/repo-config.test.mjs",
     "test:watch:spa": "npm run test --workspace=@openpath/react-spa -- --watch",
     "test:watch:api": "npm run test:watch --workspace=@openpath/api",

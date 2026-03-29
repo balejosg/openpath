@@ -634,7 +634,8 @@ export async function updateRule(input: UpdateRuleInput): Promise<Rule | null> {
   const updates: Partial<{ value: string; comment: string | null }> = {};
 
   if (value !== undefined) {
-    const normalizedValue = normalize.domain(value);
+    const normalizedValue =
+      existing.type === 'blocked_path' ? value.trim() : normalize.domain(value);
 
     // Check for duplicates if changing value
     const [duplicate] = await db
@@ -663,6 +664,7 @@ export async function updateRule(input: UpdateRuleInput): Promise<Rule | null> {
   // Only update if there's something to update
   if (Object.keys(updates).length > 0) {
     await db.update(whitelistRules).set(updates).where(eq(whitelistRules.id, id));
+    await touchGroupUpdatedAt(existing.groupId);
     logger.debug('Updated rule', { id, ...updates });
   }
 
@@ -680,7 +682,7 @@ export async function createRule(
   comment: string | null = null,
   source: RuleSource = 'manual'
 ): Promise<CreateRuleResult> {
-  const normalizedValue = normalize.domain(value);
+  const normalizedValue = type === 'blocked_path' ? value.trim() : normalize.domain(value);
 
   // Check for existing rule
   const [existing] = await db
@@ -708,6 +710,8 @@ export async function createRule(
     comment,
   });
 
+  await touchGroupUpdatedAt(groupId);
+
   logger.debug('Created rule', { id, groupId, type, value: normalizedValue, source });
   return { success: true, id };
 }
@@ -716,7 +720,12 @@ export async function createRule(
  * Delete a rule by ID.
  */
 export async function deleteRule(id: string): Promise<boolean> {
-  return getRowCount(await db.delete(whitelistRules).where(eq(whitelistRules.id, id))) > 0;
+  const existing = await getRuleById(id);
+  const deleted = getRowCount(await db.delete(whitelistRules).where(eq(whitelistRules.id, id))) > 0;
+  if (deleted && existing) {
+    await touchGroupUpdatedAt(existing.groupId);
+  }
+  return deleted;
 }
 
 /**
@@ -729,9 +738,17 @@ export async function bulkDeleteRules(ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
 
   const uniqueIds = Array.from(new Set(ids));
+  const existingRules = await db
+    .select({ groupId: whitelistRules.groupId })
+    .from(whitelistRules)
+    .where(inArray(whitelistRules.id, uniqueIds));
   const deletedCount = getRowCount(
     await db.delete(whitelistRules).where(inArray(whitelistRules.id, uniqueIds))
   );
+  if (deletedCount > 0) {
+    const affectedGroupIds = new Set(existingRules.map((rule) => rule.groupId));
+    await Promise.all(Array.from(affectedGroupIds, (groupId) => touchGroupUpdatedAt(groupId)));
+  }
   logger.debug('Bulk deleted rules', { count: deletedCount, requested: ids.length });
   return deletedCount;
 }

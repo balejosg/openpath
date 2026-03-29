@@ -16,7 +16,7 @@ import { users, roles, whitelistGroups, whitelistRules } from '../src/db/schema.
 const { Pool } = pg;
 
 // Test users matching react-spa/e2e/fixtures/test-utils.ts
-const TEST_USERS = [
+export const TEST_USERS = [
   {
     email: 'admin@openpath.local',
     name: 'Admin User',
@@ -38,13 +38,13 @@ const TEST_USERS = [
 ];
 
 // Test group
-const TEST_GROUP = {
+export const TEST_GROUP = {
   id: 'test-e2e-group',
   name: 'test-e2e-group',
   displayName: 'E2E Test Group',
 };
 
-async function seed(): Promise<void> {
+export async function seedE2E(): Promise<void> {
   console.log('🌱 Starting E2E database seed...\n');
 
   const pool = new Pool({
@@ -150,7 +150,11 @@ async function seed(): Promise<void> {
   }
 }
 
-seed().catch((error: unknown) => {
-  console.error('Seed failed:', error);
-  process.exit(1);
-});
+const isMainModule = import.meta.url === `file://${process.argv[1] ?? ''}`;
+
+if (isMainModule) {
+  seedE2E().catch((error: unknown) => {
+    console.error('Seed failed:', error);
+    process.exit(1);
+  });
+}

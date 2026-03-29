@@ -77,6 +77,7 @@ import {
   ensureScheduleBoundaryTickerStarted,
   getSseClientCount,
   registerSseClient,
+  runScheduleBoundaryTickOnce,
 } from './lib/rule-events.js';
 import { UNRESTRICTED_GROUP_ID } from './lib/exemption-storage.js';
 
@@ -104,6 +105,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+let testNowOverride: Date | null = null;
+
+function getCurrentEvaluationTime(): Date {
+  return config.isTest && testNowOverride !== null ? new Date(testNowOverride) : new Date();
+}
+
+function getBodyField(body: unknown, key: string): unknown {
+  if (typeof body !== 'object' || body === null) {
+    return undefined;
+  }
+
+  return (body as Record<string, unknown>)[key];
+}
 
 // Optional: enable proxy-aware IP parsing (e.g. for rate limiting behind reverse proxies).
 if (config.trustProxy !== undefined) {
@@ -1094,6 +1108,176 @@ app.post('/api/enroll/:classroomId/ticket', (req: Request, res: Response): void 
   })();
 });
 
+if (config.isTest) {
+  app.get('/api/test-support/machine-context/:hostname', (req: Request, res: Response): void => {
+    void (async (): Promise<void> => {
+      try {
+        const decoded = await verifyAccessTokenFromRequest(req);
+        if (!decoded) {
+          res.status(401).json({ success: false, error: 'Authorization required' });
+          return;
+        }
+
+        const roles = decoded.roles.map((r) => r.role);
+        if (!roles.includes('admin') && !roles.includes('teacher')) {
+          res.status(403).json({ success: false, error: 'Teacher access required' });
+          return;
+        }
+
+        const hostname = getFirstParam(req.params.hostname);
+        if (!hostname) {
+          res.status(400).json({ success: false, error: 'hostname is required' });
+          return;
+        }
+
+        const now = getCurrentEvaluationTime();
+        const machine = await classroomStorage.getMachineByHostname(hostname);
+        const context = await classroomStorage.resolveMachineEnforcementContext(hostname, now);
+        const classroom = machine?.classroomId
+          ? await classroomStorage.getClassroomById(machine.classroomId)
+          : null;
+
+        res.json({
+          success: true,
+          machine: machine
+            ? {
+                id: machine.id,
+                hostname: machine.hostname,
+                reportedHostname: machine.reportedHostname,
+                classroomId: machine.classroomId,
+              }
+            : null,
+          context,
+          classroom: classroom
+            ? {
+                id: classroom.id,
+                defaultGroupId: classroom.defaultGroupId,
+                activeGroupId: classroom.activeGroupId,
+              }
+            : null,
+        });
+      } catch (error) {
+        logger.error('Test-support machine context error', { error: getErrorMessage(error) });
+        res.status(500).json({ success: false, error: 'Internal error' });
+      }
+    })();
+  });
+
+  app.post('/api/test-support/auto-approve', (req: Request, res: Response): void => {
+    void (async (): Promise<void> => {
+      try {
+        const decoded = await verifyAccessTokenFromRequest(req);
+        if (!decoded) {
+          res.status(401).json({ success: false, error: 'Authorization required' });
+          return;
+        }
+
+        const roles = decoded.roles.map((r) => r.role);
+        if (!roles.includes('admin') && !roles.includes('teacher')) {
+          res.status(403).json({ success: false, error: 'Teacher access required' });
+          return;
+        }
+
+        const enabled = getBodyField(req.body as unknown, 'enabled');
+        if (typeof enabled !== 'boolean') {
+          res.status(400).json({ success: false, error: 'enabled boolean is required' });
+          return;
+        }
+
+        Object.defineProperty(config, 'autoApproveMachineRequests', {
+          value: enabled,
+          writable: true,
+          configurable: true,
+          enumerable: true,
+        });
+
+        res.json({ success: true, enabled: config.autoApproveMachineRequests });
+      } catch (error) {
+        logger.error('Test-support auto-approve error', { error: getErrorMessage(error) });
+        res.status(500).json({ success: false, error: 'Internal error' });
+      }
+    })();
+  });
+
+  app.post('/api/test-support/clock', (req: Request, res: Response): void => {
+    void (async (): Promise<void> => {
+      try {
+        const decoded = await verifyAccessTokenFromRequest(req);
+        if (!decoded) {
+          res.status(401).json({ success: false, error: 'Authorization required' });
+          return;
+        }
+
+        const roles = decoded.roles.map((r) => r.role);
+        if (!roles.includes('admin') && !roles.includes('teacher')) {
+          res.status(403).json({ success: false, error: 'Teacher access required' });
+          return;
+        }
+
+        const rawAt = getBodyField(req.body as unknown, 'at');
+        if (rawAt === null) {
+          testNowOverride = null;
+          res.json({ success: true, now: null });
+          return;
+        }
+
+        if (typeof rawAt !== 'string' || rawAt.trim() === '') {
+          res.status(400).json({ success: false, error: 'at must be an ISO timestamp or null' });
+          return;
+        }
+
+        const at = new Date(rawAt);
+        if (!Number.isFinite(at.getTime())) {
+          res.status(400).json({ success: false, error: 'at must be a valid ISO timestamp' });
+          return;
+        }
+
+        testNowOverride = at;
+        res.json({ success: true, now: testNowOverride.toISOString() });
+      } catch (error) {
+        logger.error('Test-support clock error', { error: getErrorMessage(error) });
+        res.status(500).json({ success: false, error: 'Internal error' });
+      }
+    })();
+  });
+
+  app.post('/api/test-support/tick-boundaries', (req: Request, res: Response): void => {
+    void (async (): Promise<void> => {
+      try {
+        const decoded = await verifyAccessTokenFromRequest(req);
+        if (!decoded) {
+          res.status(401).json({ success: false, error: 'Authorization required' });
+          return;
+        }
+
+        const roles = decoded.roles.map((r) => r.role);
+        if (!roles.includes('admin') && !roles.includes('teacher')) {
+          res.status(403).json({ success: false, error: 'Teacher access required' });
+          return;
+        }
+
+        const rawAt = getBodyField(req.body as unknown, 'at');
+        if (typeof rawAt !== 'string' || rawAt.trim() === '') {
+          res.status(400).json({ success: false, error: 'at ISO timestamp is required' });
+          return;
+        }
+
+        const at = new Date(rawAt);
+        if (!Number.isFinite(at.getTime())) {
+          res.status(400).json({ success: false, error: 'at must be a valid ISO timestamp' });
+          return;
+        }
+
+        await runScheduleBoundaryTickOnce(at);
+        res.json({ success: true, at: at.toISOString() });
+      } catch (error) {
+        logger.error('Test-support schedule tick error', { error: getErrorMessage(error) });
+        res.status(500).json({ success: false, error: 'Internal error' });
+      }
+    })();
+  });
+}
+
 // === Enrollment Script Endpoint ===
 app.get('/api/enroll/:classroomId', (req: Request, res: Response): void => {
   void (async (): Promise<void> => {
@@ -1629,7 +1813,10 @@ app.get('/w/:machineToken/whitelist.txt', (req: Request, res: Response): void =>
         return;
       }
 
-      const whitelistInfo = await classroomStorage.getWhitelistUrlForMachine(machine.hostname);
+      const whitelistInfo = await classroomStorage.resolveMachineEnforcementContext(
+        machine.hostname,
+        getCurrentEvaluationTime()
+      );
       if (!whitelistInfo) {
         res.setHeader('Cache-Control', 'no-store, max-age=0');
         res.setHeader('Pragma', 'no-cache');

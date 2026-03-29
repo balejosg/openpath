@@ -334,8 +334,21 @@ function findMatchingBlockedPathRule(
   requestUrl: string,
   rules: CompiledBlockedPathRule[] = blockedPathRulesState.rules
 ): CompiledBlockedPathRule | null {
+  const alternateUrls = [requestUrl];
+  try {
+    const parsed = new URL(requestUrl);
+    if (parsed.port) {
+      parsed.port = '';
+      alternateUrls.push(parsed.toString());
+    }
+  } catch {
+    // Ignore malformed URLs; original matching will handle failure cases.
+  }
+
   for (const rule of rules) {
-    if (rule.regexes.some((regex) => regex.test(requestUrl))) {
+    if (
+      rule.regexes.some((regex) => alternateUrls.some((candidateUrl) => regex.test(candidateUrl)))
+    ) {
       return rule;
     }
   }
@@ -450,6 +463,20 @@ async function initBlockedPathRules(): Promise<void> {
   logger.error('[Monitor] No se pudieron cargar reglas de ruta tras reintentos', {
     maxRetries: BLOCKED_PATH_MAX_RETRIES,
   });
+}
+
+async function forceBlockedPathRulesRefresh(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const success = await refreshBlockedPathRules(true);
+    return success
+      ? { success: true }
+      : { success: false, error: 'No se pudieron refrescar las reglas de ruta' };
+  } catch (error) {
+    return {
+      success: false,
+      error: getErrorMessage(error),
+    };
+  }
 }
 
 /**
@@ -1056,6 +1083,36 @@ browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.
         statuses: getDomainStatusesForTab(msg.tabId),
       };
 
+    case 'getBlockedPathRulesDebug':
+      return {
+        success: true,
+        version: blockedPathRulesState.version,
+        count: blockedPathRulesState.rules.length,
+        rawRules: blockedPathRulesState.rules.map((rule) => rule.rawRule),
+        compiledPatterns: blockedPathRulesState.rules.flatMap((rule) => rule.compiledPatterns),
+      };
+
+    case 'getNativeBlockedPathsDebug':
+      try {
+        return (await sendNativeMessage({
+          action: 'get-blocked-paths',
+        })) as NativeBlockedPathsResponse;
+      } catch (error) {
+        return {
+          success: false,
+          error: getErrorMessage(error),
+        };
+      }
+
+    case 'evaluateBlockedPathDebug': {
+      const targetUrl = (msg as { url?: string }).url ?? '';
+      const targetType = (msg as { type?: string }).type ?? '';
+      return {
+        success: true,
+        outcome: evaluatePathBlocking({ type: targetType, url: targetUrl }),
+      };
+    }
+
     case 'clearBlockedDomains':
       clearBlockedDomains(msg.tabId);
       return { success: true };
@@ -1112,6 +1169,9 @@ browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return { success: false, error: errorMessage };
       }
+
+    case 'refreshBlockedPathRules':
+      return forceBlockedPathRulesRefresh();
 
     case 'retryLocalUpdate':
       if (!msg.hostname) {

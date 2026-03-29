@@ -346,10 +346,23 @@ function Sync-OpenPathFirefoxNativeHostState {
         ''
     }
 
+    $apiUrl = if (
+        $Config -and
+        $Config.PSObject.Properties['apiUrl'] -and
+        $Config.apiUrl
+    ) {
+        ([string]$Config.apiUrl).TrimEnd('/')
+    }
+    else {
+        ''
+    }
+
     $statePath = Get-OpenPathFirefoxNativeStatePath
     $stateJson = [ordered]@{
         machineName = $machineName
         whitelistUrl = $whitelistUrl
+        apiUrl = $apiUrl
+        requestApiUrl = $apiUrl
         version = $version
         syncedAt = (Get-Date -Format 'o')
     } | ConvertTo-Json -Depth 8

@@ -226,8 +226,21 @@ function findMatchingBlockedPathRule(
   requestUrl: string,
   rules: CompiledBlockedPathRule[]
 ): CompiledBlockedPathRule | null {
+  const alternateUrls = [requestUrl];
+  try {
+    const parsed = new URL(requestUrl);
+    if (parsed.port) {
+      parsed.port = '';
+      alternateUrls.push(parsed.toString());
+    }
+  } catch {
+    // Ignore malformed URLs in tests; original request URL is still evaluated.
+  }
+
   for (const rule of rules) {
-    if (rule.regexes.some((regex) => regex.test(requestUrl))) {
+    if (
+      rule.regexes.some((regex) => alternateUrls.some((candidateUrl) => regex.test(candidateUrl)))
+    ) {
       return rule;
     }
   }
@@ -276,6 +289,22 @@ function evaluatePathBlocking(
   }
 
   return { cancel: true, reason };
+}
+
+async function handleForcedBlockedPathRefresh(
+  refreshFn: (force: boolean) => Promise<boolean>
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const success = await refreshFn(true);
+    return success
+      ? { success: true }
+      : { success: false, error: 'No se pudieron refrescar las reglas de ruta' };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 function resolveAutoStatus(payload: {
@@ -638,6 +667,16 @@ void describe('Path Blocking', () => {
     assert.strictEqual(matched.rawRule, 'facebook.com/gaming');
   });
 
+  void test('should match blocked path when request URL includes a port', () => {
+    const rules = compileBlockedPathRules(['site.127.0.0.1.sslip.io/*private*']);
+    const matched = findMatchingBlockedPathRule(
+      'http://site.127.0.0.1.sslip.io:53371/xhr/private.json',
+      rules
+    );
+    assert.ok(matched !== null);
+    assert.strictEqual(matched.rawRule, 'site.127.0.0.1.sslip.io/*private*');
+  });
+
   void test('should match blocked path for subdomain', () => {
     const rules = compileBlockedPathRules(['facebook.com/gaming']);
     const matched = findMatchingBlockedPathRule('https://m.facebook.com/gaming/watch', rules);
@@ -984,6 +1023,108 @@ void describe('Message Contract Compatibility', () => {
     assert.strictEqual(mapped.domain, 'cdn.example.com');
     assert.strictEqual(mapped.inWhitelist, true);
     assert.strictEqual(mapped.resolvedIp, '10.0.0.2');
+  });
+
+  void test('should force blocked-path refresh with force=true', async () => {
+    let receivedForce = false;
+
+    const response = await handleForcedBlockedPathRefresh((force) => {
+      receivedForce = force;
+      return Promise.resolve(true);
+    });
+
+    assert.strictEqual(receivedForce, true);
+    assert.deepStrictEqual(response, { success: true });
+  });
+
+  void test('should report an error when forced blocked-path refresh fails', async () => {
+    const response = await handleForcedBlockedPathRefresh(() => Promise.resolve(false));
+
+    assert.deepStrictEqual(response, {
+      success: false,
+      error: 'No se pudieron refrescar las reglas de ruta',
+    });
+  });
+
+  void test('should surface thrown errors during forced blocked-path refresh', async () => {
+    const response = await handleForcedBlockedPathRefresh(() =>
+      Promise.reject(new Error('native host unavailable'))
+    );
+
+    assert.deepStrictEqual(response, {
+      success: false,
+      error: 'native host unavailable',
+    });
+  });
+
+  void test('should expose blocked-path debug payload shape', () => {
+    const rules = compileBlockedPathRules(['example.com/private', '*.school.local/restricted']);
+    const payload = {
+      success: true,
+      version: 'debug-version',
+      count: rules.length,
+      rawRules: rules.map((rule) => rule.rawRule),
+      compiledPatterns: rules.flatMap((rule) => rule.compiledPatterns),
+    };
+
+    assert.deepStrictEqual(payload, {
+      success: true,
+      version: 'debug-version',
+      count: 2,
+      rawRules: ['example.com/private', '*.school.local/restricted'],
+      compiledPatterns: [
+        '*://*.example.com/private*',
+        '*://example.com/private*',
+        '*://*.school.local/restricted*',
+        '*://school.local/restricted*',
+      ],
+    });
+  });
+
+  void test('should expose native blocked-path debug payload shape', () => {
+    const payload = {
+      success: true,
+      action: 'get-blocked-paths',
+      paths: ['example.com/private*'],
+      count: 1,
+      hash: 'abc123',
+      mtime: 123,
+      source: '/var/lib/openpath/whitelist.txt',
+    };
+
+    assert.deepStrictEqual(payload, {
+      success: true,
+      action: 'get-blocked-paths',
+      paths: ['example.com/private*'],
+      count: 1,
+      hash: 'abc123',
+      mtime: 123,
+      source: '/var/lib/openpath/whitelist.txt',
+    });
+  });
+
+  void test('should expose blocked-path evaluation payload shape', () => {
+    const rules = compileBlockedPathRules(['example.com/private']);
+    const outcome = evaluatePathBlocking(
+      {
+        type: 'xmlhttprequest',
+        url: 'https://example.com/private/data.json',
+      },
+      rules
+    );
+
+    const payload = {
+      success: true,
+      outcome,
+    };
+
+    assert.deepStrictEqual(payload, {
+      success: true,
+      outcome: {
+        cancel: true,
+        reason: 'BLOCKED_PATH_POLICY:example.com/private',
+      },
+    });
   });
 });
 

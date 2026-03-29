@@ -100,6 +100,44 @@ def get_machine_token():
     }
 
 
+def read_optional_text(path_str):
+    path = Path(path_str)
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def get_native_config():
+    api_url = read_optional_text("/etc/openpath/api-url.conf")
+    whitelist_url = read_optional_text("/etc/openpath/whitelist-url.conf")
+    machine_token = ""
+
+    if whitelist_url:
+        match = re.search(r"/w/([^/]+)/", whitelist_url)
+        if match:
+            machine_token = match.group(1)
+
+    if not api_url:
+        return {
+            "success": False,
+            "action": "get-config",
+            "error": "API URL is not configured",
+        }
+
+    normalized_api_url = api_url.rstrip("/")
+    return {
+        "success": True,
+        "action": "get-config",
+        "apiUrl": normalized_api_url,
+        "requestApiUrl": normalized_api_url,
+        "fallbackApiUrls": [],
+        "hostname": socket.gethostname(),
+        "machineToken": machine_token,
+        "whitelistUrl": whitelist_url,
+    }
+
+
 def read_message():
     """Lee un mensaje del stdin en formato Native Messaging"""
     raw_length = sys.stdin.buffer.read(4)
@@ -343,6 +381,9 @@ def handle_message(message):
 
     elif action == "get-machine-token":
         return get_machine_token()
+
+    elif action == "get-config":
+        return get_native_config()
 
     elif action == "update-whitelist":
         # Trigger whitelist update script

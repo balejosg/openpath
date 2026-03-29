@@ -1,0 +1,540 @@
+$ErrorActionPreference = 'Stop'
+
+$script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
+$script:ArtifactsRoot = if ($env:OPENPATH_STUDENT_ARTIFACTS_DIR) {
+    [System.IO.Path]::GetFullPath($env:OPENPATH_STUDENT_ARTIFACTS_DIR)
+}
+else {
+    [System.IO.Path]::GetFullPath((Join-Path $script:RepoRoot 'tests\e2e\artifacts\windows-student-policy'))
+}
+
+$script:ApiPort = if ($env:OPENPATH_STUDENT_API_PORT) { [int]$env:OPENPATH_STUDENT_API_PORT } else { 3201 }
+$script:FixturePort = if ($env:OPENPATH_STUDENT_FIXTURE_PORT) { [int]$env:OPENPATH_STUDENT_FIXTURE_PORT } else { 18082 }
+$script:MachineName = if ($env:OPENPATH_STUDENT_MACHINE_NAME) { [string]$env:OPENPATH_STUDENT_MACHINE_NAME } else { 'windows-student-e2e' }
+
+$script:ApiJob = $null
+$script:FixtureJob = $null
+$script:DatabaseMode = $null
+$script:PostgresServiceName = $null
+$script:PostgresBinDir = $null
+
+function Write-Step {
+    param(
+        [Parameter(Mandatory = $true)][string]$Message
+    )
+
+    Write-Host ""
+    Write-Host $Message -ForegroundColor Cyan
+}
+
+function Get-FreeTcpPort {
+    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    try {
+        $listener.Start()
+        return $listener.LocalEndpoint.Port
+    }
+    finally {
+        $listener.Stop()
+    }
+}
+
+function Assert-LastExitCode {
+    param(
+        [Parameter(Mandatory = $true)][string]$Context
+    )
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Context failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Invoke-WebProbe {
+    param(
+        [Parameter(Mandatory = $true)][string]$Url,
+        [hashtable]$Headers = @{},
+        [int]$TimeoutSec = 3
+    )
+
+    Invoke-WebRequest -Uri $Url -Headers $Headers -UseBasicParsing -TimeoutSec $TimeoutSec | Out-Null
+}
+
+function Wait-ForHttp {
+    param(
+        [Parameter(Mandatory = $true)][string]$Url,
+        [hashtable]$Headers = @{},
+        [int]$Attempts = 40,
+        [object]$Job = $null,
+        [string]$JobName = 'background job'
+    )
+
+    for ($attempt = 1; $attempt -le $Attempts; $attempt += 1) {
+        if ($null -ne $Job) {
+            if ($Job.State -eq 'Failed') {
+                $jobOutput = Receive-Job -Job $Job -Keep -ErrorAction SilentlyContinue | Out-String
+                throw "$JobName failed before becoming ready. $jobOutput"
+            }
+
+            if ($Job.State -eq 'Completed') {
+                $jobOutput = Receive-Job -Job $Job -Keep -ErrorAction SilentlyContinue | Out-String
+                throw "$JobName exited before becoming ready. $jobOutput"
+            }
+        }
+
+        try {
+            Invoke-WebProbe -Url $Url -Headers $Headers -TimeoutSec 3
+            return
+        }
+        catch {
+            Start-Sleep -Seconds 1
+        }
+    }
+
+    throw "Timed out waiting for HTTP endpoint: $Url"
+}
+
+function Ensure-ArtifactsDirectory {
+    if (-not (Test-Path $script:ArtifactsRoot)) {
+        New-Item -ItemType Directory -Path $script:ArtifactsRoot -Force | Out-Null
+    }
+}
+
+function Ensure-SeleniumDependencies {
+    Write-Step 'Ensuring Selenium package dependencies...'
+    Push-Location (Join-Path $script:RepoRoot 'tests\selenium')
+    try {
+        npm install | Out-Host
+        Assert-LastExitCode 'npm install (tests/selenium)'
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Build-RequiredWorkspaces {
+    Write-Step 'Building shared and Firefox extension workspaces...'
+    Push-Location $script:RepoRoot
+    try {
+        npm run build --workspace=@openpath/shared | Out-Host
+        Assert-LastExitCode 'npm run build --workspace=@openpath/shared'
+        npm run build --workspace=@openpath/firefox-extension | Out-Host
+        Assert-LastExitCode 'npm run build --workspace=@openpath/firefox-extension'
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Start-TestPostgresDocker {
+    Write-Step 'Starting PostgreSQL via Docker Compose...'
+    docker compose -f "$script:RepoRoot\docker-compose.test.yml" up -d | Out-Host
+    Assert-LastExitCode 'docker compose up -d'
+
+    for ($attempt = 1; $attempt -le 30; $attempt += 1) {
+        try {
+            docker exec openpath-test-db pg_isready -U openpath -d openpath_test | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                $script:DatabaseMode = 'docker'
+                return
+            }
+        }
+        catch {
+            Start-Sleep -Seconds 1
+        }
+    }
+
+    throw 'Docker-based PostgreSQL did not become ready in time.'
+}
+
+function Get-PostgresBinDir {
+    $command = Get-Command psql.exe -ErrorAction SilentlyContinue
+    if ($command) {
+        return Split-Path -Parent $command.Source
+    }
+
+    $candidate = Get-ChildItem 'C:\Program Files\PostgreSQL\*\bin\psql.exe' -ErrorAction SilentlyContinue |
+        Sort-Object FullName |
+        Select-Object -Last 1
+    if ($candidate) {
+        return Split-Path -Parent $candidate.FullName
+    }
+
+    return $null
+}
+
+function Invoke-PostgresSql {
+    param(
+        [Parameter(Mandatory = $true)][string]$Sql
+    )
+
+    if (-not $script:PostgresBinDir) {
+        throw 'PostgreSQL bin directory is not configured.'
+    }
+
+    $psql = Join-Path $script:PostgresBinDir 'psql.exe'
+    $env:PGPASSWORD = 'openpath_test'
+    & $psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c $Sql | Out-Host
+    Assert-LastExitCode 'psql'
+}
+
+function Start-TestPostgresLocal {
+    Write-Step 'Starting PostgreSQL via local Windows service...'
+
+    if (-not (Get-Command choco.exe -ErrorAction SilentlyContinue)) {
+        throw 'Chocolatey is required to install PostgreSQL on the Windows runner.'
+    }
+
+    $script:PostgresBinDir = Get-PostgresBinDir
+    if (-not $script:PostgresBinDir) {
+        choco install postgresql16 --params '"/Password:openpath_test"' --no-progress -y | Out-Host
+        Assert-LastExitCode 'choco install postgresql16'
+        $script:PostgresBinDir = Get-PostgresBinDir
+    }
+
+    if (-not $script:PostgresBinDir) {
+        throw 'Could not locate PostgreSQL binaries after installation.'
+    }
+
+    $service = Get-Service | Where-Object { $_.Name -like 'postgresql*' } | Select-Object -First 1
+    if (-not $service) {
+        throw 'Could not locate PostgreSQL Windows service.'
+    }
+
+    $script:PostgresServiceName = $service.Name
+    Start-Service -Name $script:PostgresServiceName -ErrorAction SilentlyContinue
+
+    for ($attempt = 1; $attempt -le 30; $attempt += 1) {
+        try {
+            $pgIsReady = Join-Path $script:PostgresBinDir 'pg_isready.exe'
+            $env:PGPASSWORD = 'openpath_test'
+            & $pgIsReady -h 127.0.0.1 -p 5432 -U postgres -d postgres | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Invoke-PostgresSql -Sql "DO `$`$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'openpath') THEN CREATE ROLE openpath LOGIN PASSWORD 'openpath_test'; ELSE ALTER ROLE openpath WITH LOGIN PASSWORD 'openpath_test'; END IF; END `$`$;"
+                Invoke-PostgresSql -Sql "DROP DATABASE IF EXISTS openpath_test WITH (FORCE);"
+                Invoke-PostgresSql -Sql "CREATE DATABASE openpath_test OWNER openpath;"
+                $script:DatabaseMode = 'local'
+                return
+            }
+        }
+        catch {
+            Start-Sleep -Seconds 1
+        }
+    }
+
+    throw 'Local PostgreSQL service did not become ready in time.'
+}
+
+function Ensure-TestPostgres {
+    try {
+        if (Get-Command docker.exe -ErrorAction SilentlyContinue) {
+            docker info | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                Start-TestPostgresDocker
+                return
+            }
+        }
+    }
+    catch {
+        Write-Host 'WARN: Docker PostgreSQL bootstrap unavailable; falling back to local PostgreSQL.' -ForegroundColor Yellow
+    }
+
+    Start-TestPostgresLocal
+}
+
+function Initialize-TestDatabase {
+    Write-Step 'Running API E2E database setup...'
+    Push-Location $script:RepoRoot
+    try {
+        $env:DB_HOST = '127.0.0.1'
+        $env:DB_PORT = '5433'
+        $env:DB_NAME = 'openpath_test'
+        $env:DB_USER = 'openpath'
+        $env:DB_PASSWORD = 'openpath_test'
+
+        if ($script:DatabaseMode -eq 'local') {
+            $env:DB_PORT = '5432'
+        }
+
+        npm run db:setup:e2e --workspace=@openpath/api | Out-Host
+        Assert-LastExitCode 'npm run db:setup:e2e --workspace=@openpath/api'
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Start-ApiServer {
+    Write-Step "Starting API on port $($script:ApiPort)..."
+    $apiLog = Join-Path $script:ArtifactsRoot 'api.log'
+    $dataDir = Join-Path $script:ArtifactsRoot 'api-data'
+    New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+
+    $script:ApiJob = Start-Job -ArgumentList $script:RepoRoot, $script:ApiPort, $dataDir, $script:DatabaseMode, $apiLog -ScriptBlock {
+        param($RepoRoot, $ApiPort, $DataDir, $DatabaseMode, $ApiLog)
+
+        Set-Location $RepoRoot
+        $env:NODE_ENV = 'test'
+        $env:JWT_SECRET = 'openpath-student-policy-secret'
+        $env:SHARED_SECRET = 'openpath-student-policy-shared'
+        $env:DB_HOST = '127.0.0.1'
+        $env:DB_PORT = if ($DatabaseMode -eq 'local') { '5432' } else { '5433' }
+        $env:DB_NAME = 'openpath_test'
+        $env:DB_USER = 'openpath'
+        $env:DB_PASSWORD = 'openpath_test'
+        $env:PORT = [string]$ApiPort
+        $env:PUBLIC_URL = "http://127.0.0.1:$ApiPort"
+        $env:DATA_DIR = $DataDir
+
+        node --import tsx api/src/server.ts *>> $ApiLog
+        if ($LASTEXITCODE -ne 0) {
+            throw "API server exited with code $LASTEXITCODE"
+        }
+    }
+
+    Wait-ForHttp -Url "http://127.0.0.1:$($script:ApiPort)/trpc/healthcheck.ready" -Job $script:ApiJob -JobName 'API server job'
+}
+
+function Start-FixtureServer {
+    Write-Step "Starting fixture server on port $($script:FixturePort)..."
+    $fixtureLog = Join-Path $script:ArtifactsRoot 'fixture-server.log'
+
+    $script:FixtureJob = Start-Job -ArgumentList $script:RepoRoot, $script:FixturePort, $fixtureLog -ScriptBlock {
+        param($RepoRoot, $FixturePort, $FixtureLog)
+
+        Set-Location $RepoRoot
+        node --import tsx tests/e2e/student-flow/fixture-server.ts --host 0.0.0.0 --port $FixturePort *>> $FixtureLog
+        if ($LASTEXITCODE -ne 0) {
+            throw "Fixture server exited with code $LASTEXITCODE"
+        }
+    }
+
+    Wait-ForHttp -Url "http://127.0.0.1:$($script:FixturePort)/ok" -Headers @{ Host = "portal.127.0.0.1.sslip.io:$($script:FixturePort)" } -Job $script:FixtureJob -JobName 'fixture server job'
+}
+
+function Invoke-BackendHarnessBootstrap {
+    param(
+        [string]$ScenarioName = 'Windows Student Policy'
+    )
+
+    Write-Step 'Bootstrapping student-policy scenario...'
+    $scenarioPath = Join-Path $script:ArtifactsRoot 'student-scenario.json'
+    Push-Location $script:RepoRoot
+    try {
+        $scenarioJson = node --import tsx tests/e2e/student-flow/backend-harness.ts bootstrap `
+            --api-url "http://127.0.0.1:$($script:ApiPort)" `
+            --scenario-name $ScenarioName `
+            --machine-hostname $script:MachineName
+        Assert-LastExitCode 'backend harness bootstrap'
+
+        $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+        [System.IO.File]::WriteAllText($scenarioPath, ($scenarioJson -join [Environment]::NewLine), $utf8NoBom)
+    }
+    finally {
+        Pop-Location
+    }
+
+    return Get-Content $scenarioPath -Raw | ConvertFrom-Json
+}
+
+function New-FirefoxExtensionArchive {
+    Write-Step 'Packaging Firefox extension XPI for Selenium...'
+    $packagePath = Join-Path $script:ArtifactsRoot 'openpath-firefox-extension.xpi'
+    if (Test-Path $packagePath) {
+        Remove-Item $packagePath -Force
+    }
+
+    $stagingDir = Join-Path $script:ArtifactsRoot 'firefox-extension-xpi'
+    if (Test-Path $stagingDir) {
+        Remove-Item $stagingDir -Recurse -Force
+    }
+
+    New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
+
+    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\manifest.json') $stagingDir -Force
+    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\dist') $stagingDir -Recurse -Force
+    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\popup') $stagingDir -Recurse -Force
+    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\blocked') $stagingDir -Recurse -Force
+    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\native') $stagingDir -Recurse -Force
+    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\icons') $stagingDir -Recurse -Force
+
+    Compress-Archive -Path (Join-Path $stagingDir '*') -DestinationPath $packagePath -Force
+    return $packagePath
+}
+
+function Ensure-FirefoxAndGeckodriver {
+    Write-Step 'Ensuring Firefox and geckodriver are available...'
+
+    if (-not (Get-Command choco.exe -ErrorAction SilentlyContinue)) {
+        throw 'Chocolatey is required to install Firefox and geckodriver on the Windows runner.'
+    }
+
+    if (-not (Get-Command firefox.exe -ErrorAction SilentlyContinue)) {
+        choco install firefox --no-progress -y | Out-Host
+        Assert-LastExitCode 'choco install firefox'
+    }
+
+    if (-not (Get-Command geckodriver.exe -ErrorAction SilentlyContinue)) {
+        choco install geckodriver --no-progress -y | Out-Host
+        Assert-LastExitCode 'choco install geckodriver'
+    }
+}
+
+function Get-EnrollmentTicket {
+    param(
+        [Parameter(Mandatory = $true)][pscustomobject]$Scenario
+    )
+
+    $response = Invoke-RestMethod -Uri "http://127.0.0.1:$($script:ApiPort)/api/enroll/$($Scenario.classroom.id)/ticket" `
+        -Headers @{ Authorization = "Bearer $($Scenario.auth.teacher.accessToken)" } `
+        -Method Post
+
+    return [string]$response.enrollmentToken
+}
+
+function Install-AndEnrollClient {
+    param(
+        [Parameter(Mandatory = $true)][pscustomobject]$Scenario,
+        [bool]$InstallClient = $true
+    )
+
+    if ($InstallClient) {
+        Write-Step 'Installing and enrolling the Windows OpenPath client...'
+
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $script:RepoRoot 'windows\Install-OpenPath.ps1') `
+            -WhitelistUrl $Scenario.machine.whitelistUrl `
+            -ApiUrl "http://127.0.0.1:$($script:ApiPort)" `
+            -Unattended
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Install-OpenPath.ps1 failed with exit code $LASTEXITCODE"
+        }
+    }
+    else {
+        Write-Step 'Reconfiguring existing Windows OpenPath client...'
+    }
+
+    $enrollmentToken = Get-EnrollmentTicket -Scenario $Scenario
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $script:RepoRoot 'windows\scripts\Enroll-Machine.ps1') `
+        -ApiUrl "http://127.0.0.1:$($script:ApiPort)" `
+        -ClassroomId $Scenario.classroom.id `
+        -EnrollmentToken $enrollmentToken `
+        -MachineName $script:MachineName `
+        -Unattended
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Enroll-Machine.ps1 failed with exit code $LASTEXITCODE"
+    }
+
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\OpenPath\scripts\Update-OpenPath.ps1'
+    if ($LASTEXITCODE -ne 0) {
+        throw "Update-OpenPath.ps1 failed with exit code $LASTEXITCODE"
+    }
+}
+
+function Invoke-SeleniumStudentSuite {
+    param(
+        [Parameter(Mandatory = $true)][string]$ScenarioPath,
+        [Parameter(Mandatory = $true)][string]$ExtensionArchivePath,
+        [Parameter(Mandatory = $true)][string]$Mode
+    )
+
+    Push-Location (Join-Path $script:RepoRoot 'tests\selenium')
+    try {
+        $env:OPENPATH_STUDENT_SCENARIO_FILE = $ScenarioPath
+        $env:OPENPATH_FIXTURE_PORT = [string]$script:FixturePort
+        $env:OPENPATH_EXTENSION_PATH = $ExtensionArchivePath
+        $env:OPENPATH_WHITELIST_PATH = 'C:\OpenPath\data\whitelist.txt'
+        $env:OPENPATH_FORCE_UPDATE_COMMAND = 'powershell -NoLogo -File "C:\OpenPath\scripts\Update-OpenPath.ps1"'
+        $env:OPENPATH_DISABLE_SSE_COMMAND = 'powershell -NoLogo -Command "Disable-ScheduledTask -TaskName ''OpenPath-SSE'' -ErrorAction SilentlyContinue; Stop-ScheduledTask -TaskName ''OpenPath-SSE'' -ErrorAction SilentlyContinue"'
+        $env:OPENPATH_ENABLE_SSE_COMMAND = 'powershell -NoLogo -Command "Enable-ScheduledTask -TaskName ''OpenPath-SSE'' -ErrorAction SilentlyContinue; Start-ScheduledTask -TaskName ''OpenPath-SSE'' -ErrorAction SilentlyContinue"'
+        $env:CI = 'true'
+        $env:OPENPATH_STUDENT_MODE = $Mode
+
+        npm run test:student-policy:ci | Out-Host
+        Assert-LastExitCode 'npm run test:student-policy:ci'
+    }
+    finally {
+        Remove-Item Env:\OPENPATH_STUDENT_SCENARIO_FILE -ErrorAction SilentlyContinue
+        Remove-Item Env:\OPENPATH_FIXTURE_PORT -ErrorAction SilentlyContinue
+        Remove-Item Env:\OPENPATH_EXTENSION_PATH -ErrorAction SilentlyContinue
+        Remove-Item Env:\OPENPATH_WHITELIST_PATH -ErrorAction SilentlyContinue
+        Remove-Item Env:\OPENPATH_FORCE_UPDATE_COMMAND -ErrorAction SilentlyContinue
+        Remove-Item Env:\OPENPATH_DISABLE_SSE_COMMAND -ErrorAction SilentlyContinue
+        Remove-Item Env:\OPENPATH_ENABLE_SSE_COMMAND -ErrorAction SilentlyContinue
+        Remove-Item Env:\OPENPATH_STUDENT_MODE -ErrorAction SilentlyContinue
+        Pop-Location
+    }
+}
+
+function Write-WindowsDiagnostics {
+    Write-Step 'Collecting Windows student-policy diagnostics...'
+
+    $diagnosticPath = Join-Path $script:ArtifactsRoot 'windows-diagnostics.txt'
+    $whitelistPath = 'C:\OpenPath\data\whitelist.txt'
+    $logPath = 'C:\OpenPath\data\logs\openpath.log'
+
+    @(
+        '=== Scheduled Tasks ==='
+        (Get-ScheduledTask -TaskName 'OpenPath-*' -ErrorAction SilentlyContinue | Format-List | Out-String)
+        '=== Resolve-DnsName google.com ==='
+        (Resolve-DnsName -Name 'google.com' -Server 127.0.0.1 -DnsOnly -ErrorAction SilentlyContinue | Out-String)
+        '=== Whitelist ==='
+        (if (Test-Path $whitelistPath) { Get-Content $whitelistPath -Raw } else { 'Whitelist file missing' })
+        '=== OpenPath Log Tail ==='
+        (if (Test-Path $logPath) { Get-Content $logPath -Tail 200 | Out-String } else { 'OpenPath log missing' })
+    ) | Set-Content -Path $diagnosticPath -Encoding UTF8
+}
+
+function Stop-BackgroundJobs {
+    foreach ($job in @($script:ApiJob, $script:FixtureJob)) {
+        if ($null -ne $job) {
+            Stop-Job -Job $job -ErrorAction SilentlyContinue
+            Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+function Cleanup-TestPostgres {
+    if ($script:DatabaseMode -eq 'docker') {
+        docker compose -f "$script:RepoRoot\docker-compose.test.yml" down | Out-Null
+    }
+}
+
+function Invoke-DebugDump {
+    Write-WindowsDiagnostics
+    if ($script:ApiJob) {
+        Receive-Job -Job $script:ApiJob -Keep -ErrorAction SilentlyContinue | Out-String | Write-Host
+    }
+    if ($script:FixtureJob) {
+        Receive-Job -Job $script:FixtureJob -Keep -ErrorAction SilentlyContinue | Out-String | Write-Host
+    }
+}
+
+try {
+    Ensure-ArtifactsDirectory
+    Build-RequiredWorkspaces
+    Ensure-SeleniumDependencies
+    Ensure-TestPostgres
+    Initialize-TestDatabase
+    Start-ApiServer
+    Start-FixtureServer
+    $scenario = Invoke-BackendHarnessBootstrap -ScenarioName 'Windows Student Policy SSE'
+    $scenarioPath = Join-Path $script:ArtifactsRoot 'student-scenario.json'
+    $extensionArchivePath = New-FirefoxExtensionArchive
+    Ensure-FirefoxAndGeckodriver
+    Install-AndEnrollClient -Scenario $scenario -InstallClient $true
+    Invoke-SeleniumStudentSuite -ScenarioPath $scenarioPath -ExtensionArchivePath $extensionArchivePath -Mode 'sse'
+    $scenario = Invoke-BackendHarnessBootstrap -ScenarioName 'Windows Student Policy Fallback'
+    Install-AndEnrollClient -Scenario $scenario -InstallClient $false
+    Invoke-SeleniumStudentSuite -ScenarioPath $scenarioPath -ExtensionArchivePath $extensionArchivePath -Mode 'fallback'
+    Write-WindowsDiagnostics
+    Write-Host 'Windows student-policy runner completed successfully' -ForegroundColor Green
+}
+catch {
+    Write-Host "Windows student-policy runner failed: $_" -ForegroundColor Red
+    Invoke-DebugDump
+    throw
+}
+finally {
+    Stop-BackgroundJobs
+    Cleanup-TestPostgres
+}
