@@ -490,8 +490,39 @@ function Invoke-SeleniumStudentSuite {
         $env:CI = 'true'
         $env:OPENPATH_STUDENT_MODE = $Mode
 
-        npm run test:student-policy:ci | Out-Host
-        Assert-LastExitCode 'npm run test:student-policy:ci'
+        $npmCommand = (Get-Command npm.cmd -ErrorAction SilentlyContinue).Source
+        if (-not $npmCommand) {
+            throw 'npm.cmd was not found on PATH.'
+        }
+
+        $logPath = Join-Path $script:ArtifactsRoot ("windows-student-policy-$Mode.log")
+        $process = Start-Process -FilePath $npmCommand `
+            -ArgumentList @('run', 'test:student-policy:ci') `
+            -WorkingDirectory (Get-Location).Path `
+            -NoNewWindow `
+            -RedirectStandardOutput $logPath `
+            -RedirectStandardError $logPath `
+            -PassThru
+
+        if (-not $process.WaitForExit(1200000)) {
+            try {
+                $process.Kill($true)
+            }
+            catch {
+                # Best effort.
+            }
+
+            $tail = if (Test-Path $logPath) { Get-Content $logPath -Raw } else { '' }
+            throw "Windows student-policy Selenium ($Mode) timed out after 20 minutes. Log output:`n$tail"
+        }
+
+        if (Test-Path $logPath) {
+            Get-Content $logPath -Raw | Out-Host
+        }
+
+        if ($process.ExitCode -ne 0) {
+            throw "npm run test:student-policy:ci ($Mode) failed with exit code $($process.ExitCode)"
+        }
     }
     finally {
         Remove-Item Env:\OPENPATH_STUDENT_SCENARIO_FILE -ErrorAction SilentlyContinue
