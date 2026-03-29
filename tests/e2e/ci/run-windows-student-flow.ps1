@@ -207,8 +207,6 @@ function Start-TestPostgresProcess {
     $script:PostgresDataDir = Join-Path $tempRoot ("openpath-postgres-" + [System.Guid]::NewGuid().ToString('N'))
     $script:PostgresLogPath = Join-Path $script:ArtifactsRoot 'postgres.log'
 
-    New-Item -ItemType Directory -Path $script:PostgresDataDir -Force | Out-Null
-
     $initdb = Join-Path $script:PostgresBinDir 'initdb.exe'
     $pgCtl = Join-Path $script:PostgresBinDir 'pg_ctl.exe'
     $pgIsReady = Join-Path $script:PostgresBinDir 'pg_isready.exe'
