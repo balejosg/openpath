@@ -12,8 +12,8 @@ $script:ApiPort = if ($env:OPENPATH_STUDENT_API_PORT) { [int]$env:OPENPATH_STUDE
 $script:FixturePort = if ($env:OPENPATH_STUDENT_FIXTURE_PORT) { [int]$env:OPENPATH_STUDENT_FIXTURE_PORT } else { 18082 }
 $script:MachineName = if ($env:OPENPATH_STUDENT_MACHINE_NAME) { [string]$env:OPENPATH_STUDENT_MACHINE_NAME } else { 'windows-student-e2e' }
 
-$script:ApiJob = $null
-$script:FixtureJob = $null
+$script:ApiProcess = $null
+$script:FixtureProcess = $null
 $script:DatabaseMode = $null
 $script:PostgresServiceName = $null
 $script:PostgresBinDir = $null
@@ -123,20 +123,16 @@ function Wait-ForHttp {
         [Parameter(Mandatory = $true)][string]$Url,
         [hashtable]$Headers = @{},
         [int]$Attempts = 40,
-        [object]$Job = $null,
-        [string]$JobName = 'background job'
+        [object]$Process = $null,
+        [string]$ProcessName = 'background process',
+        [string]$LogPath = ''
     )
 
     for ($attempt = 1; $attempt -le $Attempts; $attempt += 1) {
-        if ($null -ne $Job) {
-            if ($Job.State -eq 'Failed') {
-                $jobOutput = Receive-Job -Job $Job -Keep -ErrorAction SilentlyContinue | Out-String
-                throw "$JobName failed before becoming ready. $jobOutput"
-            }
-
-            if ($Job.State -eq 'Completed') {
-                $jobOutput = Receive-Job -Job $Job -Keep -ErrorAction SilentlyContinue | Out-String
-                throw "$JobName exited before becoming ready. $jobOutput"
+        if ($null -ne $Process) {
+            if ($Process.HasExited) {
+                $logOutput = if ($LogPath -and (Test-Path $LogPath)) { Get-Content $LogPath -Raw } else { '' }
+                throw "$ProcessName exited before becoming ready. ExitCode=$($Process.ExitCode). Log:`n$logOutput"
             }
         }
 
@@ -360,49 +356,73 @@ function Initialize-TestDatabase {
 function Start-ApiServer {
     Write-Step "Starting API on port $($script:ApiPort)..."
     $apiLog = Join-Path $script:ArtifactsRoot 'api.log'
+    $apiErrLog = Join-Path $script:ArtifactsRoot 'api.err.log'
     $dataDir = Join-Path $script:ArtifactsRoot 'api-data'
     New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
 
-    $script:ApiJob = Start-Job -ArgumentList $script:RepoRoot, $script:ApiPort, $dataDir, $script:DatabaseMode, $script:PostgresPort, $apiLog -ScriptBlock {
-        param($RepoRoot, $ApiPort, $DataDir, $DatabaseMode, $PostgresPort, $ApiLog)
+    $nodeCommand = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
+    if (-not $nodeCommand) {
+        throw 'node.exe was not found on PATH.'
+    }
 
-        Set-Location $RepoRoot
+    $originalEnv = @{}
+    foreach ($name in 'NODE_ENV','JWT_SECRET','SHARED_SECRET','DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD','PORT','PUBLIC_URL','DATA_DIR') {
+        $originalEnv[$name] = (Get-Item "Env:$name" -ErrorAction SilentlyContinue).Value
+    }
+
+    try {
         $env:NODE_ENV = 'test'
         $env:JWT_SECRET = 'openpath-student-policy-secret'
         $env:SHARED_SECRET = 'openpath-student-policy-shared'
         $env:DB_HOST = '127.0.0.1'
-        $env:DB_PORT = if ($DatabaseMode -eq 'local') { [string]$PostgresPort } else { '5433' }
+        $env:DB_PORT = if ($script:DatabaseMode -eq 'local') { [string]$script:PostgresPort } else { '5433' }
         $env:DB_NAME = 'openpath_test'
         $env:DB_USER = 'openpath'
         $env:DB_PASSWORD = 'openpath_test'
-        $env:PORT = [string]$ApiPort
-        $env:PUBLIC_URL = "http://127.0.0.1:$ApiPort"
-        $env:DATA_DIR = $DataDir
+        $env:PORT = [string]$script:ApiPort
+        $env:PUBLIC_URL = "http://127.0.0.1:$($script:ApiPort)"
+        $env:DATA_DIR = $dataDir
 
-        node --import tsx api/src/server.ts *>> $ApiLog
-        if ($LASTEXITCODE -ne 0) {
-            throw "API server exited with code $LASTEXITCODE"
+        $script:ApiProcess = Start-Process -FilePath $nodeCommand `
+            -ArgumentList @('--import', 'tsx', 'api/src/server.ts') `
+            -WorkingDirectory $script:RepoRoot `
+            -NoNewWindow `
+            -RedirectStandardOutput $apiLog `
+            -RedirectStandardError $apiErrLog `
+            -PassThru
+    }
+    finally {
+        foreach ($name in $originalEnv.Keys) {
+            if ($null -eq $originalEnv[$name]) {
+                Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+            }
+            else {
+                Set-Item "Env:$name" -Value $originalEnv[$name]
+            }
         }
     }
 
-    Wait-ForHttp -Url "http://127.0.0.1:$($script:ApiPort)/trpc/healthcheck.ready" -Job $script:ApiJob -JobName 'API server job'
+    Wait-ForHttp -Url "http://127.0.0.1:$($script:ApiPort)/trpc/healthcheck.ready" -Process $script:ApiProcess -ProcessName 'API server process' -LogPath $apiLog
 }
 
 function Start-FixtureServer {
     Write-Step "Starting fixture server on port $($script:FixturePort)..."
     $fixtureLog = Join-Path $script:ArtifactsRoot 'fixture-server.log'
-
-    $script:FixtureJob = Start-Job -ArgumentList $script:RepoRoot, $script:FixturePort, $fixtureLog -ScriptBlock {
-        param($RepoRoot, $FixturePort, $FixtureLog)
-
-        Set-Location $RepoRoot
-        node --import tsx tests/e2e/student-flow/fixture-server.ts --host 0.0.0.0 --port $FixturePort *>> $FixtureLog
-        if ($LASTEXITCODE -ne 0) {
-            throw "Fixture server exited with code $LASTEXITCODE"
-        }
+    $fixtureErrLog = Join-Path $script:ArtifactsRoot 'fixture-server.err.log'
+    $nodeCommand = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
+    if (-not $nodeCommand) {
+        throw 'node.exe was not found on PATH.'
     }
 
-    Wait-ForHttp -Url "http://127.0.0.1:$($script:FixturePort)/ok" -Headers @{ Host = "portal.127.0.0.1.sslip.io:$($script:FixturePort)" } -Job $script:FixtureJob -JobName 'fixture server job'
+    $script:FixtureProcess = Start-Process -FilePath $nodeCommand `
+        -ArgumentList @('--import', 'tsx', 'tests/e2e/student-flow/fixture-server.ts', '--host', '0.0.0.0', '--port', [string]$script:FixturePort) `
+        -WorkingDirectory $script:RepoRoot `
+        -NoNewWindow `
+        -RedirectStandardOutput $fixtureLog `
+        -RedirectStandardError $fixtureErrLog `
+        -PassThru
+
+    Wait-ForHttp -Url "http://127.0.0.1:$($script:FixturePort)/ok" -Headers @{ Host = "portal.127.0.0.1.sslip.io:$($script:FixturePort)" } -Process $script:FixtureProcess -ProcessName 'fixture server process' -LogPath $fixtureLog
 }
 
 function Invoke-BackendHarnessBootstrap {
@@ -620,10 +640,14 @@ function Write-WindowsDiagnostics {
 }
 
 function Stop-BackgroundJobs {
-    foreach ($job in @($script:ApiJob, $script:FixtureJob)) {
-        if ($null -ne $job) {
-            Stop-Job -Job $job -ErrorAction SilentlyContinue
-            Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    foreach ($process in @($script:ApiProcess, $script:FixtureProcess)) {
+        if ($null -ne $process -and -not $process.HasExited) {
+            try {
+                $process.Kill($true)
+            }
+            catch {
+                # Best effort.
+            }
         }
     }
 }
@@ -647,11 +671,16 @@ function Cleanup-TestPostgres {
 
 function Invoke-DebugDump {
     Write-WindowsDiagnostics
-    if ($script:ApiJob) {
-        Receive-Job -Job $script:ApiJob -Keep -ErrorAction SilentlyContinue | Out-String | Write-Host
-    }
-    if ($script:FixtureJob) {
-        Receive-Job -Job $script:FixtureJob -Keep -ErrorAction SilentlyContinue | Out-String | Write-Host
+    foreach ($logPath in @(
+        (Join-Path $script:ArtifactsRoot 'api.log'),
+        (Join-Path $script:ArtifactsRoot 'api.err.log'),
+        (Join-Path $script:ArtifactsRoot 'fixture-server.log'),
+        (Join-Path $script:ArtifactsRoot 'fixture-server.err.log')
+    )) {
+        if (Test-Path $logPath) {
+            Write-Host "===== $(Split-Path $logPath -Leaf) ====="
+            Get-Content $logPath -Raw | Write-Host
+        }
     }
 }
 
