@@ -240,4 +240,18 @@ describe('repository verification contract', () => {
       'Linux student-policy image should copy the Selenium package manifests and install its dependencies'
     );
   });
+
+  test('windows student policy runner packages the Firefox XPI with the canonical build script', () => {
+    const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
+
+    assert.ok(
+      !windowsRunner.includes('Compress-Archive'),
+      'Windows student-policy runner should not package the Selenium XPI with Compress-Archive'
+    );
+    assert.match(
+      windowsRunner,
+      /build-xpi\.sh/,
+      'Windows student-policy runner should use firefox-extension/build-xpi.sh to create the Selenium XPI'
+    );
+  });
 });

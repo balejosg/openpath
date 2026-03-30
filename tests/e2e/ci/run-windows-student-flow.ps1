@@ -523,21 +523,27 @@ function New-FirefoxExtensionArchive {
         Remove-Item $packagePath -Force
     }
 
-    $stagingDir = Join-Path $script:ArtifactsRoot 'firefox-extension-xpi'
-    if (Test-Path $stagingDir) {
-        Remove-Item $stagingDir -Recurse -Force
+    $bashCommand = (Get-Command bash.exe -ErrorAction SilentlyContinue).Source
+    if (-not $bashCommand) {
+        throw 'bash.exe is required to package the Firefox extension XPI on the Windows runner.'
     }
 
-    New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
+    $extensionDir = Join-Path $script:RepoRoot 'firefox-extension'
+    $manifest = Get-Content (Join-Path $extensionDir 'manifest.json') -Raw | ConvertFrom-Json
+    $expectedName = "monitor-bloqueos-red-$($manifest.version).xpi"
+    $builtXpiPath = Join-Path $extensionDir $expectedName
+    if (Test-Path $builtXpiPath) {
+        Remove-Item $builtXpiPath -Force
+    }
 
-    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\manifest.json') $stagingDir -Force
-    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\dist') $stagingDir -Recurse -Force
-    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\popup') $stagingDir -Recurse -Force
-    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\blocked') $stagingDir -Recurse -Force
-    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\native') $stagingDir -Recurse -Force
-    Copy-Item (Join-Path $script:RepoRoot 'firefox-extension\icons') $stagingDir -Recurse -Force
+    & $bashCommand (Join-Path $extensionDir 'build-xpi.sh') | Out-Host
+    Assert-LastExitCode 'firefox-extension/build-xpi.sh'
 
-    Compress-Archive -Path (Join-Path $stagingDir '*') -DestinationPath $packagePath -Force
+    if (-not (Test-Path $builtXpiPath)) {
+        throw "Firefox extension packaging did not produce $builtXpiPath"
+    }
+
+    Copy-Item $builtXpiPath -Destination $packagePath -Force
     return $packagePath
 }
 
