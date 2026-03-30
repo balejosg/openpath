@@ -18,7 +18,7 @@
     "test:dashboard": "npm test --workspace=@openpath/dashboard",
     "test:react-spa": "npm test --workspace=@openpath/react-spa",
     "test:e2e": "npm run test:e2e --workspace=@openpath/react-spa",
-    "test:e2e:helpers": "node --import tsx --test tests/selenium/firefox-extension-uuid.test.ts tests/e2e/student-flow/fixture-server.test.ts tests/e2e/student-flow/reconcile-student-scenario.test.ts tests/e2e/student-flow/windows-student-summary.test.ts",
+    "test:e2e:helpers": "node --import tsx --test tests/selenium/firefox-extension-uuid.test.ts tests/selenium/student-policy-flow.test.ts tests/e2e/student-flow/fixture-server.test.ts tests/e2e/student-flow/reconcile-student-scenario.test.ts tests/e2e/student-flow/windows-student-summary.test.ts",
     "test:e2e:smoke": "npm run test:e2e --workspace=@openpath/react-spa -- --grep @smoke",
     "test:student-policy:linux": "bash tests/e2e/ci/run-linux-student-flow.sh",
     "test:student-policy:windows": "pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/run-windows-student-flow.ps1",

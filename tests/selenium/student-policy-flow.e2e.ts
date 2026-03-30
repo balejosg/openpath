@@ -285,6 +285,10 @@ async function readWhitelistFile(): Promise<string> {
   return fs.readFile(getWhitelistPath(), 'utf8');
 }
 
+function normalizeWhitelistContents(contents: string): string {
+  return contents.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n');
+}
+
 function getFixturePort(): string {
   return optionalEnv('OPENPATH_FIXTURE_PORT') ?? '80';
 }
@@ -620,12 +624,12 @@ export class StudentPolicyDriver {
   }
 
   public async assertWhitelistContains(hostname: string): Promise<void> {
-    const contents = await readWhitelistFile();
+    const contents = normalizeWhitelistContents(await readWhitelistFile());
     assert.match(contents, new RegExp(`(^|\\n)${escapeRegExp(hostname)}($|\\n)`));
   }
 
   public async assertWhitelistMissing(hostname: string): Promise<void> {
-    const contents = await readWhitelistFile();
+    const contents = normalizeWhitelistContents(await readWhitelistFile());
     assert.doesNotMatch(contents, new RegExp(`(^|\\n)${escapeRegExp(hostname)}($|\\n)`));
   }
 
