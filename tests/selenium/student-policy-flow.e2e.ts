@@ -238,6 +238,13 @@ export function buildWindowsBlockedDnsCommand(hostname: string): string {
   return `powershell -NoLogo -Command "try { $result = Resolve-DnsName -Name '${hostname}' -Server 127.0.0.1 -DnsOnly -ErrorAction Stop; if ($result) { $result | ForEach-Object { $_.IPAddress } } } catch { if (($_.Exception.Message -like '*DNS name does not exist*') -or ($_.FullyQualifiedErrorId -like '*DNS_ERROR_RCODE_NAME_ERROR*')) { exit 0 } throw }"`;
 }
 
+export function buildWindowsHttpProbeCommand(url: string): string {
+  const escapedUrl = url.replace(/'/g, "''");
+  const script = `Invoke-WebRequest -Uri '${escapedUrl}' -UseBasicParsing -ErrorAction Stop | Out-Null`;
+  const encodedScript = Buffer.from(script, 'utf16le').toString('base64');
+  return `powershell -NoLogo -EncodedCommand ${encodedScript}`;
+}
+
 async function runPlatformCommand(command: string): Promise<string> {
   const { stdout, stderr } = await exec(command);
   return `${stdout}${stderr}`.trim();
@@ -848,12 +855,20 @@ export class StudentPolicyDriver {
   }
 
   public async assertHttpReachable(url: string): Promise<void> {
-    await runPlatformCommand(`curl -fsS ${shellEscape(url)} >/dev/null`);
+    const command = isWindows()
+      ? buildWindowsHttpProbeCommand(url)
+      : `curl -fsS ${shellEscape(url)} >/dev/null`;
+
+    await runPlatformCommand(command);
   }
 
   public async assertHttpBlocked(url: string): Promise<void> {
+    const command = isWindows()
+      ? buildWindowsHttpProbeCommand(url)
+      : `curl -fsS ${shellEscape(url)} >/dev/null`;
+
     try {
-      await runPlatformCommand(`curl -fsS ${shellEscape(url)} >/dev/null`);
+      await runPlatformCommand(command);
     } catch {
       return;
     }

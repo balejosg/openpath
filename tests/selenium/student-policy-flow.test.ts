@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import {
+  buildWindowsHttpProbeCommand,
   buildWindowsBlockedDnsCommand,
   StudentPolicyDriver,
   type StudentScenario,
@@ -117,4 +118,32 @@ test('buildWindowsBlockedDnsCommand treats NXDOMAIN as a blocked result instead 
   assert.match(command, /DNS_ERROR_RCODE_NAME_ERROR/);
   assert.match(command, /\bthrow\b/);
   assert.doesNotMatch(command, /catch \{ exit 0 \}/);
+});
+
+test('buildWindowsHttpProbeCommand uses a Windows-safe HTTP probe without POSIX redirection', () => {
+  const command = buildWindowsHttpProbeCommand(
+    'http://exempted-domain.127.0.0.1.sslip.io:18082/ok'
+  );
+
+  assert.match(command, /^powershell -NoLogo -EncodedCommand /);
+  assert.doesNotMatch(command, />\/dev\/null/);
+});
+
+test('buildWindowsHttpProbeCommand avoids exposing raw URLs to cmd quoting and expansion', () => {
+  const url = "http://exempted-domain.127.0.0.1.sslip.io:18082/o'k?token=%TEMP%";
+  const command = buildWindowsHttpProbeCommand(url);
+
+  assert.match(command, /^powershell -NoLogo -EncodedCommand /);
+  assert.doesNotMatch(command, /%TEMP%/);
+  assert.doesNotMatch(command, /o'k/);
+
+  const encodedCommand = command.replace(/^powershell -NoLogo -EncodedCommand /, '');
+  const decodedCommand = Buffer.from(encodedCommand, 'base64').toString('utf16le');
+
+  assert.match(
+    decodedCommand,
+    /Invoke-WebRequest -Uri 'http:\/\/exempted-domain\.127\.0\.0\.1\.sslip\.io:18082\/o''k\?token=%TEMP%'/
+  );
+  assert.match(decodedCommand, /-UseBasicParsing/);
+  assert.match(decodedCommand, /\| Out-Null/);
 });
