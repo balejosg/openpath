@@ -112,6 +112,7 @@ export interface ConvergenceOptions {
 export interface StudentPolicyDriverOptions {
   diagnosticsDir?: string;
   extensionPath?: string;
+  firefoxBinaryPath?: string;
   headless?: boolean;
 }
 
@@ -370,6 +371,8 @@ export class StudentPolicyDriver {
 
   private readonly extensionPath: string;
 
+  private readonly firefoxBinaryPath?: string;
+
   private readonly headless: boolean;
 
   private driver: WebDriver | null = null;
@@ -384,6 +387,7 @@ export class StudentPolicyDriver {
       getDiagnosticsDir();
     this.extensionPath =
       options.extensionPath ?? optionalEnv('OPENPATH_EXTENSION_PATH') ?? DEFAULT_EXTENSION_PATH;
+    this.firefoxBinaryPath = options.firefoxBinaryPath ?? optionalEnv('OPENPATH_FIREFOX_BINARY');
     this.headless = options.headless ?? normalizeBoolean(optionalEnv('CI'), true);
   }
 
@@ -393,6 +397,9 @@ export class StudentPolicyDriver {
     const options = new firefox.Options();
     if (!shouldSkipBundledExtension()) {
       options.addExtensions(this.extensionPath);
+    }
+    if (this.firefoxBinaryPath !== undefined) {
+      options.setBinary(this.firefoxBinaryPath);
     }
     options.setPreference('network.dns.disablePrefetch', true);
     options.setPreference('dom.webnotifications.enabled', true);

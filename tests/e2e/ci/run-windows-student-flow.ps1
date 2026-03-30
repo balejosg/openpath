@@ -20,6 +20,10 @@ $script:PostgresBinDir = $null
 $script:PostgresDataDir = $null
 $script:PostgresLogPath = $null
 $script:PostgresPort = 5432
+$script:FirefoxBinaryPath = $null
+$script:FirefoxUnsignedAddonSupportState = $null
+$script:PrimaryFailure = $null
+$script:RunSucceeded = $false
 
 function Write-Step {
     param(
@@ -116,12 +120,106 @@ function Assert-LastExitCode {
     }
 }
 
+function Write-Utf8NoBomLfFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string[]]$Lines
+    )
+
+    $parent = Split-Path $Path -Parent
+    if ($parent -and -not (Test-Path $parent)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
+
+    $content = ($Lines -join "`n") + "`n"
+    [System.IO.File]::WriteAllText($Path, $content, [System.Text.UTF8Encoding]::new($false))
+}
+
 function Quote-Argument {
     param(
         [Parameter(Mandatory = $true)][string]$Value
     )
 
     '"' + $Value.Replace('"', '""') + '"'
+}
+
+function Get-FirefoxNightlyBinaryPath {
+    if ($script:FirefoxBinaryPath) {
+        return $script:FirefoxBinaryPath
+    }
+
+    if ($env:OPENPATH_FIREFOX_BINARY) {
+        $overridePath = [System.IO.Path]::GetFullPath($env:OPENPATH_FIREFOX_BINARY)
+        if ((Test-Path $overridePath -PathType Leaf) -and ([System.IO.Path]::GetFileName($overridePath) -ieq 'firefox.exe')) {
+            $script:FirefoxBinaryPath = $overridePath
+            return $overridePath
+        }
+
+        throw "OPENPATH_FIREFOX_BINARY must point to firefox.exe: $overridePath"
+    }
+
+    $candidateRoots = @(
+        $env:ProgramFiles,
+        ${env:ProgramFiles(x86)},
+        $env:LOCALAPPDATA
+    ) | Where-Object { $_ }
+
+    $candidateRelativePaths = @(
+        'Firefox Nightly\firefox.exe',
+        'Programs\Firefox Nightly\firefox.exe'
+    )
+
+    foreach ($root in $candidateRoots) {
+        foreach ($relativePath in $candidateRelativePaths) {
+            $candidate = Join-Path $root $relativePath
+            if (Test-Path $candidate) {
+                $script:FirefoxBinaryPath = $candidate
+                return $candidate
+            }
+        }
+    }
+
+    return $null
+}
+
+function Backup-FirefoxConfigFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if (Test-Path $Path) {
+        return [pscustomobject]@{
+            Path = $Path
+            Existed = $true
+            Content = [System.IO.File]::ReadAllBytes($Path)
+        }
+    }
+
+    return [pscustomobject]@{
+        Path = $Path
+        Existed = $false
+        Content = $null
+    }
+}
+
+function Restore-FirefoxConfigFile {
+    param(
+        [Parameter(Mandatory = $true)][pscustomobject]$Snapshot
+    )
+
+    if ($Snapshot.Existed) {
+        $parent = Split-Path $Snapshot.Path -Parent
+        if ($parent -and -not (Test-Path $parent)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+
+        [System.IO.File]::WriteAllBytes($Snapshot.Path, $Snapshot.Content)
+        return
+    }
+
+    if (Test-Path $Snapshot.Path) {
+        Remove-Item $Snapshot.Path -Force
+    }
 }
 
 function Invoke-ProcessWithTimeout {
@@ -547,6 +645,68 @@ function New-FirefoxExtensionArchive {
     return $packagePath
 }
 
+function Enable-FirefoxUnsignedAddonSupport {
+    Write-Step 'Configuring Firefox for unsigned Selenium addons...'
+
+    $firefoxBinaryPath = Get-FirefoxNightlyBinaryPath
+    if (-not $firefoxBinaryPath) {
+        throw 'Firefox Nightly executable not found in the expected install locations.'
+    }
+    $firefoxDir = Split-Path -Parent $firefoxBinaryPath
+
+    $defaultsPrefDir = Join-Path $firefoxDir 'defaults\pref'
+    $autoconfigPath = Join-Path $defaultsPrefDir 'autoconfig.js'
+    $mozillaCfgPath = Join-Path $firefoxDir 'mozilla.cfg'
+
+    $script:FirefoxUnsignedAddonSupportState = [pscustomobject]@{
+        Autoconfig = Backup-FirefoxConfigFile -Path $autoconfigPath
+        MozillaCfg = Backup-FirefoxConfigFile -Path $mozillaCfgPath
+    }
+
+    Write-Utf8NoBomLfFile -Path $autoconfigPath -Lines @(
+        '// OpenPath Selenium Firefox autoconfig',
+        'pref("general.config.filename", "mozilla.cfg");',
+        'pref("general.config.obscure_value", 0);'
+    )
+
+    Write-Utf8NoBomLfFile -Path $mozillaCfgPath -Lines @(
+        '// OpenPath Selenium Firefox configuration',
+        'lockPref("xpinstall.signatures.required", false);',
+        'lockPref("extensions.langpacks.signatures.required", false);',
+        'lockPref("extensions.blocklist.enabled", false);'
+    )
+}
+
+function Restore-FirefoxUnsignedAddonSupport {
+    if ($null -eq $script:FirefoxUnsignedAddonSupportState) {
+        return
+    }
+
+    $restoreError = $null
+
+    try {
+        Restore-FirefoxConfigFile -Snapshot $script:FirefoxUnsignedAddonSupportState.Autoconfig
+    }
+    catch {
+        $restoreError = $_
+    }
+
+    try {
+        Restore-FirefoxConfigFile -Snapshot $script:FirefoxUnsignedAddonSupportState.MozillaCfg
+    }
+    catch {
+        if ($null -eq $restoreError) {
+            $restoreError = $_
+        }
+    }
+
+    $script:FirefoxUnsignedAddonSupportState = $null
+
+    if ($null -ne $restoreError) {
+        throw $restoreError
+    }
+}
+
 function Ensure-FirefoxAndGeckodriver {
     Write-Step 'Ensuring Firefox and geckodriver are available...'
 
@@ -554,9 +714,9 @@ function Ensure-FirefoxAndGeckodriver {
         throw 'Chocolatey is required to install Firefox and geckodriver on the Windows runner.'
     }
 
-    if (-not (Get-Command firefox.exe -ErrorAction SilentlyContinue)) {
-        choco install firefox --no-progress -y | Out-Host
-        Assert-LastExitCode 'choco install firefox'
+    if (-not (Get-FirefoxNightlyBinaryPath)) {
+        choco install firefox-nightly --no-progress -y | Out-Host
+        Assert-LastExitCode 'choco install firefox-nightly'
     }
 
     if (-not (Get-Command geckodriver.exe -ErrorAction SilentlyContinue)) {
@@ -657,6 +817,7 @@ function Invoke-SeleniumStudentSuite {
 
     Push-Location (Join-Path $script:RepoRoot 'tests\selenium')
     try {
+        $originalFirefoxBinary = $env:OPENPATH_FIREFOX_BINARY
         $env:OPENPATH_STUDENT_SCENARIO_FILE = $ScenarioPath
         $env:OPENPATH_FIXTURE_PORT = [string]$script:FixturePort
         $env:OPENPATH_EXTENSION_PATH = $ExtensionArchivePath
@@ -666,6 +827,10 @@ function Invoke-SeleniumStudentSuite {
         $env:OPENPATH_ENABLE_SSE_COMMAND = 'powershell -NoLogo -Command "Enable-ScheduledTask -TaskName ''OpenPath-SSE'' -ErrorAction SilentlyContinue; Start-ScheduledTask -TaskName ''OpenPath-SSE'' -ErrorAction SilentlyContinue"'
         $env:CI = 'true'
         $env:OPENPATH_STUDENT_MODE = $Mode
+        $env:OPENPATH_FIREFOX_BINARY = Get-FirefoxNightlyBinaryPath
+        if (-not $env:OPENPATH_FIREFOX_BINARY) {
+            throw 'Firefox Nightly executable not found before Selenium startup.'
+        }
 
         Write-DiagnosticNote "Starting Selenium student-policy suite mode=$Mode scenarioPath=$ScenarioPath extensionPath=$ExtensionArchivePath"
         Write-DiagnosticNote "Scenario payload at Selenium handoff: $(Get-Content $ScenarioPath -Raw)"
@@ -722,6 +887,12 @@ function Invoke-SeleniumStudentSuite {
         Remove-Item Env:\OPENPATH_DISABLE_SSE_COMMAND -ErrorAction SilentlyContinue
         Remove-Item Env:\OPENPATH_ENABLE_SSE_COMMAND -ErrorAction SilentlyContinue
         Remove-Item Env:\OPENPATH_STUDENT_MODE -ErrorAction SilentlyContinue
+        if ($null -ne $originalFirefoxBinary) {
+            $env:OPENPATH_FIREFOX_BINARY = $originalFirefoxBinary
+        }
+        else {
+            Remove-Item Env:\OPENPATH_FIREFOX_BINARY -ErrorAction SilentlyContinue
+        }
         Pop-Location
     }
 }
@@ -809,16 +980,17 @@ try {
     $scenarioPath = Join-Path $script:ArtifactsRoot 'student-scenario.json'
     $extensionArchivePath = New-FirefoxExtensionArchive
     Ensure-FirefoxAndGeckodriver
+    Enable-FirefoxUnsignedAddonSupport
     Install-AndEnrollClient -Scenario $scenario -InstallClient $true
     Invoke-SeleniumStudentSuite -ScenarioPath $scenarioPath -ExtensionArchivePath $extensionArchivePath -Mode 'sse'
     $scenario = Invoke-BackendHarnessBootstrap -ScenarioName 'Windows Student Policy Fallback'
     Install-AndEnrollClient -Scenario $scenario -InstallClient $false
     Invoke-SeleniumStudentSuite -ScenarioPath $scenarioPath -ExtensionArchivePath $extensionArchivePath -Mode 'fallback'
     Write-WindowsDiagnostics
-    Publish-GitHubStepSummary -Mode 'success'
-    Write-Host 'Windows student-policy runner completed successfully' -ForegroundColor Green
+    $script:RunSucceeded = $true
 }
 catch {
+    $script:PrimaryFailure = $_
     Write-Host "Windows student-policy runner failed: $_" -ForegroundColor Red
     Invoke-DebugDump
     Publish-GitHubFailureAnnotations
@@ -826,6 +998,43 @@ catch {
     throw
 }
 finally {
-    Stop-BackgroundJobs
-    Cleanup-TestPostgres
+    $cleanupError = $null
+
+    try {
+        Restore-FirefoxUnsignedAddonSupport
+    }
+    catch {
+        $cleanupError = $_
+    }
+
+    try {
+        Stop-BackgroundJobs
+    }
+    catch {
+        if ($null -eq $cleanupError) {
+            $cleanupError = $_
+        }
+    }
+
+    try {
+        Cleanup-TestPostgres
+    }
+    catch {
+        if ($null -eq $cleanupError) {
+            $cleanupError = $_
+        }
+    }
+
+    if (($null -ne $cleanupError) -and ($null -eq $script:PrimaryFailure)) {
+        throw $cleanupError
+    }
+
+    if (($null -ne $cleanupError) -and ($null -ne $script:PrimaryFailure)) {
+        Write-Host "Cleanup failed after primary error: $cleanupError" -ForegroundColor Yellow
+    }
+
+    if (($script:RunSucceeded) -and ($null -eq $cleanupError) -and ($null -eq $script:PrimaryFailure)) {
+        Publish-GitHubStepSummary -Mode 'success'
+        Write-Host 'Windows student-policy runner completed successfully' -ForegroundColor Green
+    }
 }
