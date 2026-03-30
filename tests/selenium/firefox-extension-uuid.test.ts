@@ -86,3 +86,94 @@ test('waitForFirefoxExtensionUuid retries until prefs.js is created', async () =
 
   assert.equal(extensionUuid, 'created-later-uuid');
 });
+
+test('waitForFirefoxExtensionUuid reports profile diagnostics when UUID stays missing', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpath-firefox-profile-'));
+  const prefsPath = path.join(tempDir, 'prefs.js');
+  const extensionsJsonPath = path.join(tempDir, 'extensions.json');
+  const extensionId = 'monitor-bloqueos@openpath';
+
+  fs.writeFileSync(
+    prefsPath,
+    'user_pref("extensions.webextensions.uuids", "{\\"other@example.com\\":\\"other-uuid\\"}");\n',
+    'utf8'
+  );
+
+  fs.writeFileSync(extensionsJsonPath, JSON.stringify({ addons: [{ id: extensionId }] }), 'utf8');
+
+  await assert.rejects(
+    () =>
+      waitForFirefoxExtensionUuid({
+        profileDir: tempDir,
+        extensionId,
+        timeoutMs: 100,
+        pollMs: 10,
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /Could not resolve extension UUID for monitor-bloqueos@openpath/);
+      assert.match(error.message, /prefs\.js=uuids:\[other@example\.com\]/);
+      assert.match(error.message, /extensions\.json=addons:\[monitor-bloqueos@openpath\]/);
+      assert.match(error.message, /addonStartup\.json\.lz4=missing/);
+      return true;
+    }
+  );
+});
+
+test('waitForFirefoxExtensionUuid reports empty prefs.js distinctly when UUID prefs never appear', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpath-firefox-profile-'));
+  const prefsPath = path.join(tempDir, 'prefs.js');
+  const extensionId = 'monitor-bloqueos@openpath';
+
+  fs.writeFileSync(prefsPath, '', 'utf8');
+
+  await assert.rejects(
+    () =>
+      waitForFirefoxExtensionUuid({
+        profileDir: tempDir,
+        extensionId,
+        timeoutMs: 100,
+        pollMs: 10,
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /Could not find extensions\.webextensions\.uuids/);
+      assert.match(error.message, /prefs\.js=empty/);
+      return true;
+    }
+  );
+});
+
+test('waitForFirefoxExtensionUuid preserves UUID failure when diagnostic files are unreadable', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpath-firefox-profile-'));
+  const prefsPath = path.join(tempDir, 'prefs.js');
+  const extensionsJsonPath = path.join(tempDir, 'extensions.json');
+  const addonStartupPath = path.join(tempDir, 'addonStartup.json.lz4');
+  const extensionId = 'monitor-bloqueos@openpath';
+
+  fs.writeFileSync(
+    prefsPath,
+    'user_pref("extensions.webextensions.uuids", "{\\"other@example.com\\":\\"other-uuid\\"}");\n',
+    'utf8'
+  );
+
+  fs.mkdirSync(extensionsJsonPath);
+  fs.mkdirSync(addonStartupPath);
+
+  await assert.rejects(
+    () =>
+      waitForFirefoxExtensionUuid({
+        profileDir: tempDir,
+        extensionId,
+        timeoutMs: 100,
+        pollMs: 10,
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /Could not resolve extension UUID for monitor-bloqueos@openpath/);
+      assert.match(error.message, /extensions\.json=unreadable:EISDIR/);
+      assert.match(error.message, /addonStartup\.json\.lz4=unreadable:EISDIR/);
+      return true;
+    }
+  );
+});
