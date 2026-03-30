@@ -61,7 +61,45 @@ XPI_FILE="$SCRIPT_DIR/${XPI_NAME}-${VERSION}.xpi"
 echo "  → Creando archivo XPI..."
 
 cd "$BUILD_DIR"
-zip -r -q "$XPI_FILE" ./*
+if command -v zip >/dev/null 2>&1; then
+    if ! zip -r -q "$XPI_FILE" ./*; then
+        if command -v python3 >/dev/null 2>&1; then
+            python3 - "$BUILD_DIR" "$XPI_FILE" <<'PY'
+import os
+import sys
+import zipfile
+
+build_dir, output_path = sys.argv[1:3]
+with zipfile.ZipFile(output_path, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+    for root, _, files in os.walk(build_dir):
+        for filename in files:
+            full_path = os.path.join(root, filename)
+            relative_path = os.path.relpath(full_path, build_dir)
+            archive.write(full_path, relative_path)
+PY
+        else
+            echo -e "${RED}Error: 'zip' falló y no se encontró 'python3' para crear el archivo XPI${NC}"
+            exit 1
+        fi
+    fi
+elif command -v python3 >/dev/null 2>&1; then
+    python3 - "$BUILD_DIR" "$XPI_FILE" <<'PY'
+import os
+import sys
+import zipfile
+
+build_dir, output_path = sys.argv[1:3]
+with zipfile.ZipFile(output_path, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+    for root, _, files in os.walk(build_dir):
+        for filename in files:
+            full_path = os.path.join(root, filename)
+            relative_path = os.path.relpath(full_path, build_dir)
+            archive.write(full_path, relative_path)
+PY
+else
+    echo -e "${RED}Error: No se encontró 'zip' ni 'python3' para crear el archivo XPI${NC}"
+    exit 1
+fi
 
 cd "$SCRIPT_DIR"
 

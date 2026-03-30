@@ -1,6 +1,16 @@
 import { afterEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  utimesSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -69,6 +79,55 @@ afterEach(() => {
 });
 
 void describe('Firefox release signing helpers', () => {
+  void test('build-xpi.sh falls back when zip is unavailable', () => {
+    const workingDir = createTempDir('openpath-build-xpi-');
+    const fixtureDir = path.join(workingDir, 'extension');
+    const fakeBinDir = path.join(workingDir, 'bin');
+    const version = '9.9.9';
+    const xpiPath = path.join(fixtureDir, `monitor-bloqueos-red-${version}.xpi`);
+
+    mkdirSync(fixtureDir, { recursive: true });
+    mkdirSync(fakeBinDir, { recursive: true });
+    mkdirSync(path.join(fixtureDir, 'popup'), { recursive: true });
+    mkdirSync(path.join(fixtureDir, 'icons'), { recursive: true });
+    mkdirSync(path.join(fixtureDir, 'blocked'), { recursive: true });
+    mkdirSync(path.join(fixtureDir, 'dist'), { recursive: true });
+
+    writeFileSync(
+      path.join(fixtureDir, 'manifest.json'),
+      `${JSON.stringify({ version }, null, 2)}\n`
+    );
+    writeFileSync(path.join(fixtureDir, 'PRIVACY.md'), '# Privacy\n');
+    writeFileSync(path.join(fixtureDir, 'popup', 'index.html'), '<html></html>\n');
+    writeFileSync(path.join(fixtureDir, 'icons', 'icon.svg'), '<svg />\n');
+    writeFileSync(path.join(fixtureDir, 'blocked', 'index.html'), '<html>blocked</html>\n');
+    writeFileSync(path.join(fixtureDir, 'dist', 'background.js'), 'console.log("ok");\n');
+    writeFileSync(
+      path.join(fixtureDir, 'build-xpi.sh'),
+      readFileSync(path.join(extensionRoot, 'build-xpi.sh'))
+    );
+    writeFileSync(
+      path.join(fakeBinDir, 'zip'),
+      '#!/bin/sh\necho "zip unavailable" >&2\nexit 127\n'
+    );
+    chmodSync(path.join(fakeBinDir, 'zip'), 0o755);
+
+    execFileSync('bash', ['build-xpi.sh'], {
+      cwd: fixtureDir,
+      env: {
+        ...process.env,
+        PATH: `${fakeBinDir}:${process.env.PATH ?? ''}`,
+      },
+      encoding: 'utf8',
+    });
+
+    assert.ok(
+      existsSync(xpiPath),
+      'build-xpi.sh should still create the XPI when zip is unavailable'
+    );
+    assert.equal(readFileSync(xpiPath).subarray(0, 2).toString('utf8'), 'PK');
+  });
+
   void test('prepareFirefoxReleaseArtifacts writes metadata and copies the signed XPI', () => {
     const workingDir = createTempDir('openpath-firefox-release-');
     const signedXpiPath = path.join(workingDir, 'signed-input.xpi');
