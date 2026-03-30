@@ -98,6 +98,15 @@ jobs:
         run: |
           bash tests/e2e/ci/run-linux-student-flow.sh
 
+      - name: Upload Linux student-policy diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: linux-student-policy-artifacts-${{ github.run_id }}
+          path: tests/e2e/artifacts/linux-student-policy
+          if-no-files-found: ignore
+          retention-days: 7
+
   # ============================================
   # Windows Student Policy Tests
   # ============================================
@@ -117,6 +126,15 @@ jobs:
         shell: pwsh
         run: |
           pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/run-windows-student-flow.ps1
+
+      - name: Upload Windows student-policy diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-student-policy-artifacts-${{ github.run_id }}
+          path: tests/e2e/artifacts/windows-student-policy
+          if-no-files-found: ignore
+          retention-days: 7
 
   # ============================================
   # Summary Job

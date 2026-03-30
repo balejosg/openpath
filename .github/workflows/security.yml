@@ -158,7 +158,19 @@ jobs:
         with:
           image-ref: 'openpath-api:scan'
           format: 'table'
+          output: 'trivy-results.txt'
           severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Trivy results artifact
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: trivy-openpath-api-scan
+          path: |
+            trivy-results.sarif
+            trivy-results.txt
+          if-no-files-found: ignore
+          retention-days: 30
 
   # ============================================
   # Dependency Vulnerability Check
@@ -166,11 +178,6 @@ jobs:
   npm-audit:
     name: NPM Audit
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        package:
-          - api
 
     steps:
       - name: Checkout code
@@ -181,18 +188,14 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install dependencies
+        run: npm ci
+
       - name: Run npm audit
-        working-directory: ${{ matrix.package }}
         run: |
-          echo "🔍 Running npm audit for ${{ matrix.package }}..."
+          echo "🔍 Running npm audit for the workspace lockfile..."
 
-          # Install dependencies first
-          npm ci || npm install
-
-          # Run audit (allow moderate/low to not fail CI)
           npm audit --audit-level=high || true
-
-          # Generate JSON report
           npm audit --json > audit-report.json || true
 
           echo "✓ Audit complete"
@@ -201,8 +204,8 @@ jobs:
         uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: npm-audit-${{ matrix.package }}
-          path: ${{ matrix.package }}/audit-report.json
+          name: npm-audit-root
+          path: audit-report.json
           retention-days: 30
 
   # ============================================
@@ -230,7 +233,7 @@ jobs:
   security-summary:
     name: Security Summary
     runs-on: ubuntu-latest
-    needs: [codeql, trivy-scan, secret-scan]
+    needs: [codeql, shellcheck-security, trivy-scan, npm-audit, secret-scan]
     if: always()
 
     steps:
@@ -241,13 +244,16 @@ jobs:
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| CodeQL Analysis | ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Shell Script Security | ${{ needs.shellcheck-security.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Container Scan (Trivy) | ${{ needs.trivy-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| NPM Audit | ${{ needs.npm-audit.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Secret Scanning | ${{ needs.secret-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Note:** ShellCheck, npm audit, and sensitive file checks run locally via pre-commit hooks." >> $GITHUB_STEP_SUMMARY
+          echo "Artifacts: Trivy SARIF/table output and the root npm audit report are uploaded with this workflow." >> $GITHUB_STEP_SUMMARY
 
           # Check if any critical jobs failed
           if [[ "${{ needs.codeql.result }}" == "failure" ]] || \
+             [[ "${{ needs.shellcheck-security.result }}" == "failure" ]] || \
              [[ "${{ needs.secret-scan.result }}" == "failure" ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "❌ **Critical security issues detected!**" >> $GITHUB_STEP_SUMMARY

@@ -23,14 +23,16 @@ const requestsLatency = new Trend('requests_latency');
 
 // Configuration
 const BASE_URL = __ENV.K6_BASE_URL || 'http://localhost:3000';
+const SUMMARY_JSON_PATH = __ENV.K6_SUMMARY_JSON || 'perf-results/k6-summary.json';
 
 export const options = {
-  vus: __ENV.K6_VUS ? parseInt(__ENV.K6_VUS) : 10,
+  vus: __ENV.K6_VUS ? parseInt(__ENV.K6_VUS, 10) : 10,
   duration: __ENV.K6_DURATION || '30s',
   thresholds: {
     http_req_duration: ['p(95)<500'], // 95% of requests under 500ms
     errors: ['rate<0.1'], // Error rate under 10%
     health_latency: ['p(99)<100'], // Health endpoint under 100ms
+    requests_latency: ['p(95)<750'], // Config endpoint under 750ms
   },
 };
 
@@ -54,22 +56,29 @@ export function setup() {
  * Default test scenario
  */
 export default function (data) {
-  if (Math.random() < 0.4) {
+  const roll = Math.random();
+
+  if (roll < 0.6) {
     testHealthEndpoint(data);
     return;
   }
 
-  if (Math.random() < 0.5) {
+  if (roll < 0.9) {
     testConfigEndpoint(data);
     return;
   }
 
-  testHealthEndpoint(data);
+  rateLimitTest(data);
 }
 
 function testConfigEndpoint(data) {
   const start = Date.now();
-  const res = http.get(`${data.baseUrl}/api/config`);
+  const res = http.get(`${data.baseUrl}/api/config`, {
+    tags: {
+      endpoint: 'api-config',
+      scenario: 'config-read',
+    },
+  });
   requestsLatency.add(Date.now() - start);
 
   const success = check(res, {
@@ -90,7 +99,12 @@ function testConfigEndpoint(data) {
 
 function testHealthEndpoint(data) {
   const start = Date.now();
-  const res = http.get(`${data.baseUrl}/health`);
+  const res = http.get(`${data.baseUrl}/health`, {
+    tags: {
+      endpoint: 'health',
+      scenario: 'health-read',
+    },
+  });
   healthLatency.add(Date.now() - start);
 
   const success = check(res, {
@@ -110,15 +124,52 @@ function testHealthEndpoint(data) {
 }
 
 export function rateLimitTest(data) {
+  let scenarioSucceeded = true;
+
   for (let i = 0; i < 20; i++) {
-    const res = http.get(`${data.baseUrl}/health`);
-    check(res, {
+    const res = http.get(`${data.baseUrl}/health`, {
+      tags: {
+        endpoint: 'health',
+        scenario: 'health-burst',
+      },
+    });
+    const success = check(res, {
       'rate limit: not server error': (r) => r.status < 500,
     });
+
+    scenarioSucceeded = scenarioSucceeded && success;
   }
+
+  errorRate.add(!scenarioSucceeded);
   sleep(1);
 }
 
 export function teardown(data) {
   console.log(`Test completed. Started at: ${new Date(data.timestamp).toISOString()}`);
+}
+
+function metricValue(metric, key, fallback = 'n/a') {
+  const value = metric?.values?.[key];
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return fallback;
+  }
+
+  return value.toFixed(2);
+}
+
+export function handleSummary(data) {
+  const summaryLines = [
+    'Load test summary',
+    `Base URL: ${BASE_URL}`,
+    `Iterations: ${metricValue(data.metrics.iterations, 'count', '0')}`,
+    `HTTP req duration p(95): ${metricValue(data.metrics.http_req_duration, 'p(95)')} ms`,
+    `Config latency p(95): ${metricValue(data.metrics.requests_latency, 'p(95)')} ms`,
+    `Health latency p(99): ${metricValue(data.metrics.health_latency, 'p(99)')} ms`,
+    `Error rate: ${metricValue(data.metrics.errors, 'rate')}`,
+  ].join('\n');
+
+  return {
+    [SUMMARY_JSON_PATH]: JSON.stringify(data, null, 2),
+    stdout: `${summaryLines}\n`,
+  };
 }

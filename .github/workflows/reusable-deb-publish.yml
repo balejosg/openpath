@@ -1,0 +1,237 @@
+name: Reusable Debian Publish
+
+on:
+  workflow_call:
+    inputs:
+      artifact-name:
+        description: 'Artifact name containing the built .deb package'
+        required: true
+        type: string
+      suite:
+        description: 'APT suite to publish to'
+        required: true
+        type: string
+      version:
+        description: 'Package version for the summary output'
+        required: true
+        type: string
+      summary-title:
+        description: 'Summary heading to write to the job summary'
+        required: false
+        type: string
+        default: 'Debian Package Published'
+      install-command:
+        description: 'Install command to show in the summary'
+        required: true
+        type: string
+      create-index:
+        description: 'Whether to regenerate the apt index page'
+        required: false
+        type: boolean
+        default: false
+      validate-published-metadata:
+        description: 'Whether to validate the published Packages metadata'
+        required: false
+        type: boolean
+        default: false
+      remove-legacy-stable-package:
+        description: 'Whether to remove whitelist-dnsmasq from stable before publish'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      APT_GPG_PRIVATE_KEY:
+        required: true
+
+jobs:
+  publish:
+    name: Publish to APT Repository (${{ inputs.suite }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    env:
+      SUITE: ${{ inputs.suite }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v6
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
+
+      - name: Create gh-pages directory if not exists
+        run: |
+          if [ ! -d gh-pages ]; then
+            mkdir gh-pages
+          fi
+
+      - name: Download package artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: packages/
+
+      - name: Install reprepro and GPG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y reprepro gnupg
+
+      - name: Require persistent APT signing key
+        run: |
+          if [ -z "${{ secrets.APT_GPG_PRIVATE_KEY }}" ]; then
+            echo "::error title=Missing APT_GPG_PRIVATE_KEY::Configure the persistent APT signing key secret before publishing packages."
+            exit 1
+          fi
+
+      - name: Setup GPG key
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: |
+          printf '%s' "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
+          GPG_KEY_ID=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
+          if [ -z "$GPG_KEY_ID" ]; then
+            echo "::error title=APT signing key import failed::Unable to extract a secret key fingerprint after import."
+            exit 1
+          fi
+          echo "GPG_KEY_ID=$GPG_KEY_ID" >> $GITHUB_ENV
+          echo "Using persistent GPG key fingerprint: $GPG_KEY_ID"
+
+      - name: Setup APT repository structure
+        run: |
+          mkdir -p gh-pages/apt/conf
+          mkdir -p gh-pages/apt/pool/main
+
+          cat > gh-pages/apt/conf/distributions << EOF
+          Origin: OpenPath System
+          Label: OpenPath System
+          Suite: stable
+          Codename: stable
+          Architectures: amd64
+          Components: main
+          Description: OpenPath DNS System - Stable releases
+          SignWith: ${{ env.GPG_KEY_ID }}
+
+          Origin: OpenPath System
+          Label: OpenPath System
+          Suite: unstable
+          Codename: unstable
+          Architectures: amd64
+          Components: main
+          Description: OpenPath DNS System - Development builds
+          SignWith: ${{ env.GPG_KEY_ID }}
+          EOF
+
+          cat > gh-pages/apt/conf/options << EOF
+          verbose
+          basedir .
+          EOF
+
+      - name: Add package to repository
+        working-directory: gh-pages/apt
+        run: |
+          echo "Adding package to $SUITE suite..."
+          if [ "${{ inputs.remove-legacy-stable-package }}" = "true" ] && [ "$SUITE" = "stable" ]; then
+            reprepro remove stable whitelist-dnsmasq || true
+          fi
+          reprepro includedeb "$SUITE" ../../packages/*.deb
+
+      - name: Re-sign published suites
+        working-directory: gh-pages/apt
+        run: |
+          for suite in stable unstable; do
+            if [ -d "dists/$suite" ]; then
+              echo "Re-signing $suite metadata with ${{ env.GPG_KEY_ID }}..."
+              reprepro export "$suite"
+            fi
+          done
+
+      - name: Validate published package metadata
+        if: inputs.validate-published-metadata
+        working-directory: gh-pages/apt
+        run: |
+          packages_file="dists/$SUITE/main/binary-amd64/Packages"
+
+          if [ ! -f "$packages_file" ]; then
+            echo "::error title=Published APT metadata missing Packages index::Expected $packages_file after publishing."
+            exit 1
+          fi
+
+          if ! grep -q '^Package: openpath-dnsmasq$' "$packages_file"; then
+            echo "::error title=Published APT metadata missing openpath-dnsmasq::Expected $packages_file to advertise openpath-dnsmasq."
+            cat "$packages_file"
+            exit 1
+          fi
+
+          if [ "$SUITE" = "stable" ] && grep -q '^Package: whitelist-dnsmasq$' "$packages_file"; then
+            echo "::error title=Legacy whitelist package leaked into stable metadata::Stable metadata must not advertise whitelist-dnsmasq."
+            cat "$packages_file"
+            exit 1
+          fi
+
+      - name: Export GPG public key
+        run: |
+          gpg --armor --export ${{ env.GPG_KEY_ID }} > gh-pages/apt/pubkey.gpg
+
+      - name: Copy setup script
+        run: |
+          cp linux/scripts/build/apt-setup.sh gh-pages/apt/apt-setup.sh
+          cp linux/scripts/build/apt-bootstrap.sh gh-pages/apt/apt-bootstrap.sh
+          chmod +x gh-pages/apt/apt-setup.sh
+          chmod +x gh-pages/apt/apt-bootstrap.sh
+
+      - name: Create index.html for apt directory
+        if: inputs.create-index
+        run: |
+          cat > gh-pages/apt/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+          <head><title>OpenPath System APT Repository</title></head>
+          <body>
+          <h1>OpenPath System APT Repository</h1>
+          <h2>Quick Install</h2>
+          <pre>curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash</pre>
+          <p>Manual install (advanced):</p>
+          <pre>curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh | sudo bash
+          sudo apt install openpath-dnsmasq
+          sudo openpath setup</pre>
+          <h2>Files</h2>
+          <ul>
+            <li><a href="apt-bootstrap.sh">apt-bootstrap.sh</a> - One-liner install + classroom setup</li>
+            <li><a href="apt-setup.sh">apt-setup.sh</a> - Setup script</li>
+            <li><a href="pubkey.gpg">pubkey.gpg</a> - GPG public key</li>
+            <li><a href="dists/">dists/</a> - Distribution metadata</li>
+            <li><a href="pool/">pool/</a> - Package pool</li>
+          </ul>
+          </body>
+          </html>
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./gh-pages
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Summary
+        run: |
+          echo "## 📦 ${{ inputs.summary-title }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Suite:** $SUITE" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Install with:" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo '${{ inputs.install-command }}' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

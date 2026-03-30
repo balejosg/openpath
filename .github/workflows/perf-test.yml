@@ -2,6 +2,21 @@ name: Performance Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Optional existing API base URL. Leave empty to start the local API.'
+        required: false
+        type: string
+      vus:
+        description: 'Virtual users for the k6 run'
+        required: false
+        default: '20'
+        type: string
+      duration:
+        description: 'k6 duration (for example 30s or 2m)'
+        required: false
+        default: '60s'
+        type: string
   schedule:
     - cron: '0 5 * * 0' # Weekly on Sunday at 5am UTC
 
@@ -29,34 +44,110 @@ jobs:
         uses: ./.github/actions/build-workspaces
 
       - name: Start API server
-        run: |
-          npm start --workspace=@openpath/api &
-          sleep 5
         env:
+          TARGET_BASE_URL: ${{ github.event.inputs.base_url || '' }}
           PORT: 3000
           NODE_ENV: test
           ADMIN_TOKEN: test-token
           SHARED_SECRET: test-secret
+        run: |
+          if [ -n "$TARGET_BASE_URL" ]; then
+            echo "Using external API target: $TARGET_BASE_URL"
+            exit 0
+          fi
+
+          npm start --workspace=@openpath/api > api-server.log 2>&1 &
+          echo $! > api-server.pid
+
+          for attempt in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null; then
+              echo "Local API is ready"
+              exit 0
+            fi
+
+            sleep 2
+          done
+
+          echo "::error title=API did not become ready::OpenPath API failed to answer /health within 60 seconds."
+          test -f api-server.log && cat api-server.log
+          exit 1
 
       - name: Run k6 load test
-        run: k6 run api/tests/load/load-test.js
         env:
-          K6_BASE_URL: http://localhost:3000
-          K6_VUS: 20
-          K6_DURATION: 60s
+          K6_BASE_URL: ${{ github.event.inputs.base_url || 'http://127.0.0.1:3000' }}
+          K6_VUS: ${{ github.event.inputs.vus || '20' }}
+          K6_DURATION: ${{ github.event.inputs.duration || '60s' }}
+          K6_SUMMARY_JSON: perf-results/k6-summary.json
           RATE_LIMIT_MAX: 10000
           NODE_ENV: test
+        run: |
+          mkdir -p perf-results
+          k6 run api/tests/load/load-test.js | tee perf-results/k6-output.txt
+
+      - name: Stop local API server
+        if: always()
+        run: |
+          if [ -f api-server.pid ]; then
+            kill "$(cat api-server.pid)" >/dev/null 2>&1 || true
+          fi
+
+      - name: Upload load-test artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: perf-test-results-${{ github.run_id }}
+          path: |
+            perf-results/
+            api-server.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Generate summary
         if: always()
+        env:
+          SUMMARY_BASE_URL: ${{ github.event.inputs.base_url || 'http://127.0.0.1:3000' }}
+          SUMMARY_VUS: ${{ github.event.inputs.vus || '20' }}
+          SUMMARY_DURATION: ${{ github.event.inputs.duration || '60s' }}
         run: |
-          echo "## 🏋️ Load Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Configuration:**" >> $GITHUB_STEP_SUMMARY
-          echo "- Virtual Users: 20" >> $GITHUB_STEP_SUMMARY
-          echo "- Duration: 60s" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Thresholds:**" >> $GITHUB_STEP_SUMMARY
-          echo "- p(95) response time < 500ms" >> $GITHUB_STEP_SUMMARY
-          echo "- Error rate < 10%" >> $GITHUB_STEP_SUMMARY
-          echo "- Health endpoint p(99) < 100ms" >> $GITHUB_STEP_SUMMARY
+          echo "## Load Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Configuration:**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Base URL: $SUMMARY_BASE_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Virtual Users: $SUMMARY_VUS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Duration: $SUMMARY_DURATION" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Thresholds:**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- HTTP request p(95) < 500ms" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Config endpoint p(95) < 750ms" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Health endpoint p(99) < 100ms" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Error rate < 10%" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          node --input-type=module <<'EOF'
+          import fs from 'node:fs';
+
+          const summaryPath = 'perf-results/k6-summary.json';
+          if (!fs.existsSync(summaryPath)) {
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, 'Result summary file was not generated.\n');
+            process.exit(0);
+          }
+
+          const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+          const metricValue = (name, key, fallback = 'n/a') => {
+            const value = summary.metrics?.[name]?.values?.[key];
+            return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : fallback;
+          };
+
+          const lines = [
+            '**Observed metrics:**',
+            `- Iterations: ${metricValue('iterations', 'count', '0')}`,
+            `- HTTP request p(95): ${metricValue('http_req_duration', 'p(95)')} ms`,
+            `- Config endpoint p(95): ${metricValue('requests_latency', 'p(95)')} ms`,
+            `- Health endpoint p(99): ${metricValue('health_latency', 'p(99)')} ms`,
+            `- Error rate: ${metricValue('errors', 'rate')}`,
+            '',
+            'Artifacts: `perf-results/` includes the raw k6 output and JSON summary.',
+          ];
+
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
+          EOF

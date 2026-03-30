@@ -13,9 +13,11 @@ permissions:
 
 jobs:
   build-prerelease:
-    name: Build and Publish Prerelease
+    name: Build Prerelease Package
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
 
     steps:
       - name: Checkout repository
@@ -52,121 +54,14 @@ jobs:
           path: build/*.deb
           retention-days: 14
 
-      - name: Checkout gh-pages branch
-        uses: actions/checkout@v6
-        with:
-          ref: gh-pages
-          path: gh-pages
-        continue-on-error: true
-
-      - name: Create gh-pages directory if not exists
-        run: |
-          if [ ! -d gh-pages ]; then
-            mkdir gh-pages
-          fi
-
-      - name: Install reprepro and GPG
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y reprepro gnupg
-
-      - name: Require persistent APT signing key
-        run: |
-          if [ -z "${{ secrets.APT_GPG_PRIVATE_KEY }}" ]; then
-            echo "::error title=Missing APT_GPG_PRIVATE_KEY::Configure the persistent APT signing key secret before publishing packages."
-            exit 1
-          fi
-
-      - name: Setup GPG key
-        env:
-          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
-        run: |
-          printf '%s' "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
-          GPG_KEY_ID=$(gpg --batch --with-colons --list-secret-keys | awk -F: '/^fpr:/ { print $10; exit }')
-          if [ -z "$GPG_KEY_ID" ]; then
-            echo "::error title=APT signing key import failed::Unable to extract a secret key fingerprint after import."
-            exit 1
-          fi
-          echo "GPG_KEY_ID=$GPG_KEY_ID" >> $GITHUB_ENV
-          echo "Using persistent GPG key fingerprint: $GPG_KEY_ID"
-
-      - name: Setup APT repository structure
-        run: |
-          mkdir -p gh-pages/apt/conf
-          mkdir -p gh-pages/apt/pool/main
-
-          cat > gh-pages/apt/conf/distributions << EOF
-          Origin: OpenPath System
-          Label: OpenPath System
-          Suite: stable
-          Codename: stable
-          Architectures: amd64
-          Components: main
-          Description: OpenPath DNS System - Stable releases
-          SignWith: ${{ env.GPG_KEY_ID }}
-
-          Origin: OpenPath System
-          Label: OpenPath System
-          Suite: unstable
-          Codename: unstable
-          Architectures: amd64
-          Components: main
-          Description: OpenPath DNS System - Development builds
-          SignWith: ${{ env.GPG_KEY_ID }}
-          EOF
-
-          cat > gh-pages/apt/conf/options << EOF
-          verbose
-          basedir .
-          EOF
-
-      - name: Add package to unstable repository
-        working-directory: gh-pages/apt
-        run: |
-          echo "Adding package to unstable suite..."
-          reprepro includedeb unstable ../../build/*.deb
-
-      - name: Re-sign published suites
-        working-directory: gh-pages/apt
-        run: |
-          for suite in stable unstable; do
-            if [ -d "dists/$suite" ]; then
-              echo "Re-signing $suite metadata with ${{ env.GPG_KEY_ID }}..."
-              reprepro export "$suite"
-            fi
-          done
-
-      - name: Export GPG public key
-        run: |
-          gpg --armor --export ${{ env.GPG_KEY_ID }} > gh-pages/apt/pubkey.gpg
-
-      - name: Copy setup script
-        run: |
-          cp linux/scripts/build/apt-setup.sh gh-pages/apt/apt-setup.sh
-          cp linux/scripts/build/apt-bootstrap.sh gh-pages/apt/apt-bootstrap.sh
-          chmod +x gh-pages/apt/apt-setup.sh
-          chmod +x gh-pages/apt/apt-bootstrap.sh
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: ./gh-pages
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-      - name: Summary
-        run: |
-          echo "## 📦 Prerelease Deb Published" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Suite:** unstable" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Install with:" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo 'curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash -s -- --unstable' >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+  publish-prerelease:
+    name: Publish Prerelease to APT Repository
+    needs: build-prerelease
+    uses: ./.github/workflows/reusable-deb-publish.yml
+    with:
+      artifact-name: prerelease-deb-package
+      suite: unstable
+      version: ${{ needs.build-prerelease.outputs.version }}
+      summary-title: Prerelease Deb Published
+      install-command: curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash -s -- --unstable
+    secrets: inherit
