@@ -879,7 +879,7 @@ Describe "DNS Module" {
                     }
                 )
                 $regexRule = $regexForwardRules[0]
-                $regexPattern = $regexRule.Substring(4)
+                $regexPattern = $regexRule.Substring(4).TrimStart('/').Replace('\\', '\')
 
                 $content.Contains('FW example.com') | Should -BeTrue
                 $content.Contains('NX >ads.example.com') | Should -BeTrue
