@@ -22,7 +22,7 @@
     "test:e2e:smoke": "npm run test:e2e --workspace=@openpath/react-spa -- --grep @smoke",
     "test:student-policy:linux": "bash tests/e2e/ci/run-linux-student-flow.sh",
     "test:student-policy:windows": "pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/run-windows-student-flow.ps1",
-    "test:repo-config": "node --test tests/repo-config.test.mjs",
+    "test:repo-config": "node --test tests/repo-config.test.mjs tests/generate-docker-manifests.test.mjs",
     "test:repo-test-files": "bash scripts/check-test-files.sh",
     "test:watch:spa": "npm run test --workspace=@openpath/react-spa -- --watch",
     "test:watch:api": "npm run test:watch --workspace=@openpath/api",
@@ -48,7 +48,9 @@
     "security:secrets": "secretlint '**/*.{js,ts,tsx,json,yml,yaml,env,env.*}' '!react-spa/e2e/test-results/**' '!react-spa/test-results/**' '!react-spa/playwright-report/**'",
     "security:audit": "npm audit --audit-level=high",
     "security:files": "bash scripts/check-sensitive-files.sh",
-    "size:check": "test -d react-spa/dist && npm run size --workspace=@openpath/react-spa || echo 'SKIP: react-spa/dist not built, skipping size check'"
+    "size:check": "test -d react-spa/dist && npm run size --workspace=@openpath/react-spa || echo 'SKIP: react-spa/dist not built, skipping size check'",
+    "docker:manifests": "node scripts/generate-docker-manifests.mjs",
+    "docker:manifests:check": "node scripts/generate-docker-manifests.mjs --check"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.4.0",

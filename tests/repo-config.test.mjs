@@ -4,6 +4,11 @@ import { dirname, resolve } from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import {
+  buildDockerManifest,
+  DOCKER_MANIFEST_CASES,
+} from '../scripts/generate-docker-manifests.mjs';
+
 const currentFilePath = fileURLToPath(import.meta.url);
 const testsDir = dirname(currentFilePath);
 const projectRoot = resolve(testsDir, '..');
@@ -18,12 +23,6 @@ function readJson(relativePath) {
 
 function readText(relativePath) {
   return readFileSync(resolve(projectRoot, relativePath), 'utf8');
-}
-
-function projectPackage(pkg, keys) {
-  return Object.fromEntries(
-    keys.filter((key) => Object.hasOwn(pkg, key)).map((key) => [key, pkg[key]])
-  );
 }
 
 describe('repository verification contract', () => {
@@ -113,67 +112,11 @@ describe('repository verification contract', () => {
   });
 
   test('docker install manifests stay aligned with dependency-bearing package.json fields', () => {
-    const cases = [
-      {
-        packagePath: 'package.json',
-        dockerPackagePath: 'package.docker.json',
-        keys: [
-          'name',
-          'private',
-          'version',
-          'license',
-          'type',
-          'workspaces',
-          'engines',
-          'packageManager',
-          'overrides',
-          'devDependencies',
-        ],
-      },
-      {
-        packagePath: 'api/package.json',
-        dockerPackagePath: 'api/package.docker.json',
-        keys: [
-          'name',
-          'version',
-          'license',
-          'type',
-          'main',
-          'types',
-          'exports',
-          'engines',
-          'dependencies',
-          'devDependencies',
-        ],
-      },
-      {
-        packagePath: 'shared/package.json',
-        dockerPackagePath: 'shared/package.docker.json',
-        keys: [
-          'name',
-          'version',
-          'license',
-          'type',
-          'main',
-          'types',
-          'exports',
-          'engines',
-          'dependencies',
-          'devDependencies',
-        ],
-      },
-      {
-        packagePath: 'react-spa/package.json',
-        dockerPackagePath: 'react-spa/package.docker.json',
-        keys: ['name', 'private', 'version', 'type', 'dependencies', 'devDependencies'],
-      },
-    ];
-
-    for (const { packagePath, dockerPackagePath, keys } of cases) {
+    for (const manifestCase of DOCKER_MANIFEST_CASES) {
       assert.deepStrictEqual(
-        readJson(dockerPackagePath),
-        projectPackage(readJson(packagePath), keys),
-        `${dockerPackagePath} should only contain dependency-relevant fields from ${packagePath}`
+        readJson(manifestCase.dockerPackagePath),
+        buildDockerManifest(projectRoot, manifestCase),
+        `${manifestCase.dockerPackagePath} should only contain dependency-relevant fields from ${manifestCase.packagePath}`
       );
     }
   });
