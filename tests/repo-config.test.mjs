@@ -4,10 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import {
-  buildDockerManifest,
-  DOCKER_MANIFEST_CASES,
-} from '../scripts/generate-docker-manifests.mjs';
+import { DOCKER_MANIFEST_CASES } from '../scripts/generate-docker-manifests.mjs';
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const testsDir = dirname(currentFilePath);
@@ -111,16 +108,6 @@ describe('repository verification contract', () => {
     assert.ok(!hook.includes('[3/3]'), 'pre-commit should keep the staged guard lean');
   });
 
-  test('docker install manifests stay aligned with dependency-bearing package.json fields', () => {
-    for (const manifestCase of DOCKER_MANIFEST_CASES) {
-      assert.deepStrictEqual(
-        readJson(manifestCase.dockerPackagePath),
-        buildDockerManifest(projectRoot, manifestCase),
-        `${manifestCase.dockerPackagePath} should only contain dependency-relevant fields from ${manifestCase.packagePath}`
-      );
-    }
-  });
-
   test('api Dockerfile uses dependency-only manifests and npm cache mounts', () => {
     const dockerfile = readFileSync(resolve(projectRoot, 'api/Dockerfile'), 'utf8');
 
@@ -128,22 +115,15 @@ describe('repository verification contract', () => {
       dockerfile.includes('# syntax=docker/dockerfile:1.7'),
       'api Dockerfile should opt into Dockerfile features required for cache mounts'
     );
-    assert.ok(
-      dockerfile.includes('COPY package.docker.json ./package.json'),
-      'api Dockerfile should use the dependency-only root manifest during npm ci'
-    );
-    assert.ok(
-      dockerfile.includes('COPY api/package.docker.json ./api/package.json'),
-      'api Dockerfile should use the dependency-only api manifest during npm ci'
-    );
-    assert.ok(
-      dockerfile.includes('COPY shared/package.docker.json ./shared/package.json'),
-      'api Dockerfile should use the dependency-only shared manifest during npm ci'
-    );
-    assert.ok(
-      dockerfile.includes('COPY react-spa/package.docker.json ./react-spa/package.json'),
-      'api Dockerfile should use the dependency-only react-spa manifest during npm ci'
-    );
+
+    for (const manifestCase of DOCKER_MANIFEST_CASES) {
+      const targetPath = manifestCase.packagePath.replace(/package\.json$/, 'package.json');
+      assert.ok(
+        dockerfile.includes(`COPY ${manifestCase.dockerPackagePath} ./${targetPath}`),
+        `api Dockerfile should use ${manifestCase.dockerPackagePath} during npm ci`
+      );
+    }
+
     assert.ok(
       dockerfile.includes('--mount=type=cache,target=/root/.npm'),
       'api Dockerfile should cache npm downloads across repeated image builds'

@@ -31,7 +31,7 @@
     "e2e:run": "npm run test:e2e --workspace=@openpath/react-spa",
     "e2e:full": "npm run e2e:setup && (npm run e2e:run; status=$?; npm run e2e:teardown; exit $status)",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "verify": "npm run typecheck && npm run lint --workspaces --if-present",
+    "verify": "npm run verify:quick",
     "verify:quick": "npm run typecheck && npm run lint && npm run format:check",
     "verify:affected": "npm run verify:quick && node scripts/affected-workspaces.js --run-tests",
     "verify:agent": "node scripts/agent-verify.js",

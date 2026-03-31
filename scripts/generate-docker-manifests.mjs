@@ -2,6 +2,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import prettier from 'prettier';
+
 const scriptPath = fileURLToPath(import.meta.url);
 export const projectRoot = resolve(dirname(scriptPath), '..');
 
@@ -75,16 +77,20 @@ export function buildDockerManifest(rootDir, manifestCase) {
   return projectPackage(readJson(rootDir, manifestCase.packagePath), manifestCase.keys);
 }
 
-export function formatDockerManifest(manifest) {
-  return `${JSON.stringify(manifest, null, 2)}\n`;
+export async function formatDockerManifest(manifest, filepath) {
+  const config = (await prettier.resolveConfig(filepath)) ?? {};
+  return prettier.format(JSON.stringify(manifest), { ...config, filepath });
 }
 
-export function syncDockerManifests(rootDir = projectRoot, { check = false } = {}) {
+export async function syncDockerManifests(rootDir = projectRoot, { check = false } = {}) {
   const changed = [];
 
   for (const manifestCase of DOCKER_MANIFEST_CASES) {
     const targetPath = resolve(rootDir, manifestCase.dockerPackagePath);
-    const nextContent = formatDockerManifest(buildDockerManifest(rootDir, manifestCase));
+    const nextContent = await formatDockerManifest(
+      buildDockerManifest(rootDir, manifestCase),
+      targetPath
+    );
     const currentContent = existsSync(targetPath) ? readFileSync(targetPath, 'utf8') : '';
 
     if (currentContent === nextContent) {
@@ -102,7 +108,9 @@ export function syncDockerManifests(rootDir = projectRoot, { check = false } = {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === scriptPath) {
-  const changed = syncDockerManifests(projectRoot, { check: process.argv.includes('--check') });
+  const changed = await syncDockerManifests(projectRoot, {
+    check: process.argv.includes('--check'),
+  });
 
   if (changed.length === 0) {
     process.exit(0);

@@ -19,6 +19,7 @@ export default tseslint.config(
       'react-spa/e2e/**',
       'firefox-extension/blocked/**',
       'tests/repo-config.test.mjs',
+      'tests/generate-docker-manifests.test.mjs',
       'tests/selenium/**',
       'scripts/**',
     ],

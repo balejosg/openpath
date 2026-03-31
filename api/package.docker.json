@@ -12,9 +12,7 @@
       "default": "./dist/src/index.js"
     }
   },
-  "engines": {
-    "node": ">=20.0.0"
-  },
+  "engines": { "node": ">=20.0.0" },
   "dependencies": {
     "@openpath/shared": "file:../shared",
     "@trpc/server": "^11.8.1",

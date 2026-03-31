@@ -10,10 +10,14 @@ import {
   projectRoot,
 } from '../scripts/generate-docker-manifests.mjs';
 
-test('docker manifest generator matches committed manifests', () => {
+test('docker manifest generator matches committed manifests', async () => {
   for (const manifestCase of DOCKER_MANIFEST_CASES) {
-    const expected = formatDockerManifest(buildDockerManifest(projectRoot, manifestCase));
-    const actual = readFileSync(resolve(projectRoot, manifestCase.dockerPackagePath), 'utf8');
+    const targetPath = resolve(projectRoot, manifestCase.dockerPackagePath);
+    const expected = await formatDockerManifest(
+      buildDockerManifest(projectRoot, manifestCase),
+      targetPath
+    );
+    const actual = readFileSync(targetPath, 'utf8');
 
     assert.equal(
       actual,

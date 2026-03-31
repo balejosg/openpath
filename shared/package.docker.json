@@ -6,37 +6,21 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
     "./classroom-status": {
       "types": "./dist/classroom-status.d.ts",
       "import": "./dist/classroom-status.js"
     },
-    "./domain": {
-      "types": "./dist/domain.d.ts",
-      "import": "./dist/domain.js"
-    },
-    "./slug": {
-      "types": "./dist/slug.d.ts",
-      "import": "./dist/slug.js"
-    },
+    "./domain": { "types": "./dist/domain.d.ts", "import": "./dist/domain.js" },
+    "./slug": { "types": "./dist/slug.d.ts", "import": "./dist/slug.js" },
     "./rules-validation": {
       "types": "./dist/rules-validation.d.ts",
       "import": "./dist/rules-validation.js"
     },
-    "./roles": {
-      "types": "./dist/roles.d.ts",
-      "import": "./dist/roles.js"
-    }
+    "./roles": { "types": "./dist/roles.d.ts", "import": "./dist/roles.js" }
   },
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "dependencies": {
-    "zod": "^4.3.6"
-  },
+  "engines": { "node": ">=20.0.0" },
+  "dependencies": { "zod": "^4.3.6" },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@types/node": "^22.10.2",
