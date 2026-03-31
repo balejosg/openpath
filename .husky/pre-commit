@@ -8,15 +8,11 @@ echo "  Pre-commit Fast Verification Starting"
 echo "=========================================="
 echo ""
 
-echo "[1/3] Checking for sensitive files..."
+echo "[1/2] Checking for sensitive files..."
 npm run security:files
 
 echo ""
-echo "[2/3] Checking test file coverage..."
-bash scripts/check-test-files.sh
-
-echo ""
-echo "[3/3] Running staged verification..."
+echo "[2/2] Running staged verification..."
 node scripts/agent-verify.js --staged
 
 echo ""

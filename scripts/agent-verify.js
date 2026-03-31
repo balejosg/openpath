@@ -10,9 +10,8 @@
  *   node scripts/agent-verify.js --staged # Check staged files only
  *
  * Verification levels:
- *   1. docs-only:  format:check (~2s)
- *   2. code:       verify:quick (~15s)
- *   3. tests:      verify:affected (~30-60s)
+ *   1. staged-only:       verify:staged (~2-5s)
+ *   2. staged + affected: verify:staged:affected (~15-45s)
  */
 
 import { execSync } from 'node:child_process';
@@ -77,6 +76,27 @@ function categorizeFiles(files) {
   return result;
 }
 
+const VERIFICATION_RULES = [
+  {
+    level: 'STAGED+AFFECTED',
+    description: 'staged checks + affected tests',
+    command: 'npm run verify:staged:affected',
+    runDescription: 'Running affected verification...',
+    when(category) {
+      return category.tests || category.shared;
+    },
+  },
+  {
+    level: 'STAGED',
+    description: 'staged file checks only',
+    command: 'npm run verify:staged',
+    runDescription: 'Running staged verification...',
+    when(category) {
+      return category.docsOnly || category.code;
+    },
+  },
+];
+
 function run(cmd, description) {
   console.log(`\n${description}`);
   console.log(`$ ${cmd}\n`);
@@ -109,22 +129,15 @@ if (files.length > 10) {
 }
 
 const category = categorizeFiles(files);
+const rule = VERIFICATION_RULES.find((candidate) => candidate.when(category));
 
 let success = true;
-let level = '';
+let level = 'NONE';
 
-if (category.docsOnly) {
-  level = 'DOCS-ONLY';
-  console.log(`\nLevel: ${level} (format check only)`);
-  success = run('npm run format:check', 'Checking formatting...');
-} else if (category.tests || category.shared) {
-  level = 'AFFECTED';
-  console.log(`\nLevel: ${level} (quick + affected tests)`);
-  success = run('npm run verify:affected', 'Running affected verification...');
-} else if (category.code) {
-  level = 'QUICK';
-  console.log(`\nLevel: ${level} (typecheck + lint + format)`);
-  success = run('npm run verify:quick', 'Running quick verification...');
+if (rule) {
+  level = rule.level;
+  console.log(`\nLevel: ${rule.level} (${rule.description})`);
+  success = run(rule.command, rule.runDescription);
 }
 
 console.log('\n=======================');

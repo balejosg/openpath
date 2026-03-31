@@ -74,13 +74,23 @@ describe('repository verification contract', () => {
     }
   });
 
-  test('verify:full runs coverage before unit, e2e, and security stages', () => {
+  test('verify:full overlaps coverage with unit tests and overlaps e2e with security', () => {
     const packageJson = readPackageJson();
     const verifyFull = packageJson.scripts['verify:full'];
+    const verifyFullScript = readText('scripts/verify-full.sh');
 
-    assert.equal(
-      verifyFull,
-      'npm run verify:static && npm run verify:checks && npm run verify:coverage && npm run verify:unit && npm run e2e:full && npm run verify:security'
+    assert.equal(verifyFull, 'bash scripts/verify-full.sh');
+    assert.ok(verifyFullScript.includes('npm run verify:static'));
+    assert.ok(verifyFullScript.includes('npm run verify:checks'));
+    assert.ok(
+      verifyFullScript.includes(
+        "concurrently --group --names 'coverage,unit' 'npm:verify:coverage' 'npm:verify:unit'"
+      )
+    );
+    assert.ok(
+      verifyFullScript.includes(
+        "concurrently --group --names 'e2e,security' 'npm:e2e:full' 'npm:verify:security'"
+      )
     );
   });
 
@@ -88,14 +98,18 @@ describe('repository verification contract', () => {
     const hook = readFileSync(resolve(projectRoot, '.husky/pre-commit'), 'utf8');
 
     assert.ok(
-      hook.includes('[3/3] Running staged verification...'),
+      hook.includes('[2/2] Running staged verification...'),
       'pre-commit should keep the staged verification step as its final fast guard'
     );
     assert.ok(
       !hook.includes('npm run verify:coverage'),
       'pre-commit should not run verify:coverage directly'
     );
-    assert.ok(!hook.includes('[4/4]'), 'pre-commit should no longer advertise a fourth stage');
+    assert.ok(
+      !hook.includes('check-test-files.sh'),
+      'pre-commit should leave repo-wide test-file checks for pre-push'
+    );
+    assert.ok(!hook.includes('[3/3]'), 'pre-commit should keep the staged guard lean');
   });
 
   test('docker install manifests stay aligned with dependency-bearing package.json fields', () => {

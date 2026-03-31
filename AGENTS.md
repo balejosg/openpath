@@ -226,9 +226,8 @@ For **fast feedback during development**, use the layered verification system:
 
 Automatically chooses the fastest verification based on what changed:
 
-- Docs only → `format:check` (~2s)
-- Code changes → `verify:quick` (~15s)
-- Test/shared changes → `verify:affected` (~30s)
+- Docs/code changes → `verify:staged` (~2-5s)
+- Test/shared changes → `verify:staged:affected` (~15-45s)
 
 ```bash
 # During iterative development:
@@ -256,14 +255,10 @@ npm run test:e2e:smoke    # Only @smoke tagged tests (~20s vs ~2min)
 
 The pre-push hook automatically runs `verify:full`, which includes:
 
-1. `npm run verify` - Typecheck + ESLint (all workspaces)
-2. `npm run lint:shell` - Shellcheck for bash scripts
-3. `npm run format:check` - Prettier format validation
-4. `npm run test:local` - All unit tests (API, SPA, shared, extension, dashboard)
-5. `npm run test:e2e` - Full Playwright E2E test suite
-6. `npm run security:audit` - npm audit (high severity)
-7. `npm run security:secrets` - Secretlint for leaked credentials
-8. `npm run size:check` - Bundle size limits
+1. `npm run verify:static` - Turbo typecheck + ESLint across workspaces
+2. `npm run verify:checks` - ShellCheck, Prettier, sensitive-file scan, repo contract tests, repo-wide test-file checks
+3. `npm run verify:coverage` and `npm run verify:unit` in parallel
+4. `npm run e2e:full` and `npm run verify:security` in parallel
 
 ### E2E Prerequisites
 
@@ -329,9 +324,9 @@ git push origin main
 ## Git Hooks (Enforced)
 
 - **branch gate**: `scripts/require-main-branch.sh` blocks commits/pushes outside `main`
-- **pre-commit**: `.husky/pre-commit` runs the fast staged guard (`security:files`, `check-test-files`, `agent-verify --staged`)
+- **pre-commit**: `.husky/pre-commit` runs the fast staged guard (`security:files`, `agent-verify --staged`)
 - **commit-msg**: `.husky/commit-msg` runs `commitlint` (conventional commits format)
-- **pre-push**: `.husky/pre-push` re-checks trunk policy and runs `npm run verify:full`
+- **pre-push**: `.husky/pre-push` re-checks trunk policy, validates repo-wide test-file coverage, and runs `npm run verify:full`
 
 **NEVER use `--no-verify`.** If the hook fails, fix the issue.
 
@@ -366,7 +361,7 @@ These files don't require tests:
 
 **New/modified files must have 80%+ line coverage.**
 
-The pre-commit hook runs `scripts/check-new-file-coverage.js` which:
+The pre-push verification pipeline runs `scripts/check-new-file-coverage.js` which:
 
 1. Identifies files changed in the commit
 2. Checks their coverage from JSON reports
@@ -386,9 +381,8 @@ The following test anti-patterns are **blocked by ESLint**:
 
 ```
 1. Check sensitive files     (security:files)
-2. Check test files exist    (scripts/check-test-files.sh)
-3. Full verification suite   (verify:full)
-4. Check 80% coverage        (scripts/check-new-file-coverage.js)
+2. Run staged guard          (agent-verify --staged -> verify:staged/verify:staged:affected)
+3. Repo-wide test-file checks and coverage run in pre-push verify:full
 ```
 
 ### Policy Violations

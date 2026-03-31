@@ -26,27 +26,31 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Build shared package
-      if: inputs.build-shared == 'true'
+    - name: Build selected workspaces with Turbo
       shell: bash
-      run: npm run build --workspace=@openpath/shared
+      run: |
+        set -euo pipefail
 
-    - name: Build API package
-      if: inputs.build-api == 'true'
-      shell: bash
-      run: npm run build --workspace=@openpath/api
+        filters=()
+        if [ "${{ inputs.build-shared }}" = 'true' ]; then
+          filters+=(--filter=@openpath/shared)
+        fi
+        if [ "${{ inputs.build-api }}" = 'true' ]; then
+          filters+=(--filter=@openpath/api)
+        fi
+        if [ "${{ inputs.build-spa }}" = 'true' ]; then
+          filters+=(--filter=@openpath/react-spa)
+        fi
+        if [ "${{ inputs.build-dashboard }}" = 'true' ]; then
+          filters+=(--filter=@openpath/dashboard)
+        fi
+        if [ "${{ inputs.build-extension }}" = 'true' ]; then
+          filters+=(--filter=@openpath/firefox-extension)
+        fi
 
-    - name: Build React SPA
-      if: inputs.build-spa == 'true'
-      shell: bash
-      run: npm run build --workspace=@openpath/react-spa
+        if [ "${#filters[@]}" -eq 0 ]; then
+          echo 'No workspaces selected for build.'
+          exit 0
+        fi
 
-    - name: Build Dashboard
-      if: inputs.build-dashboard == 'true'
-      shell: bash
-      run: npm run build --workspace=@openpath/dashboard
-
-    - name: Build Firefox Extension
-      if: inputs.build-extension == 'true'
-      shell: bash
-      run: npm run build --workspace=@openpath/firefox-extension
+        npx turbo run build "${filters[@]}"
