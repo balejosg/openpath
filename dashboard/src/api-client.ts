@@ -70,6 +70,74 @@ export interface LoginResult {
   error?: string;
 }
 
+interface DashboardAuthUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+interface DashboardAuthLoginPayload {
+  accessToken: string;
+  refreshToken: string;
+  user?: DashboardAuthUser;
+}
+
+interface DashboardAuthRefreshPayload {
+  accessToken: string;
+  refreshToken: string;
+}
+
+interface DashboardGroupsClientContract {
+  list: { query(): Promise<Group[]> };
+  getById: { query(input: { id: string }): Promise<Group> };
+  getByName: { query(input: { name: string }): Promise<Group> };
+  create: {
+    mutate(input: { name: string; displayName: string }): Promise<{ id: string; name: string }>;
+  };
+  update: {
+    mutate(input: { id: string; displayName: string; enabled: boolean }): Promise<Group>;
+  };
+  delete: { mutate(input: { id: string }): Promise<{ deleted: boolean }> };
+  listRules: { query(input: { groupId: string; type?: RuleType }): Promise<Rule[]> };
+  createRule: {
+    mutate(input: {
+      groupId: string;
+      type: RuleType;
+      value: string;
+      comment?: string;
+    }): Promise<{ id: string }>;
+  };
+  deleteRule: { mutate(input: { id: string }): Promise<{ deleted: boolean }> };
+  bulkCreateRules: {
+    mutate(input: {
+      groupId: string;
+      type: RuleType;
+      values: string[];
+    }): Promise<{ count: number }>;
+  };
+  stats: { query(): Promise<GroupStats> };
+  systemStatus: { query(): Promise<SystemStatus> };
+  toggleSystem: { mutate(input: { enable: boolean }): Promise<SystemStatus> };
+  export: { query(input: { groupId: string }): Promise<{ name: string; content: string }> };
+  exportAll: { query(): Promise<{ name: string; content: string }[]> };
+}
+
+interface DashboardAuthClientContract {
+  login: { mutate(input: { email: string; password: string }): Promise<DashboardAuthLoginPayload> };
+  refresh: {
+    mutate(input: { refreshToken: string }): Promise<DashboardAuthRefreshPayload>;
+  };
+  logout: { mutate(input: { refreshToken: string }): Promise<unknown> };
+  changePassword: {
+    mutate(input: { currentPassword: string; newPassword: string }): Promise<unknown>;
+  };
+}
+
+interface DashboardTrpcClientContract {
+  auth: DashboardAuthClientContract;
+  groups: DashboardGroupsClientContract;
+}
+
 // =============================================================================
 // API Client Factory
 // =============================================================================
@@ -108,11 +176,11 @@ export interface ApiClient {
  * Create an API client with the provided authentication token.
  */
 export function createApiClient(token: string): ApiClient {
-  const trpc = createTRPCWithAuth(token);
+  const trpc = createTRPCWithAuth(token) as unknown as DashboardTrpcClientContract;
 
   return {
     // Groups
-    async getAllGroups(): Promise<Group[]> {
+    getAllGroups(): Promise<Group[]> {
       return trpc.groups.list.query();
     },
 
@@ -132,11 +200,11 @@ export function createApiClient(token: string): ApiClient {
       }
     },
 
-    async createGroup(name: string, displayName: string): Promise<{ id: string; name: string }> {
+    createGroup(name: string, displayName: string): Promise<{ id: string; name: string }> {
       return trpc.groups.create.mutate({ name, displayName });
     },
 
-    async updateGroup(id: string, displayName: string, enabled: boolean): Promise<Group> {
+    updateGroup(id: string, displayName: string, enabled: boolean): Promise<Group> {
       return trpc.groups.update.mutate({ id, displayName, enabled });
     },
 
@@ -146,17 +214,19 @@ export function createApiClient(token: string): ApiClient {
     },
 
     // Rules
-    async getRulesByGroup(groupId: string, type?: RuleType): Promise<Rule[]> {
-      return trpc.groups.listRules.query({ groupId, type });
+    getRulesByGroup(groupId: string, type?: RuleType): Promise<Rule[]> {
+      return trpc.groups.listRules.query(type === undefined ? { groupId } : { groupId, type });
     },
 
-    async createRule(
+    createRule(
       groupId: string,
       type: RuleType,
       value: string,
       comment?: string
     ): Promise<{ id: string }> {
-      return trpc.groups.createRule.mutate({ groupId, type, value, comment });
+      return trpc.groups.createRule.mutate(
+        comment === undefined ? { groupId, type, value } : { groupId, type, value, comment }
+      );
     },
 
     async deleteRule(id: string): Promise<boolean> {
@@ -170,24 +240,24 @@ export function createApiClient(token: string): ApiClient {
     },
 
     // Stats
-    async getStats(): Promise<GroupStats> {
+    getStats(): Promise<GroupStats> {
       return trpc.groups.stats.query();
     },
 
-    async getSystemStatus(): Promise<SystemStatus> {
+    getSystemStatus(): Promise<SystemStatus> {
       return trpc.groups.systemStatus.query();
     },
 
-    async toggleSystemStatus(enable: boolean): Promise<SystemStatus> {
+    toggleSystemStatus(enable: boolean): Promise<SystemStatus> {
       return trpc.groups.toggleSystem.mutate({ enable });
     },
 
     // Export
-    async exportGroup(groupId: string): Promise<{ name: string; content: string }> {
+    exportGroup(groupId: string): Promise<{ name: string; content: string }> {
       return trpc.groups.export.query({ groupId });
     },
 
-    async exportAllGroups(): Promise<{ name: string; content: string }[]> {
+    exportAllGroups(): Promise<{ name: string; content: string }[]> {
       return trpc.groups.exportAll.query();
     },
   };
@@ -204,7 +274,7 @@ export function createApiClient(token: string): ApiClient {
  * Email format: <username>@dashboard.local
  */
 export async function login(username: string, password: string): Promise<LoginResult> {
-  const trpc = createTRPCPublic();
+  const trpc = createTRPCPublic() as unknown as DashboardTrpcClientContract;
 
   // Convert username to email format
   const email = username.includes('@') ? username : `${username}@dashboard.local`;
@@ -235,7 +305,7 @@ export async function login(username: string, password: string): Promise<LoginRe
  * Refresh access token using refresh token.
  */
 export async function refreshToken(refreshTokenValue: string): Promise<LoginResult> {
-  const trpc = createTRPCPublic();
+  const trpc = createTRPCPublic() as unknown as DashboardTrpcClientContract;
 
   try {
     const result = await trpc.auth.refresh.mutate({ refreshToken: refreshTokenValue });
@@ -258,7 +328,7 @@ export async function refreshToken(refreshTokenValue: string): Promise<LoginResu
  * Logout (invalidate refresh token).
  */
 export async function logout(accessToken: string, refreshTokenValue: string): Promise<boolean> {
-  const trpc = createTRPCWithAuth(accessToken);
+  const trpc = createTRPCWithAuth(accessToken) as unknown as DashboardTrpcClientContract;
 
   try {
     await trpc.auth.logout.mutate({ refreshToken: refreshTokenValue });
@@ -278,7 +348,7 @@ export async function changePassword(
   currentPassword: string,
   newPassword: string
 ): Promise<{ success: boolean; error?: string }> {
-  const trpc = createTRPCWithAuth(accessToken);
+  const trpc = createTRPCWithAuth(accessToken) as unknown as DashboardTrpcClientContract;
 
   try {
     await trpc.auth.changePassword.mutate({
