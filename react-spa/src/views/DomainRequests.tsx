@@ -1,121 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, CheckCircle, XCircle, Trash2, Clock, AlertTriangle, Filter } from 'lucide-react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { DomainRequest, RequestStatus } from '@openpath/api';
-import { trpc } from '../lib/trpc';
-import { reportError } from '../lib/reportError';
-import { normalizeSearchTerm, useNormalizedSearch } from '../hooks/useNormalizedSearch';
-import { ConfirmDialog, DangerConfirmDialog } from '../components/ui/ConfirmDialog';
-import { STATUS_COLORS, STATUS_LABELS } from './domain-requests.constants';
-
-type SortOption = 'pending' | 'newest' | 'oldest';
-
-interface Group {
-  id: string;
-  name: string;
-  path: string;
-}
-
-const EMPTY_REQUESTS: DomainRequest[] = [];
-const EMPTY_GROUPS: Group[] = [];
-
-function useDomainRequestsData(statusFilter: RequestStatus | 'all') {
-  const queryClient = useQueryClient();
-
-  // Avoid keeping Node test processes alive via refetch intervals.
-  const shouldPoll = import.meta.env.MODE !== 'test';
-
-  const requestsQuery = useQuery({
-    queryKey: ['domain-requests', 'requests', statusFilter],
-    queryFn: () => trpc.requests.list.query(statusFilter === 'all' ? {} : { status: statusFilter }),
-    refetchInterval: shouldPoll ? 10000 : false,
-    refetchOnWindowFocus: 'always',
-  });
-
-  const groupsQuery = useQuery({
-    queryKey: ['domain-requests', 'groups'],
-    queryFn: () => trpc.requests.listGroups.query(),
-    staleTime: 60 * 1000,
-    refetchOnWindowFocus: 'always',
-  });
-
-  const invalidateRequests = () =>
-    queryClient.invalidateQueries({ queryKey: ['domain-requests', 'requests'] });
-
-  const approveMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return await trpc.requests.approve.mutate({ id });
-    },
-    onSuccess: () => {
-      void invalidateRequests();
-    },
-  });
-
-  const rejectMutation = useMutation({
-    mutationFn: async (input: { id: string; reason?: string }) => {
-      return await trpc.requests.reject.mutate(input);
-    },
-    onSuccess: () => {
-      void invalidateRequests();
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return await trpc.requests.delete.mutate({ id });
-    },
-    onSuccess: () => {
-      void invalidateRequests();
-    },
-  });
-
-  const loading = requestsQuery.status === 'pending' || groupsQuery.status === 'pending';
-  const fetching =
-    requestsQuery.fetchStatus === 'fetching' || groupsQuery.fetchStatus === 'fetching';
-  const hasError = requestsQuery.status === 'error' || groupsQuery.status === 'error';
-
-  return {
-    requests: requestsQuery.data ?? EMPTY_REQUESTS,
-    groups: groupsQuery.data ?? EMPTY_GROUPS,
-    loading,
-    fetching,
-    error: hasError ? 'Error al cargar las solicitudes' : null,
-    invalidateRequests,
-    approveRequest: approveMutation.mutateAsync,
-    rejectRequest: rejectMutation.mutateAsync,
-    deleteRequest: deleteMutation.mutateAsync,
-    actionsLoading:
-      approveMutation.status === 'pending' ||
-      rejectMutation.status === 'pending' ||
-      deleteMutation.status === 'pending',
-  };
-}
+import { useRef, useState } from 'react';
+import type { RequestStatus } from '@openpath/api';
+import { AlertTriangle } from 'lucide-react';
+import { DomainRequestsBulkActions } from '../components/domain-requests/DomainRequestsBulkActions';
+import { DomainRequestsDialogs } from '../components/domain-requests/DomainRequestsDialogs';
+import { DomainRequestsFilters } from '../components/domain-requests/DomainRequestsFilters';
+import { DomainRequestsTable } from '../components/domain-requests/DomainRequestsTable';
+import { useDomainRequestsBulkActions } from '../hooks/useDomainRequestsBulkActions';
+import { useDomainRequestsData } from '../hooks/useDomainRequestsData';
+import { useDomainRequestsDialogs } from '../hooks/useDomainRequestsDialogs';
+import { useDomainRequestsState } from '../hooks/useDomainRequestsState';
 
 export default function DomainRequests() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const normalizedSearchTerm = useNormalizedSearch(searchTerm);
-  const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('all');
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'firefox-extension' | 'manual'>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('pending');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [selectedRequestIds, setSelectedRequestIds] = useState<string[]>([]);
-  const [bulkRejectReason, setBulkRejectReason] = useState('');
-  const [bulkLoading, setBulkLoading] = useState(false);
-  const [bulkProgress, setBulkProgress] = useState<{
-    mode: 'approve' | 'reject';
-    done: number;
-    total: number;
-  } | null>(null);
-  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
-  const [bulkFailedIds, setBulkFailedIds] = useState<string[]>([]);
-  const [bulkFailedMode, setBulkFailedMode] = useState<'approve' | 'reject' | null>(null);
-  const [bulkConfirm, setBulkConfirm] = useState<{
-    mode: 'approve' | 'reject';
-    requestIds: string[];
-    rejectReason?: string;
-  } | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [statusFilter, setStatusFilter] = useState<RequestStatus | 'all'>('all');
 
   const {
     requests,
@@ -123,134 +20,42 @@ export default function DomainRequests() {
     loading: baseLoading,
     fetching,
     error,
-    invalidateRequests,
     approveRequest,
     rejectRequest,
     deleteRequest,
     actionsLoading,
   } = useDomainRequestsData(statusFilter);
 
+  const {
+    searchTerm,
+    setSearchTerm,
+    sourceFilter,
+    setSourceFilter,
+    sortBy,
+    setSortBy,
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
+    selectedRequestIds,
+    setSelectedRequestIds,
+    filteredRequests,
+    sortedRequests,
+    paginatedRequests,
+    pendingIdsInPage,
+    selectedPendingRequests,
+    pendingCount,
+    hasActiveFilters,
+    canBulkSelectInPage,
+    bulkSelectTitle,
+    totalPages,
+    getGroupName,
+    toggleRequestSelection,
+    toggleSelectAllInPage,
+  } = useDomainRequestsState({ requests, groups, statusFilter });
+
   const loading = baseLoading || fetching;
 
-  // Modal states
-  const [approveModal, setApproveModal] = useState<{
-    open: boolean;
-    request: DomainRequest | null;
-  }>({
-    open: false,
-    request: null,
-  });
-  const [rejectModal, setRejectModal] = useState<{ open: boolean; request: DomainRequest | null }>({
-    open: false,
-    request: null,
-  });
-  const [deleteModal, setDeleteModal] = useState<{ open: boolean; request: DomainRequest | null }>({
-    open: false,
-    request: null,
-  });
-
-  const [rejectionReason, setRejectionReason] = useState('');
-
-  useEffect(() => {
-    if (!bulkMessage) return;
-    const timeout = window.setTimeout(() => setBulkMessage(null), 4000);
-    return () => window.clearTimeout(timeout);
-  }, [bulkMessage]);
-
-  // Filter requests by search term
-  const filteredRequests = useMemo(
-    () =>
-      requests.filter((req) => {
-        const matchesSearch =
-          !normalizedSearchTerm ||
-          normalizeSearchTerm(req.domain).includes(normalizedSearchTerm) ||
-          normalizeSearchTerm(req.machineHostname ?? '').includes(normalizedSearchTerm);
-
-        if (!matchesSearch) return false;
-        if (sourceFilter === 'all') return true;
-        if (sourceFilter === 'firefox-extension') return req.source === 'firefox-extension';
-        return (req.source ?? 'manual') !== 'firefox-extension';
-      }),
-    [requests, normalizedSearchTerm, sourceFilter]
-  );
-
-  const sortedRequests = useMemo(() => {
-    const sorted = [...filteredRequests];
-
-    sorted.sort((a, b) => {
-      switch (sortBy) {
-        case 'newest':
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        case 'oldest':
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        case 'pending':
-        default: {
-          if (a.status === 'pending' && b.status !== 'pending') return -1;
-          if (a.status !== 'pending' && b.status === 'pending') return 1;
-
-          if (a.status === 'pending' && b.status === 'pending') {
-            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-          }
-
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-        }
-      }
-    });
-
-    return sorted;
-  }, [filteredRequests, sortBy]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedRequests.length / pageSize));
-  const paginatedRequests = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return sortedRequests.slice(start, start + pageSize);
-  }, [sortedRequests, currentPage, pageSize]);
-
-  const pendingIdsInPage = useMemo(
-    () => paginatedRequests.filter((r) => r.status === 'pending').map((r) => r.id),
-    [paginatedRequests]
-  );
-
-  const hasActiveFilters =
-    normalizedSearchTerm.length > 0 || statusFilter !== 'all' || sourceFilter !== 'all';
-  const canBulkSelectInPage = pendingIdsInPage.length > 0;
-  const bulkSelectTitle = canBulkSelectInPage
-    ? 'Seleccionar elementos pendientes de esta pagina'
-    : statusFilter === 'approved' || statusFilter === 'rejected'
-      ? 'Seleccion masiva no disponible en este filtro'
-      : 'No hay elementos pendientes seleccionables en esta pagina';
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter, sourceFilter, sortBy, pageSize]);
-
-  useEffect(() => {
-    setSelectedRequestIds((prev) => {
-      const next = prev.filter((id) => sortedRequests.some((r) => r.id === id));
-      if (next.length === prev.length && next.every((id, idx) => id === prev[idx])) {
-        return prev;
-      }
-      return next;
-    });
-  }, [sortedRequests]);
-
-  const selectedPendingRequests = useMemo(
-    () => requests.filter((r) => r.status === 'pending' && selectedRequestIds.includes(r.id)),
-    [requests, selectedRequestIds]
-  );
-
-  const groupNameByPath = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const group of groups) {
-      map.set(group.path, group.name);
-    }
-    return map;
-  }, [groups]);
-
-  // Get group name by path
-  const getGroupName = (groupId: string) => groupNameByPath.get(groupId) ?? groupId;
-
-  // Format date
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('es-ES', {
       day: '2-digit',
@@ -261,201 +66,19 @@ export default function DomainRequests() {
     });
   };
 
-  const pendingCount = useMemo(() => {
-    return filteredRequests.reduce(
-      (count, request) => (request.status === 'pending' ? count + 1 : count),
-      0
-    );
-  }, [filteredRequests]);
+  const bulkActions = useDomainRequestsBulkActions({
+    requests,
+    selectedPendingRequests,
+    setSelectedRequestIds,
+    approveRequest,
+    rejectRequest,
+  });
 
-  // Handle approve
-  const handleApprove = async () => {
-    if (!approveModal.request) return;
-    try {
-      await approveRequest(approveModal.request.id);
-      setApproveModal({ open: false, request: null });
-    } catch (err) {
-      reportError('Error approving request:', err);
-    }
-  };
-
-  // Handle reject
-  const handleReject = async () => {
-    if (!rejectModal.request) return;
-    try {
-      await rejectRequest({
-        id: rejectModal.request.id,
-        reason: rejectionReason || undefined,
-      });
-      setRejectModal({ open: false, request: null });
-      setRejectionReason('');
-    } catch (err) {
-      reportError('Error rejecting request:', err);
-    }
-  };
-
-  // Handle delete
-  const handleDelete = async () => {
-    if (!deleteModal.request) return;
-    try {
-      await deleteRequest(deleteModal.request.id);
-      setDeleteModal({ open: false, request: null });
-    } catch (err) {
-      reportError('Error deleting request:', err);
-    }
-  };
-
-  const toggleRequestSelection = (requestId: string) => {
-    setSelectedRequestIds((prev) =>
-      prev.includes(requestId) ? prev.filter((id) => id !== requestId) : [...prev, requestId]
-    );
-  };
-
-  const toggleSelectAllInPage = () => {
-    const allSelected =
-      pendingIdsInPage.length > 0 &&
-      pendingIdsInPage.every((id) => selectedRequestIds.includes(id));
-
-    if (allSelected) {
-      setSelectedRequestIds((prev) => prev.filter((id) => !pendingIdsInPage.includes(id)));
-      return;
-    }
-
-    setSelectedRequestIds((prev) => Array.from(new Set([...prev, ...pendingIdsInPage])));
-  };
-
-  const openBulkApproveConfirm = () => {
-    if (selectedPendingRequests.length === 0) return;
-    setBulkConfirm({
-      mode: 'approve',
-      requestIds: selectedPendingRequests.map((r) => r.id),
-    });
-  };
-
-  const openBulkRejectConfirm = () => {
-    if (selectedPendingRequests.length === 0) return;
-    const reason = bulkRejectReason.trim();
-    setBulkConfirm({
-      mode: 'reject',
-      requestIds: selectedPendingRequests.map((r) => r.id),
-      rejectReason: reason ? reason : undefined,
-    });
-  };
-
-  const runBulkApprove = async (requestIds: string[]) => {
-    if (requestIds.length === 0) return;
-
-    setBulkMessage(null);
-    setBulkLoading(true);
-    setBulkProgress({ mode: 'approve', done: 0, total: requestIds.length });
-    let successCount = 0;
-    let failedCount = 0;
-    let processedCount = 0;
-    const failedIds: string[] = [];
-
-    for (const id of requestIds) {
-      try {
-        await trpc.requests.approve.mutate({ id });
-        successCount++;
-      } catch {
-        failedCount++;
-        failedIds.push(id);
-      }
-      processedCount++;
-      setBulkProgress({
-        mode: 'approve',
-        done: processedCount,
-        total: requestIds.length,
-      });
-    }
-
-    if (successCount > 0) {
-      setSelectedRequestIds([]);
-      void invalidateRequests();
-    }
-
-    setBulkMessage(
-      failedCount > 0
-        ? `Aprobadas ${successCount}. Fallaron ${failedCount}.`
-        : `Aprobadas ${successCount} solicitudes.`
-    );
-    setBulkFailedIds(failedIds);
-    setBulkFailedMode(failedCount > 0 ? 'approve' : null);
-    setBulkProgress(null);
-    setBulkLoading(false);
-  };
-
-  const runBulkReject = async (requestIds: string[], reason?: string) => {
-    if (requestIds.length === 0) return;
-
-    setBulkMessage(null);
-    setBulkLoading(true);
-    setBulkProgress({ mode: 'reject', done: 0, total: requestIds.length });
-    let successCount = 0;
-    let failedCount = 0;
-    let processedCount = 0;
-    const failedIds: string[] = [];
-
-    for (const id of requestIds) {
-      try {
-        await trpc.requests.reject.mutate({ id, reason });
-        successCount++;
-      } catch {
-        failedCount++;
-        failedIds.push(id);
-      }
-      processedCount++;
-      setBulkProgress({
-        mode: 'reject',
-        done: processedCount,
-        total: requestIds.length,
-      });
-    }
-
-    if (successCount > 0) {
-      setSelectedRequestIds([]);
-      setBulkRejectReason('');
-      void invalidateRequests();
-    }
-
-    setBulkMessage(
-      failedCount > 0
-        ? `Rechazadas ${successCount}. Fallaron ${failedCount}.`
-        : `Rechazadas ${successCount} solicitudes.`
-    );
-    setBulkFailedIds(failedIds);
-    setBulkFailedMode(failedCount > 0 ? 'reject' : null);
-    setBulkProgress(null);
-    setBulkLoading(false);
-  };
-
-  const handleRetryFailed = () => {
-    if (bulkFailedIds.length === 0 || !bulkFailedMode) return;
-
-    const retryCandidates = requests.filter(
-      (r) => r.status === 'pending' && bulkFailedIds.includes(r.id)
-    );
-    if (retryCandidates.length === 0) {
-      setBulkMessage('No hay solicitudes fallidas pendientes para reintentar.');
-      setBulkFailedIds([]);
-      setBulkFailedMode(null);
-      return;
-    }
-
-    setSelectedRequestIds(retryCandidates.map((r) => r.id));
-
-    if (bulkFailedMode === 'approve') {
-      setBulkConfirm({ mode: 'approve', requestIds: retryCandidates.map((r) => r.id) });
-      return;
-    }
-
-    const reason = bulkRejectReason.trim();
-    setBulkConfirm({
-      mode: 'reject',
-      requestIds: retryCandidates.map((r) => r.id),
-      rejectReason: reason ? reason : undefined,
-    });
-  };
+  const dialogs = useDomainRequestsDialogs({
+    approveRequest,
+    rejectRequest,
+    deleteRequest,
+  });
 
   const clearSearch = () => {
     setSearchTerm('');
@@ -473,91 +96,24 @@ export default function DomainRequests() {
 
   return (
     <div className="space-y-6">
-      {/* Description */}
       <p className="text-slate-500 text-sm">
         Gestiona las solicitudes de acceso a dominios bloqueados
       </p>
 
-      {/* Filters */}
-      <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
-        <div className="flex flex-col sm:flex-row gap-4">
-          {/* Search */}
-          <div className="relative flex-1">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              name="domain-requests-search"
-              autoComplete="off"
-              placeholder="Buscar por dominio o máquina..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onFocus={(e) => {
-                if (e.currentTarget.value !== searchTerm) {
-                  setSearchTerm(e.currentTarget.value);
-                }
-              }}
-              className="w-full pl-10 pr-24 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <button
-              type="button"
-              onClick={clearSearch}
-              aria-label="Limpiar busqueda"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded border border-slate-200 text-slate-600 hover:bg-slate-50"
-            >
-              Limpiar
-            </button>
-          </div>
-
-          {/* Status filter */}
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-slate-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as RequestStatus | 'all')}
-              aria-label="Filtrar por estado"
-              className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">Todos</option>
-              <option value="pending">Pendientes</option>
-              <option value="approved">Aprobados</option>
-              <option value="rejected">Rechazados</option>
-            </select>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              aria-label="Ordenar solicitudes"
-              className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="pending">Pendientes primero</option>
-              <option value="newest">Mas nuevas</option>
-              <option value="oldest">Mas antiguas</option>
-            </select>
-            <select
-              value={sourceFilter}
-              onChange={(e) =>
-                setSourceFilter(e.target.value as 'all' | 'firefox-extension' | 'manual')
-              }
-              aria-label="Filtrar por fuente"
-              className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">Todas las fuentes</option>
-              <option value="firefox-extension">Firefox Extension</option>
-              <option value="manual">Manual/API</option>
-            </select>
-            <select
-              value={String(pageSize)}
-              onChange={(e) => setPageSize(Number(e.target.value))}
-              aria-label="Elementos por pagina"
-              className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="10">10/pag</option>
-              <option value="20">20/pag</option>
-              <option value="50">50/pag</option>
-            </select>
-          </div>
-        </div>
-      </div>
+      <DomainRequestsFilters
+        searchInputRef={searchInputRef}
+        searchTerm={searchTerm}
+        statusFilter={statusFilter}
+        sortBy={sortBy}
+        sourceFilter={sourceFilter}
+        pageSize={pageSize}
+        onSearchChange={setSearchTerm}
+        onStatusFilterChange={setStatusFilter}
+        onSortChange={setSortBy}
+        onSourceFilterChange={setSourceFilter}
+        onPageSizeChange={setPageSize}
+        onClearSearch={clearSearch}
+      />
 
       {!loading && pendingCount > 0 && (
         <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
@@ -567,106 +123,21 @@ export default function DomainRequests() {
         </div>
       )}
 
-      {selectedPendingRequests.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
-          <div className="text-sm text-blue-900 font-medium">
-            {selectedPendingRequests.length} solicitudes pendientes seleccionadas
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input
-              type="text"
-              value={bulkRejectReason}
-              onChange={(e) => setBulkRejectReason(e.target.value)}
-              placeholder="Motivo para rechazo en lote (opcional)"
-              className="px-3 py-2 border border-blue-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                openBulkApproveConfirm();
-              }}
-              disabled={bulkLoading}
-              className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg disabled:opacity-50"
-            >
-              {bulkLoading ? 'Procesando...' : 'Aprobar seleccionadas'}
-            </button>
-            <button
-              onClick={() => {
-                openBulkRejectConfirm();
-              }}
-              disabled={bulkLoading}
-              className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg disabled:opacity-50"
-            >
-              {bulkLoading ? 'Procesando...' : 'Rechazar seleccionadas'}
-            </button>
-            <button
-              onClick={() => {
-                setSelectedRequestIds([]);
-                setBulkFailedIds([]);
-                setBulkFailedMode(null);
-                setBulkRejectReason('');
-              }}
-              disabled={bulkLoading}
-              className="px-3 py-2 bg-white border border-slate-300 text-slate-700 text-sm rounded-lg disabled:opacity-50"
-            >
-              Limpiar seleccion
-            </button>
-          </div>
-          {bulkProgress && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-xs text-blue-900">
-                <span>
-                  {bulkProgress.mode === 'approve'
-                    ? 'Aprobando en lote...'
-                    : 'Rechazando en lote...'}
-                </span>
-                <span>
-                  {bulkProgress.done}/{bulkProgress.total}
-                </span>
-              </div>
-              <div className="w-full h-2 bg-blue-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-600"
-                  style={{
-                    width: `${Math.round((bulkProgress.done / Math.max(1, bulkProgress.total)) * 100)}%`,
-                  }}
-                />
-              </div>
-            </div>
-          )}
-          {bulkFailedIds.length > 0 && (
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-red-700">Fallidas: {bulkFailedIds.length}</span>
-              <button
-                onClick={() => setSelectedRequestIds(bulkFailedIds)}
-                disabled={bulkLoading}
-                className="px-2 py-1 bg-white border border-red-300 text-red-700 rounded disabled:opacity-50"
-              >
-                Seleccionar fallidas
-              </button>
-              <button
-                onClick={() => {
-                  handleRetryFailed();
-                }}
-                disabled={bulkLoading}
-                className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded disabled:opacity-50"
-              >
-                Reintentar fallidas
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      <DomainRequestsBulkActions
+        selectedCount={selectedPendingRequests.length}
+        bulkRejectReason={bulkActions.bulkRejectReason}
+        bulkLoading={bulkActions.bulkLoading}
+        bulkProgress={bulkActions.bulkProgress}
+        bulkFailedIds={bulkActions.bulkFailedIds}
+        bulkMessage={bulkActions.bulkMessage}
+        onBulkRejectReasonChange={bulkActions.setBulkRejectReason}
+        onApproveSelected={bulkActions.openBulkApproveConfirm}
+        onRejectSelected={bulkActions.openBulkRejectConfirm}
+        onClearSelection={bulkActions.clearBulkSelection}
+        onSelectFailed={() => setSelectedRequestIds(bulkActions.bulkFailedIds)}
+        onRetryFailed={bulkActions.handleRetryFailed}
+      />
 
-      {bulkMessage && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
-          <CheckCircle className="text-green-600" size={20} />
-          <span className="text-green-800 text-sm">{bulkMessage}</span>
-        </div>
-      )}
-
-      {/* Error state */}
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
           <AlertTriangle className="text-red-500" size={20} />
@@ -674,338 +145,67 @@ export default function DomainRequests() {
         </div>
       )}
 
-      {/* Loading state */}
       {loading && (
         <div className="bg-white border border-slate-200 rounded-lg p-8 shadow-sm flex justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       )}
 
-      {/* Requests table */}
-      {!loading && sortedRequests.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={
-                        canBulkSelectInPage &&
-                        pendingIdsInPage.every((id) => selectedRequestIds.includes(id))
-                      }
-                      onChange={toggleSelectAllInPage}
-                      disabled={!canBulkSelectInPage}
-                      className="rounded border-slate-300"
-                      title={bulkSelectTitle}
-                      aria-label="Seleccion masiva de pagina"
-                    />
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Dominio
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Máquina
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Grupo
-                  </th>
-
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Estado
-                  </th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Fecha
-                  </th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {paginatedRequests.map((request) => (
-                  <tr
-                    key={request.id}
-                    data-testid="request-row"
-                    data-status={request.status}
-                    className="hover:bg-slate-50 transition-colors"
-                  >
-                    <td className="px-4 py-3">
-                      {request.status === 'pending' ? (
-                        <input
-                          type="checkbox"
-                          checked={selectedRequestIds.includes(request.id)}
-                          onChange={() => toggleRequestSelection(request.id)}
-                          className="rounded border-slate-300"
-                          aria-label={`Seleccionar ${request.domain}`}
-                        />
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>
-                        <div data-testid="domain-name" className="font-medium text-slate-800">
-                          {request.domain}
-                        </div>
-                        {request.reason && (
-                          <div className="text-xs text-slate-500 mt-0.5 truncate max-w-xs">
-                            {request.reason}
-                          </div>
-                        )}
-                        <div className="text-xs text-slate-400 mt-0.5 truncate max-w-xs">
-                          {(request.source ?? 'manual') === 'firefox-extension'
-                            ? `Firefox${request.clientVersion ? ` v${request.clientVersion}` : ''}`
-                            : 'Manual/API'}
-                          {request.originHost ? ` · Origen: ${request.originHost}` : ''}
-                          {request.machineHostname ? ` · Host: ${request.machineHostname}` : ''}
-                          {request.errorType ? ` · Error: ${request.errorType}` : ''}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {request.machineHostname ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {getGroupName(request.groupId)}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLORS[request.status]}`}
-                      >
-                        {STATUS_LABELS[request.status]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-500">
-                      <div className="flex items-center gap-1">
-                        <Clock size={14} />
-                        {formatDate(request.createdAt)}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        {request.status === 'pending' && (
-                          <>
-                            <button
-                              onClick={() => setApproveModal({ open: true, request })}
-                              className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Aprobar"
-                            >
-                              <CheckCircle size={18} />
-                            </button>
-                            <button
-                              onClick={() => setRejectModal({ open: true, request })}
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Rechazar"
-                            >
-                              <XCircle size={18} />
-                            </button>
-                          </>
-                        )}
-                        <button
-                          onClick={() => setDeleteModal({ open: true, request })}
-                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {!loading && !error && (
+        <DomainRequestsTable
+          paginatedRequests={paginatedRequests}
+          filteredRequests={filteredRequests}
+          sortedRequests={sortedRequests}
+          hasActiveFilters={hasActiveFilters}
+          selectedRequestIds={selectedRequestIds}
+          pendingIdsInPage={pendingIdsInPage}
+          canBulkSelectInPage={canBulkSelectInPage}
+          bulkSelectTitle={bulkSelectTitle}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          totalPages={totalPages}
+          getGroupName={getGroupName}
+          formatDate={formatDate}
+          onToggleSelectAllInPage={toggleSelectAllInPage}
+          onToggleRequestSelection={toggleRequestSelection}
+          onOpenApprove={(request) => dialogs.setApproveModal({ open: true, request })}
+          onOpenReject={(request) => dialogs.setRejectModal({ open: true, request })}
+          onOpenDelete={(request) => dialogs.setDeleteModal({ open: true, request })}
+          onChangePage={(updater) =>
+            setCurrentPage((page) => (typeof updater === 'function' ? updater(page) : updater))
+          }
+          onClearFilters={clearFilters}
+        />
       )}
 
-      {/* Empty state */}
-      {!loading && filteredRequests.length === 0 && !hasActiveFilters && (
-        <div className="flex flex-col items-center justify-center h-[50vh] bg-white rounded-lg border border-slate-200 shadow-sm text-slate-500">
-          <div className="bg-green-50 p-4 rounded-full mb-4">
-            <CheckCircle size={48} className="text-green-500" />
-          </div>
-          <h2 className="text-xl font-semibold text-slate-800">Todo en orden</h2>
-          <p className="mt-2 text-slate-500 text-sm">
-            No hay solicitudes de dominio pendientes de revisión.
-          </p>
-        </div>
-      )}
-
-      {/* No results after filtering */}
-      {!loading && filteredRequests.length === 0 && hasActiveFilters && (
-        <div className="bg-white border border-slate-200 rounded-lg p-8 shadow-sm text-center">
-          <Search size={32} className="mx-auto text-slate-300 mb-3" />
-          <p className="text-slate-500">No hay solicitudes para los filtros seleccionados</p>
-          <button
-            type="button"
-            onClick={clearFilters}
-            className="mt-4 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
-          >
-            Limpiar filtros
-          </button>
-        </div>
-      )}
-
-      {!loading && sortedRequests.length > 0 && (
-        <div className="flex items-center justify-between text-sm text-slate-600">
-          <span>
-            Mostrando {(currentPage - 1) * pageSize + 1}-
-            {Math.min(currentPage * pageSize, sortedRequests.length)} de {sortedRequests.length}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage <= 1}
-              className="px-3 py-1 border border-slate-300 rounded disabled:opacity-50"
-            >
-              Anterior
-            </button>
-            <span>
-              Pagina {currentPage} de {totalPages}
-            </span>
-            <button
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1 border border-slate-300 rounded disabled:opacity-50"
-            >
-              Siguiente
-            </button>
-          </div>
-        </div>
-      )}
-
-      {bulkConfirm
-        ? (() => {
-            const snapshot = bulkConfirm;
-            const count = snapshot.requestIds.length;
-
-            if (snapshot.mode === 'approve') {
-              return (
-                <ConfirmDialog
-                  isOpen
-                  title="Aprobar solicitudes"
-                  confirmLabel="Aprobar"
-                  cancelLabel="Cancelar"
-                  disableConfirm={count === 0}
-                  onClose={() => setBulkConfirm(null)}
-                  onConfirm={() => {
-                    setBulkConfirm(null);
-                    void runBulkApprove(snapshot.requestIds);
-                  }}
-                >
-                  <p className="text-sm text-slate-600">
-                    ¿Aprobar {count} solicitudes seleccionadas?
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Las solicitudes se aprobarán en sus grupos originales.
-                  </p>
-                </ConfirmDialog>
-              );
-            }
-
-            return (
-              <DangerConfirmDialog
-                isOpen
-                title="Rechazar solicitudes"
-                confirmLabel="Rechazar"
-                cancelLabel="Cancelar"
-                disableConfirm={count === 0}
-                onClose={() => setBulkConfirm(null)}
-                onConfirm={() => {
-                  setBulkConfirm(null);
-                  void runBulkReject(snapshot.requestIds, snapshot.rejectReason);
-                }}
-              >
-                <p className="text-sm text-slate-600">
-                  ¿Rechazar {count} solicitudes seleccionadas?
-                </p>
-                {snapshot.rejectReason ? (
-                  <p className="text-xs text-slate-500 break-words">
-                    Motivo (opcional): <span className="font-medium">{snapshot.rejectReason}</span>
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-500">Motivo (opcional): (sin motivo)</p>
-                )}
-              </DangerConfirmDialog>
-            );
-          })()
-        : null}
-
-      {/* Approve Modal */}
-      {approveModal.open && approveModal.request && (
-        <ConfirmDialog
-          isOpen
-          title="Aprobar Solicitud"
-          confirmLabel="Aprobar"
-          cancelLabel="Cancelar"
-          isLoading={actionsLoading}
-          onClose={() => setApproveModal({ open: false, request: null })}
-          onConfirm={handleApprove}
-        >
-          <p className="text-sm text-slate-600">
-            Aprobar acceso a <strong>{approveModal.request.domain}</strong> solicitado por{' '}
-            <strong>{approveModal.request.machineHostname ?? 'máquina desconocida'}</strong>
-          </p>
-          <p className="text-sm text-slate-600">
-            La solicitud se aprobara en el grupo original:{' '}
-            <strong>{getGroupName(approveModal.request.groupId)}</strong>
-          </p>
-        </ConfirmDialog>
-      )}
-
-      {/* Reject Modal */}
-      {rejectModal.open && rejectModal.request && (
-        <DangerConfirmDialog
-          isOpen
-          title="Rechazar Solicitud"
-          confirmLabel="Rechazar"
-          cancelLabel="Cancelar"
-          isLoading={actionsLoading}
-          onClose={() => {
-            setRejectModal({ open: false, request: null });
-            setRejectionReason('');
-          }}
-          onConfirm={handleReject}
-        >
-          <p className="text-sm text-slate-600">
-            Rechazar acceso a <strong>{rejectModal.request.domain}</strong> solicitado por{' '}
-            <strong>{rejectModal.request.machineHostname ?? 'máquina desconocida'}</strong>
-          </p>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Motivo del rechazo (opcional)
-            </label>
-            <textarea
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="Explica por qué se rechaza esta solicitud..."
-              rows={3}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-            />
-          </div>
-        </DangerConfirmDialog>
-      )}
-
-      {/* Delete Modal */}
-      {deleteModal.open && deleteModal.request && (
-        <DangerConfirmDialog
-          isOpen
-          title="Eliminar Solicitud"
-          confirmLabel="Eliminar"
-          cancelLabel="Cancelar"
-          isLoading={actionsLoading}
-          onClose={() => setDeleteModal({ open: false, request: null })}
-          onConfirm={handleDelete}
-        >
-          <p className="text-sm text-slate-600">
-            ¿Estás seguro de que deseas eliminar la solicitud de acceso a{' '}
-            <strong>{deleteModal.request.domain}</strong>?
-          </p>
-          <p className="text-xs text-slate-500">Esta acción no se puede deshacer.</p>
-        </DangerConfirmDialog>
-      )}
+      <DomainRequestsDialogs
+        bulkConfirm={bulkActions.bulkConfirm}
+        approveModal={dialogs.approveModal}
+        rejectModal={dialogs.rejectModal}
+        deleteModal={dialogs.deleteModal}
+        rejectionReason={dialogs.rejectionReason}
+        actionsLoading={actionsLoading || bulkActions.bulkLoading}
+        onBulkConfirmClose={() => bulkActions.setBulkConfirm(null)}
+        onBulkApproveConfirm={(requestIds) => {
+          bulkActions.setBulkConfirm(null);
+          void bulkActions.runBulkApprove(requestIds);
+        }}
+        onBulkRejectConfirm={(requestIds, reason) => {
+          bulkActions.setBulkConfirm(null);
+          void bulkActions.runBulkReject(requestIds, reason);
+        }}
+        onApproveClose={() => dialogs.setApproveModal({ open: false, request: null })}
+        onApproveConfirm={dialogs.handleApprove}
+        onRejectClose={() => {
+          dialogs.setRejectModal({ open: false, request: null });
+          dialogs.setRejectionReason('');
+        }}
+        onRejectConfirm={dialogs.handleReject}
+        onRejectReasonChange={dialogs.setRejectionReason}
+        onDeleteClose={() => dialogs.setDeleteModal({ open: false, request: null })}
+        onDeleteConfirm={dialogs.handleDelete}
+        getGroupName={getGroupName}
+      />
     </div>
   );
 }

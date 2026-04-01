@@ -1,19 +1,67 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# OpenPath React SPA
 
-# Run and deploy your AI Studio app
+> Status: maintained
+> Applies to: `@openpath/react-spa`
+> Last verified: 2026-04-01
 
-This contains everything you need to run your app locally.
+OpenPath's React SPA is the OSS administration UI for dashboard, classrooms, groups, rules, requests, and settings flows.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1BZR1HCl8e1HqCedaoNwJCjEx6eBNspip
+It also exposes a small public surface for downstream consumers. That public surface is the only supported integration boundary.
 
-## Run Locally
+## Start Here
 
-**Prerequisites:** Node.js
+- Public surface ADR: [`../docs/adr/0010-public-spa-extension-surface.md`](../docs/adr/0010-public-spa-extension-surface.md)
+- Repo docs index: [`../docs/INDEX.md`](../docs/INDEX.md)
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Supported Public Entry Points
+
+The package exports:
+
+- `@openpath/react-spa/openpath.css`
+- `@openpath/react-spa/public-ui`
+- `@openpath/react-spa/public-shell`
+- `@openpath/react-spa/public-auth`
+- `@openpath/react-spa/public-google`
+
+Downstream consumers should use these entry points instead of deep-importing files under `src/`.
+
+## Development
+
+From `OpenPath/`:
+
+```bash
+npm install
+npm run build --workspace=@openpath/shared
+npm run build --workspace=@openpath/api
+npm run dev --workspace=@openpath/react-spa
+```
+
+From `OpenPath/react-spa/`:
+
+```bash
+npm run dev
+```
+
+## Verification
+
+From `OpenPath/`:
+
+```bash
+npm run test:react-spa
+npm run test:e2e
+```
+
+From `OpenPath/react-spa/`:
+
+```bash
+npm test
+npm run test:e2e
+npm run typecheck
+npm run lint
+```
+
+## Notes For Downstream Consumers
+
+- The public entry points are source-based today, not a separately versioned design system package.
+- Internal file layout under `src/` can change without downstream compatibility guarantees.
+- If a downstream app needs a new reusable surface, add it deliberately to `src/public/*` and document it in ADR 0010.

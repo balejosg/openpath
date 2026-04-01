@@ -59,6 +59,13 @@ foundation for environments where trust and explainability matter.
 - **Assessments and Focus Sessions**: Provide a default-deny environment that is easy to explain and audit.
 - **Shared-Device Operations**: Apply explicit allowlists wherever open internet access creates noise, risk, or unnecessary support work.
 
+## Docs
+
+- Repository workflow: [`AGENTS.md`](AGENTS.md)
+- Documentation index: [`docs/INDEX.md`](docs/INDEX.md)
+- API package guide: [`api/README.md`](api/README.md)
+- React SPA guide: [`react-spa/README.md`](react-spa/README.md)
+
 ## Installation
 
 ### Central Server (Required for Classroom Deployment)
@@ -135,7 +142,7 @@ PowerShell-based installation using Acrylic DNS Proxy.
 ## Technologies
 
 - **Backend**: Node.js, TypeScript, Express.js, tRPC, Zod
-- **Frontend**: TypeScript, Vanilla CSS, HTML (No framework, ES Modules)
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS
 - **Infrastructure**: Linux, Docker, Systemd, Git
 - **Testing**: Playwright (E2E), Node.js Test Runner, BATS (Bash)
 
