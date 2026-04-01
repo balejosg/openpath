@@ -49,6 +49,11 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "apt bootstrap supports pinning an explicit package version" {
+    run grep -n -- "--package-version" "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "apt bootstrap fails clearly when the selected track does not advertise openpath-dnsmasq" {
     run grep -n 'apt-cache show openpath-dnsmasq' "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
     [ "$status" -eq 0 ]

@@ -104,6 +104,15 @@ export function readServerVersion(): string {
   return '0.0.0';
 }
 
+export function readLinuxAgentVersion(): string {
+  const envVersion = process.env.OPENPATH_LINUX_AGENT_VERSION?.trim();
+  if (envVersion) {
+    return envVersion;
+  }
+
+  return readServerVersion();
+}
+
 function normalizeManifestRelativePath(relativePath: string): string | null {
   const normalizedPath = relativePath.replaceAll('\\', '/');
   if (!normalizedPath || normalizedPath.startsWith('..') || path.isAbsolute(normalizedPath)) {
@@ -294,7 +303,7 @@ export function resolveLinuxAgentPackagePath(version: string): string | null {
 }
 
 export function buildLinuxAgentPackageManifest(): LinuxAgentPackageEntry | null {
-  const version = readServerVersion();
+  const version = readLinuxAgentVersion();
   const absolutePath = resolveLinuxAgentPackagePath(version);
   if (!absolutePath) {
     return null;

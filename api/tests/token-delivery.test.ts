@@ -490,9 +490,10 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
 
   await describe('GET /api/agent/linux/*', async () => {
     let machineToken: string;
+    let classroomId: string;
 
     before(async () => {
-      await createTestClassroom('LinuxAgentClassroom', 'linux-agent-group');
+      classroomId = await createTestClassroom('LinuxAgentClassroom', 'linux-agent-group');
 
       mkdirSync(linuxAgentBuildRoot, { recursive: true });
       writeFileSync(linuxAgentPackageFilePath, 'fake-linux-agent-package');
@@ -574,6 +575,46 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       }
     });
 
+    await test('should prefer OPENPATH_LINUX_AGENT_VERSION over the server version for linux manifests', async () => {
+      const pinnedVersion = '9.9.9';
+      const pinnedPackageFileName = `openpath-dnsmasq_${pinnedVersion}-1_amd64.deb`;
+      const pinnedPackageFilePath = resolve(linuxAgentBuildRoot, pinnedPackageFileName);
+      const originalPinnedVersion = process.env.OPENPATH_LINUX_AGENT_VERSION;
+
+      writeFileSync(pinnedPackageFilePath, 'fake-linux-pinned-package');
+      process.env.OPENPATH_LINUX_AGENT_VERSION = pinnedVersion;
+
+      try {
+        const response = await fetch(`${API_URL}/api/agent/linux/latest.json`, {
+          headers: {
+            Authorization: `Bearer ${machineToken}`,
+          },
+        });
+
+        assert.strictEqual(response.status, 200);
+        const data = (await response.json()) as {
+          version: string;
+          packageFileName: string;
+          downloadPath: string;
+        };
+
+        assert.strictEqual(data.version, pinnedVersion);
+        assert.strictEqual(data.packageFileName, pinnedPackageFileName);
+        assert.ok(
+          data.downloadPath.includes(
+            `/api/agent/linux/package?version=${encodeURIComponent(pinnedVersion)}`
+          )
+        );
+      } finally {
+        rmSync(pinnedPackageFilePath, { force: true });
+        if (originalPinnedVersion === undefined) {
+          delete process.env.OPENPATH_LINUX_AGENT_VERSION;
+        } else {
+          process.env.OPENPATH_LINUX_AGENT_VERSION = originalPinnedVersion;
+        }
+      }
+    });
+
     await test('should download the linux agent package through the API path', async () => {
       const manifestResponse = await fetch(`${API_URL}/api/agent/linux/latest.json`, {
         headers: {
@@ -616,6 +657,32 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       assert.strictEqual(response.status, 200);
       const packageContent = await response.text();
       assert.strictEqual(packageContent, 'fake-linux-bridge-package');
+    });
+
+    await test('should pin the configured linux package version in enrollment bootstrap scripts', async () => {
+      const originalPinnedVersion = process.env.OPENPATH_LINUX_AGENT_VERSION;
+      process.env.OPENPATH_LINUX_AGENT_VERSION = '9.9.9';
+
+      try {
+        const enrollmentToken = await getEnrollmentToken(classroomId);
+        const response = await fetch(`${API_URL}/api/enroll/${classroomId}`, {
+          headers: {
+            Authorization: `Bearer ${enrollmentToken}`,
+          },
+        });
+
+        assert.strictEqual(response.status, 200);
+        const body = await response.text();
+
+        assert.match(body, /LINUX_AGENT_VERSION='9\.9\.9'/);
+        assert.match(body, /--package-version "\$LINUX_AGENT_VERSION"/);
+      } finally {
+        if (originalPinnedVersion === undefined) {
+          delete process.env.OPENPATH_LINUX_AGENT_VERSION;
+        } else {
+          process.env.OPENPATH_LINUX_AGENT_VERSION = originalPinnedVersion;
+        }
+      }
     });
   });
 

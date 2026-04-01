@@ -91,6 +91,7 @@ export function registerEnrollmentRoutes(app: Express): void {
 
         const publicUrl = getPublicBaseUrl(req);
         const aptRepoUrl = config.aptRepoUrl;
+        const configuredLinuxAgentVersion = process.env.OPENPATH_LINUX_AGENT_VERSION?.trim() ?? '';
         if (!aptRepoUrl) {
           res.status(500).send('APT repo URL not configured');
           return;
@@ -109,6 +110,7 @@ CLASSROOM_ID=${bashSingleQuote(classroomId)}
 CLASSROOM_NAME=${bashSingleQuote(classroom.name)}
 ENROLLMENT_TOKEN=${bashSingleQuote(enrollmentToken)}
 APT_BOOTSTRAP_URL=${bashSingleQuote(`${aptRepoUrl}/apt-bootstrap.sh`)}
+LINUX_AGENT_VERSION=${bashSingleQuote(configuredLinuxAgentVersion)}
 
  echo ''
 echo '==============================================='
@@ -125,7 +127,11 @@ echo "[1/2] Instalando y registrando en aula..."
 tmpfile="$(mktemp)"
 trap 'rm -f "$tmpfile"' EXIT
 curl -fsSL --proto '=https' --tlsv1.2 "$APT_BOOTSTRAP_URL" -o "$tmpfile"
-bash "$tmpfile" --api-url "$API_URL" --classroom "$CLASSROOM_NAME" --classroom-id "$CLASSROOM_ID" --enrollment-token "$ENROLLMENT_TOKEN"
+bootstrap_cmd=(bash "$tmpfile" --api-url "$API_URL" --classroom "$CLASSROOM_NAME" --classroom-id "$CLASSROOM_ID" --enrollment-token "$ENROLLMENT_TOKEN")
+if [ -n "$LINUX_AGENT_VERSION" ]; then
+    bootstrap_cmd=(bash "$tmpfile" --package-version "$LINUX_AGENT_VERSION" --api-url "$API_URL" --classroom "$CLASSROOM_NAME" --classroom-id "$CLASSROOM_ID" --enrollment-token "$ENROLLMENT_TOKEN")
+fi
+"\${bootstrap_cmd[@]}"
 
 echo "[2/2] Verificando..."
 openpath health || true
