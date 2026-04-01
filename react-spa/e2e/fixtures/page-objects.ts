@@ -329,7 +329,7 @@ export class BulkImportPage {
 
     // Prefer the seeded E2E group so the RulesManager opens on a stable dataset.
     const seededGroupCard = this.page
-      .locator('div')
+      .locator('div.bg-white.border.border-slate-200.rounded-lg')
       .filter({ hasText: /E2E Test Group/i })
       .first();
     const seededConfigButton = seededGroupCard.getByRole('button', { name: /Configurar/i });
