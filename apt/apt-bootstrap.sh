@@ -14,6 +14,7 @@
 #   --token-file F  Read registration token from file
 #   --token-stdin   Read registration token from stdin
 #   --enrollment-token T  Classroom enrollment token
+#   --package-version V Install an explicit openpath-dnsmasq version
 ################################################################################
 
 set -euo pipefail
@@ -29,6 +30,7 @@ CLASSROOM_ID=""
 TOKEN_FILE=""
 TOKEN_STDIN=false
 ENROLLMENT_TOKEN=""
+PACKAGE_VERSION=""
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -43,6 +45,7 @@ usage() {
     echo "  --token-file FILE    Read registration token from file"
     echo "  --token-stdin        Read registration token from stdin"
     echo "  --enrollment-token T Classroom enrollment token"
+    echo "  --package-version V  Install explicit openpath-dnsmasq version"
     echo "  --help               Show this help"
 }
 
@@ -82,6 +85,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --enrollment-token)
             ENROLLMENT_TOKEN="$2"
+            shift 2
+            ;;
+        --package-version)
+            PACKAGE_VERSION="$2"
             shift 2
             ;;
         --help|-h)
@@ -135,7 +142,19 @@ if ! apt-cache show openpath-dnsmasq >/dev/null 2>&1; then
     echo "    curl -fsSL $APT_REPO_URL/apt-bootstrap.sh | sudo bash -s -- --unstable"
     exit 1
 fi
-apt-get install -y openpath-dnsmasq
+
+if [ -n "$PACKAGE_VERSION" ]; then
+    PACKAGE_DEB_VERSION="${PACKAGE_VERSION}-1"
+    if ! apt-cache show "openpath-dnsmasq=$PACKAGE_DEB_VERSION" >/dev/null 2>&1; then
+        echo "ERROR: Requested openpath-dnsmasq version $PACKAGE_DEB_VERSION is not available on the $TRACK track."
+        echo "  Refusing to install an implicit fallback package version."
+        echo "  Publish the requested package first or update the enrollment manifest."
+        exit 1
+    fi
+    apt-get install -y "openpath-dnsmasq=$PACKAGE_DEB_VERSION"
+else
+    apt-get install -y openpath-dnsmasq
+fi
 echo "  OK Package installed"
 
 if [ "$SKIP_SETUP" = true ]; then
