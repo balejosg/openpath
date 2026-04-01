@@ -80,6 +80,7 @@ import {
   runScheduleBoundaryTickOnce,
 } from './lib/rule-events.js';
 import { UNRESTRICTED_GROUP_ID } from './lib/exemption-storage.js';
+import { getSessionCookieConfig } from './lib/session-cookies.js';
 
 import { registerPublicRequestRoutes } from './routes/public-requests.js';
 
@@ -177,6 +178,52 @@ function parseCookieValue(cookieHeader: string | undefined, name: string): strin
   }
 
   return null;
+}
+
+function normalizeOrigin(value: string | undefined): string | null {
+  if (!value) return null;
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+function getRequestOrigin(req: Request): string {
+  return `${req.protocol}://${req.get('host') ?? 'localhost'}`;
+}
+
+function isCookieAuthenticatedMutation(req: Request): boolean {
+  if (!['POST', 'PATCH', 'PUT', 'DELETE'].includes(req.method.toUpperCase())) {
+    return false;
+  }
+
+  const authorization = req.headers.authorization;
+  if (authorization?.startsWith('Bearer ')) {
+    return false;
+  }
+
+  const cookieConfig = getSessionCookieConfig();
+  if (!cookieConfig) {
+    return false;
+  }
+
+  return Boolean(
+    parseCookieValue(req.headers.cookie, cookieConfig.accessCookieName) ??
+    parseCookieValue(req.headers.cookie, cookieConfig.refreshCookieName)
+  );
+}
+
+function isTrustedCsrfOrigin(req: Request, allowedOrigins: string[]): boolean {
+  const candidateOrigin =
+    normalizeOrigin(req.get('origin')) ?? normalizeOrigin(req.get('referer')) ?? null;
+
+  if (!candidateOrigin) {
+    return false;
+  }
+
+  return candidateOrigin === getRequestOrigin(req) || allowedOrigins.includes(candidateOrigin);
 }
 
 function getFirstParam(value: string | string[] | undefined): string | undefined {
@@ -615,11 +662,10 @@ app.use(
           "'self'",
           "'unsafe-inline'",
           'https://fonts.googleapis.com',
-          'https://unpkg.com',
           'https://accounts.google.com',
         ],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-        scriptSrc: ["'self'", 'https://accounts.google.com/gsi/client', 'https://unpkg.com'],
+        scriptSrc: ["'self'", 'https://accounts.google.com/gsi/client'],
         frameSrc: ["'self'", 'https://accounts.google.com'],
         imgSrc: ["'self'", 'data:', 'https:'],
         connectSrc: connectSrcDirectives,
@@ -637,6 +683,10 @@ app.use(
 // =============================================================================
 
 const corsOrigins = config.corsAllowedOrigins;
+const trustedBrowserOrigins = [
+  ...corsOrigins,
+  ...(config.publicUrl ? [new URL(config.publicUrl).origin] : []),
+];
 
 // Warn if CORS is empty or wildcard in production
 if (config.isProduction) {
@@ -649,7 +699,14 @@ if (config.isProduction) {
 
 app.use(
   cors({
-    origin: corsOrigins.includes('*') ? '*' : corsOrigins,
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      callback(null, corsOrigins.includes(origin));
+    },
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'trpc-batch-mode'],
     credentials: true,
@@ -720,6 +777,33 @@ app.use(express.json({ limit: '10kb' }));
 
 // Request ID middleware
 app.use(requestIdMiddleware);
+
+app.use((req: Request, res: Response, next) => {
+  if (!isCookieAuthenticatedMutation(req)) {
+    next();
+    return;
+  }
+
+  if (isTrustedCsrfOrigin(req, trustedBrowserOrigins)) {
+    next();
+    return;
+  }
+
+  logger.warn('Rejected cookie-authenticated request with invalid CSRF origin', {
+    path: req.originalUrl || req.url,
+    method: req.method,
+    origin: req.get('origin'),
+    referer: req.get('referer'),
+    requestOrigin: getRequestOrigin(req),
+  });
+
+  res.status(403).json({
+    success: false,
+    error: 'Invalid CSRF origin',
+    code: 'FORBIDDEN',
+    requestId: (req as Request & { id?: string }).id,
+  });
+});
 
 // Request logging with Winston
 app.use(logger.requestMiddleware);
@@ -1996,12 +2080,16 @@ if (swaggerUi && getSwaggerSpec) {
 import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from './trpc/routers/index.js';
 import { createContext } from './trpc/context.js';
+import { logTrpcError } from './trpc/trpc.js';
 
 app.use(
   '/trpc',
   createExpressMiddleware({
     router: appRouter,
     createContext,
+    onError({ path, ctx, error }) {
+      logTrpcError({ path, ctx, error });
+    },
   })
 );
 

@@ -4,10 +4,6 @@ import assert from 'node:assert';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import * as userStorage from '../src/lib/user-storage.js';
-import { closeConnection } from '../src/db/index.js';
-import { getAvailablePort, resetDb, uniqueEmail } from './test-utils.js';
-
 const apiRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 async function waitFor(
@@ -40,7 +36,10 @@ async function waitForHealth(baseUrl: string): Promise<void> {
 
 async function waitForAdmin(
   email: string
-): Promise<NonNullable<Awaited<ReturnType<typeof userStorage.getUserByEmail>>>> {
+): Promise<
+  NonNullable<Awaited<ReturnType<typeof import('../src/lib/user-storage.js').getUserByEmail>>>
+> {
+  const userStorage = await import('../src/lib/user-storage.js');
   let foundUser!: NonNullable<Awaited<ReturnType<typeof userStorage.getUserByEmail>>>;
 
   await waitFor(async () => {
@@ -70,6 +69,7 @@ function waitForExit(child: ChildProcess): Promise<number | null> {
 }
 
 after(async () => {
+  const { closeConnection } = await import('../src/db/index.js');
   await closeConnection();
 });
 
@@ -78,6 +78,14 @@ void describe('Server startup coverage', () => {
     'runs the main-module startup path, handles invalid JSON, 404s, and graceful shutdown',
     { timeout: 30000 },
     async () => {
+      process.env.DB_HOST = process.env.DB_HOST ?? 'localhost';
+      process.env.DB_PORT = process.env.DB_PORT ?? '5433';
+      process.env.DB_NAME = process.env.DB_NAME ?? 'openpath_test';
+      process.env.DB_USER = process.env.DB_USER ?? 'openpath';
+      process.env.DB_PASSWORD = process.env.DB_PASSWORD ?? 'openpath_test';
+
+      const { getAvailablePort, resetDb, uniqueEmail } = await import('./test-utils.js');
+
       await resetDb();
 
       const port = await getAvailablePort();
@@ -89,6 +97,11 @@ void describe('Server startup coverage', () => {
         cwd: apiRoot,
         env: {
           ...process.env,
+          DB_HOST: process.env.DB_HOST ?? 'localhost',
+          DB_PORT: process.env.DB_PORT ?? '5433',
+          DB_NAME: process.env.DB_NAME ?? 'openpath_test',
+          DB_USER: process.env.DB_USER ?? 'openpath',
+          DB_PASSWORD: process.env.DB_PASSWORD ?? 'openpath_test',
           HOST: '127.0.0.1',
           PORT: String(port),
           NODE_ENV: 'test',

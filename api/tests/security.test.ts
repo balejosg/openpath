@@ -18,6 +18,8 @@ process.env.JWT_SECRET = 'test-secret-123';
 process.env.NODE_ENV = 'development'; // Enable rate limiting logic
 process.env.ENABLE_RATE_LIMIT_IN_TEST = 'true'; // Actually enable the middleware
 process.env.TRUST_PROXY = '1';
+process.env.OPENPATH_ACCESS_TOKEN_COOKIE_NAME = 'op_access';
+process.env.OPENPATH_REFRESH_TOKEN_COOKIE_NAME = 'op_refresh';
 
 let PORT: number;
 let API_URL: string;
@@ -100,6 +102,7 @@ await describe('Security and Hardening Tests', async () => {
       const csp = headers.get('content-security-policy');
       assert.ok(csp !== null && csp !== '', 'CSP header should be present');
       assert.ok(csp.includes('default-src'), 'CSP should include default-src');
+      assert.ok(!csp.includes('unpkg.com'), 'CSP should not allow unpkg.com');
     });
   });
 
@@ -214,6 +217,35 @@ await describe('Security and Hardening Tests', async () => {
       // At least one should fail with 429
       const blocked = responses.filter((r) => r.status === 429);
       assert.ok(blocked.length > 0, 'Should have blocked some requests');
+    });
+
+    await it('rejects cookie-authenticated mutations without a trusted origin', async (): Promise<void> => {
+      const response = await request('/trpc/auth.logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'op_access=fake-access; op_refresh=fake-refresh',
+        },
+        body: JSON.stringify({}),
+      });
+
+      assert.strictEqual(response.status, 403);
+      assert.strictEqual(response.body.code, 'FORBIDDEN');
+      assert.match(String(response.body.error ?? ''), /csrf origin/i);
+    });
+
+    await it('allows trusted-origin cookie mutations to continue past CSRF checks', async (): Promise<void> => {
+      const response = await request('/trpc/auth.logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: 'op_access=fake-access; op_refresh=fake-refresh',
+          Origin: 'http://localhost:3000',
+        },
+        body: JSON.stringify({}),
+      });
+
+      assert.notStrictEqual(response.status, 403);
     });
   });
 

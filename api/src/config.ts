@@ -156,6 +156,16 @@ export function loadConfig(
 ): LoadedConfig {
   const parsedDbUrl = parseDatabaseUrl(env.DATABASE_URL);
   const nodeEnv = env.NODE_ENV ?? 'development';
+  const corsAllowedOrigins = parseListEnv(
+    env.CORS_ORIGINS,
+    nodeEnv === 'production'
+      ? []
+      : ['http://localhost:3000', 'http://localhost:5500', 'http://127.0.0.1:3000']
+  );
+
+  if (nodeEnv === 'production' && corsAllowedOrigins.includes('*')) {
+    throw new Error('CORS_ORIGINS must not include * in production');
+  }
 
   return {
     // ==========================================================================
@@ -236,12 +246,7 @@ export function loadConfig(
     // ==========================================================================
 
     /** CORS allowed origins (comma-separated). MUST be set in production. */
-    corsAllowedOrigins: parseListEnv(
-      env.CORS_ORIGINS,
-      nodeEnv === 'production'
-        ? [] // Production MUST set CORS_ORIGINS explicitly
-        : ['http://localhost:3000', 'http://localhost:5500', 'http://127.0.0.1:3000']
-    ),
+    corsAllowedOrigins,
 
     // ==========================================================================
     // Push Notifications

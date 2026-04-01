@@ -6,7 +6,22 @@ import { verifyEnrollmentToken } from '../lib/enrollment-token.js';
 import { hashMachineToken } from '../lib/machine-download-token.js';
 import { logger } from '../lib/logger.js';
 
-const t = initTRPC.context<Context>().create();
+function getRequestId(ctx?: Context): string | undefined {
+  const raw = ctx?.req.headers['x-request-id'];
+  return Array.isArray(raw) ? raw[0] : raw;
+}
+
+const t = initTRPC.context<Context>().create({
+  errorFormatter({ shape, ctx }) {
+    return {
+      ...shape,
+      data: {
+        ...shape.data,
+        requestId: getRequestId(ctx),
+      },
+    };
+  },
+});
 
 type AuthenticatedMachine = NonNullable<
   Awaited<ReturnType<typeof classroomStorage.getMachineByDownloadTokenHash>>
@@ -116,3 +131,15 @@ export const sharedSecretProcedure = t.procedure.use(({ ctx, next }) => {
   }
   return next({ ctx });
 });
+
+export function logTrpcError(params: {
+  path: string | undefined;
+  ctx: Context | undefined;
+  error: Error;
+}): void {
+  logger.error('tRPC request failed', {
+    requestId: getRequestId(params.ctx),
+    path: params.path,
+    error: params.error.message,
+  });
+}

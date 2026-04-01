@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { afterEach, describe, it } from 'node:test';
 
 const ORIGINAL_ENV = {
+  CORS_ORIGINS: process.env.CORS_ORIGINS,
   JWT_SECRET: process.env.JWT_SECRET,
   NODE_ENV: process.env.NODE_ENV,
 };
@@ -10,9 +11,13 @@ const ORIGINAL_ENV = {
 afterEach(() => {
   restoreEnvVar('JWT_SECRET', ORIGINAL_ENV.JWT_SECRET);
   restoreEnvVar('NODE_ENV', ORIGINAL_ENV.NODE_ENV);
+  restoreEnvVar('CORS_ORIGINS', ORIGINAL_ENV.CORS_ORIGINS);
 });
 
-function restoreEnvVar(name: 'JWT_SECRET' | 'NODE_ENV', value: string | undefined): void {
+function restoreEnvVar(
+  name: 'CORS_ORIGINS' | 'JWT_SECRET' | 'NODE_ENV',
+  value: string | undefined
+): void {
   if (value !== undefined) {
     process.env[name] = value;
     return;
@@ -95,5 +100,21 @@ await describe('jwt secret configuration', async () => {
       JWT_SECRET: undefined,
     });
     assert.strictEqual(testImport.status, 0, String(testImport.stderr));
+  });
+
+  await it('rejects wildcard CORS_ORIGINS in production', async () => {
+    const { loadConfig } = (await import(
+      `../src/config.ts?${freshTag()}`
+    )) as typeof import('../src/config.js');
+
+    assert.throws(
+      () =>
+        loadConfig({
+          NODE_ENV: 'production',
+          JWT_SECRET: 'production-secret',
+          CORS_ORIGINS: '*',
+        }),
+      /CORS_ORIGINS/i
+    );
   });
 });
