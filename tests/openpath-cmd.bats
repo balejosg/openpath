@@ -17,7 +17,7 @@ setup() {
     cp "$PROJECT_DIR/linux/lib/"*.sh "$INSTALL_DIR/lib/" 2>/dev/null || true
     
     # Create test whitelist
-    create_test_whitelist "$CONFIG_DIR/whitelist.txt"
+    create_test_whitelist "$CONFIG_DIR/whitelist.txt" >/dev/null
 }
 
 teardown() {
@@ -120,4 +120,75 @@ teardown() {
 @test "setup puede pedir datos por /dev/tty cuando stdin no es interactivo" {
     run grep -n "/dev/tty" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
     [ "$status" -eq 0 ]
+}
+
+@test "health treats remote-disabled fail-open mode as expected state" {
+    local whitelist_file="$CONFIG_DIR/whitelist.txt"
+    local helper_script="$TEST_TMP_DIR/run-cmd-health.sh"
+
+    cat > "$helper_script" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+project_dir="$1"
+state_dir="$2"
+whitelist_file="$3"
+extracted_script="$state_dir/cmd-health.sh"
+
+export VERSION="test"
+export WHITELIST_FILE="$whitelist_file"
+export FIREFOX_POLICIES="$state_dir/firefox-policies.json"
+export SYSTEM_DISABLED_FLAG="$state_dir/system-disabled.flag"
+export VAR_STATE_DIR="$state_dir"
+export RED=""
+export GREEN=""
+export YELLOW=""
+export BLUE=""
+export NC=""
+
+: > "$FIREFOX_POLICIES"
+: > "$SYSTEM_DISABLED_FLAG"
+
+timeout() {
+    shift
+    "$@"
+}
+
+dig() {
+    case "$2" in
+        google.com)
+            echo "142.250.184.14"
+            ;;
+        blocked-test.invalid)
+            return 0
+            ;;
+    esac
+}
+
+iptables() {
+    printf "Chain OUTPUT (policy ACCEPT)\n"
+}
+
+systemctl() {
+    [ "$1" = "is-active" ] && return 0
+    return 1
+}
+
+find() {
+    return 1
+}
+
+awk '/^cmd_health\(\) \{/,/^}/' \
+    "$project_dir/linux/scripts/runtime/openpath-cmd.sh" > "$extracted_script"
+source "$extracted_script"
+
+cmd_health
+EOF
+    chmod +x "$helper_script"
+
+    run "$helper_script" "$PROJECT_DIR" "$TEST_TMP_DIR" "$whitelist_file"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"system disabled remotely"* ]]
+    [[ "$output" != *"ISSUES DETECTED"* ]]
 }

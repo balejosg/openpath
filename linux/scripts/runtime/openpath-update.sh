@@ -92,12 +92,17 @@ WHITELIST_URL=$(get_whitelist_url)
 # Checks that the file contains enough domain-like lines (defense against HTML error pages)
 validate_whitelist_content() {
     local file="$1"
+    local first_line=""
     local valid_lines
-    valid_lines=$(grep -cP '^[a-zA-Z0-9*].*\.[a-zA-Z]{2,}' "$file" 2>/dev/null || echo 0)
 
-    if [ "$valid_lines" -lt "${MIN_VALID_DOMAINS:-5}" ]; then
-        log_warn "Downloaded whitelist does not look valid ($valid_lines domain-like lines, need ${MIN_VALID_DOMAINS:-5})"
-        return 1
+    first_line=$(grep -v '^[[:space:]]*$' "$file" | head -n 1 2>/dev/null || true)
+    if ! echo "$first_line" | grep -iq "^#.*DESACTIVADO"; then
+        valid_lines=$(grep -cP '^[a-zA-Z0-9*].*\.[a-zA-Z]{2,}' "$file" 2>/dev/null || echo 0)
+
+        if [ "$valid_lines" -lt "${MIN_VALID_DOMAINS:-5}" ]; then
+            log_warn "Downloaded whitelist does not look valid ($valid_lines domain-like lines, need ${MIN_VALID_DOMAINS:-5})"
+            return 1
+        fi
     fi
 
     # Enforce max domains limit

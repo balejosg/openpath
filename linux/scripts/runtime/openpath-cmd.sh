@@ -309,6 +309,11 @@ cmd_check() {
 # Comprehensive health check
 cmd_health() {
     local failed=0
+    local remote_disabled=false
+
+    if [ -f "$SYSTEM_DISABLED_FLAG" ]; then
+        remote_disabled=true
+    fi
 
     echo -e "${BLUE}═══════════════════════════════════════════════════${NC}"
     echo -e "${BLUE}  OpenPath Health Check v$VERSION${NC}"
@@ -333,19 +338,32 @@ cmd_health() {
     fi
     echo ""
 
+    echo -e "${YELLOW}System State:${NC}"
+    if [ "$remote_disabled" = true ]; then
+        echo -e "  Enforcement: ${YELLOW}⚠ fail-open (system disabled remotely)${NC}"
+    else
+        echo -e "  Enforcement: ${GREEN}✓ enforced${NC}"
+    fi
+    echo ""
+
     # Firewall test
     echo -e "${YELLOW}Firewall:${NC}"
-    if iptables -L OUTPUT -n 2>/dev/null | grep -q "dpt:53"; then
-        echo -e "  DNS blocking rules: ${GREEN}✓ active${NC}"
+    if [ "$remote_disabled" = true ]; then
+        echo -e "  DNS blocking rules: ${YELLOW}⚠ bypassed (system disabled remotely)${NC}"
+        echo -e "  Loopback rule: ${YELLOW}⚠ bypassed (system disabled remotely)${NC}"
     else
-        echo -e "  DNS blocking rules: ${RED}✗ MISSING${NC}"
-        failed=1
-    fi
+        if iptables -L OUTPUT -n 2>/dev/null | grep -q "dpt:53"; then
+            echo -e "  DNS blocking rules: ${GREEN}✓ active${NC}"
+        else
+            echo -e "  DNS blocking rules: ${RED}✗ MISSING${NC}"
+            failed=1
+        fi
 
-    if iptables -L OUTPUT -n 2>/dev/null | grep -q "ACCEPT.*lo"; then
-        echo -e "  Loopback rule: ${GREEN}✓ present${NC}"
-    else
-        echo -e "  Loopback rule: ${YELLOW}⚠ not found${NC}"
+        if iptables -L OUTPUT -n 2>/dev/null | grep -q "ACCEPT.*lo"; then
+            echo -e "  Loopback rule: ${GREEN}✓ present${NC}"
+        else
+            echo -e "  Loopback rule: ${YELLOW}⚠ not found${NC}"
+        fi
     fi
     echo ""
 
