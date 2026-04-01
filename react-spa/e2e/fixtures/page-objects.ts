@@ -327,8 +327,23 @@ export class BulkImportPage {
     // Wait for groups page to load
     await this.page.waitForTimeout(500);
 
-    // Click the first "Configurar" button to open the config modal
-    const configButton = this.page.getByRole('button', { name: /Configurar/i }).first();
+    // Prefer the seeded E2E group so the RulesManager opens on a stable dataset.
+    const seededGroupCard = this.page
+      .locator('div')
+      .filter({ hasText: /E2E Test Group/i })
+      .first();
+    const seededConfigButton = seededGroupCard.getByRole('button', { name: /Configurar/i });
+
+    const configButton = await Promise.race([
+      seededConfigButton
+        .waitFor({ state: 'visible', timeout: 5000 })
+        .then(() => seededConfigButton),
+      this.page
+        .getByRole('button', { name: /Configurar/i })
+        .first()
+        .waitFor({ state: 'visible', timeout: 5000 })
+        .then(() => this.page.getByRole('button', { name: /Configurar/i }).first()),
+    ]);
     await configButton.waitFor({ state: 'visible', timeout: 5000 });
     await configButton.click();
 
@@ -535,8 +550,23 @@ export class RulesManagerPage {
     await manageLink.click();
     await this.page.waitForLoadState('networkidle');
 
-    // Wait for RulesManager to load
-    await this.rulesTable.waitFor({ state: 'visible', timeout: 10000 });
+    // Wait for RulesManager to load. Seed a baseline rule if the selected group is empty,
+    // otherwise the table is intentionally replaced by the empty-state card.
+    const emptyState = this.page.getByText(/No hay reglas configuradas/i);
+
+    const loadedState = await Promise.race([
+      this.rulesTable.waitFor({ state: 'visible', timeout: 10000 }).then(() => 'table' as const),
+      emptyState.waitFor({ state: 'visible', timeout: 10000 }).then(() => 'empty' as const),
+    ]);
+
+    if (loadedState === 'empty') {
+      await this.addRuleInput.fill('baseline-inline-edit.example.com');
+      await this.addRuleButton.click();
+      await this.page.waitForLoadState('networkidle').catch(() => {});
+      await this.page.reload();
+      await this.page.waitForLoadState('networkidle');
+      await this.rulesTable.waitFor({ state: 'visible', timeout: 10000 });
+    }
   }
 
   /**

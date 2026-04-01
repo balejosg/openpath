@@ -11,11 +11,17 @@ export PORT="${PORT:-3001}"
 
 SCRIPT_DIR="$(dirname "$0")"
 
+echo "Ensuring E2E PostgreSQL is running..."
+(cd "$SCRIPT_DIR/.." && docker compose -f docker-compose.test.yml up -d postgres-test)
+
 # Build the SPA for E2E tests (API serves it as static files).
 # This ensures Playwright runs against the current UI.
 if [ "${SKIP_SPA_BUILD:-0}" != "1" ]; then
   echo "Building SPA for E2E tests..."
   (cd "$SCRIPT_DIR/../react-spa" && npm run build)
 fi
+
+echo "Preparing E2E test database..."
+(cd "$SCRIPT_DIR/../api" && npm run db:setup:e2e)
 
 cd "$SCRIPT_DIR/../api" && npm run dev
