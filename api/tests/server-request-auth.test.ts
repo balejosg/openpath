@@ -35,7 +35,7 @@ await describe('server request auth helpers', async () => {
     const req = {
       protocol: 'https',
       headers: {},
-      get(name: string) {
+      get(name: string): string | undefined {
         if (name === 'host') return 'example.test';
         if (name === 'origin') return 'https://allowed.example';
         return undefined;
