@@ -364,6 +364,13 @@ cmd_health() {
         else
             echo -e "  Loopback rule: ${YELLOW}⚠ not found${NC}"
         fi
+
+        if verify_firewall_rules >/dev/null 2>&1; then
+            echo -e "  Critical firewall rules: ${GREEN}✓ complete${NC}"
+        else
+            echo -e "  Critical firewall rules: ${RED}✗ incomplete${NC}"
+            failed=1
+        fi
     fi
     echo ""
 

@@ -193,6 +193,85 @@ EOF
     [[ "$output" != *"ISSUES DETECTED"* ]]
 }
 
+@test "health reports issues when firewall verification fails despite DNS rules being present" {
+    local helper_script="$TEST_TMP_DIR/run-health-firewall-verification.sh"
+    local whitelist_file="$CONFIG_DIR/whitelist.txt"
+
+    cat > "$helper_script" <<'EOF'
+#!/bin/bash
+set -uo pipefail
+
+project_dir="$1"
+state_dir="$2"
+whitelist_file="$3"
+extracted_script="$state_dir/cmd-health.sh"
+
+export VERSION="test"
+export SYSTEM_DISABLED_FLAG="$state_dir/system-disabled.flag"
+export WHITELIST_FILE="$whitelist_file"
+export FIREFOX_POLICIES="$state_dir/firefox-policies.json"
+touch "$FIREFOX_POLICIES"
+
+GREEN=""
+RED=""
+YELLOW=""
+BLUE=""
+NC=""
+
+timeout() {
+    shift
+    "$@"
+}
+
+dig() {
+    case "$2" in
+        google.com)
+            echo "142.250.184.14"
+            ;;
+        blocked-test.invalid)
+            return 0
+            ;;
+    esac
+}
+
+iptables() {
+    cat <<'RULES'
+Chain OUTPUT (policy ACCEPT)
+target     prot opt source    destination
+ACCEPT     udp  --  anywhere  127.0.0.1   udp dpt:53
+ACCEPT     tcp  --  anywhere  127.0.0.1   tcp dpt:53
+DROP       udp  --  anywhere  anywhere    udp dpt:53
+DROP       tcp  --  anywhere  anywhere    tcp dpt:53
+RULES
+}
+
+verify_firewall_rules() {
+    return 1
+}
+
+systemctl() {
+    [ "$1" = "is-active" ] && return 0
+    return 1
+}
+
+find() {
+    return 1
+}
+
+awk '/^cmd_health\(\) \{/,/^}/' \
+    "$project_dir/linux/scripts/runtime/openpath-cmd.sh" > "$extracted_script"
+source "$extracted_script"
+
+cmd_health
+EOF
+    chmod +x "$helper_script"
+
+    run "$helper_script" "$PROJECT_DIR" "$TEST_TMP_DIR" "$whitelist_file"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"ISSUES DETECTED"* ]]
+}
+
 @test "reset_cached_whitelist_state clears cached whitelist and remote-disabled markers" {
     local helper_script="$TEST_TMP_DIR/run-reset-cached-whitelist-state.sh"
     local state_dir="$TEST_TMP_DIR/state"

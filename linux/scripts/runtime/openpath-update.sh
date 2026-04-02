@@ -409,7 +409,10 @@ EOF
             # Verificar DNS
             if verify_dns; then
                 log "✓ DNS funcional"
-                activate_firewall
+                if ! activate_firewall; then
+                    log "⚠ Fallo al activar firewall restrictivo - manteniendo modo permisivo"
+                    deactivate_firewall
+                fi
             else
                 log "⚠ DNS no funcional - modo permisivo"
                 deactivate_firewall
@@ -424,7 +427,10 @@ EOF
         if verify_dns; then
             if [ "$firewall_was_inactive" = true ]; then
                 log "Reactivando firewall..."
-                activate_firewall
+                if ! activate_firewall; then
+                    log "⚠ Fallo al reactivar firewall restrictivo - manteniendo modo permisivo"
+                    deactivate_firewall
+                fi
             fi
         else
             log "⚠ DNS no funcional - manteniendo firewall permisivo"
