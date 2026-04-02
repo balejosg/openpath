@@ -91,6 +91,12 @@ echo ""
 echo -e "${BLUE}[5/6]${NC} Running smoke tests..."
 ./linux/scripts/runtime/smoke-test.sh --quick || echo -e "${YELLOW}⚠${NC} Smoke tests had issues"
 
+if [ "${OPENPATH_INSTALLER_CONTRACT_MODE:-0}" = "1" ]; then
+    echo ""
+    echo -e "${GREEN}✓${NC} Installer contract mode completed after install + smoke tests"
+    exit 0
+fi
+
 # Step 6: Run E2E tests
 echo ""
 echo -e "${BLUE}[6/6]${NC} Running E2E tests..."

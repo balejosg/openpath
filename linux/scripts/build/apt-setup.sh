@@ -13,10 +13,10 @@
 #   sudo apt install openpath-dnsmasq
 ################################################################################
 
-set -e
+set -euo pipefail
 
 # Configuration
-REPO_URL="https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt"
+REPO_URL="${OPENPATH_APT_REPO_URL:-https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt}"
 GPG_KEY_URL="$REPO_URL/pubkey.gpg"
 KEYRING_PATH="/usr/share/keyrings/openpath.gpg"
 SOURCES_PATH="/etc/apt/sources.list.d/openpath.list"
@@ -59,9 +59,9 @@ fi
 # Step 1: Download and install GPG key
 echo "[1/3] Downloading GPG key..."
 if command -v curl &> /dev/null; then
-    curl -fsSL "$GPG_KEY_URL" | gpg --dearmor -o "$KEYRING_PATH"
+    curl -fsSL "$GPG_KEY_URL" | gpg --batch --yes --dearmor -o "$KEYRING_PATH"
 elif command -v wget &> /dev/null; then
-    wget -qO- "$GPG_KEY_URL" | gpg --dearmor -o "$KEYRING_PATH"
+    wget -qO- "$GPG_KEY_URL" | gpg --batch --yes --dearmor -o "$KEYRING_PATH"
 else
     echo "ERROR: curl or wget required"
     exit 1

@@ -54,6 +54,52 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "apt bootstrap preserves HTTPS hardening while allowing explicit local repo overrides" {
+    run grep -n 'if \[\[ "\$APT_SETUP_URL" == https://\* \]\]; then' "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n -- "--proto '=https' --tlsv1.2" "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'curl -fsSL "\$APT_SETUP_URL" -o "\$setup_script"' "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "apt scripts support overriding the repository URL for runtime contracts" {
+    run grep -n 'OPENPATH_APT_REPO_URL' "$PROJECT_DIR/linux/scripts/build/apt-setup.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'OPENPATH_APT_REPO_URL' "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "apt setup installs the keyring idempotently" {
+    run grep -n 'gpg --batch --yes --dearmor -o "\$KEYRING_PATH"' "$PROJECT_DIR/linux/scripts/build/apt-setup.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "linux installer contracts runner exposes installer-only mode" {
+    run grep -n -- '--installer-only' "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'OPENPATH_INSTALLER_CONTRACT_MODE' "$PROJECT_DIR/tests/e2e/docker-e2e-runner.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n '/openpath/linux/uninstall.sh --auto-yes' "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "package scripts expose linux installer contract commands" {
+    run grep -n '"test:installer:linux"' "$PROJECT_DIR/package.json"
+    [ "$status" -eq 0 ]
+
+    run grep -n '"test:installer:apt"' "$PROJECT_DIR/package.json"
+    [ "$status" -eq 0 ]
+
+    run grep -n '"test:installer:contracts"' "$PROJECT_DIR/package.json"
+    [ "$status" -eq 0 ]
+}
+
 @test "apt bootstrap fails clearly when the selected track does not advertise openpath-dnsmasq" {
     run grep -n 'apt-cache show openpath-dnsmasq' "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
     [ "$status" -eq 0 ]
@@ -179,6 +225,17 @@ load 'test_helper'
 
 @test "APT signing key maintainer runbook documents the repository secret" {
     run grep -n 'gh secret set APT_GPG_PRIVATE_KEY --repo balejosg/openpath' "$PROJECT_DIR/docs/apt-signing-key.md"
+    [ "$status" -eq 0 ]
+}
+
+@test "installer contracts workflow publishes a required summary check" {
+    run grep -n 'name: Installer Contracts Success' "$PROJECT_DIR/.github/workflows/installer-contracts.yml"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'npm run test:installer:contracts' "$PROJECT_DIR/.github/workflows/release-scripts.yml"
+    [ "$status" -eq 0 ]
+
+    run grep -n '/openpath/linux/uninstall.sh --auto-yes' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
     [ "$status" -eq 0 ]
 }
 

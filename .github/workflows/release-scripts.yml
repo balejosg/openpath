@@ -66,6 +66,10 @@ jobs:
           build-api: 'false'
           build-extension: 'true'
 
+      - name: Run installer contracts
+        run: |
+          npm run test:installer:contracts
+
       - name: Validate package contents
         run: |
           echo "🔍 Validating package structure before creating release..."

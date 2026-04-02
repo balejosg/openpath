@@ -6,8 +6,22 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 IMAGE_TAG="${OPENPATH_E2E_IMAGE_TAG:-openpath-e2e:latest}"
 CONTAINER_NAME="${OPENPATH_E2E_CONTAINER_NAME:-e2e-test-$$}"
+INSTALLER_ONLY=0
 
 _context_dir=""
+
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --installer-only)
+            INSTALLER_ONLY=1
+            shift
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            exit 2
+            ;;
+    esac
+done
 
 cleanup() {
     # Best-effort cleanup
@@ -469,7 +483,7 @@ verify_linux_uninstall() {
     docker exec "$CONTAINER_NAME" bash -lc '
         set -euo pipefail
 
-        /usr/local/lib/openpath/uninstall.sh --auto-yes
+        /openpath/linux/uninstall.sh --auto-yes
 
         if [ -e /etc/dnsmasq.d/openpath.conf ]; then
             echo "/etc/dnsmasq.d/openpath.conf still exists after uninstall"
@@ -508,6 +522,7 @@ main() {
         -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
         --dns 8.8.8.8 \
         -e CI=true \
+        -e OPENPATH_INSTALLER_CONTRACT_MODE="$INSTALLER_ONLY" \
         "$IMAGE_TAG"
 
     echo "Waiting for systemd to boot..."
@@ -533,6 +548,13 @@ main() {
         echo "E2E tests failed (result: $result)"
         debug_container
         exit 1
+    fi
+
+    if [ "$INSTALLER_ONLY" = "1" ]; then
+        verify_linux_uninstall
+        echo ""
+        echo "Linux installer contract passed"
+        return 0
     fi
 
     run_whitelist_update_test

@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-APT_REPO_URL="https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt"
+APT_REPO_URL="${OPENPATH_APT_REPO_URL:-https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt}"
 APT_SETUP_URL="$APT_REPO_URL/apt-setup.sh"
 
 TRACK="stable"
@@ -127,7 +127,11 @@ echo "  OK Dependencies ready"
 echo "[2/4] Configuring OpenPath APT repository ($TRACK)..."
 setup_script="$(mktemp)"
 trap 'rm -f "$setup_script"' EXIT
-curl -fsSL --proto '=https' --tlsv1.2 "$APT_SETUP_URL" -o "$setup_script"
+if [[ "$APT_SETUP_URL" == https://* ]]; then
+    curl -fsSL --proto '=https' --tlsv1.2 "$APT_SETUP_URL" -o "$setup_script"
+else
+    curl -fsSL "$APT_SETUP_URL" -o "$setup_script"
+fi
 bash "$setup_script" "--$TRACK"
 echo "  OK Repository configured"
 

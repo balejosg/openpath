@@ -1,0 +1,133 @@
+name: Installer Contracts
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  detect-relevant-changes:
+    name: Detect Installer Changes
+    runs-on: ubuntu-latest
+    outputs:
+      installer_contracts: ${{ steps.filter.outputs.installer_contracts }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "installer_contracts=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            head_sha="${{ github.event.pull_request.head.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+            head_sha="${{ github.sha }}"
+          fi
+
+          changed_files="$(git diff --name-only "$base_sha" "$head_sha" || true)"
+          if [ -z "$changed_files" ]; then
+            changed_files="$(git show --pretty='' --name-only "$head_sha")"
+          fi
+
+          echo "Changed files:"
+          if [ -n "$changed_files" ]; then
+            echo "$changed_files"
+          else
+            echo "(none)"
+          fi
+
+          installer_contracts=false
+
+          if echo "$changed_files" | grep -Eq '^(VERSION|package(-lock)?\.json|linux/|firefox-extension/|tests/e2e/|tests/install\.bats|\.github/workflows/(installer-contracts|release-scripts|e2e-tests)\.yml$)'; then
+            installer_contracts=true
+          fi
+
+          echo "installer_contracts=$installer_contracts" >> "$GITHUB_OUTPUT"
+
+  linux-installer-contracts:
+    name: Linux Installer Contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: detect-relevant-changes
+    if: needs.detect-relevant-changes.outputs.installer_contracts == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Build Firefox Extension
+        uses: ./.github/actions/build-workspaces
+        with:
+          build-shared: 'false'
+          build-api: 'false'
+          build-extension: 'true'
+
+      - name: Run installer runtime contracts
+        shell: bash
+        run: npm run test:installer:linux
+
+  linux-apt-contracts:
+    name: Linux APT Contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: detect-relevant-changes
+    if: needs.detect-relevant-changes.outputs.installer_contracts == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+
+      - name: Build Firefox Extension
+        uses: ./.github/actions/build-workspaces
+        with:
+          build-shared: 'false'
+          build-api: 'false'
+          build-extension: 'true'
+
+      - name: Run APT bootstrap contracts
+        shell: bash
+        run: npm run test:installer:apt
+
+  installer-contracts-success:
+    name: Installer Contracts Success
+    runs-on: ubuntu-latest
+    needs: [detect-relevant-changes, linux-installer-contracts, linux-apt-contracts]
+    if: always()
+
+    steps:
+      - name: Check all jobs
+        shell: bash
+        run: |
+          if [[ "${{ needs.linux-installer-contracts.result }}" == "failure" ]] || \
+             [[ "${{ needs.linux-installer-contracts.result }}" == "cancelled" ]] || \
+             [[ "${{ needs.linux-apt-contracts.result }}" == "failure" ]] || \
+             [[ "${{ needs.linux-apt-contracts.result }}" == "cancelled" ]]; then
+            echo "Installer contracts failed"
+            exit 1
+          fi
+
+          echo "Installer contracts passed"
