@@ -4,10 +4,10 @@
 #
 # Usage (one-liner install):
 #   # Stable (recommended):
-#   curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/apt-setup.sh | sudo bash
 #
 #   # Unstable (development builds):
-#   curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh | sudo bash -s -- --unstable
+#   curl -fsSL https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/apt-setup.sh | sudo bash -s -- --unstable
 #
 # After running:
 #   sudo apt install openpath-dnsmasq
@@ -16,7 +16,7 @@
 set -e
 
 # Configuration
-REPO_URL="https://balejosg.github.io/openpath/apt"
+REPO_URL="https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt"
 GPG_KEY_URL="$REPO_URL/pubkey.gpg"
 KEYRING_PATH="/usr/share/keyrings/openpath.gpg"
 SOURCES_PATH="/etc/apt/sources.list.d/openpath.list"
