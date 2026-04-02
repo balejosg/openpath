@@ -143,7 +143,7 @@ jobs:
       # Coverage upload
       - name: Upload coverage to Codecov
         if: inputs.run-coverage && inputs.test-type != 'bash'
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: |
             api/coverage/lcov.info
