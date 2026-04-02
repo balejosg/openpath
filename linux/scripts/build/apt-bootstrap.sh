@@ -3,7 +3,7 @@
 # apt-bootstrap.sh - One-liner bootstrap for classroom mode (novice-friendly)
 #
 # Usage:
-#   curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/apt-bootstrap.sh | sudo bash
 #
 # Optional flags:
 #   --unstable      Use unstable track
@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-APT_REPO_URL="https://balejosg.github.io/openpath/apt"
+APT_REPO_URL="https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt"
 APT_SETUP_URL="$APT_REPO_URL/apt-setup.sh"
 
 TRACK="stable"

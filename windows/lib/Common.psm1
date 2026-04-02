@@ -393,7 +393,6 @@ function Get-OpenPathProtectedDomains {
             'api.github.com',
             'release-assets.githubusercontent.com',
             'objects.githubusercontent.com',
-            'balejosg.github.io',
             'sourceforge.net',
             'downloads.sourceforge.net'
         )) {

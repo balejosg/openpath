@@ -194,7 +194,8 @@ export function loadConfig(
     isTest: nodeEnv === 'test',
 
     /** APT Repository Setup URL */
-    aptRepoUrl: env.APT_REPO_URL ?? 'https://balejosg.github.io/openpath/apt',
+    aptRepoUrl:
+      env.APT_REPO_URL ?? 'https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt',
 
     /** Enable rate limiting even in test environment (defaults to false) */
     enableRateLimitInTest: parseBooleanEnv(env.ENABLE_RATE_LIMIT_IN_TEST, false),

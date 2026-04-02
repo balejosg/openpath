@@ -65,6 +65,40 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "active apt clients use raw GitHub instead of legacy GitHub Pages" {
+    run grep -n 'https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt' "$PROJECT_DIR/linux/scripts/build/apt-setup.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt' "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt' "$PROJECT_DIR/api/src/config.ts"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'balejosg.github.io' "$PROJECT_DIR/linux/scripts/build/apt-setup.sh"
+    [ "$status" -ne 0 ]
+
+    run grep -n 'balejosg.github.io' "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
+    [ "$status" -ne 0 ]
+
+    run grep -n 'balejosg.github.io' "$PROJECT_DIR/api/src/config.ts"
+    [ "$status" -ne 0 ]
+}
+
+@test "protected control-plane domains no longer include legacy GitHub Pages" {
+    run grep -n 'raw.githubusercontent.com' "$PROJECT_DIR/linux/lib/common.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'raw.githubusercontent.com' "$PROJECT_DIR/windows/lib/Common.psm1"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'balejosg.github.io' "$PROJECT_DIR/linux/lib/common.sh"
+    [ "$status" -ne 0 ]
+
+    run grep -n 'balejosg.github.io' "$PROJECT_DIR/windows/lib/Common.psm1"
+    [ "$status" -ne 0 ]
+}
+
 @test "stable deb publish workflow re-signs existing APT suites before exporting the public key" {
     run grep -n 'uses: ./.github/workflows/reusable-deb-publish.yml' "$PROJECT_DIR/.github/workflows/build-deb.yml"
     [ "$status" -eq 0 ]

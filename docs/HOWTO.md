@@ -5,7 +5,7 @@
 ### Install on a Single PC
 
 ```bash
-curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/apt-bootstrap.sh | sudo bash
 ```
 
 The bootstrap installs OpenPath and launches `openpath setup` (classroom wizard).
@@ -42,7 +42,7 @@ sudo dpkg-reconfigure openpath-dnsmasq
 ### Option 1: One-liner via SSH
 
 ```bash
-ssh user@pc-01 "curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash"
+ssh user@pc-01 "curl -fsSL https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/apt-bootstrap.sh | sudo bash"
 ```
 
 ### Option 2: Ansible Playbook
@@ -54,12 +54,12 @@ ssh user@pc-01 "curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap
   tasks:
     - name: Add GPG key
       apt_key:
-        url: https://balejosg.github.io/openpath/apt/pubkey.gpg
+        url: https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/pubkey.gpg
         keyring: /usr/share/keyrings/openpath.gpg
 
     - name: Add APT repository
       apt_repository:
-        repo: 'deb [signed-by=/usr/share/keyrings/openpath.gpg] https://balejosg.github.io/openpath/apt stable main'
+        repo: 'deb [signed-by=/usr/share/keyrings/openpath.gpg] https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt stable main'
         filename: openpath
 
     - name: Install openpath-dnsmasq
@@ -195,8 +195,8 @@ sudo apt purge openpath-dnsmasq
 
 ## APT Repository Details
 
-- **URL**: https://balejosg.github.io/openpath/apt/
+- **URL**: https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/
 - **Distribution**: stable
 - **Component**: main
 - **Architecture**: amd64
-- **GPG Key**: https://balejosg.github.io/openpath/apt/pubkey.gpg
+- **GPG Key**: https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/pubkey.gpg

@@ -110,7 +110,7 @@ Navigate to `http://your-server-ip:3000/` in your browser. On first run, the set
 One-liner installation via APT + guided classroom linking. This is the simplest path for non-technical users.
 
 ```bash
-curl -fsSL https://balejosg.github.io/openpath/apt/apt-bootstrap.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/apt-bootstrap.sh | sudo bash
 ```
 
 The installer asks for:
@@ -126,7 +126,7 @@ After setup, the PC is registered in the central server and can be managed remot
 If you prefer manual steps:
 
 ```bash
-curl -fsSL https://balejosg.github.io/openpath/apt/apt-setup.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/apt-setup.sh | sudo bash
 sudo apt install openpath-dnsmasq
 sudo openpath setup
 ```
