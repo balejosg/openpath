@@ -586,6 +586,9 @@ except Exception:
         exit 1
     fi
 
+    # A new enrollment must not inherit cached policy state from a previous token/classroom.
+    reset_cached_whitelist_state
+
     # Step 4: Apply immediately
     echo -e "  Aplicando configuracion..."
     systemctl restart openpath-sse-listener.service 2>/dev/null || true
@@ -598,6 +601,15 @@ except Exception:
     else
         echo -e "${GREEN}✓ Registrado en aula${NC}"
     fi
+}
+
+reset_cached_whitelist_state() {
+    rm -f \
+        "$WHITELIST_FILE" \
+        "${WHITELIST_FILE}.etag" \
+        "$SYSTEM_DISABLED_FLAG" \
+        "$DNSMASQ_CONF_HASH" \
+        "$BROWSER_POLICIES_HASH"
 }
 
 # Asistente de configuración (modo Aula)

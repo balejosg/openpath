@@ -192,3 +192,47 @@ EOF
     [[ "$output" == *"system disabled remotely"* ]]
     [[ "$output" != *"ISSUES DETECTED"* ]]
 }
+
+@test "reset_cached_whitelist_state clears cached whitelist and remote-disabled markers" {
+    local helper_script="$TEST_TMP_DIR/run-reset-cached-whitelist-state.sh"
+    local state_dir="$TEST_TMP_DIR/state"
+
+    mkdir -p "$state_dir"
+
+    cat > "$helper_script" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+project_dir="$1"
+state_dir="$2"
+extracted_script="$state_dir/reset-cached-whitelist-state.sh"
+
+export WHITELIST_FILE="$state_dir/whitelist.txt"
+export SYSTEM_DISABLED_FLAG="$state_dir/system-disabled.flag"
+export DNSMASQ_CONF_HASH="$state_dir/dnsmasq.hash"
+export BROWSER_POLICIES_HASH="$state_dir/browser-policies.hash"
+
+: > "$WHITELIST_FILE"
+: > "${WHITELIST_FILE}.etag"
+: > "$SYSTEM_DISABLED_FLAG"
+: > "$DNSMASQ_CONF_HASH"
+: > "$BROWSER_POLICIES_HASH"
+
+awk '/^reset_cached_whitelist_state\(\) \{/,/^}/' \
+    "$project_dir/linux/scripts/runtime/openpath-cmd.sh" > "$extracted_script"
+source "$extracted_script"
+
+reset_cached_whitelist_state
+
+test ! -e "$WHITELIST_FILE"
+test ! -e "${WHITELIST_FILE}.etag"
+test ! -e "$SYSTEM_DISABLED_FLAG"
+test ! -e "$DNSMASQ_CONF_HASH"
+test ! -e "$BROWSER_POLICIES_HASH"
+EOF
+    chmod +x "$helper_script"
+
+    run "$helper_script" "$PROJECT_DIR" "$state_dir"
+
+    [ "$status" -eq 0 ]
+}

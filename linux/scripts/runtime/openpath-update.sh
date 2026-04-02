@@ -94,12 +94,19 @@ validate_whitelist_content() {
     local file="$1"
     local first_line=""
     local valid_lines
+    local has_openpath_sections=false
 
     first_line=$(grep -v '^[[:space:]]*$' "$file" | head -n 1 2>/dev/null || true)
     if ! echo "$first_line" | grep -iq "^#.*DESACTIVADO"; then
         valid_lines=$(grep -cP '^[a-zA-Z0-9*].*\.[a-zA-Z]{2,}' "$file" 2>/dev/null || echo 0)
+        if grep -Eq '^## (WHITELIST|BLOCKED-SUBDOMAINS|BLOCKED-PATHS)$' "$file" 2>/dev/null; then
+            has_openpath_sections=true
+        fi
 
         if [ "$valid_lines" -lt "${MIN_VALID_DOMAINS:-5}" ]; then
+            if [ "$valid_lines" -gt 0 ] && [ "$has_openpath_sections" = true ]; then
+                return 0
+            fi
             log_warn "Downloaded whitelist does not look valid ($valid_lines domain-like lines, need ${MIN_VALID_DOMAINS:-5})"
             return 1
         fi
