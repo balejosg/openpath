@@ -48,7 +48,7 @@ jobs:
           ./linux/scripts/build/build-deb.sh ${{ steps.version.outputs.version }} 1
 
       - name: Upload package artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: prerelease-deb-package
           path: build/*.deb
