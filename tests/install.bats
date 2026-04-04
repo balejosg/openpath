@@ -85,7 +85,7 @@ load 'test_helper'
     run grep -n 'OPENPATH_INSTALLER_CONTRACT_MODE' "$PROJECT_DIR/tests/e2e/docker-e2e-runner.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n '/openpath/linux/uninstall.sh --auto-yes' "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
+    run grep -n '/usr/local/lib/openpath/uninstall.sh --auto-yes' "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
     [ "$status" -eq 0 ]
 }
 
