@@ -483,7 +483,7 @@ verify_linux_uninstall() {
     docker exec "$CONTAINER_NAME" bash -lc '
         set -euo pipefail
 
-        /openpath/linux/uninstall.sh --auto-yes
+        /usr/local/lib/openpath/uninstall.sh --auto-yes
 
         if [ -e /etc/dnsmasq.d/openpath.conf ]; then
             echo "/etc/dnsmasq.d/openpath.conf still exists after uninstall"
