@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +20,35 @@ function readJson(relativePath) {
 
 function readText(relativePath) {
   return readFileSync(resolve(projectRoot, relativePath), 'utf8');
+}
+
+function walkTextFiles(relativePath) {
+  const root = resolve(projectRoot, relativePath);
+  const entries = readdirSync(root, { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    const nextRelativePath = `${relativePath}/${entry.name}`;
+    const nextAbsolutePath = resolve(projectRoot, nextRelativePath);
+
+    if (entry.isDirectory()) {
+      files.push(...walkTextFiles(nextRelativePath));
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    const stat = statSync(nextAbsolutePath);
+    if (stat.size > 1024 * 1024) {
+      continue;
+    }
+
+    files.push(nextRelativePath);
+  }
+
+  return files;
 }
 
 describe('repository verification contract', () => {
@@ -128,6 +157,50 @@ describe('repository verification contract', () => {
       dockerfile.includes('--mount=type=cache,target=/root/.npm'),
       'api Dockerfile should cache npm downloads across repeated image builds'
     );
+  });
+
+  test('linux and windows clients do not reference the legacy classroom whitelist source', () => {
+    const forbiddenFragments = ['LasEncinasIT', 'Whitelist-por-aula', 'Informatica%203.txt'];
+    const clientRoots = ['linux', 'windows'];
+
+    for (const root of clientRoots) {
+      const files = walkTextFiles(root);
+
+      for (const relativePath of files) {
+        if (relativePath.includes('/node_modules/')) {
+          continue;
+        }
+
+        if (
+          relativePath.endsWith('.deb') ||
+          relativePath.endsWith('.dll') ||
+          relativePath.endsWith('.exe')
+        ) {
+          continue;
+        }
+
+        if (relativePath.includes('/dist/')) {
+          continue;
+        }
+
+        if (relativePath.includes('/bin/')) {
+          continue;
+        }
+
+        if (relativePath.includes('/obj/')) {
+          continue;
+        }
+
+        const content = readText(relativePath);
+
+        for (const forbidden of forbiddenFragments) {
+          assert.ok(
+            !content.includes(forbidden),
+            `${relativePath} should not reference legacy classroom whitelist sources`
+          );
+        }
+      }
+    }
   });
 
   test('selenium CI scripts use cross-platform environment setup', () => {

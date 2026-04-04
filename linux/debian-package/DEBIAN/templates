@@ -1,6 +1,6 @@
 Template: openpath-dnsmasq/whitelist-url
 Type: string
-Default: https://raw.githubusercontent.com/LasEncinasIT/Whitelist-por-aula/main/Informatica%203.txt
+Default:
 Description: URL of the whitelist file:
  Enter the URL where the whitelist will be downloaded from.
  This URL should point to a plain text file with allowed domains.

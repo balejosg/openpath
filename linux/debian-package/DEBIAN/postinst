@@ -25,7 +25,7 @@ case "$1" in
         if [ -z "${RET:-}" ]; then
             db_get whitelist-dnsmasq/whitelist-url || true
         fi
-        WHITELIST_URL="${RET:-https://raw.githubusercontent.com/LasEncinasIT/Whitelist-por-aula/main/Informatica%203.txt}"
+        WHITELIST_URL="${RET:-}"
 
         db_get openpath-dnsmasq/health-api-url || true
         if [ -z "${RET:-}" ]; then

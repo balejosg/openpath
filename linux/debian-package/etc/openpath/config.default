@@ -3,7 +3,8 @@
 # or post-install via /var/lib/url-whitelist/*.conf files
 
 # Default whitelist URL
-WHITELIST_URL=https://raw.githubusercontent.com/LasEncinasIT/Whitelist-por-aula/main/Informatica%203.txt
+# Empty by default: configure explicitly during enrollment or installation.
+WHITELIST_URL=
 
 # Health API (optional, leave empty if not used)
 HEALTH_API_URL=

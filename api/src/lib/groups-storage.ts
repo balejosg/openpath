@@ -864,7 +864,10 @@ export async function exportGroup(groupId: string): Promise<string | null> {
   let content = '';
 
   if (!group.enabled) {
-    content = '#DESACTIVADO\n\n';
+    const finalContent = '#DESACTIVADO\n';
+    exportCache.delete(groupId);
+    exportCache.set(groupId, { version, content: finalContent });
+    return finalContent;
   }
 
   const whitelist = rules.filter((r) => r.type === 'whitelist');
