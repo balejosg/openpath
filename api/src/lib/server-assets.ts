@@ -34,6 +34,9 @@ const WINDOWS_AGENT_BOOTSTRAP_ROOT_FILES = [
   'Rotate-Token.ps1',
 ] as const;
 const FIREFOX_EXTENSION_DIRECTORIES = ['dist', 'popup', 'icons', 'blocked', 'native'] as const;
+const STABLE_APT_PACKAGES_RELATIVE_PATH = 'dists/stable/main/binary-amd64/Packages';
+const LINUX_AGENT_APT_METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
+const linuxAgentAptMetadataCache = new Map<string, { fetchedAt: number; content: string }>();
 
 export interface ChromiumManagedMetadata {
   extensionId: string;
@@ -111,6 +114,103 @@ export function readLinuxAgentVersion(): string {
   }
 
   return readServerVersion();
+}
+
+function buildStableAptPackagesUrl(aptRepoUrl: string): string {
+  return `${aptRepoUrl.replace(/\/+$/, '')}/${STABLE_APT_PACKAGES_RELATIVE_PATH}`;
+}
+
+export function stableAptMetadataAdvertisesLinuxAgentVersion(
+  content: string,
+  version: string
+): boolean {
+  const targetVersion = version.trim();
+  if (!targetVersion) {
+    return false;
+  }
+
+  for (const block of content.split(/\r?\n\r?\n+/)) {
+    let packageName = '';
+    let packageVersion = '';
+
+    for (const rawLine of block.split(/\r?\n/)) {
+      const separatorIndex = rawLine.indexOf(':');
+      if (separatorIndex === -1) {
+        continue;
+      }
+
+      const key = rawLine.slice(0, separatorIndex).trim();
+      const value = rawLine.slice(separatorIndex + 1).trim();
+
+      if (key === 'Package') {
+        packageName = value;
+      } else if (key === 'Version') {
+        packageVersion = value.replace(/-[^-]+$/, '');
+      }
+    }
+
+    if (packageName === 'openpath-dnsmasq' && packageVersion === targetVersion) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function downloadStableAptPackagesManifest(aptRepoUrl: string): Promise<string> {
+  const packagesUrl = buildStableAptPackagesUrl(aptRepoUrl);
+  const cachedEntry = linuxAgentAptMetadataCache.get(packagesUrl);
+  if (cachedEntry && Date.now() - cachedEntry.fetchedAt < LINUX_AGENT_APT_METADATA_CACHE_TTL_MS) {
+    return cachedEntry.content;
+  }
+
+  const response = await fetch(packagesUrl);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch stable APT metadata (${String(response.status)} ${response.statusText})`
+    );
+  }
+
+  const content = await response.text();
+  linuxAgentAptMetadataCache.set(packagesUrl, {
+    fetchedAt: Date.now(),
+    content,
+  });
+  return content;
+}
+
+export function clearLinuxAgentAptMetadataCache(): void {
+  linuxAgentAptMetadataCache.clear();
+}
+
+export async function resolveEnrollmentLinuxAgentVersionPin(
+  aptRepoUrl: string,
+  configuredVersion: string
+): Promise<string> {
+  const version = configuredVersion.trim();
+  if (!version) {
+    return '';
+  }
+
+  try {
+    const manifest = await downloadStableAptPackagesManifest(aptRepoUrl);
+    if (stableAptMetadataAdvertisesLinuxAgentVersion(manifest, version)) {
+      return version;
+    }
+
+    logger.warn('Skipping stale OPENPATH_LINUX_AGENT_VERSION pin for enrollment script', {
+      version,
+      packagesUrl: buildStableAptPackagesUrl(aptRepoUrl),
+    });
+    return '';
+  } catch (error) {
+    logger.warn('Failed to validate OPENPATH_LINUX_AGENT_VERSION against stable APT metadata', {
+      version,
+      packagesUrl: buildStableAptPackagesUrl(aptRepoUrl),
+      error: getErrorMessage(error),
+    });
+    return version;
+  }
 }
 
 function normalizeManifestRelativePath(relativePath: string): string | null {

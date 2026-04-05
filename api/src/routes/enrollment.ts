@@ -6,8 +6,13 @@ import { logger } from '../lib/logger.js';
 import * as classroomStorage from '../lib/classroom-storage.js';
 import { config } from '../config.js';
 import { generateEnrollmentToken, verifyEnrollmentToken } from '../lib/enrollment-token.js';
+import { buildLinuxEnrollmentScript } from '../lib/enrollment-script.js';
 import { getFirstParam, verifyAccessTokenFromRequest } from '../lib/server-request-auth.js';
-import { getPublicBaseUrl, quotePowerShellSingle } from '../lib/server-assets.js';
+import {
+  getPublicBaseUrl,
+  quotePowerShellSingle,
+  resolveEnrollmentLinuxAgentVersionPin,
+} from '../lib/server-assets.js';
 import ClassroomService from '../services/classroom.service.js';
 
 export function registerEnrollmentRoutes(app: Express): void {
@@ -96,52 +101,18 @@ export function registerEnrollmentRoutes(app: Express): void {
           res.status(500).send('APT repo URL not configured');
           return;
         }
-
-        const bashSingleQuote = (value: string): string => {
-          const escaped = value.replace(/'/g, "'\\''");
-          return `'${escaped}'`;
-        };
-
-        const script = `#!/bin/bash
-set -euo pipefail
-
-API_URL=${bashSingleQuote(publicUrl)}
-CLASSROOM_ID=${bashSingleQuote(classroomId)}
-CLASSROOM_NAME=${bashSingleQuote(classroom.name)}
-ENROLLMENT_TOKEN=${bashSingleQuote(enrollmentToken)}
-APT_BOOTSTRAP_URL=${bashSingleQuote(`${aptRepoUrl}/apt-bootstrap.sh`)}
-LINUX_AGENT_VERSION=${bashSingleQuote(configuredLinuxAgentVersion)}
-
- echo ''
-echo '==============================================='
-echo ' OpenPath Enrollment: '"$CLASSROOM_NAME"
-echo '==============================================='
-echo ''
-
-if [ "$(id -u)" -ne 0 ]; then
-    echo "ERROR: Run with sudo"
-    exit 1
-fi
-
-echo "[1/2] Instalando y registrando en aula..."
-tmpfile="$(mktemp)"
-trap 'rm -f "$tmpfile"' EXIT
-curl -fsSL --proto '=https' --tlsv1.2 "$APT_BOOTSTRAP_URL" -o "$tmpfile"
-bootstrap_cmd=(bash "$tmpfile" --api-url "$API_URL" --classroom "$CLASSROOM_NAME" --classroom-id "$CLASSROOM_ID" --enrollment-token "$ENROLLMENT_TOKEN")
-if [ -n "$LINUX_AGENT_VERSION" ]; then
-    bootstrap_cmd=(bash "$tmpfile" --package-version "$LINUX_AGENT_VERSION" --api-url "$API_URL" --classroom "$CLASSROOM_NAME" --classroom-id "$CLASSROOM_ID" --enrollment-token "$ENROLLMENT_TOKEN")
-fi
-"\${bootstrap_cmd[@]}"
-
-echo "[2/2] Verificando..."
-openpath health || true
-
-echo ""
-echo "========================================="
-echo "  OK - Equipo listo en aula: $CLASSROOM_NAME"
-echo "========================================="
-echo ""
-`;
+        const effectiveLinuxAgentVersion = await resolveEnrollmentLinuxAgentVersionPin(
+          aptRepoUrl,
+          configuredLinuxAgentVersion
+        );
+        const script = buildLinuxEnrollmentScript({
+          publicUrl,
+          classroomId,
+          classroomName: classroom.name,
+          enrollmentToken,
+          aptRepoUrl,
+          linuxAgentVersion: effectiveLinuxAgentVersion,
+        });
 
         res.setHeader('Content-Type', 'text/x-shellscript');
         res.setHeader('Cache-Control', 'no-store, max-age=0');

@@ -23,6 +23,7 @@ import {
   parseTRPC,
 } from './test-utils.js';
 import { closeConnection, db } from '../src/db/index.js';
+import { clearLinuxAgentAptMetadataCache } from '../src/lib/server-assets.js';
 import { sql } from 'drizzle-orm';
 
 let PORT: number;
@@ -56,6 +57,32 @@ GLOBAL_TIMEOUT.unref();
 
 const trpcMutate = (procedure: string, input: unknown): Promise<Response> =>
   _trpcMutate(API_URL, procedure, input);
+
+function mockStableAptPackagesManifest(content: string): () => void {
+  const originalFetch = globalThis.fetch;
+  clearLinuxAgentAptMetadataCache();
+
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+    init?: RequestInit
+  ): Promise<Response> => {
+    const url = input instanceof Request ? input.url : String(input);
+
+    if (url.endsWith('/dists/stable/main/binary-amd64/Packages')) {
+      return new Response(content, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    }
+
+    return originalFetch(input, init);
+  }) as typeof fetch;
+
+  return () => {
+    globalThis.fetch = originalFetch;
+    clearLinuxAgentAptMetadataCache();
+  };
+}
 
 async function getEnrollmentToken(classroomId: string): Promise<string> {
   const loginResponse = await trpcMutate('auth.login', {
@@ -659,8 +686,12 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
       assert.strictEqual(packageContent, 'fake-linux-bridge-package');
     });
 
-    await test('should pin the configured linux package version in enrollment bootstrap scripts', async () => {
+    await test('should pin the configured linux package version in enrollment bootstrap scripts when APT still advertises it', async () => {
       const originalPinnedVersion = process.env.OPENPATH_LINUX_AGENT_VERSION;
+      const restoreFetch = mockStableAptPackagesManifest(`
+Package: openpath-dnsmasq
+Version: 9.9.9-1
+`);
       process.env.OPENPATH_LINUX_AGENT_VERSION = '9.9.9';
 
       try {
@@ -677,6 +708,39 @@ void describe('Token Delivery REST API Tests', { timeout: 30000 }, async () => {
         assert.match(body, /LINUX_AGENT_VERSION='9\.9\.9'/);
         assert.match(body, /--package-version "\$LINUX_AGENT_VERSION"/);
       } finally {
+        restoreFetch();
+        if (originalPinnedVersion === undefined) {
+          delete process.env.OPENPATH_LINUX_AGENT_VERSION;
+        } else {
+          process.env.OPENPATH_LINUX_AGENT_VERSION = originalPinnedVersion;
+        }
+      }
+    });
+
+    await test('should omit stale linux package pins from enrollment bootstrap scripts when APT no longer advertises them', async () => {
+      const originalPinnedVersion = process.env.OPENPATH_LINUX_AGENT_VERSION;
+      const restoreFetch = mockStableAptPackagesManifest(`
+Package: openpath-dnsmasq
+Version: 4.1.10-1
+`);
+      process.env.OPENPATH_LINUX_AGENT_VERSION = '4.1.9';
+
+      try {
+        const enrollmentToken = await getEnrollmentToken(classroomId);
+        const response = await fetch(`${API_URL}/api/enroll/${classroomId}`, {
+          headers: {
+            Authorization: `Bearer ${enrollmentToken}`,
+          },
+        });
+
+        assert.strictEqual(response.status, 200);
+        const body = await response.text();
+
+        assert.doesNotMatch(body, /LINUX_AGENT_VERSION='4\.1\.9'/);
+        assert.doesNotMatch(body, /--package-version "\$LINUX_AGENT_VERSION"/);
+        assert.match(body, /bootstrap_cmd=\(bash "\$tmpfile" --api-url "\$API_URL"/);
+      } finally {
+        restoreFetch();
         if (originalPinnedVersion === undefined) {
           delete process.env.OPENPATH_LINUX_AGENT_VERSION;
         } else {
