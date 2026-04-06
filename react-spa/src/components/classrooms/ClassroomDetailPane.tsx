@@ -88,7 +88,10 @@ export default function ClassroomDetailPane({
 }: ClassroomDetailPaneProps) {
   if (!selectedClassroom) {
     return (
-      <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+      <div
+        data-testid="classrooms-empty-state"
+        className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm"
+      >
         <h2 className="text-2xl font-bold text-slate-900 mb-1">Sin aulas</h2>
         <p className="text-slate-500 text-sm">
           {admin

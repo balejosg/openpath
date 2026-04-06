@@ -146,6 +146,7 @@ describe('ClassroomDetailPane', () => {
     const props = buildProps({ selectedClassroom: null });
     render(<ClassroomDetailPane {...props} />);
 
+    expect(screen.getByTestId('classrooms-empty-state')).toBeInTheDocument();
     expect(screen.getByText('Sin aulas')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /crear aula/i }));
 
