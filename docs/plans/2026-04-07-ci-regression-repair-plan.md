@@ -90,3 +90,4 @@
 - Standardize artifact upload semantics for optional diagnostics (`continue-on-error`, `if-no-files-found: ignore`) so healthy jobs do not fail on missing or transient artifact paths.
 - Make Windows test/config consumers less noisy when `C:\OpenPath\data\config.json` is absent in CI so discovery-time module imports do not emit repeated expected-error logs.
 - Document or automate an SSH-based push path for workflow-touching changes so local pushes do not fail on HTTPS tokens without `workflow` scope.
+- Keep Windows GitHub Actions lanes pinned to an explicit hosted image and revisit them intentionally; the April 7, 2026 incident left completed Pester jobs stuck `in_progress` when the lane used `windows-latest`.

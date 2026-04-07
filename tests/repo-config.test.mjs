@@ -166,6 +166,14 @@ describe('repository verification contract', () => {
     const ciWorkflow = readText('.github/workflows/ci.yml');
 
     assert.ok(
+      ciWorkflow.includes('runs-on: windows-2022'),
+      'ci.yml should pin the required Windows Pester lane to windows-2022'
+    );
+    assert.ok(
+      !ciWorkflow.includes('runs-on: windows-latest'),
+      'ci.yml should avoid windows-latest for the required Windows Pester lane'
+    );
+    assert.ok(
       !ciWorkflow.includes('GITHUB_STEP_SUMMARY'),
       'ci.yml should avoid inline Windows step summary processing in the required Pester job'
     );

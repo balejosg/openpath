@@ -134,7 +134,10 @@ jobs:
   # ============================================
   test-windows:
     name: Windows Agent Tests (Pester)
-    runs-on: windows-latest
+    # Hosted Windows runs have been leaving successful Pester jobs in a
+    # stuck "in_progress" state at the check-run level. Pinning the image
+    # avoids silent platform drift while we keep this lane stable.
+    runs-on: windows-2022
     needs: detect-relevant-changes
     if: needs.detect-relevant-changes.outputs.os_bound == 'true'
 
