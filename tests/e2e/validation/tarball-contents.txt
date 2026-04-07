@@ -4,4 +4,5 @@ required linux/install.sh
 required linux/uninstall.sh
 required linux/lib/
 required linux/scripts/
+required runtime/
 required firefox-extension/

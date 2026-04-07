@@ -317,9 +317,16 @@ Write-Host "[2/7] Copiando modulos y scripts..." -ForegroundColor Yellow
 Get-ChildItem "$scriptDir\lib\*.psm1" -ErrorAction SilentlyContinue | 
     Copy-Item -Destination "$OpenPathRoot\lib\" -Force
 
-$browserPolicySpecSource = Join-Path $scriptDir 'runtime\browser-policy-spec.json'
-if (Test-Path $browserPolicySpecSource) {
-    Copy-Item $browserPolicySpecSource -Destination "$OpenPathRoot\lib\browser-policy-spec.json" -Force
+$browserPolicySpecCandidates = @(
+    (Join-Path $scriptDir 'runtime\browser-policy-spec.json'),
+    [System.IO.Path]::GetFullPath((Join-Path $scriptDir '..\runtime\browser-policy-spec.json'))
+)
+
+foreach ($browserPolicySpecSource in $browserPolicySpecCandidates) {
+    if (Test-Path $browserPolicySpecSource) {
+        Copy-Item $browserPolicySpecSource -Destination "$OpenPathRoot\lib\browser-policy-spec.json" -Force
+        break
+    }
 }
 
 # Copy scripts

@@ -90,6 +90,7 @@ jobs:
             linux/uninstall.sh \
             linux/lib/ \
             linux/scripts/ \
+            runtime/ \
             firefox-extension/
 
           # Verify
@@ -114,7 +115,7 @@ jobs:
 
           # Create ZIP with all Windows files
           echo "  → Creating ZIP archive..."
-          zip -r -q "$PACKAGE_NAME" windows/ VERSION
+          zip -r -q "$PACKAGE_NAME" windows/ runtime/ VERSION
 
           # Verify
           if [ -f "$PACKAGE_NAME" ]; then
@@ -180,6 +181,7 @@ jobs:
             - Uninstaller (`uninstall.sh`)
             - Library modules (`lib/`)
             - Runtime scripts (`scripts/`)
+            - Shared runtime assets (`runtime/`)
             - Firefox extension (`firefox-extension/`)
 
             **Windows Package:**
@@ -187,6 +189,7 @@ jobs:
             - PowerShell uninstaller (`Uninstall-OpenPath.ps1`)
             - Library modules (`lib/*.psm1`)
             - Runtime scripts (`scripts/*.ps1`)
+            - Shared runtime assets (`runtime/`)
             - Configuration files
 
             ---

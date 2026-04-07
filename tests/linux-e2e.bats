@@ -150,6 +150,9 @@ EOF
 @test "linux packaged updates keep the installed uninstaller available" {
     run grep -nF 'cp "$LINUX_DIR/uninstall.sh" "$BUILD_DIR/usr/local/lib/openpath/uninstall.sh"' "$PROJECT_DIR/linux/scripts/build/build-deb.sh"
     [ "$status" -eq 0 ]
+
+    run grep -nF 'cp "$INSTALLER_SOURCE_DIR/uninstall.sh" "$INSTALL_DIR/uninstall.sh"' "$PROJECT_DIR/linux/install.sh"
+    [ "$status" -eq 0 ]
 }
 
 @test "linux deb build stamps the target agent version into the packaged VERSION file" {
@@ -191,13 +194,7 @@ EOF
 }
 
 @test "linux install script stages Firefox release artifacts when available" {
-    run grep -nF '$INSTALLER_SOURCE_DIR/lib/firefox-extension-assets.sh' "$PROJECT_DIR/linux/install.sh"
-    [ "$status" -eq 0 ]
-
-    run grep -nF '$INSTALLER_SOURCE_DIR/lib/firefox-policy.sh' "$PROJECT_DIR/linux/install.sh"
-    [ "$status" -eq 0 ]
-
-    run grep -nF '$INSTALLER_SOURCE_DIR/lib/firefox-managed-extension.sh' "$PROJECT_DIR/linux/install.sh"
+    run grep -nF 'cp "$INSTALLER_SOURCE_DIR/lib/"*.sh "$INSTALL_DIR/lib/"' "$PROJECT_DIR/linux/install.sh"
     [ "$status" -eq 0 ]
 
     run grep -nF 'stage_firefox_release_artifacts "$INSTALLER_SOURCE_DIR" "$staged_release_dir"' "$PROJECT_DIR/linux/install.sh"
@@ -385,6 +382,14 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "linux install script stages chromium browser helper modules required by common.sh" {
+    run grep -nF 'cp "$INSTALLER_SOURCE_DIR/lib/"*.sh "$INSTALL_DIR/lib/"' "$PROJECT_DIR/linux/install.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '"$INSTALL_DIR/lib/chromium-managed-extension.sh"' "$PROJECT_DIR/linux/lib/common.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "browser runtimes stage the shared browser policy spec" {
     run grep -nF '$INSTALLER_SOURCE_DIR/../runtime/browser-policy-spec.json' "$PROJECT_DIR/linux/install.sh"
     [ "$status" -eq 0 ]
@@ -407,6 +412,40 @@ EOF
     [ "$status" -eq 0 ]
 
     run grep -nF 'COPY runtime/ ./runtime/' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'mkdir -p "$tmp/linux" "$tmp/runtime" "$tmp/tests/e2e" "$tmp/firefox-extension" "$tmp/windows"' "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'cp -a "$PROJECT_ROOT/runtime/." "$tmp/runtime/"' "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'mkdir -p "$tmp/linux" "$tmp/runtime" "$tmp/windows" "$tmp/tests/e2e" "$tmp/tests/selenium" "$tmp/firefox-extension"' "$PROJECT_DIR/tests/e2e/ci/run-linux-student-flow.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'cp -a "$PROJECT_ROOT/runtime/." "$tmp/runtime/"' "$PROJECT_DIR/tests/e2e/ci/run-linux-student-flow.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'mkdir -p "$tmp/linux" "$tmp/runtime"' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'cp -a "$PROJECT_ROOT/runtime/." "$tmp/runtime/"' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "release scripts package the shared runtime assets" {
+    run grep -nF 'runtime/' "$PROJECT_DIR/.github/workflows/release-scripts.yml"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Shared runtime assets (`runtime/`)' "$PROJECT_DIR/.github/workflows/release-scripts.yml"
+    [ "$status" -eq 0 ]
+}
+
+@test "windows installer and release scripts stage browser policy runtime assets compatibly" {
+    run grep -nF "..\\runtime\\browser-policy-spec.json" "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'zip -r -q "$PACKAGE_NAME" windows/ runtime/ VERSION' "$PROJECT_DIR/.github/workflows/release-scripts.yml"
     [ "$status" -eq 0 ]
 }
 

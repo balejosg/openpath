@@ -11,13 +11,19 @@ Describe "Browser Module - Native Host" {
     Context "Native host registration" {
         It "Re-stages native host artifacts before writing the Firefox manifest" {
             $browserModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
-            $content = Get-Content $browserModulePath -Raw
+            $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"
+            $browserContent = Get-Content $browserModulePath -Raw
+            $nativeHostContent = Get-Content $nativeHostModulePath -Raw
 
-            Assert-ContentContainsAll -Content $content -Needles @(
+            Assert-ContentContainsAll -Content $nativeHostContent -Needles @(
                 'function Sync-OpenPathFirefoxNativeHostArtifacts',
                 "OpenPath-NativeHost.ps1",
-                "OpenPath-NativeHost.cmd",
-                'Sync-OpenPathFirefoxNativeHostArtifacts | Out-Null'
+                "OpenPath-NativeHost.cmd"
+            )
+
+            Assert-ContentContainsAll -Content $browserContent -Needles @(
+                'function Sync-OpenPathFirefoxNativeHostArtifacts',
+                'Browser.FirefoxNativeHost\Sync-OpenPathFirefoxNativeHostArtifacts -SourceRoot $SourceRoot'
             )
         }
 

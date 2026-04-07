@@ -303,21 +303,14 @@ step_install_libraries() {
     mkdir -p "$INSTALL_DIR/libexec"
     mkdir -p "$CONFIG_DIR"
 
-    cp "$INSTALLER_SOURCE_DIR/lib/common.sh" "$INSTALL_DIR/lib/"
-    cp "$INSTALLER_SOURCE_DIR/lib/dns.sh" "$INSTALL_DIR/lib/"
-    cp "$INSTALLER_SOURCE_DIR/lib/firewall.sh" "$INSTALL_DIR/lib/"
-    cp "$INSTALLER_SOURCE_DIR/lib/captive-portal.sh" "$INSTALL_DIR/lib/"
-    cp "$INSTALLER_SOURCE_DIR/lib/browser.sh" "$INSTALL_DIR/lib/"
-    cp "$INSTALLER_SOURCE_DIR/lib/firefox-policy.sh" "$INSTALL_DIR/lib/"
-    cp "$INSTALLER_SOURCE_DIR/lib/firefox-managed-extension.sh" "$INSTALL_DIR/lib/"
-    cp "$INSTALLER_SOURCE_DIR/lib/firefox-extension-assets.sh" "$INSTALL_DIR/lib/"
+    cp "$INSTALLER_SOURCE_DIR/lib/"*.sh "$INSTALL_DIR/lib/"
     cp "$INSTALLER_SOURCE_DIR/libexec/browser-json.py" "$INSTALL_DIR/libexec/"
     cp "$INSTALLER_SOURCE_DIR/../runtime/browser-policy-spec.json" "$INSTALL_DIR/libexec/"
-    cp "$INSTALLER_SOURCE_DIR/lib/services.sh" "$INSTALL_DIR/lib/"
-    cp "$INSTALLER_SOURCE_DIR/lib/rollback.sh" "$INSTALL_DIR/lib/"
+    cp "$INSTALLER_SOURCE_DIR/uninstall.sh" "$INSTALL_DIR/uninstall.sh"
 
     chmod +x "$INSTALL_DIR/lib/"*.sh
     chmod +x "$INSTALL_DIR/libexec/browser-json.py"
+    chmod +x "$INSTALL_DIR/uninstall.sh"
     echo "✓ Librerías instaladas"
 
     # Load all libraries at once

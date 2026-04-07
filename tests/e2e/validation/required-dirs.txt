@@ -5,6 +5,7 @@ required linux/scripts
 required linux/scripts/runtime
 required linux/scripts/build
 required linux/scripts/dev
+required runtime
 
 required firefox-extension
 required firefox-extension/icons

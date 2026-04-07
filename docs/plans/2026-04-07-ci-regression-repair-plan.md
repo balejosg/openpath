@@ -77,3 +77,6 @@
 - Replace filename-grep installer contracts with executable helper-level contract tests so refactors do not fail on call-site moves alone.
 - Introduce a small Windows browser submodule loader/helper that centralizes `Import-Module` semantics and makes split-module runtime failures fail fast with one code path.
 - Narrow `TestHelpers` so split suites import only the modules they actually exercise; today the helper still bootstraps more modules than some tests need.
+- Extract a shared Bash helper for assembling Linux CI Docker contexts; `run-linux-e2e.sh`, `run-linux-student-flow.sh`, and `run-linux-apt-contracts.sh` still duplicate the same minimal bundle logic.
+- Generate release tarball contents from the installer validation manifest so release packaging and pre-install validation cannot drift apart.
+- Add a dedicated Windows test bootstrap module for discovery-time imports so `Windows.Tests.ps1` and split suites do not drift on which commands exist before Pester starts discovery.

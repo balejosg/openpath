@@ -3,10 +3,16 @@
 
 Import-Module (Join-Path $PSScriptRoot "TestHelpers.psm1") -Force
 
+$modulePath = Join-Path $PSScriptRoot ".." "lib"
+Import-Module "$modulePath\Common.psm1" -Force -ErrorAction Stop
+Import-Module "$modulePath\DNS.psm1" -Force -ErrorAction Stop
+Import-Module "$modulePath\Firewall.psm1" -Force -ErrorAction Stop
+
 BeforeAll {
     # Re-import modules in BeforeAll to ensure fresh state for tests
-    $modulePath = Join-Path $PSScriptRoot ".." "lib"
     Import-Module "$modulePath\Common.psm1" -Force -ErrorAction Stop
+    Import-Module "$modulePath\DNS.psm1" -Force -ErrorAction Stop
+    Import-Module "$modulePath\Firewall.psm1" -Force -ErrorAction Stop
 }
 
 Describe "Common Module" {
@@ -581,11 +587,11 @@ downloads.example/blocked
                     }
                 } -ModuleName Common
 
-                Mock Update-AcrylicHost { $true } -ModuleName Common
-                Mock Restart-AcrylicService { $true } -ModuleName Common
-                Mock Get-AcrylicPath { 'C:\OpenPath\Acrylic DNS Proxy' } -ModuleName Common
-                Mock Set-OpenPathFirewall { $true } -ModuleName Common
-                Mock Set-LocalDNS { } -ModuleName Common
+                Mock Update-AcrylicHost { $true } -ModuleName DNS
+                Mock Restart-AcrylicService { $true } -ModuleName DNS
+                Mock Get-AcrylicPath { 'C:\OpenPath\Acrylic DNS Proxy' } -ModuleName DNS
+                Mock Set-OpenPathFirewall { $true } -ModuleName Firewall
+                Mock Set-LocalDNS { } -ModuleName DNS
 
                 $config = [PSCustomObject]@{
                     enableFirewall = $true

@@ -214,9 +214,10 @@ create_context() {
     local tmp
     tmp="$(mktemp -d -t openpath-student-e2e-context.XXXXXXXX)"
 
-    mkdir -p "$tmp/linux" "$tmp/windows" "$tmp/tests/e2e" "$tmp/tests/selenium" "$tmp/firefox-extension"
+    mkdir -p "$tmp/linux" "$tmp/runtime" "$tmp/windows" "$tmp/tests/e2e" "$tmp/tests/selenium" "$tmp/firefox-extension"
 
     cp -a "$PROJECT_ROOT/linux/." "$tmp/linux/"
+    cp -a "$PROJECT_ROOT/runtime/." "$tmp/runtime/"
     cp -a "$PROJECT_ROOT/windows/." "$tmp/windows/"
     cp -a "$PROJECT_ROOT/tests/e2e/." "$tmp/tests/e2e/"
     cp -a "$PROJECT_ROOT/tests/selenium/." "$tmp/tests/selenium/"
@@ -236,6 +237,7 @@ create_context() {
     cp -a "$PROJECT_ROOT/firefox-extension/icons" "$tmp/firefox-extension/"
 
     require_file "$PROJECT_ROOT/VERSION"
+    require_file "$PROJECT_ROOT/runtime/browser-policy-spec.json"
     require_file "$PROJECT_ROOT/tests/e2e/Dockerfile.student"
 
     cp -a "$PROJECT_ROOT/VERSION" "$tmp/"

@@ -97,9 +97,11 @@ create_context() {
     local tmp
     tmp="$(mktemp -d -t openpath-apt-contracts.XXXXXXXX)"
 
-    mkdir -p "$tmp/linux"
+    mkdir -p "$tmp/linux" "$tmp/runtime"
     cp -a "$PROJECT_ROOT/linux/." "$tmp/linux/"
+    cp -a "$PROJECT_ROOT/runtime/." "$tmp/runtime/"
     cp -a "$PROJECT_ROOT/VERSION" "$tmp/"
+    require_file "$PROJECT_ROOT/runtime/browser-policy-spec.json"
 
     cat > "$tmp/Dockerfile" <<'EOF'
 FROM ubuntu:24.04

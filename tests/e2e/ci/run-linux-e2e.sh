@@ -82,10 +82,11 @@ create_minimal_context() {
     local tmp
     tmp="$(mktemp -d -t openpath-e2e-context.XXXXXXXX)"
 
-    mkdir -p "$tmp/linux" "$tmp/tests/e2e" "$tmp/firefox-extension" "$tmp/windows"
+    mkdir -p "$tmp/linux" "$tmp/runtime" "$tmp/tests/e2e" "$tmp/firefox-extension" "$tmp/windows"
 
     # Core Linux agent + E2E runner scripts
     cp -a "$PROJECT_ROOT/linux/." "$tmp/linux/"
+    cp -a "$PROJECT_ROOT/runtime/." "$tmp/runtime/"
     cp -a "$PROJECT_ROOT/tests/e2e/." "$tmp/tests/e2e/"
 
     # Keep Windows tree so pre-install validation does not warn
@@ -108,6 +109,7 @@ create_minimal_context() {
     cp -a "$PROJECT_ROOT/firefox-extension/icons" "$tmp/firefox-extension/"
 
     require_file "$PROJECT_ROOT/VERSION"
+    require_file "$PROJECT_ROOT/runtime/browser-policy-spec.json"
     cp -a "$PROJECT_ROOT/VERSION" "$tmp/"
 
     echo "$tmp"

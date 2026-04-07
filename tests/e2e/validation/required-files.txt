@@ -10,10 +10,15 @@ required linux/lib/dns.sh
 required linux/lib/firewall.sh
 required linux/lib/captive-portal.sh
 required linux/lib/browser.sh
+required linux/lib/chromium-managed-extension.sh
+required linux/lib/firefox-policy.sh
+required linux/lib/firefox-managed-extension.sh
+required linux/lib/firefox-extension-assets.sh
 required linux/lib/services.sh
 required linux/lib/rollback.sh
 
 # Runtime scripts
+required runtime/browser-policy-spec.json
 required linux/scripts/runtime/openpath-update.sh
 required linux/scripts/runtime/dnsmasq-watchdog.sh
 required linux/scripts/runtime/captive-portal-detector.sh
