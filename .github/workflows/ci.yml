@@ -165,14 +165,19 @@ jobs:
 
           [xml]$resultsXml = Get-Content "windows-test-results.xml"
           $summary = $resultsXml.'test-results'
-          $passedCount = [int]($summary.total - $summary.failures - $summary.not-run - $summary.inconclusive - $summary.skipped)
+          $totalCount = [int]$summary.total
+          $failedCount = [int]$summary.failures
+          $skippedCount = [int]$summary.skipped
+          $inconclusiveCount = [int]$summary.inconclusive
+          $notRunCount = [int]$summary.'not-run'
+          $passedCount = $totalCount - $failedCount - $skippedCount - $inconclusiveCount - $notRunCount
 
           @(
             '## Windows Agent Tests'
             ''
             "- Passed: $passedCount"
-            "- Failed: $($summary.failures)"
-            "- Skipped: $($summary.skipped)"
+            "- Failed: $failedCount"
+            "- Skipped: $skippedCount"
             "- Result XML: windows-test-results.xml"
           ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
