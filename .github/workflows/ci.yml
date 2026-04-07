@@ -160,11 +160,13 @@ jobs:
           Invoke-Pester -Configuration $config
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
         with:
           name: windows-test-results
           path: windows-test-results.xml
+          if-no-files-found: ignore
           retention-days: 7
 
   # ============================================
@@ -188,7 +190,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Restore Turbo cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.ref_name }}-${{ hashFiles('package-lock.json', 'turbo.json', '**/package.json', '**/tsconfig*.json') }}

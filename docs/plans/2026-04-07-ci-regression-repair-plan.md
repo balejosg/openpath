@@ -86,5 +86,7 @@
 - Standardize Windows split-module tests on one invocation pattern (`InModuleScope` or an explicit wrapper) instead of mixing `Module\Function`, `Get-Command -Module`, and path imports; the mixed model is still causing command-resolution drift between local intent and GitHub runners.
 - Stop shell wrappers from calling repo-local CLIs as bare binaries; use `npm exec`/`npx` (or `npm run`) so clean shells and CI runners resolve workspace tools consistently.
 - Upgrade remaining GitHub Actions dependencies that still run on deprecated Node 20 (`actions/cache`, `actions/upload-artifact`, `softprops/action-gh-release`) before the June 2, 2026 default switch to Node 24.
+- Centralize GitHub Actions versions in one reusable source or lint rule; the same `upload-artifact` and `cache` upgrades were drifting across multiple workflows.
+- Standardize artifact upload semantics for optional diagnostics (`continue-on-error`, `if-no-files-found: ignore`) so healthy jobs do not fail on missing or transient artifact paths.
 - Make Windows test/config consumers less noisy when `C:\OpenPath\data\config.json` is absent in CI so discovery-time module imports do not emit repeated expected-error logs.
 - Document or automate an SSH-based push path for workflow-touching changes so local pushes do not fail on HTTPS tokens without `workflow` scope.

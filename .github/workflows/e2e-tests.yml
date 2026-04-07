@@ -101,7 +101,7 @@ jobs:
       - name: Upload Linux student-policy diagnostics
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-student-policy-artifacts-${{ github.run_id }}
           path: tests/e2e/artifacts/linux-student-policy
@@ -131,7 +131,7 @@ jobs:
       - name: Upload Windows student-policy diagnostics
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-student-policy-artifacts-${{ github.run_id }}
           path: tests/e2e/artifacts/windows-student-policy

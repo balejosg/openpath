@@ -162,7 +162,7 @@ jobs:
           severity: 'CRITICAL,HIGH,MEDIUM'
 
       - name: Upload Trivy results artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: trivy-openpath-api-scan
@@ -201,7 +201,7 @@ jobs:
           echo "✓ Audit complete"
 
       - name: Upload audit report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: npm-audit-root
