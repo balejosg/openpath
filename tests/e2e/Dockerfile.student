@@ -79,6 +79,7 @@ WORKDIR /openpath
 
 COPY VERSION ./VERSION
 COPY linux/ ./linux/
+COPY runtime/ ./runtime/
 COPY windows/ ./windows/
 COPY tests/e2e/ ./tests/e2e/
 COPY tests/selenium/package.json ./tests/selenium/package.json

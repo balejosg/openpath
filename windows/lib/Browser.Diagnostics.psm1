@@ -1,20 +1,20 @@
 # OpenPath browser diagnostics for Windows
 
-Import-Module "$PSScriptRoot\Common.psm1" -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\Browser.Common.psm1" -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\Browser.FirefoxPolicy.psm1" -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\Browser.FirefoxNativeHost.psm1" -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\Common.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Browser.Common.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Browser.FirefoxPolicy.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Browser.FirefoxNativeHost.psm1" -Force -ErrorAction Stop
 
 function Get-OpenPathBrowserDoctorReport {
-    $metadataPath = Browser.FirefoxPolicy\Get-OpenPathFirefoxReleaseMetadataPath
-    $xpiPath = Browser.FirefoxPolicy\Get-OpenPathFirefoxReleaseXpiPath
-    $nativeHostManifestPath = Browser.FirefoxNativeHost\Get-OpenPathFirefoxNativeHostManifestPath
-    $nativeHostWrapperPath = Browser.FirefoxNativeHost\Get-OpenPathFirefoxNativeHostWrapperPath
-    $nativeHostScriptPath = Browser.FirefoxNativeHost\Get-OpenPathFirefoxNativeHostScriptPath
-    $nativeHostStatePath = Browser.FirefoxNativeHost\Get-OpenPathFirefoxNativeStatePath
-    $nativeHostWhitelistPath = Browser.FirefoxNativeHost\Get-OpenPathFirefoxNativeWhitelistMirrorPath
-    $nativeHostUpdateTaskName = Browser.FirefoxNativeHost\Get-OpenPathFirefoxNativeHostUpdateTaskName
-    $nativeHostRegistryPaths = Browser.FirefoxNativeHost\Get-OpenPathFirefoxNativeHostRegistryPaths
+    $metadataPath = Get-OpenPathFirefoxReleaseMetadataPath
+    $xpiPath = Get-OpenPathFirefoxReleaseXpiPath
+    $nativeHostManifestPath = Get-OpenPathFirefoxNativeHostManifestPath
+    $nativeHostWrapperPath = Get-OpenPathFirefoxNativeHostWrapperPath
+    $nativeHostScriptPath = Get-OpenPathFirefoxNativeHostScriptPath
+    $nativeHostStatePath = Get-OpenPathFirefoxNativeStatePath
+    $nativeHostWhitelistPath = Get-OpenPathFirefoxNativeWhitelistMirrorPath
+    $nativeHostUpdateTaskName = Get-OpenPathFirefoxNativeHostUpdateTaskName
+    $nativeHostRegistryPaths = Get-OpenPathFirefoxNativeHostRegistryPaths
     $nativeHostRegistrySummary = '(missing)'
     $nativeHostManifestParse = 'missing'
     $nativeHostManifestName = '(missing)'
@@ -152,7 +152,7 @@ function Get-OpenPathBrowserDoctorReport {
         $task = Get-ScheduledTask -TaskName $nativeHostUpdateTaskName -ErrorAction Stop
         if ($task) {
             $nativeHostUpdateTaskPresent = $true
-            $securityDescriptor = Browser.Common\Get-OpenPathScheduledTaskSecurityDescriptor -TaskName $nativeHostUpdateTaskName
+            $securityDescriptor = Get-OpenPathScheduledTaskSecurityDescriptor -TaskName $nativeHostUpdateTaskName
             if ($securityDescriptor -and $securityDescriptor -match '\(A;;[^)]*(?:GX|GA)[^)]*;;;BU\)') {
                 $nativeHostUpdateTaskUserAccess = 'granted'
             }
@@ -169,7 +169,7 @@ function Get-OpenPathBrowserDoctorReport {
         $nativeHostUpdateTaskUserAccess = 'missing'
     }
 
-    $managedExtensionPolicy = Browser.FirefoxPolicy\Get-OpenPathFirefoxManagedExtensionPolicy
+    $managedExtensionPolicy = Get-OpenPathFirefoxManagedExtensionPolicy
     $resolvedInstallUrl = if ($managedExtensionPolicy) {
         [string]$managedExtensionPolicy.InstallUrl
     }

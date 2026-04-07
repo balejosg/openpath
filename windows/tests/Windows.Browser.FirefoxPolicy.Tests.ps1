@@ -1,10 +1,11 @@
 # OpenPath Windows browser Firefox policy tests
 
-. (Join-Path $PSScriptRoot "TestHelpers.ps1")
+Import-Module (Join-Path $PSScriptRoot "TestHelpers.psm1") -Force
 
 BeforeAll {
     $modulePath = Join-Path $PSScriptRoot ".." "lib"
-    Import-Module "$modulePath\Browser.psm1" -Force -ErrorAction SilentlyContinue
+    Import-Module "$modulePath\Browser.Common.psm1" -Force -ErrorAction Stop
+    Import-Module "$modulePath\Browser.FirefoxPolicy.psm1" -Force -ErrorAction Stop
 }
 
 Describe "Browser Module - Firefox Policy" {
@@ -22,17 +23,17 @@ Describe "Browser Module - Firefox Policy" {
                 if ($Path -like '*firefox.exe') { return $true }
                 if ($Path -like '*browser-extension\firefox\manifest.json') { return $true }
                 return $false
-            } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
 
-            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser
-            Mock Get-OpenPathConfig { [PSCustomObject]@{} } -ModuleName Browser
+            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
+            Mock Get-OpenPathConfig { [PSCustomObject]@{} } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathUtf8NoBomFile {
                 param([string]$Path, [string]$Value)
                 if ($Path -like '*policies.json') {
                     $script:capturedFirefoxPolicyJson = $Value
                 }
-            } -ModuleName Browser
-            Mock Write-OpenPathLog { } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
             $result = Set-FirefoxPolicy -BlockedPaths @()
             $result | Should -BeTrue
@@ -50,22 +51,22 @@ Describe "Browser Module - Firefox Policy" {
                 param([string]$Path)
                 if ($Path -like '*firefox.exe') { return $true }
                 return $false
-            } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
 
-            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser
+            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
             Mock Get-OpenPathConfig {
                 [PSCustomObject]@{
                     firefoxExtensionId = $contract.extensionId
                     firefoxExtensionInstallUrl = $contract.configuredInstallUrl
                 }
-            } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathUtf8NoBomFile {
                 param([string]$Path, [string]$Value)
                 if ($Path -like '*policies.json') {
                     $script:capturedFirefoxPolicyJson = $Value
                 }
-            } -ModuleName Browser
-            Mock Write-OpenPathLog { } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
             $result = Set-FirefoxPolicy -BlockedPaths @()
             $result | Should -BeTrue
@@ -85,10 +86,10 @@ Describe "Browser Module - Firefox Policy" {
                 if ($Path -like '*browser-extension\firefox-release\metadata.json') { return $true }
                 if ($Path -like '*browser-extension\firefox-release\openpath-firefox-extension.xpi') { return $true }
                 return $false
-            } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
 
-            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser
-            Mock Get-OpenPathConfig { [PSCustomObject]@{ apiUrl = 'https://school.example/' } } -ModuleName Browser
+            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
+            Mock Get-OpenPathConfig { [PSCustomObject]@{ apiUrl = 'https://school.example/' } } -ModuleName Browser.FirefoxPolicy
             Mock Get-Content {
                 param([string]$Path, [switch]$Raw)
                 if ($Path -like '*browser-extension\firefox-release\metadata.json') {
@@ -96,14 +97,14 @@ Describe "Browser Module - Firefox Policy" {
                 }
 
                 throw "Unexpected path: $Path"
-            } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathUtf8NoBomFile {
                 param([string]$Path, [string]$Value)
                 if ($Path -like '*policies.json') {
                     $script:capturedFirefoxPolicyJson = $Value
                 }
-            } -ModuleName Browser
-            Mock Write-OpenPathLog { } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
             $result = Set-FirefoxPolicy -BlockedPaths @()
             $result | Should -BeTrue
@@ -122,12 +123,12 @@ Describe "Browser Module - Firefox Policy" {
                 if ($Path -like '*browser-extension\firefox-release\metadata.json') { return $true }
                 if ($Path -like '*browser-extension\firefox-release\openpath-firefox-extension.xpi') { return $true }
                 return $false
-            } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
 
-            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser
-            Mock Get-OpenPathConfig { [PSCustomObject]@{} } -ModuleName Browser
-            Mock Resolve-Path { $null } -ModuleName Browser
-            Mock ConvertTo-OpenPathFileUrl { $contract.stagedReleaseInstallUrl } -ModuleName Browser
+            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
+            Mock Get-OpenPathConfig { [PSCustomObject]@{} } -ModuleName Browser.FirefoxPolicy
+            Mock Resolve-Path { $null } -ModuleName Browser.FirefoxPolicy
+            Mock ConvertTo-OpenPathFileUrl { $contract.stagedReleaseInstallUrl } -ModuleName Browser.FirefoxPolicy
             Mock Get-Content {
                 param([string]$Path, [switch]$Raw)
                 if ($Path -like '*browser-extension\firefox-release\metadata.json') {
@@ -135,14 +136,14 @@ Describe "Browser Module - Firefox Policy" {
                 }
 
                 throw "Unexpected path: $Path"
-            } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathUtf8NoBomFile {
                 param([string]$Path, [string]$Value)
                 if ($Path -like '*policies.json') {
                     $script:capturedFirefoxPolicyJson = $Value
                 }
-            } -ModuleName Browser
-            Mock Write-OpenPathLog { } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
             $result = Set-FirefoxPolicy -BlockedPaths @()
             $result | Should -BeTrue
@@ -163,12 +164,12 @@ Describe "Browser Module - Firefox Policy" {
                     'C:\OpenPath\browser-extension\firefox-release\openpath-firefox-extension.xpi' { return $true }
                     default { return $false }
                 }
-            } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
 
-            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser
-            Mock Get-OpenPathConfig { [PSCustomObject]@{} } -ModuleName Browser
-            Mock Resolve-Path { $null } -ModuleName Browser
-            Mock ConvertTo-OpenPathFileUrl { $contract.stagedReleaseInstallUrl } -ModuleName Browser
+            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
+            Mock Get-OpenPathConfig { [PSCustomObject]@{} } -ModuleName Browser.FirefoxPolicy
+            Mock Resolve-Path { $null } -ModuleName Browser.FirefoxPolicy
+            Mock ConvertTo-OpenPathFileUrl { $contract.stagedReleaseInstallUrl } -ModuleName Browser.FirefoxPolicy
             Mock Get-Content {
                 param([string]$Path, [switch]$Raw)
                 if ($Path -eq 'C:\OpenPath\browser-extension\firefox-release\metadata.json') {
@@ -176,14 +177,14 @@ Describe "Browser Module - Firefox Policy" {
                 }
 
                 throw "Unexpected path: $Path"
-            } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathUtf8NoBomFile {
                 param([string]$Path, [string]$Value)
                 if ($Path -like '*policies.json') {
                     $script:capturedFirefoxPolicyJson = $Value
                 }
-            } -ModuleName Browser
-            Mock Write-OpenPathLog { } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
             $result = Set-FirefoxPolicy -BlockedPaths @()
             $result | Should -BeTrue
@@ -195,23 +196,17 @@ Describe "Browser Module - Firefox Policy" {
         It "Converts unresolved staged Windows XPI paths into file URLs" {
             $contract = Get-ContractFixtureJson -FileName 'browser-firefox-managed-extension.json'
 
-            Mock Resolve-Path { $null } -ModuleName Browser
+            Mock Resolve-Path { $null } -ModuleName Browser.Common
 
-            InModuleScope Browser {
-                $result = ConvertTo-OpenPathFileUrl -Path 'C:\OpenPath\browser-extension\firefox-release\openpath-firefox-extension.xpi'
-                $result | Should -Be $contract.stagedReleaseInstallUrl
-            }
+            $result = ConvertTo-OpenPathFileUrl -Path 'C:\OpenPath\browser-extension\firefox-release\openpath-firefox-extension.xpi'
+            $result | Should -Be $contract.stagedReleaseInstallUrl
         }
 
         It "Writes UTF-8 text files without a BOM" {
             $tempFile = Join-Path $TestDrive 'policies.json'
             $json = '{"policies":{"DisableTelemetry":true}}'
-            $browserModule = Get-Module Browser
 
-            & $browserModule {
-                param($Path, $Value)
-                Write-OpenPathUtf8NoBomFile -Path $Path -Value $Value
-            } $tempFile $json
+            Write-OpenPathUtf8NoBomFile -Path $tempFile -Value $json
 
             $bytes = [System.IO.File]::ReadAllBytes($tempFile)
             $hasUtf8Bom = $bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191
@@ -235,16 +230,16 @@ Describe "Browser Module - Firefox Policy" {
                 param([string]$Path)
                 if ($Path -like '*firefox.exe') { return $true }
                 return $false
-            } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
 
-            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser
+            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathUtf8NoBomFile {
                 param([string]$Path, [string]$Value)
                 if ($Path -like '*policies.json') {
                     $script:capturedFirefoxPolicyJson = $Value
                 }
-            } -ModuleName Browser
-            Mock Write-OpenPathLog { } -ModuleName Browser
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
             $result = Set-FirefoxPolicy -BlockedPaths @()
             $result | Should -BeTrue

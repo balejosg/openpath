@@ -1,8 +1,8 @@
 # OpenPath Firefox policy helpers for Windows
 
 $script:OpenPathRoot = "C:\OpenPath"
-Import-Module "$PSScriptRoot\Common.psm1" -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\Browser.Common.psm1" -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\Common.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Browser.Common.psm1" -Force -ErrorAction Stop
 
 function Get-OpenPathFirefoxExtensionRoot {
     return "$script:OpenPathRoot\browser-extension\firefox"
@@ -92,7 +92,7 @@ function Resolve-OpenPathFirefoxReleaseInstallSpec {
 
     if (Test-Path $signedXpiPath) {
         return [PSCustomObject]@{
-            InstallUrl = (Browser.Common\ConvertTo-OpenPathFileUrl -Path $signedXpiPath)
+            InstallUrl = (ConvertTo-OpenPathFileUrl -Path $signedXpiPath)
             Source = 'staged-release'
         }
     }
@@ -166,7 +166,7 @@ function Set-FirefoxPolicy {
     $unsignedExtensionManifest = Join-Path (Get-OpenPathFirefoxExtensionRoot) 'manifest.json'
     $managedExtensionPolicy = Get-OpenPathFirefoxManagedExtensionPolicy
     $signedExtensionWarningWritten = $false
-    $policySpec = Browser.Common\Get-OpenPathBrowserPolicySpec
+    $policySpec = Get-OpenPathBrowserPolicySpec
     $firefoxSpec = $policySpec.firefox
 
     foreach ($firefoxPath in $firefoxPaths) {
@@ -233,7 +233,7 @@ function Set-FirefoxPolicy {
 
         $policiesPath = "$firefoxPath\policies.json"
         $policiesJson = $policies | ConvertTo-Json -Depth 10
-        Browser.Common\Write-OpenPathUtf8NoBomFile -Path $policiesPath -Value $policiesJson
+        Write-OpenPathUtf8NoBomFile -Path $policiesPath -Value $policiesJson
 
         Write-OpenPathLog "Firefox policies written to: $policiesPath"
         $policiesSet = $true

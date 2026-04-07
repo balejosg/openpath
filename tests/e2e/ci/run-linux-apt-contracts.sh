@@ -129,6 +129,7 @@ RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
 WORKDIR /openpath
 COPY VERSION ./VERSION
 COPY linux/ ./linux/
+COPY runtime/ ./runtime/
 
 STOPSIGNAL SIGRTMIN+3
 VOLUME ["/sys/fs/cgroup"]

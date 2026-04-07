@@ -2,11 +2,11 @@
 # Manages Firefox and Chrome/Edge policies
 
 $script:OpenPathRoot = "C:\OpenPath"
-Import-Module "$PSScriptRoot\Common.psm1" -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\Browser.Common.psm1" -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\Browser.FirefoxPolicy.psm1" -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\Browser.FirefoxNativeHost.psm1" -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\Browser.Diagnostics.psm1" -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\Common.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Browser.Common.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Browser.FirefoxPolicy.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Browser.FirefoxNativeHost.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Browser.Diagnostics.psm1" -Force -ErrorAction Stop
 
 function Get-OpenPathChromiumManagedMetadataPath {
     return "$script:OpenPathRoot\browser-extension\chromium-managed\metadata.json"
@@ -115,7 +115,7 @@ function Set-ChromePolicy {
 
     Write-OpenPathLog "Configuring Chrome/Edge policies..."
     $managedExtensionPolicy = Get-OpenPathChromiumManagedPolicy
-    $policySpec = Browser.Common\Get-OpenPathBrowserPolicySpec
+    $policySpec = Get-OpenPathBrowserPolicySpec
     $chromiumSpec = $policySpec.chromium
 
     $regPaths = @(

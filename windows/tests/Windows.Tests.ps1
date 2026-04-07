@@ -1,12 +1,12 @@
 # OpenPath Windows Pester Tests
 # Tests for all PowerShell modules
 
-. (Join-Path $PSScriptRoot "TestHelpers.ps1")
+Import-Module (Join-Path $PSScriptRoot "TestHelpers.psm1") -Force
 
 BeforeAll {
     # Re-import modules in BeforeAll to ensure fresh state for tests
     $modulePath = Join-Path $PSScriptRoot ".." "lib"
-    Import-Module "$modulePath\Common.psm1" -Force
+    Import-Module "$modulePath\Common.psm1" -Force -ErrorAction Stop
 }
 
 Describe "Common Module" {

@@ -1,8 +1,8 @@
 # OpenPath Firefox native host helpers for Windows
 
 $script:OpenPathRoot = "C:\OpenPath"
-Import-Module "$PSScriptRoot\Common.psm1" -Force -ErrorAction SilentlyContinue
-Import-Module "$PSScriptRoot\Browser.Common.psm1" -Force -ErrorAction SilentlyContinue
+Import-Module "$PSScriptRoot\Common.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Browser.Common.psm1" -Force -ErrorAction Stop
 
 function Get-OpenPathFirefoxNativeHostName {
     return 'whitelist_native_host'
@@ -163,7 +163,7 @@ function Sync-OpenPathFirefoxNativeHostState {
         version = $version
         syncedAt = (Get-Date -Format 'o')
     } | ConvertTo-Json -Depth 8
-    Browser.Common\Write-OpenPathUtf8NoBomFile -Path $statePath -Value $stateJson
+    Write-OpenPathUtf8NoBomFile -Path $statePath -Value $stateJson
 
     $whitelistMirrorPath = Get-OpenPathFirefoxNativeWhitelistMirrorPath
     if ($ClearWhitelist) {
@@ -200,7 +200,7 @@ function Register-OpenPathFirefoxNativeHost {
         type = 'stdio'
         allowed_extensions = @('monitor-bloqueos@openpath')
     } | ConvertTo-Json -Depth 8
-    Browser.Common\Write-OpenPathUtf8NoBomFile -Path $manifestPath -Value $manifestJson
+    Write-OpenPathUtf8NoBomFile -Path $manifestPath -Value $manifestJson
 
     foreach ($registryPath in Get-OpenPathFirefoxNativeHostRegistryPaths) {
         & reg.exe ADD $registryPath /ve /d $manifestPath /f | Out-Null
@@ -212,7 +212,7 @@ function Register-OpenPathFirefoxNativeHost {
 
 function Unregister-OpenPathFirefoxNativeHost {
     foreach ($registryPath in Get-OpenPathFirefoxNativeHostRegistryPaths) {
-        Browser.Common\Remove-OpenPathRegistryKeyIfPresent -RegistryPath $registryPath
+        Remove-OpenPathRegistryKeyIfPresent -RegistryPath $registryPath
     }
 
     $paths = @(

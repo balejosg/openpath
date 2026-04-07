@@ -163,6 +163,14 @@ stage_firefox_unpacked_extension_assets() {
         openpath_firefox_unpacked_bundle_items
 }
 
+stage_firefox_installation_bundle() {
+    local ext_source="$1"
+    local destination_dir="$2"
+
+    stage_firefox_unpacked_extension_assets "$ext_source" "$destination_dir" || return 1
+    stage_firefox_optional_extension_assets "$ext_source" "$destination_dir"
+}
+
 stage_firefox_optional_extension_assets() {
     local ext_source="$1"
     local destination_dir="$2"

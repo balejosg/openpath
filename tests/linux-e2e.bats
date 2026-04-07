@@ -203,7 +203,7 @@ EOF
     run grep -nF 'stage_firefox_release_artifacts "$INSTALLER_SOURCE_DIR" "$staged_release_dir"' "$PROJECT_DIR/linux/install.sh"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'stage_firefox_unpacked_extension_assets "$INSTALLER_SOURCE_DIR/firefox-extension" "$staged_ext_dir"' "$PROJECT_DIR/linux/install.sh"
+    run grep -nF 'stage_firefox_installation_bundle "$INSTALLER_SOURCE_DIR/firefox-extension" "$staged_ext_dir"' "$PROJECT_DIR/linux/install.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -399,8 +399,22 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "linux e2e docker contexts copy runtime browser policy spec" {
+    run grep -nF 'COPY runtime/ ./runtime/' "$PROJECT_DIR/tests/e2e/Dockerfile"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'COPY runtime/ ./runtime/' "$PROJECT_DIR/tests/e2e/Dockerfile.student"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'COPY runtime/ ./runtime/' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows browser Pester coverage is split into focused suites with shared helpers" {
     run test -f "$PROJECT_DIR/windows/tests/TestHelpers.ps1"
+    [ "$status" -eq 0 ]
+
+    run test -f "$PROJECT_DIR/windows/tests/TestHelpers.psm1"
     [ "$status" -eq 0 ]
 
     run test -f "$PROJECT_DIR/windows/tests/Windows.Browser.FirefoxPolicy.Tests.ps1"
@@ -415,7 +429,7 @@ EOF
     run test -f "$PROJECT_DIR/windows/tests/Windows.Browser.Diagnostics.Tests.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF '. (Join-Path $PSScriptRoot "TestHelpers.ps1")' "$PROJECT_DIR/windows/tests/Windows.Browser.FirefoxPolicy.Tests.ps1"
+    run grep -nF 'Import-Module (Join-Path $PSScriptRoot "TestHelpers.psm1") -Force' "$PROJECT_DIR/windows/tests/Windows.Browser.FirefoxPolicy.Tests.ps1"
     [ "$status" -eq 0 ]
 
     run grep -nF 'Describe "Browser Module"' "$PROJECT_DIR/windows/tests/Windows.Tests.ps1"
@@ -429,7 +443,7 @@ EOF
     run grep -nF 'browser-chromium-policy.json' "$PROJECT_DIR/windows/tests/Windows.Browser.ChromiumPolicy.Tests.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'Get-ContractFixtureJson' "$PROJECT_DIR/windows/tests/TestHelpers.ps1"
+    run grep -nF 'Get-ContractFixtureJson' "$PROJECT_DIR/windows/tests/TestHelpers.psm1"
     [ "$status" -eq 0 ]
 }
 

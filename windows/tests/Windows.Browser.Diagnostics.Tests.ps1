@@ -1,10 +1,10 @@
 # OpenPath Windows browser diagnostics tests
 
-. (Join-Path $PSScriptRoot "TestHelpers.ps1")
+Import-Module (Join-Path $PSScriptRoot "TestHelpers.psm1") -Force
 
 BeforeAll {
     $modulePath = Join-Path $PSScriptRoot ".." "lib"
-    Import-Module "$modulePath\Browser.psm1" -Force -ErrorAction SilentlyContinue
+    Import-Module "$modulePath\Browser.psm1" -Force -ErrorAction Stop
 }
 
 Describe "Browser Module - Diagnostics" {

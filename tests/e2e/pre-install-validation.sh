@@ -247,10 +247,10 @@ test_release_tarball_simulation() {
 test_installer_extension_paths() {
     test_section "6/6" "Firefox installer path consistency"
 
-    local browser_sh="$PROJECT_ROOT/linux/lib/browser.sh"
+    local installer_sh="$PROJECT_ROOT/linux/install.sh"
     local asset_helper="$PROJECT_ROOT/linux/lib/firefox-extension-assets.sh"
 
-    if grep -Fq 'stage_firefox_unpacked_extension_assets "$ext_source" "$ext_dir" || return 1' "$browser_sh"; then
+    if grep -Fq 'stage_firefox_installation_bundle "$INSTALLER_SOURCE_DIR/firefox-extension" "$staged_ext_dir"' "$installer_sh"; then
         test_pass "installer delegates unpacked Firefox asset staging to the shared helper"
     else
         test_fail "installer does not call the shared Firefox asset staging helper"

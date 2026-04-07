@@ -561,8 +561,7 @@ step_install_extension() {
 
         rm -rf "$staged_ext_dir"
         rm -rf "$staged_release_dir"
-        stage_firefox_unpacked_extension_assets "$INSTALLER_SOURCE_DIR/firefox-extension" "$staged_ext_dir"
-        stage_firefox_optional_extension_assets "$INSTALLER_SOURCE_DIR/firefox-extension" "$staged_ext_dir"
+        stage_firefox_installation_bundle "$INSTALLER_SOURCE_DIR/firefox-extension" "$staged_ext_dir"
 
         if firefox_release_source="$(stage_firefox_release_artifacts "$INSTALLER_SOURCE_DIR" "$staged_release_dir")"; then
             echo "  ✓ Artefactos Firefox Release firmados preparados desde $firefox_release_source"

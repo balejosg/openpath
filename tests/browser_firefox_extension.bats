@@ -123,6 +123,28 @@ EOF
     [ -d "$staged_dir/blocked" ]
 }
 
+@test "stage_firefox_installation_bundle includes optional native host assets when present" {
+    local ext_dir="$TEST_TMP_DIR/firefox-extension"
+    local staged_dir="$TEST_TMP_DIR/staged-extension"
+    mkdir -p "$ext_dir/dist/lib" "$ext_dir/popup" "$ext_dir/icons" "$ext_dir/blocked" "$ext_dir/native"
+    echo '{"manifest_version": 2}' > "$ext_dir/manifest.json"
+    echo 'console.log("bg");' > "$ext_dir/dist/background.js"
+    echo 'console.log("popup");' > "$ext_dir/dist/popup.js"
+    echo 'console.log("lib");' > "$ext_dir/dist/lib/runtime.js"
+    touch "$ext_dir/popup/popup.html"
+    touch "$ext_dir/icons/icon-48.png"
+    touch "$ext_dir/blocked/blocked.html"
+    touch "$ext_dir/blocked/blocked.css"
+    touch "$ext_dir/blocked/blocked.js"
+    touch "$ext_dir/native/openpath-native-host.py"
+
+    source "$PROJECT_DIR/linux/lib/firefox-extension-assets.sh"
+
+    run stage_firefox_installation_bundle "$ext_dir" "$staged_dir"
+    [ "$status" -eq 0 ]
+    [ -f "$staged_dir/native/openpath-native-host.py" ]
+}
+
 @test "install_firefox_extension copies extension files" {
     local ext_dir="$TEST_TMP_DIR/firefox-extension"
     mkdir -p "$ext_dir/dist/lib" "$ext_dir/popup" "$ext_dir/icons" "$ext_dir/blocked"

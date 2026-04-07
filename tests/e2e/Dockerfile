@@ -35,6 +35,7 @@ WORKDIR /openpath
 # Copy only what the Linux E2E image needs
 COPY VERSION ./VERSION
 COPY linux/ ./linux/
+COPY runtime/ ./runtime/
 COPY windows/ ./windows/
 COPY tests/e2e/ ./tests/e2e/
 COPY firefox-extension/manifest.json ./firefox-extension/manifest.json
