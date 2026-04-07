@@ -2,11 +2,14 @@
 
 Import-Module (Join-Path $PSScriptRoot "TestHelpers.psm1") -Force
 $modulePath = Join-Path $PSScriptRoot ".." "lib"
-Import-Module "$modulePath\Browser.psm1" -Force -ErrorAction Stop
 
 Describe "Browser Module - Chromium Policy" {
+    BeforeAll {
+        Import-OpenPathTestModules -ModuleNames @('Browser')
+    }
+
     Context "Set-ChromePolicy" {
-        It "Does not throw with empty blocked paths" -Skip:(-not ((Test-FunctionExists 'Set-ChromePolicy') -and (Test-IsAdmin))) {
+        It "Does not throw with empty blocked paths" -Skip:(-not (Test-IsAdmin)) {
             { Set-ChromePolicy -BlockedPaths @() } | Should -Not -Throw
         }
 

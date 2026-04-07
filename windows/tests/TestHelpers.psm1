@@ -1,5 +1,7 @@
 # Shared OpenPath Windows Pester helpers
 
+$script:modulePath = Join-Path $PSScriptRoot ".." "lib"
+
 # Must be at module scope so -Skip checks can use the helpers during discovery.
 function Test-FunctionExists {
     param([string]$FunctionName)
@@ -7,6 +9,10 @@ function Test-FunctionExists {
 }
 
 function Test-IsAdmin {
+    if (-not (Test-FunctionExists 'Test-AdminPrivileges')) {
+        Import-OpenPathTestModules -ModuleNames @('Common')
+    }
+
     if (Test-FunctionExists 'Test-AdminPrivileges') {
         return Test-AdminPrivileges
     }
@@ -14,12 +20,17 @@ function Test-IsAdmin {
     return $false
 }
 
-$script:modulePath = Join-Path $PSScriptRoot ".." "lib"
-Import-Module "$script:modulePath\Common.psm1" -Force -ErrorAction Stop
-Import-Module "$script:modulePath\DNS.psm1" -Force -ErrorAction Stop
-Import-Module "$script:modulePath\Firewall.psm1" -Force -ErrorAction Stop
-Import-Module "$script:modulePath\Browser.psm1" -Force -ErrorAction Stop
-Import-Module "$script:modulePath\Services.psm1" -Force -ErrorAction Stop
+function Import-OpenPathTestModules {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string[]]$ModuleNames
+    )
+
+    foreach ($moduleName in $ModuleNames) {
+        $moduleFilePath = Join-Path $script:modulePath "$moduleName.psm1"
+        Import-Module $moduleFilePath -Force -Global -ErrorAction Stop
+    }
+}
 
 function Assert-ContentContainsAll {
     param(
@@ -113,6 +124,7 @@ function Get-ContractFixtureJson {
 Export-ModuleMember -Function @(
     'Test-FunctionExists',
     'Test-IsAdmin',
+    'Import-OpenPathTestModules',
     'Assert-ContentContainsAll',
     'Initialize-FirewallRuleCaptureMocks',
     'Get-ContractFixturePath',

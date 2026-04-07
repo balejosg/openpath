@@ -4,11 +4,12 @@
 Import-Module (Join-Path $PSScriptRoot "TestHelpers.psm1") -Force
 
 $script:modulePath = Join-Path $PSScriptRoot ".." "lib"
-Import-Module "$script:modulePath\Common.psm1" -Force -ErrorAction Stop
-Import-Module "$script:modulePath\DNS.psm1" -Force -ErrorAction Stop
-Import-Module "$script:modulePath\Firewall.psm1" -Force -ErrorAction Stop
 
 Describe "Common Module" {
+    BeforeAll {
+        Import-OpenPathTestModules -ModuleNames @('Common', 'DNS', 'Firewall', 'Services', 'Browser.Common', 'Browser', 'Browser.FirefoxNativeHost')
+    }
+
     Context "Test-AdminPrivileges" {
         It "Returns a boolean value" {
             $result = Test-AdminPrivileges
@@ -1817,8 +1818,8 @@ Describe "Installer" {
         }
 
         It "Registers Firefox native messaging host in both 64-bit and WOW6432Node registry views" {
-            $browserModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
-            $content = Get-Content $browserModulePath -Raw
+            $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"
+            $content = Get-Content $nativeHostModulePath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 'Mozilla\NativeMessagingHosts\whitelist_native_host',
@@ -1829,30 +1830,34 @@ Describe "Installer" {
         }
 
         It "Uses braced interpolation for SourceRoot error messages before a colon" {
-            $browserModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
-            $content = Get-Content $browserModulePath -Raw
+            $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"
+            $content = Get-Content $nativeHostModulePath -Raw
 
             $content.Contains('Firefox native host artifacts not found in ${SourceRoot}:') | Should -BeTrue
             $content.Contains('Firefox native host artifacts not found in $SourceRoot:') | Should -BeFalse
         }
 
-        It "Skips registry deletion when Firefox native host keys are already absent in the browser module" {
-            $browserModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
-            $content = Get-Content $browserModulePath -Raw
+        It "Skips registry deletion when Firefox native host keys are already absent in the shared browser helpers" {
+            $browserCommonModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.Common.psm1"
+            $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"
+            $browserCommonContent = Get-Content $browserCommonModulePath -Raw
+            $nativeHostContent = Get-Content $nativeHostModulePath -Raw
 
-            Assert-ContentContainsAll -Content $content -Needles @(
+            Assert-ContentContainsAll -Content $browserCommonContent -Needles @(
                 'function ConvertTo-OpenPathRegistryProviderPath',
                 'return "Registry::HKEY_LOCAL_MACHINE\\$($RegistryPath.Substring(5))"',
                 'if ($RegistryPath -match ''^HKLM\\'')',
-                'Remove-OpenPathRegistryKeyIfPresent -RegistryPath $registryPath',
                 'if (Test-Path $providerPath)'
             )
-            $content.Contains('& reg.exe DELETE $registryPath /f 2>$null | Out-Null') | Should -BeFalse
+            Assert-ContentContainsAll -Content $nativeHostContent -Needles @(
+                'Remove-OpenPathRegistryKeyIfPresent -RegistryPath $registryPath'
+            )
+            $browserCommonContent.Contains('& reg.exe DELETE $registryPath /f 2>$null | Out-Null') | Should -BeFalse
         }
 
         It "Falls back to the staged native host directory during re-registration after self-update" {
-            $browserModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
-            $content = Get-Content $browserModulePath -Raw
+            $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"
+            $content = Get-Content $nativeHostModulePath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 '$candidateRoots = @($SourceRoot, $nativeRoot) | Select-Object -Unique',
