@@ -22,6 +22,53 @@ function readText(relativePath) {
   return readFileSync(resolve(projectRoot, relativePath), 'utf8');
 }
 
+function listStableReleaseTags() {
+  const tags = new Set();
+  const tagsDir = resolve(projectRoot, '.git/refs/tags');
+  const packedRefsPath = resolve(projectRoot, '.git/packed-refs');
+
+  function collectTagRefs(directory, prefix = '') {
+    if (!existsSync(directory)) {
+      return;
+    }
+
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const relativeName = prefix ? `${prefix}/${entry.name}` : entry.name;
+
+      if (entry.isDirectory()) {
+        collectTagRefs(resolve(directory, entry.name), relativeName);
+        continue;
+      }
+
+      if (entry.isFile() && relativeName.startsWith('v')) {
+        tags.add(relativeName);
+      }
+    }
+  }
+
+  collectTagRefs(tagsDir);
+
+  if (existsSync(packedRefsPath)) {
+    const packedRefs = readFileSync(packedRefsPath, 'utf8');
+
+    for (const line of packedRefs.split(/\r?\n/)) {
+      if (!line || line.startsWith('#') || line.startsWith('^')) {
+        continue;
+      }
+
+      const [, ref] = line.split(' ');
+      const tagName = ref?.replace(/^refs\/tags\//, '') ?? '';
+      if (tagName.startsWith('v')) {
+        tags.add(tagName);
+      }
+    }
+  }
+
+  return [...tags].sort((left, right) =>
+    compareSemver(right.replace(/^v/, ''), left.replace(/^v/, ''))
+  );
+}
+
 function compareSemver(left, right) {
   const leftParts = left.split('.').map(Number);
   const rightParts = right.split('.').map(Number);
@@ -113,6 +160,23 @@ describe('repository verification contract', () => {
         assert.ok(!content.includes(version), `${relativePath} should not include ${version}`);
       }
     }
+  });
+
+  test('release-please manifest is not behind the latest stable release tag', () => {
+    const manifest = readJson('.release-please-manifest.json');
+    const manifestVersion = String(manifest['.'] ?? '').trim();
+    const latestStableTag = listStableReleaseTags()[0] ?? '';
+    const latestStableVersion = latestStableTag.replace(/^v/, '');
+
+    assert.ok(
+      manifestVersion,
+      '.release-please-manifest.json should define the root release version'
+    );
+    assert.ok(latestStableTag, 'repository should expose at least one stable v* tag');
+    assert.ok(
+      compareSemver(manifestVersion, latestStableVersion) >= 0,
+      `release-please manifest (${manifestVersion}) is behind the latest stable tag (${latestStableTag})`
+    );
   });
 
   test('verify:full overlaps coverage with unit tests and overlaps e2e with security', () => {
