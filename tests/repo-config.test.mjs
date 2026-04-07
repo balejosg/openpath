@@ -162,6 +162,23 @@ describe('repository verification contract', () => {
     }
   });
 
+  test('required Windows CI publishes a step summary instead of relying on artifact upload', () => {
+    const ciWorkflow = readText('.github/workflows/ci.yml');
+
+    assert.ok(
+      ciWorkflow.includes('Out-File -FilePath $env:GITHUB_STEP_SUMMARY'),
+      'ci.yml should publish the Windows Pester summary to GITHUB_STEP_SUMMARY'
+    );
+    assert.ok(
+      !ciWorkflow.includes('name: Upload test results'),
+      'ci.yml should not make required Windows CI depend on uploading test result artifacts'
+    );
+    assert.ok(
+      !ciWorkflow.includes('name: windows-test-results'),
+      'ci.yml should not upload the Windows Pester result artifact from the required CI job'
+    );
+  });
+
   test('release-please manifest is not behind the latest stable release tag', () => {
     const manifest = readJson('.release-please-manifest.json');
     const manifestVersion = String(manifest['.'] ?? '').trim();

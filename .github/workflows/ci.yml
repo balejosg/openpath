@@ -157,17 +157,20 @@ jobs:
           $config.TestResult.Enabled = $true
           $config.TestResult.OutputPath = "windows-test-results.xml"
           $config.TestResult.OutputFormat = "NUnitXml"
-          Invoke-Pester -Configuration $config
+          $result = Invoke-Pester -Configuration $config -PassThru
 
-      - name: Upload test results
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v7
-        with:
-          name: windows-test-results
-          path: windows-test-results.xml
-          if-no-files-found: ignore
-          retention-days: 7
+          @(
+            '## Windows Agent Tests'
+            ''
+            "- Passed: $($result.PassedCount)"
+            "- Failed: $($result.FailedCount)"
+            "- Skipped: $($result.SkippedCount)"
+            "- Result XML: windows-test-results.xml"
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+
+          if ($result.FailedCount -gt 0 -or $result.Result -ne 'Passed') {
+            throw "Windows Pester suite failed with result '$($result.Result)'."
+          }
 
   # ============================================
   # Job 3: Firefox Delivery Contracts
