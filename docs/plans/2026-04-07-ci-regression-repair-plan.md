@@ -91,3 +91,4 @@
 - Make Windows test/config consumers less noisy when `C:\OpenPath\data\config.json` is absent in CI so discovery-time module imports do not emit repeated expected-error logs.
 - Document or automate an SSH-based push path for workflow-touching changes so local pushes do not fail on HTTPS tokens without `workflow` scope.
 - Keep Windows GitHub Actions lanes pinned to an explicit hosted image and revisit them intentionally; the April 7, 2026 incident left completed Pester jobs stuck `in_progress` when the lane used `windows-latest`.
+- Move optional Windows test-result artifact publishing to a non-required diagnostic path; on April 7, 2026 the artifact upload step itself started hanging after Pester had already completed successfully on `windows-2022`.

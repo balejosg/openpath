@@ -166,15 +166,6 @@ jobs:
             throw "Windows Pester suite did not produce windows-test-results.xml."
           }
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        continue-on-error: true
-        with:
-          name: windows-test-results
-          path: windows-test-results.xml
-          retention-days: 7
-
   # ============================================
   # Job 3: Firefox Delivery Contracts
   # ============================================
