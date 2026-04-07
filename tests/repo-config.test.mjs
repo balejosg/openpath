@@ -22,6 +22,22 @@ function readText(relativePath) {
   return readFileSync(resolve(projectRoot, relativePath), 'utf8');
 }
 
+function compareSemver(left, right) {
+  const leftParts = left.split('.').map(Number);
+  const rightParts = right.split('.').map(Number);
+
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const leftPart = leftParts[index] ?? 0;
+    const rightPart = rightParts[index] ?? 0;
+
+    if (leftPart !== rightPart) {
+      return leftPart - rightPart;
+    }
+  }
+
+  return 0;
+}
+
 function walkTextFiles(relativePath) {
   const root = resolve(projectRoot, relativePath);
   const entries = readdirSync(root, { withFileTypes: true });
@@ -116,6 +132,17 @@ describe('repository verification contract', () => {
       verifyFullScript.includes(
         "concurrently --group --names 'e2e,security' 'npm:e2e:full' 'npm:verify:security'"
       )
+    );
+  });
+
+  test('lockfile keeps vite above the current high-severity advisory range', () => {
+    const packageLock = readJson('package-lock.json');
+    const viteVersion = packageLock.packages['node_modules/vite']?.version;
+
+    assert.ok(viteVersion, 'package-lock.json should record the resolved vite version');
+    assert.ok(
+      compareSemver(viteVersion, '7.3.1') > 0,
+      `vite ${viteVersion} is within the blocked advisory range ending at 7.3.1`
     );
   });
 
