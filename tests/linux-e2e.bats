@@ -399,6 +399,40 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "windows browser Pester coverage is split into focused suites with shared helpers" {
+    run test -f "$PROJECT_DIR/windows/tests/TestHelpers.ps1"
+    [ "$status" -eq 0 ]
+
+    run test -f "$PROJECT_DIR/windows/tests/Windows.Browser.FirefoxPolicy.Tests.ps1"
+    [ "$status" -eq 0 ]
+
+    run test -f "$PROJECT_DIR/windows/tests/Windows.Browser.ChromiumPolicy.Tests.ps1"
+    [ "$status" -eq 0 ]
+
+    run test -f "$PROJECT_DIR/windows/tests/Windows.Browser.NativeHost.Tests.ps1"
+    [ "$status" -eq 0 ]
+
+    run test -f "$PROJECT_DIR/windows/tests/Windows.Browser.Diagnostics.Tests.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '. (Join-Path $PSScriptRoot "TestHelpers.ps1")' "$PROJECT_DIR/windows/tests/Windows.Browser.FirefoxPolicy.Tests.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Describe "Browser Module"' "$PROJECT_DIR/windows/tests/Windows.Tests.ps1"
+    [ "$status" -ne 0 ]
+}
+
+@test "windows browser suites load shared browser contract fixtures" {
+    run grep -nF 'browser-firefox-managed-extension.json' "$PROJECT_DIR/windows/tests/Windows.Browser.FirefoxPolicy.Tests.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'browser-chromium-policy.json' "$PROJECT_DIR/windows/tests/Windows.Browser.ChromiumPolicy.Tests.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Get-ContractFixtureJson' "$PROJECT_DIR/windows/tests/TestHelpers.ps1"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows installer explains Firefox Release requires a signed extension distribution" {
     run grep -nF 'Firefox Release extension auto-install requires a signed XPI distribution (AMO, HTTPS URL, or staged signed artifact).' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
     [ "$status" -eq 0 ]

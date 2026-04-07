@@ -1,0 +1,13 @@
+{
+  "extensionId": "monitor-bloqueos@openpath",
+  "configuredInstallUrl": "https://addons.mozilla.org/firefox/downloads/latest/monitor-bloqueos@openpath/latest.xpi",
+  "managedApiInstallUrl": "https://school.example/api/extensions/firefox/openpath.xpi",
+  "stagedReleaseInstallUrl": "file:///C:/OpenPath/browser-extension/firefox-release/openpath-firefox-extension.xpi",
+  "metadataInstallUrl": "https://downloads.example/openpath-firefox-extension.xpi",
+  "sourcePrecedence": [
+    "configured-install-url",
+    "managed-api",
+    "staged-release",
+    "metadata-install-url"
+  ]
+}

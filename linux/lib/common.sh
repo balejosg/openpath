@@ -1041,6 +1041,7 @@ CRITICAL_FILES=(
     "$INSTALL_DIR/lib/firewall.sh"
     "$INSTALL_DIR/lib/captive-portal.sh"
     "$INSTALL_DIR/lib/browser.sh"
+    "$INSTALL_DIR/lib/chromium-managed-extension.sh"
     "$INSTALL_DIR/lib/firefox-policy.sh"
     "$INSTALL_DIR/lib/firefox-managed-extension.sh"
     "$INSTALL_DIR/libexec/browser-json.py"
@@ -1061,7 +1062,7 @@ load_libraries() {
 
     libexec_dir="$(cd "$lib_dir/.." && pwd)/libexec"
 
-    for helper_lib in firefox-policy.sh firefox-managed-extension.sh; do
+    for helper_lib in chromium-managed-extension.sh firefox-policy.sh firefox-managed-extension.sh; do
         if [ ! -f "$lib_dir/$helper_lib" ]; then
             log_error "Required library not found: $lib_dir/$helper_lib"
             return 1

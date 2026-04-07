@@ -1,0 +1,7 @@
+{
+  "googleSearchBlock": "*://www.google.*/search*",
+  "defaultSearchProviderEnabled": 1,
+  "defaultSearchProviderName": "DuckDuckGo",
+  "defaultSearchProviderSearchURL": "https://duckduckgo.com/?q={searchTerms}",
+  "dnsOverHttpsMode": "off"
+}

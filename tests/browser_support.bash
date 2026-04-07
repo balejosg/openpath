@@ -80,3 +80,31 @@ write_browser_policy_spec_fixture() {
 }
 EOF
 }
+
+browser_contract_fixture_value() {
+    local file_name="$1"
+    local field_path="$2"
+    local fixture_path="$PROJECT_DIR/tests/contracts/$file_name"
+
+    python3 - "$fixture_path" "$field_path" <<'PYEOF'
+import json
+import sys
+
+fixture_path, field_path = sys.argv[1:3]
+with open(fixture_path, "r", encoding="utf-8") as fh:
+    value = json.load(fh)
+
+for segment in field_path.split("."):
+    if isinstance(value, list):
+        value = value[int(segment)]
+    else:
+        value = value[segment]
+
+if isinstance(value, bool):
+    print("true" if value else "false")
+elif value is None:
+    print("null")
+else:
+    print(value)
+PYEOF
+}

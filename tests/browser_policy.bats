@@ -276,10 +276,10 @@ PYEOF
     run grep -nF 'browser-json.py mutate-firefox-policies' "$PROJECT_DIR/linux/lib/firefox-policy.sh"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'browser-json.py write-chromium-policy' "$PROJECT_DIR/linux/lib/browser.sh"
+    run grep -nF 'browser-json.py write-chromium-policy' "$PROJECT_DIR/linux/lib/chromium-managed-extension.sh"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'browser-json.py rewrite-chromium-manifest' "$PROJECT_DIR/linux/lib/browser.sh"
+    run grep -nF 'browser-json.py rewrite-chromium-manifest' "$PROJECT_DIR/linux/lib/chromium-managed-extension.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -294,6 +294,25 @@ PYEOF
     [ "$status" -eq 0 ]
 
     run test -f "$PROJECT_DIR/tests/browser_native_host.bats"
+    [ "$status" -eq 0 ]
+}
+
+@test "browser policy tests consume shared Firefox managed-extension contracts" {
+    source "$PROJECT_DIR/linux/lib/browser.sh"
+
+    run browser_contract_fixture_value "browser-firefox-managed-extension.json" "extensionId"
+    [ "$status" -eq 0 ]
+    [ "$output" = "monitor-bloqueos@openpath" ]
+}
+
+@test "browser policy contracts define managed Firefox source precedence" {
+    run test -f "$PROJECT_DIR/tests/contracts/browser-firefox-managed-extension.json"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '"managedApiInstallUrl"' "$PROJECT_DIR/tests/contracts/browser-firefox-managed-extension.json"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '"stagedReleaseInstallUrl"' "$PROJECT_DIR/tests/contracts/browser-firefox-managed-extension.json"
     [ "$status" -eq 0 ]
 }
 #!/usr/bin/env bats

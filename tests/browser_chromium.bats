@@ -119,6 +119,22 @@ EOF
     [ -f "$CHROME_EXTERNAL_EXTENSIONS_DIR/abcdefghijklmnopabcdefghijklmnop.json" ]
     [ -f "$EDGE_EXTERNAL_EXTENSIONS_DIR/abcdefghijklmnopabcdefghijklmnop.json" ]
 }
+
+@test "Chromium browser helpers live in a dedicated module sourced from browser.sh" {
+    run test -f "$PROJECT_DIR/linux/lib/chromium-managed-extension.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'source "$_browser_lib_dir/chromium-managed-extension.sh"' "$PROJECT_DIR/linux/lib/browser.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "Chromium browser tests consume shared Chromium policy contracts" {
+    source "$PROJECT_DIR/linux/lib/browser.sh"
+
+    run browser_contract_fixture_value "browser-chromium-policy.json" "defaultSearchProviderName"
+    [ "$status" -eq 0 ]
+    [ "$output" = "DuckDuckGo" ]
+}
 #!/usr/bin/env bats
 ################################################################################
 # browser_chromium.bats - Chromium browser integration tests
