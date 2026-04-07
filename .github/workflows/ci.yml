@@ -163,22 +163,6 @@ jobs:
             throw "Windows Pester suite did not produce windows-test-results.xml."
           }
 
-          [xml]$resultsXml = Get-Content "windows-test-results.xml"
-          $summary = $resultsXml.'test-results'
-          $totalCount = [int]$summary.total
-          $failedCount = [int]$summary.failures
-          $skippedCount = [int]$summary.skipped
-          $inconclusiveCount = [int]$summary.inconclusive
-          $notRunCount = [int]$summary.'not-run'
-          $passedCount = $totalCount - $failedCount - $skippedCount - $inconclusiveCount - $notRunCount
-
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '## Windows Agent Tests'
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Passed: $passedCount"
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Failed: $failedCount"
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Skipped: $skippedCount"
-          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "- Result XML: windows-test-results.xml"
-
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()

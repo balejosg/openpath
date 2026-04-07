@@ -162,16 +162,12 @@ describe('repository verification contract', () => {
     }
   });
 
-  test('required Windows CI keeps artifact upload best-effort while publishing a step summary', () => {
+  test('required Windows CI keeps artifact upload best-effort without inline summary processing', () => {
     const ciWorkflow = readText('.github/workflows/ci.yml');
 
     assert.ok(
-      ciWorkflow.includes('Add-Content -Path $env:GITHUB_STEP_SUMMARY'),
-      'ci.yml should append the Windows Pester summary via Add-Content'
-    );
-    assert.ok(
-      !ciWorkflow.includes('Out-File -FilePath $env:GITHUB_STEP_SUMMARY'),
-      'ci.yml should not write the Windows Pester summary with Out-File'
+      !ciWorkflow.includes('GITHUB_STEP_SUMMARY'),
+      'ci.yml should avoid inline Windows step summary processing in the required Pester job'
     );
     assert.ok(
       ciWorkflow.includes('name: Upload test results'),
