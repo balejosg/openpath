@@ -198,7 +198,7 @@ Describe "Browser Module - Firefox Policy" {
 
             Mock Resolve-Path { $null } -ModuleName Browser.Common
 
-            $result = Browser.Common\ConvertTo-OpenPathFileUrl -Path 'C:\OpenPath\browser-extension\firefox-release\openpath-firefox-extension.xpi'
+            $result = ConvertTo-OpenPathFileUrl -Path 'C:\OpenPath\browser-extension\firefox-release\openpath-firefox-extension.xpi'
             $result | Should -Be $contract.stagedReleaseInstallUrl
         }
 
@@ -206,7 +206,7 @@ Describe "Browser Module - Firefox Policy" {
             $tempFile = Join-Path $TestDrive 'policies.json'
             $json = '{"policies":{"DisableTelemetry":true}}'
 
-            Browser.Common\Write-OpenPathUtf8NoBomFile -Path $tempFile -Value $json
+            Write-OpenPathUtf8NoBomFile -Path $tempFile -Value $json
 
             $bytes = [System.IO.File]::ReadAllBytes($tempFile)
             $hasUtf8Bom = $bytes.Length -ge 3 -and $bytes[0] -eq 239 -and $bytes[1] -eq 187 -and $bytes[2] -eq 191

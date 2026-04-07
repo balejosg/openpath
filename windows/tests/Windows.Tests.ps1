@@ -3,16 +3,16 @@
 
 Import-Module (Join-Path $PSScriptRoot "TestHelpers.psm1") -Force
 
-$modulePath = Join-Path $PSScriptRoot ".." "lib"
-Import-Module "$modulePath\Common.psm1" -Force -ErrorAction Stop
-Import-Module "$modulePath\DNS.psm1" -Force -ErrorAction Stop
-Import-Module "$modulePath\Firewall.psm1" -Force -ErrorAction Stop
+$script:modulePath = Join-Path $PSScriptRoot ".." "lib"
+Import-Module "$script:modulePath\Common.psm1" -Force -ErrorAction Stop
+Import-Module "$script:modulePath\DNS.psm1" -Force -ErrorAction Stop
+Import-Module "$script:modulePath\Firewall.psm1" -Force -ErrorAction Stop
 
 BeforeAll {
     # Re-import modules in BeforeAll to ensure fresh state for tests
-    Import-Module "$modulePath\Common.psm1" -Force -ErrorAction Stop
-    Import-Module "$modulePath\DNS.psm1" -Force -ErrorAction Stop
-    Import-Module "$modulePath\Firewall.psm1" -Force -ErrorAction Stop
+    Import-Module "$script:modulePath\Common.psm1" -Force -ErrorAction Stop
+    Import-Module "$script:modulePath\DNS.psm1" -Force -ErrorAction Stop
+    Import-Module "$script:modulePath\Firewall.psm1" -Force -ErrorAction Stop
 }
 
 Describe "Common Module" {

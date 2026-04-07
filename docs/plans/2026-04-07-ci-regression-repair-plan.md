@@ -80,3 +80,6 @@
 - Extract a shared Bash helper for assembling Linux CI Docker contexts; `run-linux-e2e.sh`, `run-linux-student-flow.sh`, and `run-linux-apt-contracts.sh` still duplicate the same minimal bundle logic.
 - Generate release tarball contents from the installer validation manifest so release packaging and pre-install validation cannot drift apart.
 - Add a dedicated Windows test bootstrap module for discovery-time imports so `Windows.Tests.ps1` and split suites do not drift on which commands exist before Pester starts discovery.
+- Upgrade remaining GitHub Actions dependencies that still run on deprecated Node 20 (`actions/cache`, `actions/upload-artifact`, `softprops/action-gh-release`) before the June 2, 2026 default switch to Node 24.
+- Make Windows test/config consumers less noisy when `C:\OpenPath\data\config.json` is absent in CI so discovery-time module imports do not emit repeated expected-error logs.
+- Document or automate an SSH-based push path for workflow-touching changes so local pushes do not fail on HTTPS tokens without `workflow` scope.
