@@ -4,12 +4,7 @@ param(
     [ValidateSet('capture', 'cleanup')]
     [string]$Mode,
 
-    [string]$SnapshotPath = (if ($env:RUNNER_TEMP) {
-            Join-Path $env:RUNNER_TEMP 'openpath-windows-process-baseline.json'
-        }
-        else {
-            Join-Path $PSScriptRoot 'openpath-windows-process-baseline.json'
-        })
+    [string]$SnapshotPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -28,11 +23,16 @@ function Get-ProcessSnapshot {
 
     return @(
         foreach ($process in $processes) {
+            $commandLine = ''
+            if ($null -ne $process.CommandLine) {
+                $commandLine = [string]$process.CommandLine
+            }
+
             [pscustomobject]@{
                 ProcessId       = [int]$process.ProcessId
                 ParentProcessId = [int]$process.ParentProcessId
                 Name            = [string]$process.Name
-                CommandLine     = [string]($process.CommandLine ?? '')
+                CommandLine     = $commandLine
             }
         }
     )
@@ -143,6 +143,17 @@ function Write-ProcessListing {
                 $process.Name, `
                 $commandLine)
     }
+}
+
+$defaultSnapshotPath = if ($env:RUNNER_TEMP) {
+    Join-Path $env:RUNNER_TEMP 'openpath-windows-process-baseline.json'
+}
+else {
+    Join-Path $PSScriptRoot 'openpath-windows-process-baseline.json'
+}
+
+if ([string]::IsNullOrWhiteSpace($SnapshotPath)) {
+    $SnapshotPath = $defaultSnapshotPath
 }
 
 $SnapshotPath = Resolve-FullPath -Path $SnapshotPath
