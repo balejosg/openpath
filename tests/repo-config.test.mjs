@@ -176,8 +176,8 @@ describe('repository verification contract', () => {
       'ci.yml should not persist checkout credentials because the required CI lanes do not need authenticated git after checkout'
     );
     assert.ok(
-      (ciWorkflow.match(/persist-credentials: false/g) ?? []).length >= 4,
-      'ci.yml should disable persisted checkout credentials for each CI lane so post-job git cleanup does not extend the Windows shutdown path'
+      (ciWorkflow.match(/persist-credentials: false/g) ?? []).length >= 3,
+      'ci.yml should disable persisted checkout credentials for each checkout-based CI lane so post-job git cleanup stays off the Linux and delivery jobs'
     );
     assert.ok(
       !ciWorkflow.includes('runs-on: windows-latest'),
@@ -199,6 +199,14 @@ describe('repository verification contract', () => {
     assert.ok(
       ciWorkflow.includes('shell: cmd'),
       'ci.yml should invoke the required Windows Pester helper from cmd so the runner is not directly hosting the pwsh test shell'
+    );
+    assert.ok(
+      ciWorkflow.includes('git fetch --no-tags --depth=1 origin "${{ github.ref }}"'),
+      'ci.yml should fetch the Windows lane repository state manually so the job avoids actions/checkout post-job cleanup on Windows'
+    );
+    assert.ok(
+      ciWorkflow.includes('git checkout --force --detach "${{ github.sha }}"'),
+      'ci.yml should detach the Windows lane at the triggering commit after the manual fetch'
     );
     assert.ok(
       ciWorkflow.includes('name: Capture Windows job process baseline'),
