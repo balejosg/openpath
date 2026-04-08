@@ -269,6 +269,10 @@ run_contracts() {
         dpkg -s openpath-dnsmasq | grep -q 'Version: ${version}-1'
         test -f /etc/dnsmasq.d/openpath.conf
         command -v openpath >/dev/null
+        (command -v firefox-esr >/dev/null || command -v firefox >/dev/null)
+        test -f /etc/firefox/policies/policies.json
+        grep -q 'ExtensionSettings' /etc/firefox/policies/policies.json
+        grep -q 'monitor-bloqueos@openpath' /etc/firefox/policies/policies.json
         systemctl is-enabled openpath-dnsmasq.timer >/dev/null
     "
 

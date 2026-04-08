@@ -204,6 +204,7 @@ rm -f /usr/local/bin/dnsmasq-watchdog.sh
 rm -f /usr/local/bin/dnsmasq-init-resolv.sh
 rm -f /usr/local/bin/captive-portal-detector.sh
 rm -f /usr/local/bin/openpath
+rm -f /usr/local/bin/openpath-browser-setup.sh
 rm -f /usr/local/bin/openpath-self-update.sh
 rm -f /usr/local/bin/openpath-agent-update.sh
 rm -rf /usr/local/lib/openpath

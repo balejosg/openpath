@@ -215,42 +215,61 @@ test_firefox_extension_installed() {
     local ext_id="monitor-bloqueos@openpath"
     local firefox_app_id="{ec8030f7-c20a-464f-9b0e-13a3a9e97384}"
     local ext_dir="/usr/share/mozilla/extensions/$firefox_app_id/$ext_id"
+    local expect_firefox_extension="${OPENPATH_EXPECT_FIREFOX_EXTENSION:-0}"
+    local release_metadata="/usr/share/openpath/firefox-release/metadata.json"
+    local release_xpi="/usr/share/openpath/firefox-release/openpath-firefox-extension.xpi"
     
     # Check extension directory exists
     if [ -d "$ext_dir" ]; then
         test_pass "Extension directory exists"
+    elif [ -f "$release_metadata" ] || [ -f "$release_xpi" ]; then
+        test_pass "Firefox release artifacts available for managed install"
     else
-        echo -e "  ${YELLOW}⚠${NC} Extension directory not found (may be installed with --no-extension)"
+        if [ "$expect_firefox_extension" = "1" ]; then
+            test_fail "Extension directory not found"
+        else
+            echo -e "  ${YELLOW}⚠${NC} Extension directory not found (may be installed with --no-extension)"
+        fi
         return 0
     fi
     
     # Check manifest.json exists
-    if [ -f "$ext_dir/manifest.json" ]; then
+    if [ ! -d "$ext_dir" ]; then
+        :
+    elif [ -f "$ext_dir/manifest.json" ]; then
         test_pass "Extension manifest.json exists"
     else
         test_fail "Extension manifest.json missing"
     fi
     
     # Check built scripts required by manifest and popup
-    if [ -f "$ext_dir/dist/background.js" ]; then
+    if [ ! -d "$ext_dir" ]; then
+        :
+    elif [ -f "$ext_dir/dist/background.js" ]; then
         test_pass "Extension dist/background.js exists"
     else
         test_fail "Extension dist/background.js missing"
     fi
 
-    if [ -f "$ext_dir/dist/popup.js" ]; then
+    if [ ! -d "$ext_dir" ]; then
+        :
+    elif [ -f "$ext_dir/dist/popup.js" ]; then
         test_pass "Extension dist/popup.js exists"
     else
         test_fail "Extension dist/popup.js missing"
     fi
 
-    if [ -f "$ext_dir/dist/lib/logger.js" ]; then
+    if [ ! -d "$ext_dir" ]; then
+        :
+    elif [ -f "$ext_dir/dist/lib/logger.js" ]; then
         test_pass "Extension dist/lib/logger.js exists"
     else
         test_fail "Extension dist/lib/logger.js missing"
     fi
 
-    if [ -f "$ext_dir/blocked/blocked.html" ] && [ -f "$ext_dir/blocked/blocked.css" ] && [ -f "$ext_dir/blocked/blocked.js" ]; then
+    if [ ! -d "$ext_dir" ]; then
+        :
+    elif [ -f "$ext_dir/blocked/blocked.html" ] && [ -f "$ext_dir/blocked/blocked.css" ] && [ -f "$ext_dir/blocked/blocked.js" ]; then
         test_pass "Extension blocked screen assets exist"
     else
         test_fail "Extension blocked screen assets missing"

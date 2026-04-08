@@ -373,6 +373,9 @@ step_install_scripts() {
     cp "$INSTALLER_SOURCE_DIR/scripts/runtime/openpath-sse-listener.sh" "$SCRIPTS_DIR/"
     chmod +x "$SCRIPTS_DIR/openpath-sse-listener.sh"
 
+    cp "$INSTALLER_SOURCE_DIR/scripts/runtime/openpath-browser-setup.sh" "$SCRIPTS_DIR/"
+    chmod +x "$SCRIPTS_DIR/openpath-browser-setup.sh"
+
     cp "$INSTALLER_SOURCE_DIR/scripts/runtime/openpath-cmd.sh" "$SCRIPTS_DIR/openpath"
     chmod +x "$SCRIPTS_DIR/openpath"
 

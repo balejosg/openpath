@@ -174,6 +174,17 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "linux apt contracts verify firefox extension delivery after bootstrap" {
+    run grep -n 'command -v firefox-esr' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'monitor-bloqueos@openpath' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'ExtensionSettings' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "linux deb build includes browser native host assets" {
     run grep -nF 'stage_firefox_optional_extension_assets \' "$PROJECT_DIR/linux/scripts/build/build-deb.sh"
     [ "$status" -eq 0 ]
@@ -201,6 +212,11 @@ EOF
     [ "$status" -eq 0 ]
 
     run grep -nF 'stage_firefox_installation_bundle "$INSTALLER_SOURCE_DIR/firefox-extension" "$staged_ext_dir"' "$PROJECT_DIR/linux/install.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "linux e2e can require firefox extension presence explicitly" {
+    run grep -n 'OPENPATH_EXPECT_FIREFOX_EXTENSION' "$PROJECT_DIR/tests/e2e/linux-e2e-tests.sh"
     [ "$status" -eq 0 ]
 }
 

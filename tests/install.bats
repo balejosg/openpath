@@ -41,6 +41,14 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "apt bootstrap script runs the browser setup helper after package install" {
+    run grep -n "OPENPATH_BROWSER_SETUP_SCRIPT" "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n "openpath-browser-setup.sh" "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "apt bootstrap supports enrollment token flags" {
     run grep -n -- "--classroom-id" "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
     [ "$status" -eq 0 ]
@@ -86,6 +94,14 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 
     run grep -n '/usr/local/lib/openpath/uninstall.sh --auto-yes' "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "linux installers ship the browser setup helper" {
+    run grep -n 'openpath-browser-setup.sh' "$PROJECT_DIR/linux/scripts/build/build-deb.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'openpath-browser-setup.sh' "$PROJECT_DIR/linux/install.sh"
     [ "$status" -eq 0 ]
 }
 

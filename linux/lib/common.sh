@@ -1050,6 +1050,7 @@ CRITICAL_FILES=(
     "$INSTALL_DIR/lib/rollback.sh"
     "$SCRIPTS_DIR/openpath-update.sh"
     "$SCRIPTS_DIR/dnsmasq-watchdog.sh"
+    "$SCRIPTS_DIR/openpath-browser-setup.sh"
     "$SCRIPTS_DIR/openpath"
 )
 
