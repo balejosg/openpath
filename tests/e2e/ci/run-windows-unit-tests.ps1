@@ -22,6 +22,103 @@ function Resolve-FullPath {
     return [System.IO.Path]::GetFullPath((Join-Path $BasePath $Path))
 }
 
+function Get-DescendantProcesses {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$RootPid
+    )
+
+    $allProcesses = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    if ($allProcesses.Count -eq 0) {
+        return @()
+    }
+
+    $childrenByParent = @{}
+    foreach ($processInfo in $allProcesses) {
+        $parentId = [int]$processInfo.ParentProcessId
+        if (-not $childrenByParent.ContainsKey($parentId)) {
+            $childrenByParent[$parentId] = @()
+        }
+
+        $childrenByParent[$parentId] += $processInfo
+    }
+
+    $pendingParents = [System.Collections.Generic.Queue[int]]::new()
+    $pendingParents.Enqueue($RootPid)
+
+    $descendants = @()
+    while ($pendingParents.Count -gt 0) {
+        $parentId = $pendingParents.Dequeue()
+        foreach ($processInfo in @($childrenByParent[$parentId])) {
+            $descendants += $processInfo
+            $pendingParents.Enqueue([int]$processInfo.ProcessId)
+        }
+    }
+
+    return @($descendants)
+}
+
+function Write-DescendantProcessSnapshot {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$RootPid,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Label
+    )
+
+    $descendants = @(Get-DescendantProcesses -RootPid $RootPid)
+    if ($descendants.Count -eq 0) {
+        Write-Host "$Label: no descendant processes detected."
+        return @()
+    }
+
+    Write-Host "$Label:"
+    foreach ($processInfo in @($descendants | Sort-Object ParentProcessId, ProcessId)) {
+        $commandLine = [string]$processInfo.CommandLine
+        if ($commandLine.Length -gt 180) {
+            $commandLine = $commandLine.Substring(0, 177) + '...'
+        }
+
+        Write-Host "  PID=$($processInfo.ProcessId) PPID=$($processInfo.ParentProcessId) Name=$($processInfo.Name) CommandLine=$commandLine"
+    }
+
+    return @($descendants)
+}
+
+function Stop-DescendantProcesses {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$RootPid
+    )
+
+    $descendants = @(Write-DescendantProcessSnapshot -RootPid $RootPid -Label "Descendants for root PID $RootPid after Pester exit")
+    if ($descendants.Count -eq 0) {
+        return
+    }
+
+    $processIds = @(
+        $descendants |
+            ForEach-Object { [int]$_.ProcessId } |
+            Sort-Object -Descending -Unique
+    )
+
+    Write-Host "Stopping lingering descendant processes for root PID $RootPid: $($processIds -join ', ')"
+    Stop-Process -Id $processIds -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 1
+
+    $remaining = @(Get-DescendantProcesses -RootPid $RootPid)
+    if ($remaining.Count -eq 0) {
+        Write-Host "All descendants for root PID $RootPid exited."
+        return
+    }
+
+    Write-Host "Remaining descendants for root PID $RootPid after cleanup:"
+    foreach ($processInfo in @($remaining | Sort-Object ParentProcessId, ProcessId)) {
+        Write-Host "  PID=$($processInfo.ProcessId) PPID=$($processInfo.ParentProcessId) Name=$($processInfo.Name)"
+    }
+}
+
 function Invoke-IsolatedPwshProcess {
     param(
         [Parameter(Mandatory = $true)]
@@ -105,7 +202,22 @@ function Invoke-IsolatedPwshProcess {
         }
     }
     finally {
-        $process.Dispose()
+        try {
+            if (-not $process.HasExited) {
+                try {
+                    $process.Kill($true)
+                    $null = $process.WaitForExit(5000)
+                }
+                catch {
+                    # Best effort.
+                }
+            }
+
+            Stop-DescendantProcesses -RootPid $process.Id
+        }
+        finally {
+            $process.Dispose()
+        }
     }
 }
 
