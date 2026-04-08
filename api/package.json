@@ -76,7 +76,7 @@
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
-    "express-rate-limit": "^7.4.1",
+    "express-rate-limit": "^8.3.2",
     "google-auth-library": "^9.14.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
