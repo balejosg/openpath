@@ -139,8 +139,11 @@ function Invoke-IsolatedPwshProcess {
     $startInfo.FileName = $pwshPath
     $startInfo.WorkingDirectory = $RepoRoot
     $startInfo.UseShellExecute = $false
-    $startInfo.RedirectStandardOutput = $true
-    $startInfo.RedirectStandardError = $true
+    # Let the isolated child inherit the runner console directly.
+    # Redirected pipes can stay open after pwsh exits if descendants inherit
+    # the handles, which leaves the CI wrapper blocked on EOF.
+    $startInfo.RedirectStandardOutput = $false
+    $startInfo.RedirectStandardError = $false
 
     foreach ($argument in @(
             '-NoLogo',
@@ -170,9 +173,6 @@ function Invoke-IsolatedPwshProcess {
     }
 
     try {
-        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-        $stderrTask = $process.StandardError.ReadToEndAsync()
-
         if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
             try {
                 $process.Kill($true)
@@ -181,20 +181,7 @@ function Invoke-IsolatedPwshProcess {
                 # Best effort.
             }
 
-            $stdout = $stdoutTask.GetAwaiter().GetResult()
-            $stderr = $stderrTask.GetAwaiter().GetResult()
-            throw "Isolated Windows Pester host timed out after $TimeoutSeconds seconds.`nSTDOUT:`n$stdout`nSTDERR:`n$stderr"
-        }
-
-        $stdout = $stdoutTask.GetAwaiter().GetResult()
-        $stderr = $stderrTask.GetAwaiter().GetResult()
-
-        if ($stdout) {
-            $stdout | Out-Host
-        }
-
-        if ($stderr) {
-            $stderr | Out-Host
+            throw "Isolated Windows Pester host timed out after $TimeoutSeconds seconds."
         }
 
         if ($process.ExitCode -ne 0) {

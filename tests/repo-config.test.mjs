@@ -210,6 +210,14 @@ describe('repository verification contract', () => {
       'the isolated Windows CI helper should detach the child Pester host from runner orphan tracking'
     );
     assert.ok(
+      windowsCiHelper.includes('$startInfo.RedirectStandardOutput = $false'),
+      'the isolated Windows CI helper should stream directly to the runner console instead of blocking on redirected stdout pipes'
+    );
+    assert.ok(
+      windowsCiHelper.includes('$startInfo.RedirectStandardError = $false'),
+      'the isolated Windows CI helper should stream directly to the runner console instead of blocking on redirected stderr pipes'
+    );
+    assert.ok(
       windowsCiHelper.includes('Set-StrictMode -Off'),
       'the isolated Windows CI helper should preserve the legacy non-strict Pester runtime used by the required Windows suite'
     );
