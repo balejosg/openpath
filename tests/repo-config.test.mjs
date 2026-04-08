@@ -172,6 +172,14 @@ describe('repository verification contract', () => {
       'ci.yml should pin the required Windows Pester lane to windows-2022'
     );
     assert.ok(
+      !ciWorkflow.includes('persist-credentials: true'),
+      'ci.yml should not persist checkout credentials because the required CI lanes do not need authenticated git after checkout'
+    );
+    assert.ok(
+      (ciWorkflow.match(/persist-credentials: false/g) ?? []).length >= 4,
+      'ci.yml should disable persisted checkout credentials for each CI lane so post-job git cleanup does not extend the Windows shutdown path'
+    );
+    assert.ok(
       !ciWorkflow.includes('runs-on: windows-latest'),
       'ci.yml should avoid windows-latest for the required Windows Pester lane'
     );
