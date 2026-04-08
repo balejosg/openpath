@@ -174,12 +174,14 @@ describe('repository verification contract', () => {
     const ciWorkflow = readText('.github/workflows/ci.yml');
     const linuxJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-linux-dnsmasq');
     const windowsJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-windows');
-    const windowsCiHelper = readText('tests/e2e/ci/run-windows-unit-tests.ps1');
-    const windowsProcessManager = readText('tests/e2e/ci/manage-windows-job-processes.ps1');
 
     assert.ok(
-      ciWorkflow.includes('runs-on: windows-2022'),
-      'ci.yml should pin the required Windows Pester lane to windows-2022'
+      ciWorkflow.includes('runs-on: windows-2025'),
+      'ci.yml should pin the required Windows Pester lane to windows-2025'
+    );
+    assert.ok(
+      !ciWorkflow.includes('runs-on: windows-2022'),
+      'ci.yml should stop pinning the required Windows Pester lane to windows-2022'
     );
     assert.ok(
       !ciWorkflow.includes('persist-credentials: true'),
@@ -194,12 +196,12 @@ describe('repository verification contract', () => {
       'ci.yml should disable persisted checkout credentials for the Linux lane checkout'
     );
     assert.ok(
-      windowsJobBlock.includes('git init .'),
-      'ci.yml should fetch the Windows lane repository state manually so the job avoids actions/checkout post-job cleanup on Windows'
+      windowsJobBlock.includes('uses: actions/checkout@v6'),
+      'ci.yml should use the standard checkout action again inside the Windows lane'
     );
     assert.ok(
-      !windowsJobBlock.includes('uses: actions/checkout@v6'),
-      'ci.yml should not use actions/checkout inside the Windows lane because its post-job cleanup has been leaving the Pester check-run stuck'
+      windowsJobBlock.includes('persist-credentials: false'),
+      'ci.yml should disable persisted checkout credentials for the Windows lane checkout'
     );
     assert.ok(
       !ciWorkflow.includes('runs-on: windows-latest'),
@@ -214,37 +216,40 @@ describe('repository verification contract', () => {
       'ci.yml should keep artifact upload out of the required Windows Pester lane'
     );
     assert.ok(
-      ciWorkflow.includes('tests/e2e/ci/run-windows-unit-tests.ps1') ||
-        ciWorkflow.includes('tests\\e2e\\ci\\run-windows-unit-tests.ps1'),
-      'ci.yml should run the required Windows Pester lane through the isolated CI helper'
+      windowsJobBlock.includes('name: Install Pester'),
+      'ci.yml should install Pester explicitly in the Windows lane before running the suite'
     );
     assert.ok(
-      ciWorkflow.includes('shell: cmd'),
-      'ci.yml should invoke the required Windows Pester helper from cmd so the runner is not directly hosting the pwsh test shell'
+      windowsJobBlock.includes('Import-Module Pester -MinimumVersion 5.0 -ErrorAction Stop'),
+      'ci.yml should import a compatible Pester version explicitly in the Windows lane'
     );
     assert.ok(
-      windowsJobBlock.includes('git fetch --no-tags --depth=1 origin "${{ github.ref }}"'),
-      'ci.yml should fetch the Windows lane repository state manually so the job avoids actions/checkout post-job cleanup on Windows'
+      !windowsJobBlock.includes('git init .'),
+      'ci.yml should not keep the manual Windows checkout workaround once the lane returns to the direct Pester pattern'
     );
     assert.ok(
-      windowsJobBlock.includes('git checkout --force --detach "${{ github.sha }}"'),
-      'ci.yml should detach the Windows lane at the triggering commit after the manual fetch'
+      !windowsJobBlock.includes('git fetch --no-tags --depth=1 origin'),
+      'ci.yml should not keep the manual Windows fetch workaround once the lane returns to the direct Pester pattern'
     );
     assert.ok(
-      ciWorkflow.includes('name: Capture Windows job process baseline'),
-      'ci.yml should snapshot the Windows job process list before running the required Pester suite'
+      !ciWorkflow.includes('tests/e2e/ci/run-windows-unit-tests.ps1'),
+      'ci.yml should stop routing the Windows lane through the isolated CI helper'
     );
     assert.ok(
-      ciWorkflow.includes('name: Clean Windows orphaned shells'),
-      'ci.yml should run an explicit Windows orphan cleanup step before the runner performs its own final orphan sweep'
+      !ciWorkflow.includes('manage-windows-job-processes.ps1'),
+      'ci.yml should stop routing the Windows lane through the process cleanup helper'
     );
     assert.ok(
-      ciWorkflow.includes('name: Re-scan Windows processes after idle delay'),
-      'ci.yml should re-scan the Windows process table after a short idle delay to catch processes that surface only as the last visible step exits'
+      !ciWorkflow.includes('name: Capture Windows job process baseline'),
+      'ci.yml should not capture a Windows process baseline once the lane returns to the direct Pester pattern'
     );
     assert.ok(
-      ciWorkflow.includes('manage-windows-job-processes.ps1'),
-      'ci.yml should route Windows process capture and cleanup through the shared CI helper'
+      !ciWorkflow.includes('name: Clean Windows orphaned shells'),
+      'ci.yml should not run the explicit Windows orphan cleanup step once the lane returns to the direct Pester pattern'
+    );
+    assert.ok(
+      !ciWorkflow.includes('name: Re-scan Windows processes after idle delay'),
+      'ci.yml should not re-scan the Windows process table once the lane returns to the direct Pester pattern'
     );
     assert.ok(
       ciWorkflow.includes(
@@ -258,7 +263,51 @@ describe('repository verification contract', () => {
     );
     assert.ok(
       !windowsJobBlock.includes('shell: bash'),
-      'ci.yml should avoid bash in the Windows lane so the runner does not need to reap Git Bash shells after the Pester helper exits'
+      'ci.yml should avoid bash in the Windows lane'
+    );
+    assert.ok(
+      !windowsJobBlock.includes('shell: cmd'),
+      'ci.yml should not route the Windows lane through cmd once the direct pwsh Pester pattern is restored'
+    );
+    assert.ok(
+      windowsJobBlock.includes('shell: pwsh'),
+      'ci.yml should run the Windows lane directly in pwsh'
+    );
+    assert.ok(
+      windowsJobBlock.includes('Set-StrictMode -Off'),
+      'ci.yml should preserve the legacy non-strict Pester runtime used by the required Windows suite'
+    );
+    assert.ok(
+      windowsJobBlock.includes("$config.Run.Path = 'windows/tests'"),
+      'ci.yml should point the Windows lane at the real Pester suite directory'
+    );
+    assert.ok(
+      windowsJobBlock.includes('$config.Run.PassThru = $true'),
+      'ci.yml should request a Pester result object so FailedCount reflects the real suite outcome'
+    );
+    assert.ok(
+      windowsJobBlock.includes("$config.TestResult.OutputPath = 'windows-test-results.xml'"),
+      'ci.yml should keep the Windows lane writing its NUnit XML result file'
+    );
+    assert.ok(
+      windowsJobBlock.includes('Invoke-Pester -Configuration $config'),
+      'ci.yml should continue to execute the real Pester suite'
+    );
+    assert.ok(
+      windowsJobBlock.includes(
+        "throw 'Windows Pester suite did not produce windows-test-results.xml.'"
+      ),
+      'ci.yml should fail fast if the Windows lane does not emit its expected NUnit XML file'
+    );
+    assert.ok(
+      windowsJobBlock.includes("throw 'Invoke-Pester returned no result object.'"),
+      'ci.yml should fail fast if Invoke-Pester does not return a result object'
+    );
+    assert.ok(
+      windowsJobBlock.includes(
+        'throw "Windows Pester suite reported $($result.FailedCount) failure(s)."'
+      ),
+      'ci.yml should fail the Windows lane when the Pester result reports failures'
     );
     assert.ok(
       windowsJobBlock.includes(
@@ -278,58 +327,6 @@ describe('repository verification contract', () => {
       ciWorkflow.includes('needs.test-windows.outputs.tests_passed'),
       'ci.yml should drive the CI summary gate from the recorded Windows lane output'
     );
-    assert.ok(
-      !windowsCiHelper.includes("Environment.Remove('RUNNER_TRACKING_ID')"),
-      'the isolated Windows CI helper should keep the child Pester host attached to runner tracking while other isolation safeguards stay in place'
-    );
-    assert.ok(
-      windowsCiHelper.includes('$startInfo.RedirectStandardOutput = $false'),
-      'the isolated Windows CI helper should stream directly to the runner console instead of blocking on redirected stdout pipes'
-    );
-    assert.ok(
-      windowsCiHelper.includes('$startInfo.RedirectStandardError = $false'),
-      'the isolated Windows CI helper should stream directly to the runner console instead of blocking on redirected stderr pipes'
-    );
-    assert.ok(
-      windowsCiHelper.includes('Set-StrictMode -Off'),
-      'the isolated Windows CI helper should preserve the legacy non-strict Pester runtime used by the required Windows suite'
-    );
-    assert.ok(
-      windowsCiHelper.includes('$config.Run.PassThru = $true'),
-      'the isolated Windows CI helper should request a Pester result object so FailedCount reflects the real suite outcome'
-    );
-    assert.ok(
-      windowsCiHelper.includes(
-        "$startInfo.Environment['OPENPATH_WINDOWS_CI_ISOLATED_PESTER'] = '1'"
-      ),
-      'the isolated Windows CI helper should keep its explicit isolation marker for diagnostics'
-    );
-    assert.ok(
-      !windowsCiHelper.includes('Get-CimInstance Win32_Process'),
-      'the isolated Windows CI helper should avoid WMI descendant sweeps that can hang the required Windows lane before the step completes'
-    );
-    assert.ok(
-      windowsCiHelper.includes('JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE'),
-      'the isolated Windows CI helper should use a kill-on-close Windows job object so lingering descendants cannot wedge the runner after successful steps'
-    );
-    assert.ok(
-      windowsCiHelper.includes('AssignProcessToJobObject'),
-      'the isolated Windows CI helper should assign the child pwsh host to the kill-on-close Windows job object'
-    );
-    assert.ok(
-      windowsCiHelper.includes('Close-JobObjectHandle -Handle $jobHandle'),
-      'the isolated Windows CI helper should close the Windows job object handle so any lingering descendants are terminated deterministically'
-    );
-    assert.ok(
-      windowsCiHelper.includes(
-        "Get-ChildItem -Path (Join-Path $RepoRoot 'windows/tests') -Filter '*.Tests.ps1' -File"
-      ),
-      'the isolated Windows CI helper should enumerate individual Pester files so the suite can be split across fresh child hosts'
-    );
-    assert.ok(
-      windowsCiHelper.includes('Running isolated Windows Pester file:'),
-      'the isolated Windows CI helper should log each isolated Pester file invocation to make per-file runner hangs diagnosable'
-    );
     for (const relativePath of [
       'windows/tests/Windows.Browser.ChromiumPolicy.Tests.ps1',
       'windows/tests/Windows.Browser.Diagnostics.Tests.ps1',
@@ -347,76 +344,6 @@ describe('repository verification contract', () => {
         `${relativePath} should resolve browser module paths from PSScriptRoot inside the executable Pester scope`
       );
     }
-    assert.ok(
-      windowsCiHelper.includes('Invoke-Pester -Configuration $config'),
-      'the isolated Windows CI helper should continue to execute the real Pester suite'
-    );
-    assert.ok(
-      windowsProcessManager.includes("ValidateSet('capture', 'cleanup')"),
-      'the Windows process manager helper should support both baseline capture and cleanup modes'
-    );
-    assert.ok(
-      windowsProcessManager.includes('Get-CimInstance Win32_Process'),
-      'the Windows process manager helper should inspect live Win32 processes so the workflow can log the exact post-suite process set'
-    );
-    assert.ok(
-      windowsProcessManager.includes('Windows processes started after the job baseline:'),
-      'the Windows process manager helper should log the new process set before cleanup so CI exposes the culprit if the runner still hangs'
-    );
-    assert.ok(
-      windowsProcessManager.includes('[AllowEmptyCollection()]'),
-      'the Windows process manager helper should tolerate empty cleanup candidate lists instead of failing when there is nothing to terminate'
-    );
-    assert.ok(
-      windowsProcessManager.includes('CreationDate'),
-      'the Windows process manager helper should track process creation timestamps so PID reuse cannot hide newly spawned Windows processes'
-    );
-    assert.ok(
-      windowsProcessManager.includes('Expand-ProtectedProcessIds'),
-      'the Windows process manager helper should protect the active cleanup shell and its descendants before terminating lingering Windows processes'
-    );
-    assert.ok(
-      windowsProcessManager.includes('return ,$protectedIds'),
-      'the Windows process manager helper should return HashSet process-id collections without PowerShell enumerating them into a fixed-size array'
-    );
-    assert.ok(
-      windowsProcessManager.includes('return ,$ProtectedIds'),
-      'the Windows process manager helper should preserve expanded HashSet process-id collections as mutable sets when returning from helper functions'
-    );
-    assert.ok(
-      !windowsProcessManager.includes(
-        '$protectedIds = Expand-ProtectedProcessIds -ProtectedIds $protectedIds -Processes $currentProcesses'
-      ),
-      'the Windows process manager helper should not expand protection from the full runner ancestor chain because that masks the orphaned descendants the cleanup step is supposed to inspect'
-    );
-    assert.ok(
-      windowsProcessManager.includes('$cleanupNames.Contains([string]$_.Name)'),
-      'the Windows process manager helper should identify lingering Windows shell and git processes by executable name before terminating them'
-    );
-    assert.ok(
-      windowsProcessManager.includes("'git.exe'"),
-      'the Windows process manager helper should target lingering Windows shell and git processes instead of killing arbitrary hosted-runner activity'
-    );
-    assert.ok(
-      windowsProcessManager.includes("candidate.Name -ieq 'conhost.exe'"),
-      'the Windows process manager helper should treat conhost.exe as a special case before terminating console hosts'
-    );
-    assert.ok(
-      windowsProcessManager.includes('$processMap.ContainsKey([int]$candidate.ParentProcessId)'),
-      'the Windows process manager helper should preserve console hosts whose parent process is still alive'
-    );
-    assert.ok(
-      windowsProcessManager.includes(
-        'Stop-Process -Id $candidate.ProcessId -Force -ErrorAction Stop'
-      ),
-      'the Windows process manager helper should terminate lingering shell processes before the runner reaches orphan cleanup'
-    );
-    assert.ok(
-      windowsProcessManager.includes(
-        'Windows processes of interest still present before job completion:'
-      ),
-      'the Windows process manager helper should log the surviving Windows shell and git process set immediately before job completion'
-    );
   });
 
   test('release-please manifest is not behind the latest stable release tag', () => {

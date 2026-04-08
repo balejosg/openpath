@@ -152,11 +152,10 @@ jobs:
   # ============================================
   test-windows:
     name: Windows Agent Tests (Pester)
-    # Hosted Windows runs have been leaving successful Pester jobs in a
-    # stuck "in_progress" state at the check-run level during orphan cleanup.
-    # Run the required Pester suite in an isolated pwsh host so GitHub's
-    # runner reaper does not wedge after the tests themselves have passed.
-    runs-on: windows-2022
+    # Keep the required Windows lane on the last hosted image where the
+    # direct Pester job closed cleanly. The 2022 image has been turning
+    # successful visible steps into teardown-time failures.
+    runs-on: windows-2025
     needs: detect-relevant-changes
     if: needs.detect-relevant-changes.outputs.os_bound == 'true'
     outputs:
@@ -164,25 +163,45 @@ jobs:
 
     steps:
       - name: Checkout code
-        shell: pwsh
-        run: |
-          git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          git fetch --no-tags --depth=1 origin "${{ github.ref }}"
-          git checkout --force --detach "${{ github.sha }}"
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
-      - name: Capture Windows job process baseline
+      - name: Install Pester
         shell: pwsh
         run: |
-          & .\tests\e2e\ci\manage-windows-job-processes.ps1 `
-            -Mode capture `
-            -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-baseline.json"
+          Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
+          Import-Module Pester -MinimumVersion 5.0 -ErrorAction Stop
 
       - name: Run Windows Unit Tests
         id: run-windows-unit-tests
-        shell: cmd
+        shell: pwsh
         run: |
-          pwsh -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests\e2e\ci\run-windows-unit-tests.ps1 -RepoRoot "%CD%"
+          # Match the locally verified Pester host semantics for the legacy
+          # Windows suite while keeping the CI lane free of extra wrappers.
+          Set-StrictMode -Off
+
+          $config = New-PesterConfiguration
+          $config.Run.Path = 'windows/tests'
+          $config.Run.PassThru = $true
+          $config.Output.Verbosity = 'Detailed'
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = 'windows-test-results.xml'
+          $config.TestResult.OutputFormat = 'NUnitXml'
+
+          $result = Invoke-Pester -Configuration $config
+
+          if (-not (Test-Path 'windows-test-results.xml')) {
+            throw 'Windows Pester suite did not produce windows-test-results.xml.'
+          }
+
+          if ($null -eq $result) {
+            throw 'Invoke-Pester returned no result object.'
+          }
+
+          if ($result.FailedCount -gt 0) {
+            throw "Windows Pester suite reported $($result.FailedCount) failure(s)."
+          }
 
       - name: Record Windows lane outcome
         id: job-status
@@ -192,23 +211,6 @@ jobs:
         shell: pwsh
         run: |
           "tests_passed=$env:TESTS_PASSED" >> $env:GITHUB_OUTPUT
-
-      - name: Clean Windows orphaned shells
-        if: always()
-        shell: pwsh
-        run: |
-          & .\tests\e2e\ci\manage-windows-job-processes.ps1 `
-            -Mode cleanup `
-            -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-baseline.json"
-
-      - name: Re-scan Windows processes after idle delay
-        if: always()
-        shell: pwsh
-        run: |
-          Start-Sleep -Seconds 5
-          & .\tests\e2e\ci\manage-windows-job-processes.ps1 `
-            -Mode cleanup `
-            -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-baseline.json"
 
   # ============================================
   # Job 3: Firefox Delivery Contracts
