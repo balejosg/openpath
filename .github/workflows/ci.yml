@@ -163,6 +163,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - name: Capture Windows job process baseline
+        shell: pwsh
+        run: |
+          & .\tests\e2e\ci\manage-windows-job-processes.ps1 `
+            -Mode capture `
+            -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-baseline.json"
+
       - name: Run Windows Unit Tests
         id: run-windows-unit-tests
         shell: cmd
@@ -179,6 +186,14 @@ jobs:
           else
             echo "tests_passed=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Clean Windows orphaned shells
+        if: always()
+        shell: pwsh
+        run: |
+          & .\tests\e2e\ci\manage-windows-job-processes.ps1 `
+            -Mode cleanup `
+            -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-baseline.json"
 
   # ============================================
   # Job 3: Firefox Delivery Contracts

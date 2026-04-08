@@ -165,6 +165,7 @@ describe('repository verification contract', () => {
   test('required Windows CI keeps the Pester lane minimal and avoids inline summary processing', () => {
     const ciWorkflow = readText('.github/workflows/ci.yml');
     const windowsCiHelper = readText('tests/e2e/ci/run-windows-unit-tests.ps1');
+    const windowsProcessManager = readText('tests/e2e/ci/manage-windows-job-processes.ps1');
 
     assert.ok(
       ciWorkflow.includes('runs-on: windows-2022'),
@@ -190,6 +191,18 @@ describe('repository verification contract', () => {
     assert.ok(
       ciWorkflow.includes('shell: cmd'),
       'ci.yml should invoke the required Windows Pester helper from cmd so the runner is not directly hosting the pwsh test shell'
+    );
+    assert.ok(
+      ciWorkflow.includes('name: Capture Windows job process baseline'),
+      'ci.yml should snapshot the Windows job process list before running the required Pester suite'
+    );
+    assert.ok(
+      ciWorkflow.includes('name: Clean Windows orphaned shells'),
+      'ci.yml should run an explicit Windows orphan cleanup step before the runner performs its own final orphan sweep'
+    );
+    assert.ok(
+      ciWorkflow.includes('manage-windows-job-processes.ps1'),
+      'ci.yml should route Windows process capture and cleanup through the shared CI helper'
     );
     assert.ok(
       ciWorkflow.includes(
@@ -244,6 +257,32 @@ describe('repository verification contract', () => {
     assert.ok(
       windowsCiHelper.includes('Invoke-Pester -Configuration $config'),
       'the isolated Windows CI helper should continue to execute the real Pester suite'
+    );
+    assert.ok(
+      windowsProcessManager.includes("ValidateSet('capture', 'cleanup')"),
+      'the Windows process manager helper should support both baseline capture and cleanup modes'
+    );
+    assert.ok(
+      windowsProcessManager.includes('Get-CimInstance Win32_Process'),
+      'the Windows process manager helper should inspect live Win32 processes so the workflow can log the exact post-suite process set'
+    );
+    assert.ok(
+      windowsProcessManager.includes('Windows processes started after the job baseline:'),
+      'the Windows process manager helper should log the new process set before cleanup so CI exposes the culprit if the runner still hangs'
+    );
+    assert.ok(
+      windowsProcessManager.includes('Expand-ProtectedProcessIds'),
+      'the Windows process manager helper should protect the active cleanup shell and its descendants before terminating lingering Windows processes'
+    );
+    assert.ok(
+      windowsProcessManager.includes('Where-Object { $cleanupNames.Contains([string]$_.Name) }'),
+      'the Windows process manager helper should target lingering Windows shell processes instead of killing arbitrary hosted-runner activity'
+    );
+    assert.ok(
+      windowsProcessManager.includes(
+        'Stop-Process -Id $candidate.ProcessId -Force -ErrorAction Stop'
+      ),
+      'the Windows process manager helper should terminate lingering shell processes before the runner reaches orphan cleanup'
     );
   });
 
