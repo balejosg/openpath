@@ -187,13 +187,11 @@ jobs:
       - name: Record Windows lane outcome
         id: job-status
         if: always()
+        env:
+          TESTS_PASSED: ${{ steps.run-windows-unit-tests.outcome == 'success' && 'true' || 'false' }}
         shell: pwsh
         run: |
-          if ('${{ steps.run-windows-unit-tests.outcome }}' -eq 'success') {
-            'tests_passed=true' | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          else
-            'tests_passed=false' | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          }
+          "tests_passed=$env:TESTS_PASSED" >> $env:GITHUB_OUTPUT
 
       - name: Clean Windows orphaned shells
         if: always()

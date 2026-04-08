@@ -261,6 +261,20 @@ describe('repository verification contract', () => {
       'ci.yml should avoid bash in the Windows lane so the runner does not need to reap Git Bash shells after the Pester helper exits'
     );
     assert.ok(
+      windowsJobBlock.includes(
+        "TESTS_PASSED: ${{ steps.run-windows-unit-tests.outcome == 'success' && 'true' || 'false' }}"
+      ),
+      'ci.yml should derive the Windows lane outcome from a GitHub Actions expression so the output step stays shell-minimal'
+    );
+    assert.ok(
+      windowsJobBlock.includes('"tests_passed=$env:TESTS_PASSED" >> $env:GITHUB_OUTPUT'),
+      'ci.yml should emit the Windows lane outcome through a single redirected line to GITHUB_OUTPUT'
+    );
+    assert.ok(
+      !windowsJobBlock.includes('Out-File -FilePath $env:GITHUB_OUTPUT'),
+      'ci.yml should avoid the more error-prone multi-line Out-File pattern in the Windows lane outcome step'
+    );
+    assert.ok(
       ciWorkflow.includes('needs.test-windows.outputs.tests_passed'),
       'ci.yml should drive the CI summary gate from the recorded Windows lane output'
     );
