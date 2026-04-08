@@ -170,7 +170,7 @@ describe('repository verification contract', () => {
     }
   });
 
-  test('required Windows CI keeps the direct Pester lane, reports lingering processes, and cleans orphaned console hosts', () => {
+  test('required Windows CI keeps the direct Pester lane and emits bounded lineage diagnostics for lingering processes', () => {
     const ciWorkflow = readText('.github/workflows/ci.yml');
     const linuxJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-linux-dnsmasq');
     const windowsJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-windows');
@@ -266,10 +266,6 @@ describe('repository verification contract', () => {
       'ci.yml should log bounded Windows process diagnostics before the runner reaches orphan cleanup'
     );
     assert.ok(
-      windowsJobBlock.includes('name: Cleanup lingering Windows console hosts'),
-      'ci.yml should clean lingering Windows console hosts before the runner reaches orphan cleanup'
-    );
-    assert.ok(
       ciWorkflow.includes(
         'outputs:\n      tests_passed: ${{ steps.job-status.outputs.tests_passed }}'
       ),
@@ -340,10 +336,6 @@ describe('repository verification contract', () => {
       'ci.yml should remove lingering PowerShell jobs before exiting the Windows lane'
     );
     assert.ok(
-      windowsJobBlock.includes('-Mode cleanup-conhost'),
-      'ci.yml should invoke the Windows process helper in cleanup-conhost mode after diagnostics'
-    );
-    assert.ok(
       windowsJobBlock.includes(
         "TESTS_PASSED: ${{ steps.run-windows-unit-tests.outcome == 'success' && 'true' || 'false' }}"
       ),
@@ -362,8 +354,8 @@ describe('repository verification contract', () => {
       'ci.yml should drive the CI summary gate from the recorded Windows lane output'
     );
     assert.ok(
-      windowsProcessReporter.includes("ValidateSet('capture', 'report', 'cleanup-conhost')"),
-      'the Windows process reporter should support snapshot capture, reporting, and targeted cleanup modes'
+      windowsProcessReporter.includes("ValidateSet('capture', 'report')"),
+      'the Windows process reporter should support snapshot capture and reporting modes'
     );
     assert.ok(
       windowsProcessReporter.includes('Get-CimInstance Win32_Process'),
@@ -380,20 +372,20 @@ describe('repository verification contract', () => {
       'the Windows process reporter should log lingering shell and git processes before the runner cleanup phase'
     );
     assert.ok(
-      windowsProcessReporter.includes('Windows lingering conhost cleanup candidates:'),
-      'the Windows process reporter should log the lingering console-host cleanup candidates explicitly'
+      windowsProcessReporter.includes('lineage='),
+      'the Windows process reporter should include lineage details for lingering processes'
     );
     assert.ok(
-      windowsProcessReporter.includes("[string]$_.Name -eq 'conhost.exe'"),
-      'the Windows process reporter should scope active cleanup to lingering conhost.exe processes'
+      windowsProcessReporter.includes('Format-ProcessLineage'),
+      'the Windows process reporter should derive process ancestry for lingering processes'
     );
     assert.ok(
-      windowsProcessReporter.includes('Stop-Process -Id'),
-      'the Windows process reporter should terminate lingering console hosts after they are identified'
+      windowsProcessReporter.includes('missing-parent('),
+      'the Windows process reporter should flag missing parent processes in the reported lineage'
     );
     assert.ok(
-      windowsProcessReporter.includes('Terminated lingering Windows console host'),
-      'the Windows process reporter should log each terminated lingering console host'
+      !windowsProcessReporter.includes('Stop-Process -Id'),
+      'the Windows process reporter should stay diagnostic-only while the lingering-process ancestry is still being investigated'
     );
     for (const relativePath of [
       'windows/tests/Windows.Browser.ChromiumPolicy.Tests.ps1',

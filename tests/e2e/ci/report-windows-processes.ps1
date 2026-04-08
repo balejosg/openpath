@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('capture', 'report', 'cleanup-conhost')]
+    [ValidateSet('capture', 'report')]
     [string]$Mode,
 
     [string]$SnapshotPath = ''
@@ -132,7 +132,9 @@ function Write-ProcessListing {
         [object[]]$Processes,
 
         [Parameter(Mandatory = $true)]
-        [string]$Title
+        [string]$Title,
+
+        [hashtable]$ProcessMap = $null
     )
 
     Write-Host $Title
@@ -148,12 +150,52 @@ function Write-ProcessListing {
             $commandLine = $commandLine.Substring(0, 180) + '...'
         }
 
-        Write-Host ("  pid={0} parent={1} name={2} cmd={3}" -f `
+        $lineageSuffix = ''
+        if ($null -ne $ProcessMap) {
+            $lineage = Format-ProcessLineage -Process $process -ProcessMap $ProcessMap
+            $lineageSuffix = " lineage=$lineage"
+        }
+
+        Write-Host ("  pid={0} parent={1} name={2} cmd={3}{4}" -f `
                 $process.ProcessId, `
                 $process.ParentProcessId, `
                 $process.Name, `
-                $commandLine)
+                $commandLine, `
+                $lineageSuffix)
     }
+}
+
+function Format-ProcessLineage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Process,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$ProcessMap
+    )
+
+    $segments = New-Object 'System.Collections.Generic.List[string]'
+    $currentProcess = $Process
+    $depth = 0
+
+    while ($null -ne $currentProcess -and $depth -lt 6) {
+        $segments.Add(("{0}({1})" -f $currentProcess.Name, $currentProcess.ProcessId))
+
+        $parentId = [int]$currentProcess.ParentProcessId
+        if ($parentId -le 0) {
+            break
+        }
+
+        if (-not $ProcessMap.ContainsKey($parentId)) {
+            $segments.Add(("missing-parent({0})" -f $parentId))
+            break
+        }
+
+        $currentProcess = $ProcessMap[$parentId]
+        $depth++
+    }
+
+    return [string]::Join(' <- ', $segments)
 }
 
 function Get-TrackedProcessContext {
@@ -192,9 +234,10 @@ function Get-TrackedProcessContext {
     }
 
     return [pscustomobject]@{
-        BaselineKeys    = $baselineKeys
+        BaselineKeys     = $baselineKeys
         CurrentProcesses = $currentProcesses
-        ProtectedIds    = $protectedIds
+        ProcessMap       = $processMap
+        ProtectedIds     = $protectedIds
     }
 }
 
@@ -233,6 +276,7 @@ switch ($Mode) {
         $context = Get-TrackedProcessContext -SnapshotPath $SnapshotPath
         $baselineKeys = $context.BaselineKeys
         $currentProcesses = $context.CurrentProcesses
+        $processMap = $context.ProcessMap
         $protectedIds = $context.ProtectedIds
 
         $newProcesses = @(
@@ -244,7 +288,7 @@ switch ($Mode) {
                 Sort-Object Name, ProcessId
         )
 
-        Write-ProcessListing -Processes $newProcesses -Title 'Windows processes started after the job baseline:'
+        Write-ProcessListing -Processes $newProcesses -Title 'Windows processes started after the job baseline:' -ProcessMap $processMap
 
         $interestingNames = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
         foreach ($name in @('bash.exe', 'cmd.exe', 'conhost.exe', 'git.exe', 'OpenConsole.exe', 'powershell.exe', 'pwsh.exe', 'sh.exe')) {
@@ -260,36 +304,7 @@ switch ($Mode) {
                 Sort-Object Name, ProcessId
         )
 
-        Write-ProcessListing -Processes $interestingProcesses -Title 'Windows shell and git processes still present before job completion:'
-        break
-    }
-
-    'cleanup-conhost' {
-        $context = Get-TrackedProcessContext -SnapshotPath $SnapshotPath
-        $currentProcesses = $context.CurrentProcesses
-        $protectedIds = $context.ProtectedIds
-
-        $cleanupCandidates = @(
-            $currentProcesses |
-                Where-Object {
-                    [string]$_.Name -eq 'conhost.exe' -and
-                    -not $protectedIds.Contains([int]$_.ProcessId)
-                } |
-                Sort-Object ProcessId -Descending
-        )
-
-        Write-ProcessListing -Processes $cleanupCandidates -Title 'Windows lingering conhost cleanup candidates:'
-
-        foreach ($candidate in $cleanupCandidates) {
-            try {
-                Stop-Process -Id $candidate.ProcessId -Force -ErrorAction Stop
-                Write-Host ("Terminated lingering Windows console host pid={0}" -f $candidate.ProcessId)
-            }
-            catch {
-                Write-Warning ("Failed to terminate lingering Windows console host pid={0}: {1}" -f $candidate.ProcessId, $_.Exception.Message)
-            }
-        }
-
+        Write-ProcessListing -Processes $interestingProcesses -Title 'Windows shell and git processes still present before job completion:' -ProcessMap $processMap
         break
     }
 }
