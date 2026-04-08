@@ -205,6 +205,10 @@ describe('repository verification contract', () => {
       'the isolated Windows CI helper should detach the child Pester host from runner orphan tracking'
     );
     assert.ok(
+      windowsCiHelper.includes('Set-StrictMode -Off'),
+      'the isolated Windows CI helper should preserve the legacy non-strict Pester runtime used by the required Windows suite'
+    );
+    assert.ok(
       windowsCiHelper.includes('Invoke-Pester -Configuration $config'),
       'the isolated Windows CI helper should continue to execute the real Pester suite'
     );

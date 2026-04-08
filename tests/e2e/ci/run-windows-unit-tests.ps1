@@ -6,7 +6,6 @@ param(
     [int]$TimeoutSeconds = 900
 )
 
-Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Resolve-FullPath {
@@ -135,6 +134,10 @@ function Invoke-ChildPesterRun {
     }
 
     Import-Module Pester -MinimumVersion $minimumPesterVersion -ErrorAction Stop
+
+    # Match the historical workflow host semantics for the Windows suite.
+    # Several legacy assertions rely on Pester's default non-strict runtime.
+    Set-StrictMode -Off
 
     $config = New-PesterConfiguration
     $config.Run.Path = 'windows/tests'
