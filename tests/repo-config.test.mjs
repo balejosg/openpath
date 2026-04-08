@@ -22,6 +22,14 @@ function readText(relativePath) {
   return readFileSync(resolve(projectRoot, relativePath), 'utf8');
 }
 
+function extractWorkflowJobBlock(workflowText, jobId) {
+  const jobPattern = new RegExp(`(^  ${jobId}:\\n[\\s\\S]*?)(?=^  [a-z0-9-]+:\\n|\\Z)`, 'm');
+  const match = workflowText.match(jobPattern);
+
+  assert.ok(match, `workflow should define a ${jobId} job block`);
+  return match[1];
+}
+
 function listStableReleaseTags() {
   const tags = new Set();
   const tagsDir = resolve(projectRoot, '.git/refs/tags');
@@ -164,6 +172,8 @@ describe('repository verification contract', () => {
 
   test('required Windows CI keeps the Pester lane minimal and avoids inline summary processing', () => {
     const ciWorkflow = readText('.github/workflows/ci.yml');
+    const linuxJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-linux-dnsmasq');
+    const windowsJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-windows');
     const windowsCiHelper = readText('tests/e2e/ci/run-windows-unit-tests.ps1');
     const windowsProcessManager = readText('tests/e2e/ci/manage-windows-job-processes.ps1');
 
@@ -176,8 +186,20 @@ describe('repository verification contract', () => {
       'ci.yml should not persist checkout credentials because the required CI lanes do not need authenticated git after checkout'
     );
     assert.ok(
-      (ciWorkflow.match(/persist-credentials: false/g) ?? []).length >= 3,
-      'ci.yml should disable persisted checkout credentials for each checkout-based CI lane so post-job git cleanup stays off the Linux and delivery jobs'
+      linuxJobBlock.includes('uses: actions/checkout@v6'),
+      'ci.yml should keep the Linux lane on actions/checkout because the Windows-specific checkout workaround should stay isolated to the required Pester job'
+    );
+    assert.ok(
+      linuxJobBlock.includes('persist-credentials: false'),
+      'ci.yml should disable persisted checkout credentials for the Linux lane checkout'
+    );
+    assert.ok(
+      windowsJobBlock.includes('git init .'),
+      'ci.yml should fetch the Windows lane repository state manually so the job avoids actions/checkout post-job cleanup on Windows'
+    );
+    assert.ok(
+      !windowsJobBlock.includes('uses: actions/checkout@v6'),
+      'ci.yml should not use actions/checkout inside the Windows lane because its post-job cleanup has been leaving the Pester check-run stuck'
     );
     assert.ok(
       !ciWorkflow.includes('runs-on: windows-latest'),
@@ -201,11 +223,11 @@ describe('repository verification contract', () => {
       'ci.yml should invoke the required Windows Pester helper from cmd so the runner is not directly hosting the pwsh test shell'
     );
     assert.ok(
-      ciWorkflow.includes('git fetch --no-tags --depth=1 origin "${{ github.ref }}"'),
+      windowsJobBlock.includes('git fetch --no-tags --depth=1 origin "${{ github.ref }}"'),
       'ci.yml should fetch the Windows lane repository state manually so the job avoids actions/checkout post-job cleanup on Windows'
     );
     assert.ok(
-      ciWorkflow.includes('git checkout --force --detach "${{ github.sha }}"'),
+      windowsJobBlock.includes('git checkout --force --detach "${{ github.sha }}"'),
       'ci.yml should detach the Windows lane at the triggering commit after the manual fetch'
     );
     assert.ok(
@@ -231,8 +253,12 @@ describe('repository verification contract', () => {
       'ci.yml should expose explicit tests_passed outputs for required CI lanes'
     );
     assert.ok(
-      ciWorkflow.includes('name: Record Windows lane outcome'),
+      windowsJobBlock.includes('name: Record Windows lane outcome'),
       'ci.yml should record an explicit Windows lane outcome instead of trusting needs.test-windows.result'
+    );
+    assert.ok(
+      !windowsJobBlock.includes('shell: bash'),
+      'ci.yml should avoid bash in the Windows lane so the runner does not need to reap Git Bash shells after the Pester helper exits'
     );
     assert.ok(
       ciWorkflow.includes('needs.test-windows.outputs.tests_passed'),

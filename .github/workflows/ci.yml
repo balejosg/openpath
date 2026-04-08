@@ -113,12 +113,9 @@ jobs:
 
     steps:
       - name: Checkout code
-        shell: pwsh
-        run: |
-          git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          git fetch --no-tags --depth=1 origin "${{ github.ref }}"
-          git checkout --force --detach "${{ github.sha }}"
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Install dnsmasq
         run: |
@@ -167,9 +164,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false
+        shell: pwsh
+        run: |
+          git init .
+          git remote add origin "https://github.com/${{ github.repository }}.git"
+          git fetch --no-tags --depth=1 origin "${{ github.ref }}"
+          git checkout --force --detach "${{ github.sha }}"
 
       - name: Capture Windows job process baseline
         shell: pwsh
@@ -187,13 +187,13 @@ jobs:
       - name: Record Windows lane outcome
         id: job-status
         if: always()
-        shell: bash
+        shell: pwsh
         run: |
-          if [[ "${{ steps.run-windows-unit-tests.outcome }}" == "success" ]]; then
-            echo "tests_passed=true" >> "$GITHUB_OUTPUT"
+          if ('${{ steps.run-windows-unit-tests.outcome }}' -eq 'success') {
+            'tests_passed=true' | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           else
-            echo "tests_passed=false" >> "$GITHUB_OUTPUT"
-          fi
+            'tests_passed=false' | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
 
       - name: Clean Windows orphaned shells
         if: always()
