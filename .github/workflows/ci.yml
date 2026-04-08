@@ -156,7 +156,7 @@ jobs:
     # stuck "in_progress" state at the check-run level during orphan cleanup.
     # Run the required Pester suite in an isolated pwsh host so GitHub's
     # runner reaper does not wedge after the tests themselves have passed.
-    runs-on: windows-2025
+    runs-on: windows-2022
     needs: detect-relevant-changes
     if: needs.detect-relevant-changes.outputs.os_bound == 'true'
     outputs:
@@ -164,12 +164,9 @@ jobs:
 
     steps:
       - name: Checkout code
-        shell: pwsh
-        run: |
-          git init .
-          git remote add origin "https://github.com/${{ github.repository }}.git"
-          git fetch --no-tags --depth=1 origin "${{ github.ref }}"
-          git checkout --force --detach "${{ github.sha }}"
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Capture Windows job process baseline
         shell: pwsh
@@ -199,6 +196,15 @@ jobs:
         if: always()
         shell: pwsh
         run: |
+          & .\tests\e2e\ci\manage-windows-job-processes.ps1 `
+            -Mode cleanup `
+            -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-baseline.json"
+
+      - name: Re-scan Windows processes after idle delay
+        if: always()
+        shell: pwsh
+        run: |
+          Start-Sleep -Seconds 5
           & .\tests\e2e\ci\manage-windows-job-processes.ps1 `
             -Mode cleanup `
             -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-baseline.json"

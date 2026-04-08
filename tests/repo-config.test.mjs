@@ -168,16 +168,16 @@ describe('repository verification contract', () => {
     const windowsProcessManager = readText('tests/e2e/ci/manage-windows-job-processes.ps1');
 
     assert.ok(
-      ciWorkflow.includes('runs-on: windows-2025'),
-      'ci.yml should pin the required Windows Pester lane to windows-2025'
+      ciWorkflow.includes('runs-on: windows-2022'),
+      'ci.yml should pin the required Windows Pester lane to windows-2022'
     );
     assert.ok(
       !ciWorkflow.includes('persist-credentials: true'),
       'ci.yml should not persist checkout credentials because the required CI lanes do not need authenticated git after checkout'
     );
     assert.ok(
-      (ciWorkflow.match(/persist-credentials: false/g) ?? []).length >= 3,
-      'ci.yml should disable persisted checkout credentials for each checkout-based CI lane so post-job git cleanup stays off the Linux and delivery jobs'
+      (ciWorkflow.match(/persist-credentials: false/g) ?? []).length >= 4,
+      'ci.yml should disable persisted checkout credentials for each CI lane so post-job git cleanup does not extend the Windows shutdown path'
     );
     assert.ok(
       !ciWorkflow.includes('runs-on: windows-latest'),
@@ -201,20 +201,16 @@ describe('repository verification contract', () => {
       'ci.yml should invoke the required Windows Pester helper from cmd so the runner is not directly hosting the pwsh test shell'
     );
     assert.ok(
-      ciWorkflow.includes('git fetch --no-tags --depth=1 origin "${{ github.ref }}"'),
-      'ci.yml should fetch the Windows lane repository state manually so the job avoids actions/checkout post-job cleanup on Windows'
-    );
-    assert.ok(
-      ciWorkflow.includes('git checkout --force --detach "${{ github.sha }}"'),
-      'ci.yml should detach the Windows lane at the triggering commit after the manual fetch'
-    );
-    assert.ok(
       ciWorkflow.includes('name: Capture Windows job process baseline'),
       'ci.yml should snapshot the Windows job process list before running the required Pester suite'
     );
     assert.ok(
       ciWorkflow.includes('name: Clean Windows orphaned shells'),
       'ci.yml should run an explicit Windows orphan cleanup step before the runner performs its own final orphan sweep'
+    );
+    assert.ok(
+      ciWorkflow.includes('name: Re-scan Windows processes after idle delay'),
+      'ci.yml should re-scan the Windows process table after a short idle delay to catch processes that surface only as the last visible step exits'
     );
     assert.ok(
       ciWorkflow.includes('manage-windows-job-processes.ps1'),
@@ -318,18 +314,32 @@ describe('repository verification contract', () => {
       'the Windows process manager helper should tolerate empty cleanup candidate lists instead of failing when there is nothing to terminate'
     );
     assert.ok(
+      windowsProcessManager.includes('CreationDate'),
+      'the Windows process manager helper should track process creation timestamps so PID reuse cannot hide newly spawned Windows processes'
+    );
+    assert.ok(
       windowsProcessManager.includes('Expand-ProtectedProcessIds'),
       'the Windows process manager helper should protect the active cleanup shell and its descendants before terminating lingering Windows processes'
     );
     assert.ok(
-      windowsProcessManager.includes('Where-Object { $cleanupNames.Contains([string]$_.Name) }'),
-      'the Windows process manager helper should target lingering Windows shell processes instead of killing arbitrary hosted-runner activity'
+      windowsProcessManager.includes('$cleanupNames.Contains([string]$_.Name)'),
+      'the Windows process manager helper should identify lingering Windows shell and git processes by executable name before terminating them'
+    );
+    assert.ok(
+      windowsProcessManager.includes("'git.exe'"),
+      'the Windows process manager helper should target lingering Windows shell and git processes instead of killing arbitrary hosted-runner activity'
     );
     assert.ok(
       windowsProcessManager.includes(
         'Stop-Process -Id $candidate.ProcessId -Force -ErrorAction Stop'
       ),
       'the Windows process manager helper should terminate lingering shell processes before the runner reaches orphan cleanup'
+    );
+    assert.ok(
+      windowsProcessManager.includes(
+        'Windows processes of interest still present before job completion:'
+      ),
+      'the Windows process manager helper should log the surviving Windows shell and git process set immediately before job completion'
     );
   });
 

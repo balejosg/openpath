@@ -32,10 +32,20 @@ function Get-ProcessSnapshot {
                 ProcessId       = [int]$process.ProcessId
                 ParentProcessId = [int]$process.ParentProcessId
                 Name            = [string]$process.Name
+                CreationDate    = [string]$process.CreationDate
                 CommandLine     = $commandLine
             }
         }
     )
+}
+
+function Get-ProcessIdentityKey {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Process
+    )
+
+    return "{0}|{1}" -f [int]$Process.ProcessId, [string]$Process.CreationDate
 }
 
 function New-ProcessMap {
@@ -166,7 +176,10 @@ if ($snapshotDirectory -and -not (Test-Path $snapshotDirectory)) {
 switch ($Mode) {
     'capture' {
         $snapshot = Get-ProcessSnapshot
-        $snapshot |
+        [pscustomobject]@{
+            CapturedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+            Processes     = $snapshot
+        } |
             ConvertTo-Json -Depth 4 |
             Set-Content -Path $SnapshotPath -Encoding utf8
 
@@ -179,10 +192,18 @@ switch ($Mode) {
             throw "Windows job process baseline not found at $SnapshotPath."
         }
 
-        $baselineSnapshot = @(Get-Content $SnapshotPath -Raw | ConvertFrom-Json)
-        $baselineIds = New-Object 'System.Collections.Generic.HashSet[int]'
+        $snapshotPayload = Get-Content $SnapshotPath -Raw | ConvertFrom-Json
+        $baselineSnapshot = @()
+        if ($snapshotPayload -is [System.Array]) {
+            $baselineSnapshot = @($snapshotPayload)
+        }
+        elseif ($null -ne $snapshotPayload.Processes) {
+            $baselineSnapshot = @($snapshotPayload.Processes)
+        }
+
+        $baselineKeys = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
         foreach ($process in $baselineSnapshot) {
-            [void]$baselineIds.Add([int]$process.ProcessId)
+            [void]$baselineKeys.Add((Get-ProcessIdentityKey -Process $process))
         }
 
         $currentProcesses = Get-ProcessSnapshot
@@ -193,7 +214,7 @@ switch ($Mode) {
         $newProcesses = @(
             $currentProcesses |
                 Where-Object {
-                    -not $baselineIds.Contains([int]$_.ProcessId) -and
+                    -not $baselineKeys.Contains((Get-ProcessIdentityKey -Process $_)) -and
                     -not $protectedIds.Contains([int]$_.ProcessId)
                 } |
                 Sort-Object Name, ProcessId
@@ -202,13 +223,33 @@ switch ($Mode) {
         Write-ProcessListing -Processes $newProcesses -Title 'Windows processes started after the job baseline:'
 
         $cleanupNames = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
-        foreach ($name in @('cmd.exe', 'conhost.exe', 'OpenConsole.exe', 'powershell.exe', 'pwsh.exe')) {
+        foreach ($name in @('bash.exe', 'cmd.exe', 'conhost.exe', 'git.exe', 'OpenConsole.exe', 'powershell.exe', 'pwsh.exe', 'sh.exe')) {
             [void]$cleanupNames.Add($name)
         }
 
+        $interestingProcesses = @(
+            $currentProcesses |
+                Where-Object {
+                    $cleanupNames.Contains([string]$_.Name) -and
+                    -not $protectedIds.Contains([int]$_.ProcessId)
+                } |
+                Sort-Object Name, ProcessId
+        )
+
+        Write-ProcessListing -Processes $interestingProcesses -Title 'Windows processes of interest still present before job completion:'
+
+        $cleanupCandidatesByKey = @{}
+        foreach ($candidate in @($newProcesses + $interestingProcesses)) {
+            if (-not $cleanupNames.Contains([string]$candidate.Name)) {
+                continue
+            }
+
+            $identityKey = Get-ProcessIdentityKey -Process $candidate
+            $cleanupCandidatesByKey[$identityKey] = $candidate
+        }
+
         $cleanupCandidates = @(
-            $newProcesses |
-                Where-Object { $cleanupNames.Contains([string]$_.Name) } |
+            $cleanupCandidatesByKey.Values |
                 Sort-Object ProcessId -Descending
         )
 
