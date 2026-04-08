@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('capture', 'report')]
+    [ValidateSet('capture', 'report', 'cleanup-conhost')]
     [string]$Mode,
 
     [string]$SnapshotPath = ''
@@ -156,6 +156,48 @@ function Write-ProcessListing {
     }
 }
 
+function Get-TrackedProcessContext {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SnapshotPath
+    )
+
+    if (-not (Test-Path $SnapshotPath)) {
+        throw "Windows process snapshot not found at $SnapshotPath."
+    }
+
+    $snapshotPayload = Get-Content $SnapshotPath -Raw | ConvertFrom-Json
+    $baselineSnapshot = @()
+    if ($snapshotPayload -is [System.Array]) {
+        $baselineSnapshot = @($snapshotPayload)
+    }
+    elseif ($null -ne $snapshotPayload.Processes) {
+        $baselineSnapshot = @($snapshotPayload.Processes)
+    }
+
+    $baselineKeys = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
+    foreach ($process in $baselineSnapshot) {
+        [void]$baselineKeys.Add((Get-ProcessIdentityKey -Process $process))
+    }
+
+    $currentProcesses = Get-ProcessSnapshot
+    $processMap = New-ProcessMap -Processes $currentProcesses
+    $protectedIds = Get-ProtectedProcessIds -ProcessId $PID -ProcessMap $processMap
+
+    $activeShellIds = New-Object 'System.Collections.Generic.HashSet[int]'
+    [void]$activeShellIds.Add($PID)
+    $activeShellIds = Expand-ProtectedProcessIds -ProtectedIds $activeShellIds -Processes $currentProcesses
+    foreach ($protectedId in $activeShellIds) {
+        [void]$protectedIds.Add($protectedId)
+    }
+
+    return [pscustomobject]@{
+        BaselineKeys    = $baselineKeys
+        CurrentProcesses = $currentProcesses
+        ProtectedIds    = $protectedIds
+    }
+}
+
 $defaultSnapshotPath = if ($env:RUNNER_TEMP) {
     Join-Path $env:RUNNER_TEMP 'openpath-windows-process-snapshot.json'
 }
@@ -188,34 +230,10 @@ switch ($Mode) {
     }
 
     'report' {
-        if (-not (Test-Path $SnapshotPath)) {
-            throw "Windows process snapshot not found at $SnapshotPath."
-        }
-
-        $snapshotPayload = Get-Content $SnapshotPath -Raw | ConvertFrom-Json
-        $baselineSnapshot = @()
-        if ($snapshotPayload -is [System.Array]) {
-            $baselineSnapshot = @($snapshotPayload)
-        }
-        elseif ($null -ne $snapshotPayload.Processes) {
-            $baselineSnapshot = @($snapshotPayload.Processes)
-        }
-
-        $baselineKeys = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
-        foreach ($process in $baselineSnapshot) {
-            [void]$baselineKeys.Add((Get-ProcessIdentityKey -Process $process))
-        }
-
-        $currentProcesses = Get-ProcessSnapshot
-        $processMap = New-ProcessMap -Processes $currentProcesses
-        $protectedIds = Get-ProtectedProcessIds -ProcessId $PID -ProcessMap $processMap
-
-        $activeShellIds = New-Object 'System.Collections.Generic.HashSet[int]'
-        [void]$activeShellIds.Add($PID)
-        $activeShellIds = Expand-ProtectedProcessIds -ProtectedIds $activeShellIds -Processes $currentProcesses
-        foreach ($protectedId in $activeShellIds) {
-            [void]$protectedIds.Add($protectedId)
-        }
+        $context = Get-TrackedProcessContext -SnapshotPath $SnapshotPath
+        $baselineKeys = $context.BaselineKeys
+        $currentProcesses = $context.CurrentProcesses
+        $protectedIds = $context.ProtectedIds
 
         $newProcesses = @(
             $currentProcesses |
@@ -243,6 +261,35 @@ switch ($Mode) {
         )
 
         Write-ProcessListing -Processes $interestingProcesses -Title 'Windows shell and git processes still present before job completion:'
+        break
+    }
+
+    'cleanup-conhost' {
+        $context = Get-TrackedProcessContext -SnapshotPath $SnapshotPath
+        $currentProcesses = $context.CurrentProcesses
+        $protectedIds = $context.ProtectedIds
+
+        $cleanupCandidates = @(
+            $currentProcesses |
+                Where-Object {
+                    [string]$_.Name -eq 'conhost.exe' -and
+                    -not $protectedIds.Contains([int]$_.ProcessId)
+                } |
+                Sort-Object ProcessId -Descending
+        )
+
+        Write-ProcessListing -Processes $cleanupCandidates -Title 'Windows lingering conhost cleanup candidates:'
+
+        foreach ($candidate in $cleanupCandidates) {
+            try {
+                Stop-Process -Id $candidate.ProcessId -Force -ErrorAction Stop
+                Write-Host ("Terminated lingering Windows console host pid={0}" -f $candidate.ProcessId)
+            }
+            catch {
+                Write-Warning ("Failed to terminate lingering Windows console host pid={0}: {1}" -f $candidate.ProcessId, $_.Exception.Message)
+            }
+        }
+
         break
     }
 }

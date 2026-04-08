@@ -237,6 +237,14 @@ jobs:
             -Mode report `
             -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-snapshot.json"
 
+      - name: Cleanup lingering Windows console hosts
+        if: always()
+        shell: pwsh
+        run: |
+          & .\tests\e2e\ci\report-windows-processes.ps1 `
+            -Mode cleanup-conhost `
+            -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-snapshot.json"
+
   # ============================================
   # Job 3: Firefox Delivery Contracts
   # ============================================
