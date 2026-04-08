@@ -181,6 +181,20 @@ describe('repository verification contract', () => {
       !ciWorkflow.includes('name: Upload test results'),
       'ci.yml should keep artifact upload out of the required Windows Pester lane'
     );
+    assert.ok(
+      ciWorkflow.includes(
+        'outputs:\n      tests_passed: ${{ steps.job-status.outputs.tests_passed }}'
+      ),
+      'ci.yml should expose explicit tests_passed outputs for required CI lanes'
+    );
+    assert.ok(
+      ciWorkflow.includes('name: Record Windows lane outcome'),
+      'ci.yml should record an explicit Windows lane outcome instead of trusting needs.test-windows.result'
+    );
+    assert.ok(
+      ciWorkflow.includes('needs.test-windows.outputs.tests_passed'),
+      'ci.yml should drive the CI summary gate from the recorded Windows lane output'
+    );
   });
 
   test('release-please manifest is not behind the latest stable release tag', () => {

@@ -107,6 +107,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: detect-relevant-changes
     if: needs.detect-relevant-changes.outputs.os_bound == 'true'
+    outputs:
+      tests_passed: ${{ steps.job-status.outputs.tests_passed }}
 
     steps:
       - name: Checkout code
@@ -122,12 +124,25 @@ jobs:
           sudo apt-get install -y bats
 
       - name: Run BATS unit tests
+        id: run-bats-unit
         run: |
           cd tests && bats *.bats
 
       - name: Run Linux agent E2E tests
+        id: run-linux-e2e
         run: |
           bats tests/e2e/agent-integration.bats
+
+      - name: Record Linux lane outcome
+        id: job-status
+        if: always()
+        run: |
+          if [[ "${{ steps.run-bats-unit.outcome }}" == "success" ]] && \
+             [[ "${{ steps.run-linux-e2e.outcome }}" == "success" ]]; then
+            echo "tests_passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tests_passed=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # ============================================
   # Job 2: Windows Agent Tests
@@ -140,18 +155,22 @@ jobs:
     runs-on: windows-2022
     needs: detect-relevant-changes
     if: needs.detect-relevant-changes.outputs.os_bound == 'true'
+    outputs:
+      tests_passed: ${{ steps.job-status.outputs.tests_passed }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
       - name: Install Pester
+        id: install-pester
         shell: pwsh
         run: |
           Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
           Import-Module Pester
 
       - name: Run Windows Unit Tests
+        id: run-windows-unit-tests
         shell: pwsh
         run: |
           $config = New-PesterConfiguration
@@ -166,6 +185,18 @@ jobs:
             throw "Windows Pester suite did not produce windows-test-results.xml."
           }
 
+      - name: Record Windows lane outcome
+        id: job-status
+        if: always()
+        shell: bash
+        run: |
+          if [[ "${{ steps.install-pester.outcome }}" == "success" ]] && \
+             [[ "${{ steps.run-windows-unit-tests.outcome }}" == "success" ]]; then
+            echo "tests_passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tests_passed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # ============================================
   # Job 3: Firefox Delivery Contracts
   # ============================================
@@ -174,12 +205,15 @@ jobs:
     runs-on: ubuntu-latest
     needs: detect-relevant-changes
     if: needs.detect-relevant-changes.outputs.delivery_contracts == 'true'
+    outputs:
+      tests_passed: ${{ steps.job-status.outputs.tests_passed }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
       - name: Setup Node.js
+        id: setup-node
         uses: actions/setup-node@v6
         with:
           node-version: '20'
@@ -187,6 +221,7 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Restore Turbo cache
+        id: restore-turbo-cache
         uses: actions/cache@v5
         with:
           path: .turbo
@@ -196,6 +231,7 @@ jobs:
             ${{ runner.os }}-turbo-
 
       - name: Start local PostgreSQL
+        id: start-postgres
         run: |
           sudo systemctl start postgresql.service || sudo service postgresql start
           sudo -u postgres psql -v ON_ERROR_STOP=1 <<'SQL'
@@ -216,9 +252,11 @@ jobs:
           SQL
 
       - name: Install dependencies
+        id: install-dependencies
         run: npm ci
 
       - name: Build required workspaces
+        id: build-workspaces
         uses: ./.github/actions/build-workspaces
         with:
           build-shared: 'true'
@@ -226,6 +264,7 @@ jobs:
           build-extension: 'true'
 
       - name: Run database migrations
+        id: run-database-migrations
         run: |
           npm run drizzle:push --workspace=@openpath/api
           npm run db:migrate --workspace=@openpath/api
@@ -237,6 +276,7 @@ jobs:
           DB_PASSWORD: openpath_dev
 
       - name: Run token delivery contracts
+        id: run-token-delivery-contracts
         run: npm run test:token-delivery --workspace=@openpath/api
         env:
           NODE_ENV: test
@@ -250,7 +290,25 @@ jobs:
           SHARED_SECRET: test-shared-secret-for-ci
 
       - name: Run Firefox extension tests
+        id: run-firefox-extension-tests
         run: npm test --workspace=@openpath/firefox-extension
+
+      - name: Record delivery-contract lane outcome
+        id: job-status
+        if: always()
+        run: |
+          if [[ "${{ steps.setup-node.outcome }}" == "success" ]] && \
+             [[ "${{ steps.restore-turbo-cache.outcome }}" == "success" ]] && \
+             [[ "${{ steps.start-postgres.outcome }}" == "success" ]] && \
+             [[ "${{ steps.install-dependencies.outcome }}" == "success" ]] && \
+             [[ "${{ steps.build-workspaces.outcome }}" == "success" ]] && \
+             [[ "${{ steps.run-database-migrations.outcome }}" == "success" ]] && \
+             [[ "${{ steps.run-token-delivery-contracts.outcome }}" == "success" ]] && \
+             [[ "${{ steps.run-firefox-extension-tests.outcome }}" == "success" ]]; then
+            echo "tests_passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tests_passed=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # ============================================
   # Summary Job
@@ -264,9 +322,21 @@ jobs:
     steps:
       - name: Check all jobs
         run: |
-          if [[ "${{ needs.test-linux-dnsmasq.result }}" == "failure" ]] || \
-             [[ "${{ needs.test-windows.result }}" == "failure" ]] || \
-             [[ "${{ needs.test-delivery-contracts.result }}" == "failure" ]]; then
+          if [[ "${{ needs.test-linux-dnsmasq.result }}" != "skipped" ]] && \
+             [[ "${{ needs.test-linux-dnsmasq.outputs.tests_passed }}" != "true" ]]; then
+            echo "Linux Agent Tests (BATS) failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.test-windows.result }}" != "skipped" ]] && \
+             [[ "${{ needs.test-windows.outputs.tests_passed }}" != "true" ]]; then
+            echo "Windows Agent Tests (Pester) failed"
+            exit 1
+          fi
+
+          if [[ "${{ needs.test-delivery-contracts.result }}" != "skipped" ]] && \
+             [[ "${{ needs.test-delivery-contracts.outputs.tests_passed }}" != "true" ]]; then
+            echo "Delivery Contracts (Node) failed"
             echo "CI Failed"
             exit 1
           fi
