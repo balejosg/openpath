@@ -634,4 +634,20 @@ describe('repository verification contract', () => {
       'Essential control-plane domains should not inherit classroom blocked-subdomain overrides'
     );
   });
+
+  test('root tooling can resolve drizzle-orm for hoisted drizzle-kit commands', () => {
+    const packageJson = readPackageJson();
+    const packageLock = readJson('package-lock.json');
+    const apiPackageJson = readJson('api/package.json');
+
+    assert.equal(
+      packageJson.devDependencies?.['drizzle-orm'],
+      apiPackageJson.dependencies['drizzle-orm'],
+      'root devDependencies should pin drizzle-orm to the api workspace version for hoisted tooling'
+    );
+    assert.ok(
+      packageLock.packages['node_modules/drizzle-orm'],
+      'package-lock.json should install drizzle-orm at the workspace root for hoisted drizzle-kit resolution'
+    );
+  });
 });
