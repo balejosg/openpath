@@ -272,6 +272,23 @@ describe('repository verification contract', () => {
       windowsCiHelper.includes('Running isolated Windows Pester file:'),
       'the isolated Windows CI helper should log each isolated Pester file invocation to make per-file runner hangs diagnosable'
     );
+    for (const relativePath of [
+      'windows/tests/Windows.Browser.ChromiumPolicy.Tests.ps1',
+      'windows/tests/Windows.Browser.Diagnostics.Tests.ps1',
+      'windows/tests/Windows.Browser.FirefoxPolicy.Tests.ps1',
+      'windows/tests/Windows.Browser.NativeHost.Tests.ps1',
+    ]) {
+      const browserTest = readText(relativePath);
+
+      assert.ok(
+        browserTest.includes('BeforeAll {'),
+        `${relativePath} should continue to re-import its browser modules in BeforeAll`
+      );
+      assert.ok(
+        browserTest.includes('Join-Path $PSScriptRoot ".." "lib"'),
+        `${relativePath} should resolve browser module paths from PSScriptRoot inside the executable Pester scope`
+      );
+    }
     assert.ok(
       windowsCiHelper.includes('Invoke-Pester -Configuration $config'),
       'the isolated Windows CI helper should continue to execute the real Pester suite'

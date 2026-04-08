@@ -7,8 +7,9 @@ Import-Module "$modulePath\Browser.FirefoxPolicy.psm1" -Force -Global -ErrorActi
 
 Describe "Browser Module - Firefox Policy" {
     BeforeAll {
-        Import-Module "$modulePath\Browser.Common.psm1" -Force -Global -ErrorAction Stop
-        Import-Module "$modulePath\Browser.FirefoxPolicy.psm1" -Force -Global -ErrorAction Stop
+        $modulePath = Join-Path $PSScriptRoot ".." "lib"
+        Import-Module (Join-Path $modulePath "Browser.Common.psm1") -Force -Global -ErrorAction Stop
+        Import-Module (Join-Path $modulePath "Browser.FirefoxPolicy.psm1") -Force -Global -ErrorAction Stop
     }
 
     Context "Set-FirefoxPolicy" {

@@ -6,7 +6,8 @@ Import-Module "$modulePath\Browser.psm1" -Force -Global -ErrorAction Stop
 
 Describe "Browser Module - Chromium Policy" {
     BeforeAll {
-        Import-Module "$modulePath\Browser.psm1" -Force -Global -ErrorAction Stop
+        $browserModulePath = Join-Path (Join-Path $PSScriptRoot ".." "lib") "Browser.psm1"
+        Import-Module $browserModulePath -Force -Global -ErrorAction Stop
     }
 
     Context "Set-ChromePolicy" {
