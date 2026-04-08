@@ -376,6 +376,14 @@ describe('repository verification contract', () => {
       'the Windows process manager helper should protect the active cleanup shell and its descendants before terminating lingering Windows processes'
     );
     assert.ok(
+      windowsProcessManager.includes('return ,$protectedIds'),
+      'the Windows process manager helper should return HashSet process-id collections without PowerShell enumerating them into a fixed-size array'
+    );
+    assert.ok(
+      windowsProcessManager.includes('return ,$ProtectedIds'),
+      'the Windows process manager helper should preserve expanded HashSet process-id collections as mutable sets when returning from helper functions'
+    );
+    assert.ok(
       !windowsProcessManager.includes(
         '$protectedIds = Expand-ProtectedProcessIds -ProtectedIds $protectedIds -Processes $currentProcesses'
       ),

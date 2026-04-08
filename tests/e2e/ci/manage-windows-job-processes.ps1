@@ -91,7 +91,7 @@ function Get-ProtectedProcessIds {
         $currentId = $parentId
     }
 
-    return $protectedIds
+    return ,$protectedIds
 }
 
 function Expand-ProtectedProcessIds {
@@ -122,7 +122,7 @@ function Expand-ProtectedProcessIds {
         }
     }
 
-    return $ProtectedIds
+    return ,$ProtectedIds
 }
 
 function Write-ProcessListing {
