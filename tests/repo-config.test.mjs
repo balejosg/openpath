@@ -226,8 +226,12 @@ describe('repository verification contract', () => {
       'the isolated Windows CI helper should request a Pester result object so FailedCount reflects the real suite outcome'
     );
     assert.ok(
-      windowsCiHelper.includes('Stop-DescendantProcesses -RootPid $process.Id'),
-      'the isolated Windows CI helper should explicitly clean up lingering child-process descendants before handing control back to the runner'
+      !windowsCiHelper.includes('Get-CimInstance Win32_Process'),
+      'the isolated Windows CI helper should avoid WMI descendant sweeps that can hang the required Windows lane before the step completes'
+    );
+    assert.ok(
+      !windowsCiHelper.includes('Stop-DescendantProcesses -RootPid $process.Id'),
+      'the isolated Windows CI helper should not run descendant cleanup that can wedge the required Windows lane before the step completes'
     );
     assert.ok(
       windowsCiHelper.includes('Invoke-Pester -Configuration $config'),
