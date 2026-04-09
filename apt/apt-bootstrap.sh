@@ -31,6 +31,7 @@ TOKEN_FILE=""
 TOKEN_STDIN=false
 ENROLLMENT_TOKEN=""
 PACKAGE_VERSION=""
+BROWSER_SETUP_SCRIPT="${OPENPATH_BROWSER_SETUP_SCRIPT:-/usr/local/bin/openpath-browser-setup.sh}"
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -47,6 +48,22 @@ usage() {
     echo "  --enrollment-token T Classroom enrollment token"
     echo "  --package-version V  Install explicit openpath-dnsmasq version"
     echo "  --help               Show this help"
+}
+
+run_browser_setup_helper() {
+    echo "[5/5] Ensuring Firefox browser setup..."
+
+    if [ ! -x "$BROWSER_SETUP_SCRIPT" ]; then
+        echo "ERROR: Browser setup helper not found at $BROWSER_SETUP_SCRIPT"
+        exit 1
+    fi
+
+    if ! "$BROWSER_SETUP_SCRIPT"; then
+        echo "ERROR: Firefox browser setup did not complete successfully."
+        exit 1
+    fi
+
+    echo "  OK Firefox browser setup ready"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -162,7 +179,8 @@ fi
 echo "  OK Package installed"
 
 if [ "$SKIP_SETUP" = true ]; then
-    echo "[4/4] Classroom setup skipped (--skip-setup)"
+    echo "[4/5] Classroom setup skipped (--skip-setup)"
+    run_browser_setup_helper
     echo "Run manually later: sudo openpath setup"
     exit 0
 fi
@@ -177,7 +195,7 @@ if [ -n "$ENROLLMENT_TOKEN" ] && { [ -n "$TOKEN_FILE" ] || [ "$TOKEN_STDIN" = tr
     exit 1
 fi
 
-echo "[4/4] Running classroom setup..."
+echo "[4/5] Running classroom setup..."
 setup_cmd=(openpath setup)
 
 if [ -n "$API_URL" ]; then
@@ -206,9 +224,12 @@ if ! "${setup_cmd[@]}"; then
     echo ""
     echo "    sudo openpath setup"
     echo ""
+    run_browser_setup_helper
     openpath status || true
     exit 0
 fi
+
+run_browser_setup_helper
 
 echo ""
 echo "OK Classroom setup completed"
