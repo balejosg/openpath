@@ -1792,7 +1792,11 @@ Describe "Watchdog Script" {
             $moduleContent = Get-Content $modulePath -Raw
 
             Assert-ContentContainsAll -Content $scriptContent -Needles @(
-                '-DependentModules @(''DNS'', ''Firewall'', ''CaptivePortal'')',
+                '-DependentModules @(',
+                '''DNS''',
+                '''Firewall''',
+                '''Browser''',
+                '''CaptivePortal''',
                 'Test-OpenPathCaptivePortalState',
                 'Enable-OpenPathCaptivePortalMode'
             )
