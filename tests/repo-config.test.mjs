@@ -350,6 +350,18 @@ describe('repository verification contract', () => {
       'ci.yml should emit the Windows lane outcome through a single redirected line to GITHUB_OUTPUT'
     );
     assert.ok(
+      windowsJobBlock.includes('name: Hold successful Windows lane until timeout cancellation'),
+      'ci.yml should keep a successful Windows lane inside an explicit sentinel step so job timeout can interrupt it before the runner reaches the stuck orphan-cleanup phase'
+    );
+    assert.ok(
+      windowsJobBlock.includes("if: steps.job-status.outputs.tests_passed == 'true'"),
+      'ci.yml should only hold the Windows lane open when the suite outcome has already been recorded as successful'
+    );
+    assert.ok(
+      windowsJobBlock.includes('Start-Sleep -Seconds 3600'),
+      'ci.yml should use a long-running Windows sentinel sleep so the job timeout cancels the lane during an active step'
+    );
+    assert.ok(
       !windowsJobBlock.includes('Out-File -FilePath $env:GITHUB_OUTPUT'),
       'ci.yml should avoid the more error-prone multi-line Out-File pattern in the Windows lane outcome step'
     );

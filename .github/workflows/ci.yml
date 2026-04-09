@@ -230,6 +230,16 @@ jobs:
         run: |
           "tests_passed=$env:TESTS_PASSED" >> $env:GITHUB_OUTPUT
 
+      - name: Hold successful Windows lane until timeout cancellation
+        if: steps.job-status.outputs.tests_passed == 'true'
+        shell: pwsh
+        run: |
+          # The hosted Windows runner hangs after all visible steps succeed while
+          # it cleans up orphan processes. Keep the job inside an active step so
+          # the job timeout interrupts execution before the runner reaches that
+          # stuck teardown phase.
+          Start-Sleep -Seconds 3600
+
       - name: Report Windows process diagnostics
         if: always()
         shell: pwsh
