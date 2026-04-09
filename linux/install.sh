@@ -563,13 +563,19 @@ step_install_extension() {
             echo "  ✓ Artefactos Firefox Release firmados preparados desde $firefox_release_source"
         fi
 
+        local browser_integration_args=(
+            --firefox-required
+            --chromium-best-effort
+            --native-host-required
+        )
+        if [ "$INSTALL_NATIVE_HOST" = true ]; then
+            browser_integration_args+=(--native-host)
+        fi
+
         install_browser_integrations \
             "$staged_ext_dir" \
             "$staged_release_dir" \
-            "$INSTALL_NATIVE_HOST" \
-            false \
-            true \
-            false
+            "${browser_integration_args[@]}"
         echo "✓ Extensiones del navegador instaladas"
     else
         echo "⊘ Extensiones del navegador omitidas (--no-extension)"

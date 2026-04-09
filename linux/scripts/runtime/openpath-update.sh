@@ -57,18 +57,6 @@ get_whitelist_url() {
     fi
 }
 
-get_url_host() {
-    local url="$1"
-    local without_scheme="${url#*://}"
-    local host_port="${without_scheme%%/*}"
-
-    # Remove optional userinfo (user:pass@host)
-    host_port="${host_port##*@}"
-
-    # Drop optional port
-    echo "${host_port%%:*}"
-}
-
 append_fail_safe_allow_domain() {
     local domain="$1"
 
@@ -256,54 +244,103 @@ sync_runtime_browser_integrations() {
     sync_firefox_managed_extension_policy "/usr/share/openpath/firefox-release" || true
 }
 
-# Lógica principal
-main() {
-    log "=== Iniciando actualización de whitelist ==="
-    
-    # Inicializar
-    init_directories
-    PRIMARY_DNS=$(detect_primary_dns)
-    
-    # CRÍTICO: Verificar portal cautivo ANTES de cualquier cambio.
-    # Solo una señal real de portal cautivo debe relajar enforcement.
+resolve_captive_portal_preflight() {
     local captive_portal_state
     captive_portal_state=$(get_captive_portal_state)
-    if [ "$captive_portal_state" = "PORTAL" ]; then
-        log "⚠ Portal cautivo detectado - desactivando firewall para autenticación"
-        deactivate_firewall
-        # No continuar hasta que el usuario se autentique
-        # El servicio captive-portal-detector.service se encargará de reactivar
+
+    printf 'CAPTIVE_PORTAL_STATE=%s\n' "$captive_portal_state"
+    case "$captive_portal_state" in
+        PORTAL)
+            printf 'CAPTIVE_PORTAL_ACTION=defer_for_authentication\n'
+            ;;
+        NO_NETWORK)
+            printf 'CAPTIVE_PORTAL_ACTION=continue_without_network_confirmation\n'
+            ;;
+        *)
+            printf 'CAPTIVE_PORTAL_ACTION=continue\n'
+            ;;
+    esac
+}
+
+apply_captive_portal_preflight() {
+    local captive_portal_action="${1:-continue}"
+
+    case "$captive_portal_action" in
+        defer_for_authentication)
+            log "⚠ Portal cautivo detectado - desactivando firewall para autenticación"
+            deactivate_firewall
+            return 1
+            ;;
+        continue_without_network_confirmation)
+            log "⚠ Sin conectividad para validar portal cautivo - manteniendo enforcement actual"
+            ;;
+    esac
+
+    return 0
+}
+
+resolve_whitelist_download_plan() {
+    local download_succeeded="${1:-false}"
+    local max_age_hours="${WHITELIST_MAX_AGE_HOURS:-24}"
+
+    if [ "$download_succeeded" = true ]; then
+        printf 'WHITELIST_DOWNLOAD_PLAN=continue\n'
         return 0
-    elif [ "$captive_portal_state" = "NO_NETWORK" ]; then
-        log "⚠ Sin conectividad para validar portal cautivo - manteniendo enforcement actual"
     fi
-    
-    # Descargar whitelist
-    if ! download_whitelist; then
-        log "⚠ Error al descargar - usando whitelist existente"
-        if [ ! -f "$WHITELIST_FILE" ]; then
+
+    if [ ! -f "$WHITELIST_FILE" ]; then
+        printf 'WHITELIST_DOWNLOAD_PLAN=fail_open\n'
+        return 0
+    fi
+
+    if [ "$max_age_hours" -le 0 ] 2>/dev/null; then
+        printf 'WHITELIST_DOWNLOAD_PLAN=reuse_cached\n'
+        return 0
+    fi
+
+    local file_age_seconds
+    file_age_seconds=$(( $(date +%s) - $(stat -c %Y "$WHITELIST_FILE" 2>/dev/null || echo 0) ))
+    local max_age_seconds=$(( max_age_hours * 3600 ))
+
+    if [ "$file_age_seconds" -ge "$max_age_seconds" ]; then
+        printf 'WHITELIST_DOWNLOAD_PLAN=fail_safe\n'
+        printf 'WHITELIST_AGE_HOURS=%s\n' "$(( file_age_seconds / 3600 ))"
+        printf 'WHITELIST_CONTROL_HOST=%s\n' "$(get_url_host "$WHITELIST_URL")"
+        return 0
+    fi
+
+    printf 'WHITELIST_DOWNLOAD_PLAN=reuse_cached\n'
+    printf 'WHITELIST_REMAINING_HOURS=%s\n' "$(( (max_age_seconds - file_age_seconds) / 3600 ))"
+}
+
+apply_whitelist_download_plan() {
+    local whitelist_download_plan="${1:-continue}"
+    local whitelist_age_hours="${2:-0}"
+    local whitelist_remaining_hours="${3:-0}"
+    local whitelist_control_host="${4:-}"
+
+    case "$whitelist_download_plan" in
+        continue)
+            return 0
+            ;;
+        fail_open)
+            log "⚠ Error al descargar - usando whitelist existente"
             log "⚠ Sin whitelist disponible - modo fail-open"
             cleanup_system
-            return
-        fi
+            return 1
+            ;;
+        reuse_cached)
+            log "⚠ Error al descargar - usando whitelist existente"
+            log "Whitelist age OK (expires in ~${whitelist_remaining_hours}h)"
+            return 0
+            ;;
+        fail_safe)
+            log "⚠ Error al descargar - usando whitelist existente"
+            log_warn "⚠ Whitelist expired: ${whitelist_age_hours}h old (max: ${WHITELIST_MAX_AGE_HOURS:-24}h)"
+            log_warn "Entering fail-safe mode — blocking all DNS until fresh whitelist"
 
-        # Offline expiration policy: check whitelist age
-        local max_age_hours="${WHITELIST_MAX_AGE_HOURS:-24}"
-        if [ "$max_age_hours" -gt 0 ] 2>/dev/null; then
-            local file_age_seconds
-            file_age_seconds=$(( $(date +%s) - $(stat -c %Y "$WHITELIST_FILE" 2>/dev/null || echo 0) ))
-            local max_age_seconds=$(( max_age_hours * 3600 ))
-
-            if [ "$file_age_seconds" -ge "$max_age_seconds" ]; then
-                local age_hours=$(( file_age_seconds / 3600 ))
-                log_warn "⚠ Whitelist expired: ${age_hours}h old (max: ${max_age_hours}h)"
-                log_warn "Entering fail-safe mode — blocking all DNS until fresh whitelist"
-
-                # Write fail-safe dnsmasq config: block everything by default.
-                # Then allow only the whitelist control-plane hostname so the
-                # agent can recover automatically.
-                cat > "$DNSMASQ_CONF" << EOF
-# FAIL-SAFE MODE — whitelist expired (${age_hours}h old, max ${max_age_hours}h)
+            cat > "$DNSMASQ_CONF" << EOF
+# FAIL-SAFE MODE — whitelist expired (${whitelist_age_hours}h old, max ${WHITELIST_MAX_AGE_HOURS:-24}h)
 # Blocks all domains by default
 no-resolv
 resolv-file=/run/dnsmasq/resolv.conf
@@ -314,19 +351,56 @@ server=$PRIMARY_DNS
 address=/#/
 EOF
 
-                local whitelist_host
-                whitelist_host=$(get_url_host "$WHITELIST_URL")
-                append_fail_safe_allow_domain "$whitelist_host"
+            append_fail_safe_allow_domain "$whitelist_control_host"
 
-                rm -f "$DNSMASQ_CONF_HASH" 2>/dev/null || true
-                systemctl restart dnsmasq 2>/dev/null || true
-                log "=== Sistema en modo fail-safe (whitelist expirada) ==="
-                return
-            else
-                local remaining_hours=$(( (max_age_seconds - file_age_seconds) / 3600 ))
-                log "Whitelist age OK (expires in ~${remaining_hours}h)"
-            fi
-        fi
+            rm -f "$DNSMASQ_CONF_HASH" 2>/dev/null || true
+            systemctl restart dnsmasq 2>/dev/null || true
+            log "=== Sistema en modo fail-safe (whitelist expirada) ==="
+            return 1
+            ;;
+    esac
+
+    log_warn "Unknown whitelist download plan: $whitelist_download_plan"
+    return 1
+}
+
+# Lógica principal
+main() {
+    log "=== Iniciando actualización de whitelist ==="
+    
+    # Inicializar
+    init_directories
+    PRIMARY_DNS=$(detect_primary_dns)
+    
+    # CRÍTICO: Verificar portal cautivo ANTES de cualquier cambio.
+    # Solo una señal real de portal cautivo debe relajar enforcement.
+    local CAPTIVE_PORTAL_ACTION="continue"
+    # shellcheck disable=SC1090,SC2154
+    eval "$(resolve_captive_portal_preflight)"
+    if ! apply_captive_portal_preflight "$CAPTIVE_PORTAL_ACTION"; then
+        # No continuar hasta que el usuario se autentique.
+        # El servicio captive-portal-detector.service se encargará de reactivar.
+        return 0
+    fi
+    
+    # Descargar whitelist
+    local download_succeeded=false
+    local WHITELIST_DOWNLOAD_PLAN="continue"
+    local WHITELIST_AGE_HOURS=0
+    local WHITELIST_REMAINING_HOURS=0
+    local WHITELIST_CONTROL_HOST=""
+    if download_whitelist; then
+        download_succeeded=true
+    fi
+
+    # shellcheck disable=SC1090,SC2154
+    eval "$(resolve_whitelist_download_plan "$download_succeeded")"
+    if ! apply_whitelist_download_plan \
+        "$WHITELIST_DOWNLOAD_PLAN" \
+        "${WHITELIST_AGE_HOURS:-0}" \
+        "${WHITELIST_REMAINING_HOURS:-0}" \
+        "${WHITELIST_CONTROL_HOST:-}"; then
+        return 0
     fi
     
     # SIEMPRE verificar desactivación (tanto si se descargó como si usamos el existente)

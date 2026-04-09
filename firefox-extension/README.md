@@ -227,7 +227,7 @@ firefox-extension/
 │   └── icon-96.png    # Icono 96x96
 ├── native/            # Native Messaging
 │   ├── openpath-native-host.py    # Host script
-│   ├── openpath_native_host.json  # Manifest
+│   ├── whitelist_native_host.json  # Manifest
 │   └── install-native-host.sh      # Instalador
 ├── build-xpi.sh       # Script de empaquetado
 └── README.md          # Este archivo

@@ -35,5 +35,5 @@ required firefox-extension/blocked/blocked.html
 required firefox-extension/blocked/blocked.css
 required firefox-extension/blocked/blocked.js
 required firefox-extension/native/openpath-native-host.py
-required firefox-extension/native/openpath_native_host.json
+required firefox-extension/native/whitelist_native_host.json
 required firefox-extension/native/install-native-host.sh

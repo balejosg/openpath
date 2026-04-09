@@ -35,6 +35,15 @@
     local native_dir="$TEST_TMP_DIR/native"
     mkdir -p "$native_dir"
     echo '#!/usr/bin/env python3' > "$native_dir/openpath-native-host.py"
+    cat > "$native_dir/whitelist_native_host.json" <<'EOF'
+{
+  "name": "whitelist_native_host",
+  "description": "OpenPath System Native Messaging Host",
+  "path": "/usr/local/bin/openpath-native-host.py",
+  "type": "stdio",
+  "allowed_extensions": ["monitor-bloqueos@openpath"]
+}
+EOF
 
     source "$PROJECT_DIR/linux/lib/browser.sh"
 
@@ -129,7 +138,12 @@
 }
 
 @test "linux browser runtime uses whitelist_native_host.json for Firefox" {
-    run grep -nF 'whitelist_native_host.json' "$PROJECT_DIR/linux/lib/browser.sh"
+    run grep -nF 'OPENPATH_FIREFOX_NATIVE_HOST_FILENAME' "$PROJECT_DIR/linux/lib/browser.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "manual native host installer uses the Firefox contract filename" {
+    run grep -nF 'whitelist_native_host.json' "$PROJECT_DIR/firefox-extension/native/install-native-host.sh"
     [ "$status" -eq 0 ]
 }
 #!/usr/bin/env bats

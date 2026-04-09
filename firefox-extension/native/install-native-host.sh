@@ -52,7 +52,7 @@ mkdir -p "$NATIVE_HOST_DIR"
 
 # Instalar el manifest
 echo "  → Instalando manifest de Native Messaging..."
-cp "$SCRIPT_DIR/openpath_native_host.json" "$NATIVE_HOST_DIR/whitelist_native_host.json"
+cp "$SCRIPT_DIR/whitelist_native_host.json" "$NATIVE_HOST_DIR/whitelist_native_host.json"
 
 # Crear archivo de log
 echo "  → Configurando archivo de log..."

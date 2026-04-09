@@ -52,7 +52,12 @@
     }
     export -f install_firefox_extension install_chromium_extension install_native_host
 
-    run install_browser_integrations "$ext_dir" "$release_dir" true false true false
+    run install_browser_integrations \
+        "$ext_dir" \
+        "$release_dir" \
+        --native-host \
+        --firefox-required \
+        --chromium-best-effort
     [ "$status" -eq 0 ]
     [[ "$output" == *"install_firefox_extension $ext_dir $release_dir"* ]]
     [[ "$output" == *"install_chromium_extension $ext_dir"* ]]
@@ -71,7 +76,13 @@
     install_native_host() { echo "install_native_host $1 $2"; return 0; }
     export -f install_firefox_extension install_chromium_extension install_native_host
 
-    run install_browser_integrations "$ext_dir" "$release_dir" true false true true
+    run install_browser_integrations \
+        "$ext_dir" \
+        "$release_dir" \
+        --native-host \
+        --firefox-required \
+        --chromium-best-effort \
+        --native-host-best-effort
     [ "$status" -eq 0 ]
     [[ "$output" == *"⚠ Extensión Chrome/Edge no instalada (se puede reintentar más tarde)"* ]]
     [[ "$output" == *"install_native_host $ext_dir/native"* ]]

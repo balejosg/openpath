@@ -101,10 +101,10 @@ EOF
         install_browser_integrations \
             /usr/share/openpath/firefox-extension \
             /usr/share/openpath/firefox-release \
-            true \
-            true \
-            true \
-            true
+            --native-host \
+            --firefox-best-effort \
+            --chromium-best-effort \
+            --native-host-best-effort
         
         # Step 8: Apply browser policies
         echo "  Aplicando políticas de navegadores..."

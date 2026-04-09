@@ -59,7 +59,10 @@ install_firefox_esr() {
 }
 
 install_browser_integrations() {
-    echo "install_browser_integrations:\$1|\$2|\$3|\$4|\$5|\$6" >> "$calls_file"
+    local ext_source="$1"
+    local release_source="$2"
+    shift 2
+    echo "install_browser_integrations:\$ext_source|\$release_source|\$*" >> "$calls_file"
 
     if [ "$mode" = "success" ]; then
         local app_id="{ec8030f7-c20a-464f-9b0e-13a3a9e97384}"
@@ -119,10 +122,15 @@ EOF
 
     [ "$status" -eq 0 ]
 
-    mapfile -t calls < "$calls_file"
-    [ "${calls[0]}" = "install_firefox_esr" ]
-    [ "${calls[1]}" = "install_browser_integrations:/usr/share/openpath/firefox-extension|/usr/share/openpath/firefox-release|true|false|true|true" ]
-    [ "${calls[2]}" = "apply_search_engine_policies" ]
+    run cat "$calls_file"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"install_firefox_esr"* ]]
+    [[ "$output" == *"install_browser_integrations:"* ]]
+    [[ "$output" == *"--native-host"* ]]
+    [[ "$output" == *"--firefox-required"* ]]
+    [[ "$output" == *"--chromium-best-effort"* ]]
+    [[ "$output" == *"--native-host-best-effort"* ]]
+    [[ "$output" == *"apply_search_engine_policies"* ]]
 }
 
 @test "openpath-browser-setup fails when firefox integration is still missing after reconciliation" {

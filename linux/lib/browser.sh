@@ -33,6 +33,19 @@ source "$_browser_lib_dir/firefox-managed-extension.sh"
 source "$_browser_lib_dir/chromium-managed-extension.sh"
 unset _browser_lib_dir
 
+OPENPATH_FIREFOX_NATIVE_HOST_NAME="${OPENPATH_FIREFOX_NATIVE_HOST_NAME:-whitelist_native_host}"
+OPENPATH_FIREFOX_NATIVE_HOST_FILENAME="${OPENPATH_FIREFOX_NATIVE_HOST_FILENAME:-${OPENPATH_FIREFOX_NATIVE_HOST_NAME}.json}"
+OPENPATH_CHROMIUM_NATIVE_HOST_FILENAME="${OPENPATH_CHROMIUM_NATIVE_HOST_FILENAME:-openpath_native_host.json}"
+OPENPATH_NATIVE_HOST_SCRIPT_NAME="${OPENPATH_NATIVE_HOST_SCRIPT_NAME:-openpath-native-host.py}"
+
+get_firefox_native_host_dir() {
+    printf '%s\n' "${FIREFOX_NATIVE_HOST_DIR:-/usr/lib/mozilla/native-messaging-hosts}"
+}
+
+get_native_host_install_dir() {
+    printf '%s\n' "${OPENPATH_NATIVE_HOST_INSTALL_DIR:-/usr/local/lib/openpath}"
+}
+
 # Close browsers to apply policies
 force_browser_close() {
     log "Closing browsers..."
@@ -265,11 +278,47 @@ EOF
 install_browser_integrations() {
     local ext_source="${1:-$INSTALL_DIR/firefox-extension}"
     local release_source="${2:-$INSTALL_DIR/firefox-release}"
-    local install_native_host_enabled="${3:-false}"
-    local firefox_best_effort="${4:-false}"
-    local chromium_best_effort="${5:-true}"
-    local native_host_best_effort="${6:-false}"
+    local install_native_host_enabled=false
+    local firefox_best_effort=false
+    local chromium_best_effort=true
+    local native_host_best_effort=false
     local chromium_ext_id=""
+
+    shift 2 || true
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --native-host)
+                install_native_host_enabled=true
+                ;;
+            --skip-native-host)
+                install_native_host_enabled=false
+                ;;
+            --firefox-best-effort)
+                firefox_best_effort=true
+                ;;
+            --firefox-required)
+                firefox_best_effort=false
+                ;;
+            --chromium-best-effort)
+                chromium_best_effort=true
+                ;;
+            --chromium-required)
+                chromium_best_effort=false
+                ;;
+            --native-host-best-effort)
+                native_host_best_effort=true
+                ;;
+            --native-host-required)
+                native_host_best_effort=false
+                ;;
+            *)
+                log "⚠ Opción de integración de navegador desconocida: $1"
+                return 1
+                ;;
+        esac
+        shift
+    done
 
     if ! install_firefox_extension "$ext_source" "$release_source"; then
         if [ "$firefox_best_effort" = true ]; then
@@ -302,13 +351,47 @@ install_browser_integrations() {
     return 0
 }
 
+render_firefox_native_host_manifest() {
+    local manifest_template="$1"
+    local firefox_manifest_path="$2"
+    local native_host_path="$3"
+
+    if [ ! -f "$manifest_template" ]; then
+        log "⚠ Native host manifest template not found: $manifest_template"
+        return 1
+    fi
+
+    sed "s|/usr/local/bin/openpath-native-host.py|$native_host_path|g" \
+        "$manifest_template" > "$firefox_manifest_path"
+}
+
+write_chromium_native_host_manifest() {
+    local manifest_path="$1"
+    local native_host_path="$2"
+    local chromium_origin="$3"
+
+    cat > "$manifest_path" << EOF
+{
+    "name": "$OPENPATH_FIREFOX_NATIVE_HOST_NAME",
+    "description": "OpenPath System Native Messaging Host",
+    "path": "$native_host_path",
+    "type": "stdio",
+    "allowed_origins": ["$chromium_origin"]
+}
+EOF
+}
+
 # Install native messaging host for the extension
 install_native_host() {
     local native_source="${1:-$INSTALL_DIR/firefox-extension/native}"
     local chromium_ext_id="${2:-}"
-    local native_manifest_dir="/usr/lib/mozilla/native-messaging-hosts"
-    local native_script_dir="/usr/local/lib/openpath"
-    local firefox_manifest_path="$native_manifest_dir/whitelist_native_host.json"
+    local native_manifest_dir
+    native_manifest_dir="$(get_firefox_native_host_dir)"
+    local native_script_dir
+    native_script_dir="$(get_native_host_install_dir)"
+    local native_host_path="$native_script_dir/$OPENPATH_NATIVE_HOST_SCRIPT_NAME"
+    local firefox_manifest_template="$native_source/$OPENPATH_FIREFOX_NATIVE_HOST_FILENAME"
+    local firefox_manifest_path="$native_manifest_dir/$OPENPATH_FIREFOX_NATIVE_HOST_FILENAME"
     
     if [ ! -d "$native_source" ]; then
         log "⚠ Native host directory not found: $native_source"
@@ -322,19 +405,15 @@ install_native_host() {
     mkdir -p "$native_script_dir"
     
     # Copy Python script
-    cp "$native_source/openpath-native-host.py" "$native_script_dir/"
-    chmod +x "$native_script_dir/openpath-native-host.py"
-    
-    # Generate manifest with correct path
-    cat > "$firefox_manifest_path" << EOF
-{
-    "name": "whitelist_native_host",
-    "description": "OpenPath System Native Messaging Host",
-    "path": "$native_script_dir/openpath-native-host.py",
-    "type": "stdio",
-    "allowed_extensions": ["monitor-bloqueos@openpath"]
-}
-EOF
+    cp "$native_source/$OPENPATH_NATIVE_HOST_SCRIPT_NAME" "$native_host_path"
+    chmod +x "$native_host_path"
+
+    if ! render_firefox_native_host_manifest \
+        "$firefox_manifest_template" \
+        "$firefox_manifest_path" \
+        "$native_host_path"; then
+        return 1
+    fi
 
     if [ -n "$chromium_ext_id" ]; then
         local chromium_origin="chrome-extension://$chromium_ext_id/"
@@ -346,15 +425,10 @@ EOF
 
         for manifest_dir in "${chromium_manifest_dirs[@]}"; do
             mkdir -p "$manifest_dir"
-            cat > "$manifest_dir/openpath_native_host.json" << EOF
-{
-    "name": "whitelist_native_host",
-    "description": "OpenPath System Native Messaging Host",
-    "path": "$native_script_dir/openpath-native-host.py",
-    "type": "stdio",
-    "allowed_origins": ["$chromium_origin"]
-}
-EOF
+            write_chromium_native_host_manifest \
+                "$manifest_dir/$OPENPATH_CHROMIUM_NATIVE_HOST_FILENAME" \
+                "$native_host_path" \
+                "$chromium_origin"
         done
     fi
     
@@ -379,11 +453,11 @@ remove_firefox_extension() {
     fi
     
     # Remove native host
-    rm -f "/usr/lib/mozilla/native-messaging-hosts/whitelist_native_host.json" 2>/dev/null || true
-    rm -f "$(get_chromium_native_host_dir)/openpath_native_host.json" 2>/dev/null || true
-    rm -f "$(get_chrome_native_host_dir)/openpath_native_host.json" 2>/dev/null || true
-    rm -f "$(get_edge_native_host_dir)/openpath_native_host.json" 2>/dev/null || true
-    rm -f "/usr/local/lib/openpath/openpath-native-host.py" 2>/dev/null || true
+    rm -f "$(get_firefox_native_host_dir)/$OPENPATH_FIREFOX_NATIVE_HOST_FILENAME" 2>/dev/null || true
+    rm -f "$(get_chromium_native_host_dir)/$OPENPATH_CHROMIUM_NATIVE_HOST_FILENAME" 2>/dev/null || true
+    rm -f "$(get_chrome_native_host_dir)/$OPENPATH_CHROMIUM_NATIVE_HOST_FILENAME" 2>/dev/null || true
+    rm -f "$(get_edge_native_host_dir)/$OPENPATH_CHROMIUM_NATIVE_HOST_FILENAME" 2>/dev/null || true
+    rm -f "$(get_native_host_install_dir)/$OPENPATH_NATIVE_HOST_SCRIPT_NAME" 2>/dev/null || true
 
     local chromium_ext_id_file
     chromium_ext_id_file="$(get_chromium_extension_id_file)"
