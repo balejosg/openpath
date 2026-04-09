@@ -22,6 +22,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 # ============================================
@@ -237,14 +238,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path ci | Out-Null
           Set-Content -Path ci/windows-tests-passed.txt -Value success
 
-      - name: Save Windows success marker
-        if: steps.job-status.outputs.tests_passed == 'true'
-        uses: actions/upload-artifact@v7
-        with:
-          path: ci/windows-tests-passed.txt
-          name: windows-ci-passed-${{ github.run_id }}-${{ github.run_attempt }}
-          retention-days: 1
-
       - name: Hold successful Windows lane until timeout cancellation
         if: steps.job-status.outputs.tests_passed == 'true'
         shell: pwsh
@@ -388,19 +381,24 @@ jobs:
     if: always()
 
     steps:
-      - name: Restore Windows success marker
-        id: restore-windows-success-marker
+      - name: Inspect Windows success marker
+        id: inspect-windows-success-marker
         if: needs.test-windows.result == 'cancelled'
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-ci-passed-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          marker_step_conclusion="$(
+            gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs \
+              --paginate \
+              --jq '.jobs[] | select(.name == "Windows Agent Tests (Pester)") | .steps[] | select(.name == "Write Windows success marker") | .conclusion' \
+              | tail -n 1
+          )"
+          echo "marker_step_conclusion=$marker_step_conclusion" >> "$GITHUB_OUTPUT"
 
       - name: Check all jobs
         run: |
           windows_success_marker_restored=false
-          if [[ -f ci/windows-tests-passed.txt ]]; then
+          if [[ "${{ steps.inspect-windows-success-marker.outputs.marker_step_conclusion }}" == "success" ]]; then
             windows_success_marker_restored=true
           fi
 

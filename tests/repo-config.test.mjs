@@ -366,16 +366,8 @@ describe('repository verification contract', () => {
       'ci.yml should write a persisted Windows success marker before entering the sentinel timeout step'
     );
     assert.ok(
-      windowsJobBlock.includes('name: Save Windows success marker'),
-      'ci.yml should persist the Windows success marker before the Windows lane times out'
-    );
-    assert.ok(
-      windowsJobBlock.includes('uses: actions/upload-artifact@v7'),
-      'ci.yml should persist the Windows success marker through an explicit artifact upload before timeout cancellation'
-    );
-    assert.ok(
-      windowsJobBlock.includes('windows-ci-passed-${{ github.run_id }}-${{ github.run_attempt }}'),
-      'ci.yml should scope the persisted Windows success marker to the current workflow run and attempt'
+      !windowsJobBlock.includes('name: Save Windows success marker'),
+      'ci.yml should stop trying to persist the Windows success marker through a second GitHub action inside the flaky Windows lane'
     );
     assert.ok(
       windowsJobBlock.includes('Set-Content -Path ci/windows-tests-passed.txt -Value success'),
@@ -394,24 +386,44 @@ describe('repository verification contract', () => {
       'ci.yml should let the CI summary gate distinguish a cancelled Windows lane from an actual failure'
     );
     assert.ok(
-      ciWorkflow.includes('name: Restore Windows success marker'),
-      'ci.yml should restore the persisted Windows success marker in the CI summary job when the Windows lane times out'
+      ciWorkflow.includes('actions: read'),
+      'ci.yml should grant the summary job permission to read workflow job metadata through the Actions API'
     );
     assert.ok(
-      ciWorkflow.includes('uses: actions/download-artifact@v4'),
-      'ci.yml should restore the Windows success marker through an artifact download in the CI summary job'
+      ciWorkflow.includes('name: Inspect Windows success marker'),
+      'ci.yml should inspect the Windows lane marker step through the Actions API in the summary job when the lane times out'
     );
     assert.ok(
-      ciWorkflow.includes('name: windows-ci-passed-${{ github.run_id }}-${{ github.run_attempt }}'),
-      'ci.yml should request the run-scoped Windows success marker artifact in the CI summary job'
+      ciWorkflow.includes(
+        'gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs'
+      ),
+      'ci.yml should query the current workflow jobs through gh api when the Windows lane times out'
     );
     assert.ok(
-      ciWorkflow.includes('[[ -f ci/windows-tests-passed.txt ]]'),
-      'ci.yml should verify the restored Windows success marker file exists before trusting the downloaded artifact'
+      ciWorkflow.includes('select(.name == "Write Windows success marker")'),
+      'ci.yml should read the conclusion of the Windows success marker step from the workflow jobs payload'
     );
     assert.ok(
       ciWorkflow.includes('windows_success_marker_restored=true'),
-      'ci.yml should record when the persisted Windows success marker has been restored successfully'
+      'ci.yml should record when the Windows success marker step has been confirmed through the workflow jobs API'
+    );
+    assert.ok(
+      ciWorkflow.includes('steps.inspect-windows-success-marker.outputs.marker_step_conclusion'),
+      'ci.yml should pass the inspected Windows marker-step conclusion into the summary gate logic'
+    );
+    assert.ok(
+      ciWorkflow.includes(
+        '[[ "${{ steps.inspect-windows-success-marker.outputs.marker_step_conclusion }}" == "success" ]]'
+      ),
+      'ci.yml should only trust the inspected Windows marker-step conclusion when it is explicitly success'
+    );
+    assert.ok(
+      !ciWorkflow.includes('actions/upload-artifact@v7'),
+      'ci.yml should avoid artifact uploads inside the flaky Windows lane once the summary job reads the marker step directly from the workflow API'
+    );
+    assert.ok(
+      !ciWorkflow.includes('actions/download-artifact@v4'),
+      'ci.yml should avoid artifact downloads in the summary job once the workflow API provides the marker-step conclusion'
     );
     assert.ok(
       ciWorkflow.includes('[[ "${{ needs.test-windows.outputs.tests_passed }}" == "true" ]] || \\'),
