@@ -32,6 +32,58 @@ TOKEN_STDIN=false
 ENROLLMENT_TOKEN=""
 PACKAGE_VERSION=""
 BROWSER_SETUP_SCRIPT="${OPENPATH_BROWSER_SETUP_SCRIPT:-/usr/local/bin/openpath-browser-setup.sh}"
+VERBOSE=false
+
+log_verbose() {
+    if [ "$VERBOSE" = true ]; then
+        printf '%s\n' "$*"
+    fi
+}
+
+show_progress() {
+    local current="$1"
+    local total="$2"
+    local label="$3"
+    local percent=$((current * 100 / total))
+
+    if [ "$VERBOSE" = true ]; then
+        printf '[%s/%s] %s\n' "$current" "$total" "$label"
+        return 0
+    fi
+
+    if [ -t 1 ]; then
+        local width=24
+        local filled=$((percent * width / 100))
+        local empty=$((width - filled))
+        local bar
+        bar="$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' "$empty" '' | tr ' ' '-')"
+        printf '\r[%s] %3d%% %s/%s %s' "$bar" "$percent" "$current" "$total" "$label"
+        if [ "$current" -eq "$total" ]; then
+            printf '\n'
+        fi
+    else
+        printf 'Progress %s/%s: %s\n' "$current" "$total" "$label"
+    fi
+}
+
+run_maybe_verbose() {
+    if [ "$VERBOSE" = true ]; then
+        "$@"
+        return $?
+    fi
+
+    local output_file
+    output_file="$(mktemp)"
+    if "$@" >"$output_file" 2>&1; then
+        rm -f "$output_file"
+        return 0
+    fi
+
+    [ -t 1 ] && printf '\n'
+    cat "$output_file"
+    rm -f "$output_file"
+    return 1
+}
 
 usage() {
     echo "Usage: $0 [OPTIONS]"
@@ -47,23 +99,24 @@ usage() {
     echo "  --token-stdin        Read registration token from stdin"
     echo "  --enrollment-token T Classroom enrollment token"
     echo "  --package-version V  Install explicit openpath-dnsmasq version"
+    echo "  --verbose            Show detailed installer output"
     echo "  --help               Show this help"
 }
 
 run_browser_setup_helper() {
-    echo "[5/5] Ensuring Firefox browser setup..."
+    show_progress 5 5 "Ensuring Firefox browser setup"
 
     if [ ! -x "$BROWSER_SETUP_SCRIPT" ]; then
         echo "ERROR: Browser setup helper not found at $BROWSER_SETUP_SCRIPT"
         exit 1
     fi
 
-    if ! "$BROWSER_SETUP_SCRIPT"; then
+    if ! run_maybe_verbose "$BROWSER_SETUP_SCRIPT"; then
         echo "ERROR: Firefox browser setup did not complete successfully."
         exit 1
     fi
 
-    echo "  OK Firefox browser setup ready"
+    log_verbose "  OK Firefox browser setup ready"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -108,6 +161,10 @@ while [[ $# -gt 0 ]]; do
             PACKAGE_VERSION="$2"
             shift 2
             ;;
+        --verbose)
+            VERBOSE=true
+            shift
+            ;;
         --help|-h)
             usage
             exit 0
@@ -120,10 +177,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-echo "=============================================="
-echo "  OpenPath Classroom Bootstrap"
-echo "=============================================="
-echo ""
+if [ "$VERBOSE" = true ]; then
+    echo "=============================================="
+    echo "  OpenPath Classroom Bootstrap"
+    echo "=============================================="
+    echo ""
+else
+    echo "Installing OpenPath..."
+fi
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "ERROR: run as root (use sudo)"
@@ -135,13 +196,13 @@ if ! command -v apt-get >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "[1/4] Installing bootstrap dependencies..."
+show_progress 1 5 "Installing bootstrap dependencies"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq ca-certificates curl gnupg >/dev/null
-echo "  OK Dependencies ready"
+run_maybe_verbose apt-get update -qq
+run_maybe_verbose apt-get install -y -qq ca-certificates curl gnupg
+log_verbose "  OK Dependencies ready"
 
-echo "[2/4] Configuring OpenPath APT repository ($TRACK)..."
+show_progress 2 5 "Configuring OpenPath APT repository ($TRACK)"
 setup_script="$(mktemp)"
 trap 'rm -f "$setup_script"' EXIT
 if [[ "$APT_SETUP_URL" == https://* ]]; then
@@ -149,10 +210,10 @@ if [[ "$APT_SETUP_URL" == https://* ]]; then
 else
     curl -fsSL "$APT_SETUP_URL" -o "$setup_script"
 fi
-bash "$setup_script" "--$TRACK"
-echo "  OK Repository configured"
+run_maybe_verbose bash "$setup_script" "--$TRACK"
+log_verbose "  OK Repository configured"
 
-echo "[3/4] Validating and installing openpath-dnsmasq..."
+show_progress 3 5 "Validating and installing openpath-dnsmasq"
 if ! apt-cache show openpath-dnsmasq >/dev/null 2>&1; then
     echo "ERROR: APT repository metadata does not advertise openpath-dnsmasq."
     if [ "$TRACK" = "stable" ] && apt-cache show whitelist-dnsmasq >/dev/null 2>&1; then
@@ -172,14 +233,15 @@ if [ -n "$PACKAGE_VERSION" ]; then
         echo "  Publish the requested package first or update the enrollment manifest."
         exit 1
     fi
-    apt-get install -y "openpath-dnsmasq=$PACKAGE_DEB_VERSION"
+    run_maybe_verbose apt-get install -y "openpath-dnsmasq=$PACKAGE_DEB_VERSION"
 else
-    apt-get install -y openpath-dnsmasq
+    run_maybe_verbose apt-get install -y openpath-dnsmasq
 fi
-echo "  OK Package installed"
+log_verbose "  OK Package installed"
 
 if [ "$SKIP_SETUP" = true ]; then
-    echo "[4/5] Classroom setup skipped (--skip-setup)"
+    show_progress 4 5 "Classroom setup skipped"
+    log_verbose "Classroom setup skipped (--skip-setup)"
     run_browser_setup_helper
     echo "Run manually later: sudo openpath setup"
     exit 0
@@ -195,7 +257,7 @@ if [ -n "$ENROLLMENT_TOKEN" ] && { [ -n "$TOKEN_FILE" ] || [ "$TOKEN_STDIN" = tr
     exit 1
 fi
 
-echo "[4/5] Running classroom setup..."
+show_progress 4 5 "Running classroom setup"
 setup_cmd=(openpath setup)
 
 if [ -n "$API_URL" ]; then
@@ -217,7 +279,7 @@ if [ -n "$ENROLLMENT_TOKEN" ]; then
     setup_cmd+=(--enrollment-token "$ENROLLMENT_TOKEN")
 fi
 
-if ! "${setup_cmd[@]}"; then
+if ! run_maybe_verbose "${setup_cmd[@]}"; then
     echo ""
     echo "WARNING: Classroom setup could not be completed right now."
     echo "  OpenPath is installed. Retry when API/token are available:"
@@ -225,7 +287,9 @@ if ! "${setup_cmd[@]}"; then
     echo "    sudo openpath setup"
     echo ""
     run_browser_setup_helper
-    openpath status || true
+    if [ "$VERBOSE" = true ]; then
+        openpath status || true
+    fi
     exit 0
 fi
 
@@ -233,5 +297,7 @@ run_browser_setup_helper
 
 echo ""
 echo "OK Classroom setup completed"
-openpath status || true
-openpath health || true
+if [ "$VERBOSE" = true ]; then
+    openpath status || true
+    openpath health || true
+fi
