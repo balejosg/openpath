@@ -16,6 +16,10 @@ import { Browser, WebRequest, Runtime, WebNavigation } from 'webextension-polyfi
 import { logger, getErrorMessage } from './lib/logger.js';
 import { getRequestApiEndpoints, loadRequestConfig } from './lib/config-storage.js';
 import { buildBlockedDomainSubmitBody } from './lib/blocked-request.js';
+import {
+  SUBMIT_BLOCKED_DOMAIN_REQUEST_ACTION,
+  isSubmitBlockedDomainRequestMessage,
+} from './lib/blocked-screen-contract.js';
 
 declare const browser: Browser;
 
@@ -1277,8 +1281,12 @@ browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.
         return { success: false, error: errorMessage };
       }
 
-    case 'submitBlockedDomainRequest':
+    case SUBMIT_BLOCKED_DOMAIN_REQUEST_ACTION:
       try {
+        if (!isSubmitBlockedDomainRequestMessage(message)) {
+          return { success: false, error: 'domain and reason are required' };
+        }
+
         const input: SubmitBlockedDomainInput = {};
         if (msg.domain !== undefined) {
           input.domain = msg.domain;

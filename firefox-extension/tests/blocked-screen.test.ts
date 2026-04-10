@@ -1,7 +1,8 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { test, describe } from 'node:test';
-import vm from 'node:vm';
+
+import { main } from '../src/blocked-page.js';
 
 class MockElement {
   className = '';
@@ -51,10 +52,15 @@ function normalizeMessages(messages: unknown[]): Record<string, unknown>[] {
   });
 }
 
-function runBlockedScript(response: unknown): {
+function runBlockedScript(
+  response: unknown,
+  search = '?domain=learning.example&error=NS_ERROR_UNKNOWN_HOST&origin=portal.example'
+): {
   elements: Map<string, MockElement>;
   messages: unknown[];
 } {
+  clearBlockedScreenGlobals();
+
   const ids = [
     'blocked-domain',
     'blocked-error',
@@ -68,39 +74,67 @@ function runBlockedScript(response: unknown): {
   ];
   const elements = new Map(ids.map((id) => [id, new MockElement()]));
   const messages: unknown[] = [];
-  const script = readFileSync(new URL('../blocked/blocked.js', import.meta.url), 'utf8');
 
-  const sandbox = {
-    URL,
-    URLSearchParams,
+  Object.defineProperties(globalThis, {
     browser: {
-      runtime: {
-        sendMessage: (message: unknown): Promise<unknown> => {
-          messages.push(message);
-          return Promise.resolve(response);
+      configurable: true,
+      value: {
+        runtime: {
+          sendMessage: (message: unknown): Promise<unknown> => {
+            messages.push(message);
+            return Promise.resolve(response);
+          },
         },
       },
     },
     document: {
-      getElementById: (id: string): MockElement | null => elements.get(id) ?? null,
+      configurable: true,
+      value: {
+        getElementById: (id: string): MockElement | null => elements.get(id) ?? null,
+      },
     },
     navigator: {
-      clipboard: {
-        writeText: (): Promise<void> => Promise.resolve(),
+      configurable: true,
+      value: {
+        clipboard: {
+          writeText: (): Promise<void> => Promise.resolve(),
+        },
       },
     },
     window: {
-      history: { length: 1, back: (): void => undefined },
-      location: {
-        replace: (): void => undefined,
-        search: '?domain=learning.example&error=NS_ERROR_UNKNOWN_HOST&origin=portal.example',
+      configurable: true,
+      value: {
+        history: { length: 1, back: (): void => undefined },
+        location: {
+          replace: (): void => undefined,
+          search,
+        },
       },
     },
-  };
+  });
 
-  vm.runInNewContext(script, sandbox, { filename: 'blocked.js' });
+  main();
 
   return { elements, messages };
+}
+
+function clearBlockedScreenGlobals(): void {
+  const globalRecord = globalThis as {
+    browser?: unknown;
+    document?: unknown;
+    navigator?: unknown;
+    window?: unknown;
+  };
+
+  delete globalRecord.browser;
+  delete globalRecord.document;
+  delete globalRecord.navigator;
+  delete globalRecord.window;
+}
+
+async function flushBlockedScreenAsyncHandlers(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 void describe('blocked screen', () => {
@@ -124,6 +158,7 @@ void describe('blocked screen', () => {
     reason.value = 'Lo necesito para una actividad de clase';
 
     await elements.get('submit-unblock-request')?.trigger('click');
+    await flushBlockedScreenAsyncHandlers();
 
     assert.deepStrictEqual(normalizeMessages(messages), [
       {
@@ -137,6 +172,36 @@ void describe('blocked screen', () => {
     assert.match(elements.get('request-status')?.textContent ?? '', /Solicitud enviada/);
   });
 
+  void test('does not send display-only fallback text as request context', async () => {
+    const { elements, messages } = runBlockedScript(
+      {
+        success: true,
+        id: 'req_124',
+        status: 'pending',
+      },
+      '?blockedUrl=https%3A%2F%2Flearning.example%2Flesson&error=NS_ERROR_UNKNOWN_HOST'
+    );
+
+    assert.equal(elements.get('blocked-origin')?.textContent, 'sin informacion');
+
+    const reason = elements.get('request-reason');
+    assert.ok(reason);
+    reason.value = 'Lo necesito para una actividad de clase';
+
+    await elements.get('submit-unblock-request')?.trigger('click');
+    await flushBlockedScreenAsyncHandlers();
+
+    assert.deepStrictEqual(normalizeMessages(messages), [
+      {
+        action: 'submitBlockedDomainRequest',
+        domain: 'learning.example',
+        reason: 'Lo necesito para una actividad de clase',
+        origin: undefined,
+        error: 'NS_ERROR_UNKNOWN_HOST',
+      },
+    ]);
+  });
+
   void test('shows a teacher fallback when request submission is unavailable', async () => {
     const { elements } = runBlockedScript({
       success: false,
@@ -148,6 +213,7 @@ void describe('blocked screen', () => {
     reason.value = 'Lo necesito para una actividad de clase';
 
     await elements.get('submit-unblock-request')?.trigger('click');
+    await flushBlockedScreenAsyncHandlers();
 
     assert.match(elements.get('request-status')?.textContent ?? '', /avisa a tu profesor/);
   });
