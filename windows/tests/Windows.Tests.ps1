@@ -2165,6 +2165,13 @@ Describe "Installer" {
                 'Show-InstallerProgress -Step 1 -Total 7 -Status ''Creando estructura de directorios'''
             )
         }
+
+        It "Does not emit empty verbose installer messages during classroom enrollment" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            $content.Contains('Write-InstallerVerbose ""') | Should -BeFalse
+        }
     }
 
     Context "Primary DNS detection" {

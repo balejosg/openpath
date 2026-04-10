@@ -338,6 +338,17 @@ load 'test_helper'
     done <<< "$install_pkgs"
 }
 
+@test "linux package no longer requires iptables-persistent on modern Ubuntu hosts" {
+    run grep -n 'iptables-persistent' "$PROJECT_DIR/linux/debian-package/DEBIAN/control"
+    [ "$status" -ne 0 ]
+
+    run grep -n 'iptables-persistent' "$PROJECT_DIR/linux/install.sh"
+    [ "$status" -ne 0 ]
+
+    run grep -n 'netfilter-persistent' "$PROJECT_DIR/linux/debian-package/DEBIAN/control"
+    [ "$status" -ne 0 ]
+}
+
 @test "install.sh hardens apt operations against stale package indexes" {
     run grep -n "apt_update_with_retry()" "$PROJECT_DIR/linux/install.sh"
     [ "$status" -eq 0 ]

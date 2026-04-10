@@ -391,7 +391,7 @@ step_install_dependencies() {
     apt_update_with_retry
     DEBIAN_FRONTEND=noninteractive apt_install_with_retry "dependencias base" \
         apt-get -o Acquire::Retries=3 install -y \
-        iptables iptables-persistent ipset curl iproute2 \
+        iptables ipset curl iproute2 \
         libcap2-bin dnsutils conntrack python3
 
     RUNLEVEL=1 apt_install_with_retry "dnsmasq" \

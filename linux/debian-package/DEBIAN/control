@@ -3,7 +3,7 @@ Version: 3.5.0-1
 Section: net
 Priority: optional
 Architecture: all
-Depends: dnsmasq, iptables, iptables-persistent, ipset, iproute2, curl, libcap2-bin, dnsutils, conntrack, python3
+Depends: dnsmasq, iptables, ipset, iproute2, curl, libcap2-bin, dnsutils, conntrack, python3
 Recommends: firefox-esr, unattended-upgrades
 Maintainer: Las Encinas IT <it@lasencinas.edu>
 Description: DNS Whitelist System for Educational Environments

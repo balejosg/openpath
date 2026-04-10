@@ -844,7 +844,6 @@ Write-InstallerVerbose "  Tareas registradas"
 # Register machine in classroom mode
 $machineRegistered = "NOT_REQUESTED"
 if ($classroomModeRequested) {
-    Write-InstallerVerbose ""
     Write-InstallerVerbose "Registering machine in classroom..."
 
     $enrollScript = "$OpenPathRoot\scripts\Enroll-Machine.ps1"
