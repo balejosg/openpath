@@ -15,6 +15,7 @@
 import { Browser, WebRequest, Runtime, WebNavigation } from 'webextension-polyfill';
 import { logger, getErrorMessage } from './lib/logger.js';
 import { getRequestApiEndpoints, loadRequestConfig } from './lib/config-storage.js';
+import { buildBlockedDomainSubmitBody } from './lib/blocked-request.js';
 
 declare const browser: Browser;
 
@@ -79,6 +80,29 @@ interface AutoAllowApiResponse {
   success: boolean;
   status?: 'approved' | 'duplicate';
   duplicate?: boolean;
+  error?: string;
+}
+
+interface SubmitBlockedDomainApiResponse {
+  success?: boolean;
+  id?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  domain?: string;
+  error?: string;
+}
+
+interface SubmitBlockedDomainResult {
+  success: boolean;
+  id?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  domain?: string;
+  error?: string;
+}
+
+interface SubmitBlockedDomainInput {
+  domain?: string;
+  reason?: string;
+  origin?: string;
   error?: string;
 }
 
@@ -789,6 +813,94 @@ async function triggerLocalWhitelistUpdate(): Promise<boolean> {
   }
 }
 
+async function submitBlockedDomainRequest(
+  input: SubmitBlockedDomainInput
+): Promise<SubmitBlockedDomainResult> {
+  const domain = input.domain?.trim();
+  const reason = input.reason?.trim();
+
+  if (!domain || !reason || reason.length < 3) {
+    return { success: false, error: 'domain and reason are required' };
+  }
+
+  const requestConfig = await loadRequestConfig();
+  const endpoints = getRequestApiEndpoints(requestConfig);
+  if (!requestConfig.enableRequests || endpoints.length === 0) {
+    return {
+      success: false,
+      error: 'Configuracion incompleta para solicitar dominios',
+    };
+  }
+
+  const hostnameResponse = (await sendNativeMessage({ action: 'get-hostname' })) as {
+    success: boolean;
+    hostname?: string;
+    error?: string;
+  };
+  if (!hostnameResponse.success || !hostnameResponse.hostname) {
+    return {
+      success: false,
+      error: hostnameResponse.error ?? 'No se pudo obtener el hostname del equipo',
+    };
+  }
+
+  const tokenResponse = (await sendNativeMessage({ action: 'get-machine-token' })) as {
+    success: boolean;
+    token?: string;
+    error?: string;
+  };
+  if (!tokenResponse.success || !tokenResponse.token) {
+    return {
+      success: false,
+      error: tokenResponse.error ?? 'No se pudo obtener token de la maquina',
+    };
+  }
+
+  const requestBody = buildBlockedDomainSubmitBody({
+    domain,
+    reason,
+    token: tokenResponse.token,
+    hostname: hostnameResponse.hostname,
+    clientVersion: browser.runtime.getManifest().version,
+    origin: input.origin,
+    error: input.error,
+  });
+
+  const response = await fetchWithFallback(
+    endpoints,
+    '/api/requests/submit',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    },
+    requestConfig.requestTimeout
+  );
+
+  const payload = (await response
+    .json()
+    .catch((): SubmitBlockedDomainApiResponse => ({}))) as SubmitBlockedDomainApiResponse;
+
+  if (!response.ok || payload.success !== true) {
+    return {
+      success: false,
+      error: payload.error ?? `No se pudo enviar la solicitud (${response.status.toString()})`,
+    };
+  }
+
+  const result: SubmitBlockedDomainResult = { success: true };
+  if (payload.id) {
+    result.id = payload.id;
+  }
+  if (payload.status) {
+    result.status = payload.status;
+  }
+  if (payload.domain) {
+    result.domain = payload.domain;
+  }
+  return result;
+}
+
 async function autoAllowBlockedDomain(
   tabId: number,
   hostname: string,
@@ -1070,7 +1182,16 @@ browser.tabs.onRemoved.addListener((tabId: number) => {
  * Responde a solicitudes de datos del popup
  */
 browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.MessageSender) => {
-  const msg = message as { action: string; tabId: number; domains?: string[]; hostname?: string };
+  const msg = message as {
+    action: string;
+    tabId: number;
+    domains?: string[];
+    hostname?: string;
+    domain?: string;
+    reason?: string;
+    origin?: string;
+    error?: string;
+  };
 
   switch (msg.action) {
     case 'getBlockedDomains':
@@ -1154,6 +1275,26 @@ browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return { success: false, error: errorMessage };
+      }
+
+    case 'submitBlockedDomainRequest':
+      try {
+        const input: SubmitBlockedDomainInput = {};
+        if (msg.domain !== undefined) {
+          input.domain = msg.domain;
+        }
+        if (msg.reason !== undefined) {
+          input.reason = msg.reason;
+        }
+        if (msg.origin !== undefined) {
+          input.origin = msg.origin;
+        }
+        if (msg.error !== undefined) {
+          input.error = msg.error;
+        }
+        return await submitBlockedDomainRequest(input);
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) };
       }
 
     case 'triggerWhitelistUpdate':
