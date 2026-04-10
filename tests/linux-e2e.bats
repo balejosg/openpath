@@ -142,6 +142,51 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "linux self-update falls back to GitHub releases when the managed manifest returns an error payload" {
+    run env PROJECT_DIR="$PROJECT_DIR" bash -lc '
+        set -euo pipefail
+
+        tmpdir=$(mktemp -d)
+        trap "rm -rf \"$tmpdir\"" EXIT
+
+        export INSTALL_DIR="$tmpdir/install"
+        export ETC_CONFIG_DIR="$tmpdir/etc"
+        export VAR_STATE_DIR="$tmpdir/var"
+        export LOG_FILE="$tmpdir/openpath.log"
+        mkdir -p "$INSTALL_DIR/lib" "$ETC_CONFIG_DIR" "$VAR_STATE_DIR"
+        cp "$PROJECT_DIR/linux/lib/"*.sh "$INSTALL_DIR/lib/"
+
+        export OPENPATH_SELF_UPDATE_SOURCE_ONLY=1
+        export OPENPATH_SELF_UPDATE_API="https://managed.example/api/agent/linux/latest.json"
+        # shellcheck source=/dev/null
+        source "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+
+        curl() {
+            local url="${*: -1}"
+            if [ "$url" = "https://managed.example/api/agent/linux/latest.json" ]; then
+                printf "%s" "{\"success\":false,\"error\":\"Linux agent package unavailable\"}"
+                return 0
+            fi
+
+            if [ "$url" = "https://api.github.com/repos/balejosg/openpath/releases/latest" ]; then
+                printf "%s" "{\"tag_name\":\"v9.9.9\",\"assets\":[{\"browser_download_url\":\"https://github.com/balejosg/openpath/releases/download/v9.9.9/openpath-dnsmasq_9.9.9-1_amd64.deb\"}]}"
+                return 0
+            fi
+
+            echo "Unexpected curl URL: $url" >&2
+            return 1
+        }
+
+        refresh_update_metadata
+
+        [ "$UPDATE_SOURCE" = "github-release" ]
+        [ "$LATEST_VERSION" = "9.9.9" ]
+        [ "$DOWNLOAD_URL" = "https://github.com/balejosg/openpath/releases/download/v9.9.9/openpath-dnsmasq_9.9.9-1_amd64.deb" ]
+        [ -z "$DOWNLOAD_AUTH_HEADER" ]
+    '
+    [ "$status" -eq 0 ]
+}
+
 @test "linux self-update validates dnsmasq health before declaring agent update success" {
     run grep -nF 'systemctl is-active --quiet dnsmasq' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
     [ "$status" -eq 0 ]

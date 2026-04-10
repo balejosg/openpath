@@ -100,7 +100,7 @@ require_root() {
 parse_json_string_field() {
     local response="$1"
     local field_name="$2"
-    printf '%s\n' "$response" | grep -oP "\"${field_name}\":\\s*\"\\K[^\"]+" | head -1
+    printf '%s\n' "$response" | grep -oP "\"${field_name}\":\\s*\"\\K[^\"]+" | head -1 || true
 }
 
 parse_json_string_array_field() {
@@ -158,6 +158,7 @@ refresh_update_metadata() {
     local origin=""
     local api_base=""
     local machine_token=""
+    local managed_manifest_requested=0
 
     if [ -n "$manifest_token" ]; then
         auth_header="Authorization: Bearer ${manifest_token}"
@@ -172,9 +173,11 @@ refresh_update_metadata() {
                 auth_header="Authorization: Bearer ${machine_token}"
             fi
             origin="$api_base"
+            managed_manifest_requested=1
         fi
     else
         origin=$(extract_url_origin "$manifest_url")
+        managed_manifest_requested=1
     fi
 
     if [ -z "$manifest_url" ]; then
@@ -213,6 +216,19 @@ refresh_update_metadata() {
         [ -z "$MIN_SUPPORTED_VERSION" ] && MIN_SUPPORTED_VERSION="0.0.0"
         [ -z "$MIN_DIRECT_UPGRADE_VERSION" ] && MIN_DIRECT_UPGRADE_VERSION="0.0.0"
         return 0
+    fi
+
+    if [ "$managed_manifest_requested" -eq 1 ]; then
+        log_warn "Managed Linux update manifest was unavailable or incomplete; falling back to GitHub releases"
+        manifest_url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
+        origin="https://github.com"
+        auth_header=""
+
+        response=$(curl -sS --connect-timeout 10 --max-time 30 "$manifest_url" 2>/dev/null)
+        if [ -z "$response" ]; then
+            log_error "Cannot reach fallback GitHub release metadata"
+            return 1
+        fi
     fi
 
     local github_tag=""
