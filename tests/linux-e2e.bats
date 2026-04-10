@@ -170,7 +170,7 @@ EOF
     run grep -nF 'install_browser_integrations \' "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'true \' "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
+    run grep -nF -- '--firefox-best-effort \' "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
     [ "$status" -eq 0 ]
 }
 
