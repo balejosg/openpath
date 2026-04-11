@@ -46,6 +46,93 @@ function normalizeApiUrl(url: string): string {
   return url.trim().replace(/\/+$/, '');
 }
 
+function normalizeApiUrlList(urls: string[]): string[] {
+  return urls.map(normalizeApiUrl).filter((url) => url.length > 0);
+}
+
+function readStoredConfig(source: unknown): {
+  config?: Partial<RequestConfig>;
+  hasConfig: boolean;
+} {
+  const maybeRecord =
+    source !== null && typeof source === 'object' ? (source as Record<string, unknown>) : null;
+  if (!maybeRecord || !('config' in maybeRecord)) {
+    return { hasConfig: false };
+  }
+
+  const candidate = maybeRecord.config;
+  if (candidate === null || typeof candidate !== 'object') {
+    return { hasConfig: true };
+  }
+
+  return {
+    config: candidate as Partial<RequestConfig>,
+    hasConfig: true,
+  };
+}
+
+function sanitizeStoredRequestConfig(
+  incoming: Partial<RequestConfig> | undefined,
+  nativeFallback: Partial<RequestConfig>
+): Partial<RequestConfig> {
+  if (!incoming) {
+    return {};
+  }
+
+  const sanitized: Partial<RequestConfig> = { ...incoming };
+  if (typeof incoming.requestApiUrl === 'string') {
+    const normalizedRequestApiUrl = normalizeApiUrl(incoming.requestApiUrl);
+    if (normalizedRequestApiUrl.length > 0) {
+      sanitized.requestApiUrl = normalizedRequestApiUrl;
+    } else if (nativeFallback.requestApiUrl) {
+      delete sanitized.requestApiUrl;
+    } else {
+      sanitized.requestApiUrl = '';
+    }
+  }
+
+  if (Array.isArray(incoming.fallbackApiUrls)) {
+    const normalizedFallbackApiUrls = normalizeApiUrlList(incoming.fallbackApiUrls);
+    if (normalizedFallbackApiUrls.length > 0) {
+      sanitized.fallbackApiUrls = normalizedFallbackApiUrls;
+    } else if ((nativeFallback.fallbackApiUrls?.length ?? 0) > 0) {
+      delete sanitized.fallbackApiUrls;
+    } else {
+      sanitized.fallbackApiUrls = [];
+    }
+  }
+
+  return sanitized;
+}
+
+async function loadStoredRequestConfig(
+  nativeFallback: Partial<RequestConfig>
+): Promise<Partial<RequestConfig>> {
+  let syncStored: Partial<RequestConfig> | undefined;
+
+  try {
+    const localStored = readStoredConfig(await browser.storage.local.get('config'));
+    if (localStored.hasConfig) {
+      return sanitizeStoredRequestConfig(localStored.config, nativeFallback);
+    }
+  } catch (error) {
+    logger.warn('[Config] Failed to load local stored config', {
+      error: getErrorMessage(error),
+    });
+  }
+
+  try {
+    const syncStoredRecord = readStoredConfig(await browser.storage.sync.get('config'));
+    syncStored = syncStoredRecord.config;
+    return sanitizeStoredRequestConfig(syncStored, nativeFallback);
+  } catch (error) {
+    logger.warn('[Config] Failed to load sync stored config', {
+      error: getErrorMessage(error),
+    });
+    return {};
+  }
+}
+
 async function loadNativeRequestConfig(): Promise<Partial<RequestConfig>> {
   try {
     const response: NativeHostConfigResponse = await browser.runtime.sendNativeMessage(
@@ -73,7 +160,7 @@ async function loadNativeRequestConfig(): Promise<Partial<RequestConfig>> {
 
     return {
       requestApiUrl: normalizeApiUrl(primaryApiUrl),
-      fallbackApiUrls: fallbackApiUrls.map(normalizeApiUrl),
+      fallbackApiUrls: normalizeApiUrlList(fallbackApiUrls),
       enableRequests: true,
     };
   } catch (error) {
@@ -86,30 +173,28 @@ async function loadNativeRequestConfig(): Promise<Partial<RequestConfig>> {
 
 export async function loadRequestConfig(): Promise<RequestConfig> {
   const nativeFallback = await loadNativeRequestConfig();
-
-  try {
-    const stored = await browser.storage.sync.get('config');
-    const incoming = stored.config as Partial<RequestConfig> | undefined;
-    return {
-      ...DEFAULT_REQUEST_CONFIG,
-      ...nativeFallback,
-      ...(incoming ?? {}),
-    };
-  } catch (error) {
-    logger.warn('[Config] Failed to load stored config', {
-      error: getErrorMessage(error),
-    });
-    return {
-      ...DEFAULT_REQUEST_CONFIG,
-      ...nativeFallback,
-    };
-  }
+  const storedConfig = await loadStoredRequestConfig(nativeFallback);
+  return {
+    ...DEFAULT_REQUEST_CONFIG,
+    ...nativeFallback,
+    ...storedConfig,
+  };
 }
 
 export async function saveRequestConfig(newConfig: Partial<RequestConfig>): Promise<void> {
   try {
-    const merged: RequestConfig = { ...DEFAULT_REQUEST_CONFIG, ...newConfig };
-    await browser.storage.sync.set({ config: merged });
+    const merged: RequestConfig = {
+      ...DEFAULT_REQUEST_CONFIG,
+      ...newConfig,
+      requestApiUrl:
+        typeof newConfig.requestApiUrl === 'string'
+          ? normalizeApiUrl(newConfig.requestApiUrl)
+          : DEFAULT_REQUEST_CONFIG.requestApiUrl,
+      fallbackApiUrls: Array.isArray(newConfig.fallbackApiUrls)
+        ? normalizeApiUrlList(newConfig.fallbackApiUrls)
+        : DEFAULT_REQUEST_CONFIG.fallbackApiUrls,
+    };
+    await browser.storage.local.set({ config: merged });
   } catch (error) {
     logger.error('[Config] Failed to save config', {
       error: getErrorMessage(error),
