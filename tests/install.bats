@@ -42,10 +42,36 @@ load 'test_helper'
 }
 
 @test "install.sh hardens sensitive config permissions" {
-    run grep -n "chmod 640 \"\$WHITELIST_URL_CONF\"" "$PROJECT_DIR/linux/install.sh"
+    run grep -n "persist_openpath_whitelist_url" "$PROJECT_DIR/linux/install.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n "chmod 600 \"\$HEALTH_API_SECRET_CONF\"" "$PROJECT_DIR/linux/install.sh"
+    run grep -n 'chmod "\$mode" "\$temp_file"' "$PROJECT_DIR/linux/lib/common.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'persist_openpath_health_api_config' "$PROJECT_DIR/linux/install.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'write_openpath_config_file "\$HEALTH_API_SECRET_CONF" "\$health_api_secret" 600' "$PROJECT_DIR/linux/lib/common.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "linux installers and runtime reuse shared config persistence helpers" {
+    run grep -n "persist_openpath_whitelist_url" "$PROJECT_DIR/linux/install.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n "persist_openpath_health_api_config" "$PROJECT_DIR/linux/install.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n "persist_openpath_whitelist_url" "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
+    [ "$status" -eq 0 ]
+
+    run grep -n "persist_openpath_health_api_config" "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
+    [ "$status" -eq 0 ]
+
+    run grep -n "persist_openpath_enrollment_state" "$PROJECT_DIR/linux/lib/runtime-cli.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'source "\$INSTALL_DIR/lib/runtime-cli.sh"' "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
     [ "$status" -eq 0 ]
 }
 

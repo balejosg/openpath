@@ -29,11 +29,6 @@ safe_db_get() {
     return 0
 }
 
-is_http_url() {
-    local value="${1:-}"
-    [[ "$value" =~ ^https?://[^[:space:]]+$ ]]
-}
-
 case "$1" in
     configure)
         echo "Configuring openpath-dnsmasq..."
@@ -55,16 +50,14 @@ case "$1" in
         mkdir -p "$VAR_STATE_DIR"      # /var/lib/openpath - state/cache
         
         # Save configuration to /etc/ (preserved on upgrade)
-        if is_http_url "$WHITELIST_URL"; then
-            echo "$WHITELIST_URL" > "$WHITELIST_URL_CONF"
+        if [ -n "$WHITELIST_URL" ] && ! persist_openpath_whitelist_url "$WHITELIST_URL"; then
+            echo "ERROR: invalid whitelist URL provided by debconf" >&2
+            exit 1
         fi
-        
-        if is_http_url "$HEALTH_API_URL"; then
-            echo "$HEALTH_API_URL" > "$HEALTH_API_URL_CONF"
-        fi
-        if [ -n "$HEALTH_API_SECRET" ]; then
-            echo "$HEALTH_API_SECRET" > "$HEALTH_API_SECRET_CONF"
-            chmod 600 "$HEALTH_API_SECRET_CONF"
+
+        if ! persist_openpath_health_api_config "$HEALTH_API_URL" "$HEALTH_API_SECRET"; then
+            echo "ERROR: invalid health API configuration provided by debconf" >&2
+            exit 1
         fi
         
         # Step 1: Free port 53 (disable systemd-resolved)

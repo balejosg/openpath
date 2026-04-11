@@ -457,32 +457,29 @@ step_install_scripts() {
     chown root:root "$ETC_CONFIG_DIR" "$CONFIG_DIR" 2>/dev/null || true
     chmod 750 "$ETC_CONFIG_DIR" 2>/dev/null || true
 
-    echo "$WHITELIST_URL" > "$WHITELIST_URL_CONF"
-    chown root:root "$WHITELIST_URL_CONF" 2>/dev/null || true
-    chmod 640 "$WHITELIST_URL_CONF"
-
-    if [ -n "$HEALTH_API_URL" ]; then
-        echo "$HEALTH_API_URL" > "$HEALTH_API_URL_CONF"
-        chown root:root "$HEALTH_API_URL_CONF" 2>/dev/null || true
-        chmod 640 "$HEALTH_API_URL_CONF"
-        echo "  → Health API URL configurada"
+    if ! persist_openpath_whitelist_url "$WHITELIST_URL"; then
+        echo "✗ ERROR: whitelist URL inválida"
+        exit 1
     fi
-    if [ -n "$HEALTH_API_SECRET" ]; then
-        local old_umask
-        old_umask=$(umask)
-        umask 077
-        echo "$HEALTH_API_SECRET" > "$HEALTH_API_SECRET_CONF"
-        umask "$old_umask"
-        chown root:root "$HEALTH_API_SECRET_CONF" 2>/dev/null || true
-        chmod 600 "$HEALTH_API_SECRET_CONF"
-        echo "  → Health API secret configurado"
+
+    if persist_openpath_health_api_config "$HEALTH_API_URL" "$HEALTH_API_SECRET"; then
+        if [ -n "$HEALTH_API_URL" ]; then
+            echo "  → Health API URL configurada"
+        fi
+        if [ -n "$HEALTH_API_SECRET" ]; then
+            echo "  → Health API secret configurado"
+        fi
+    else
+        echo "✗ ERROR: configuración health API inválida"
+        exit 1
     fi
 
     if [ -n "$CLASSROOM_NAME" ] && [ -n "$API_URL" ]; then
-        echo "$CLASSROOM_NAME" > "$ETC_CONFIG_DIR/classroom.conf"
-        echo "$API_URL" > "$ETC_CONFIG_DIR/api-url.conf"
-        chown root:root "$ETC_CONFIG_DIR/classroom.conf" "$ETC_CONFIG_DIR/api-url.conf" 2>/dev/null || true
-        chmod 640 "$ETC_CONFIG_DIR/classroom.conf" "$ETC_CONFIG_DIR/api-url.conf"
+        if ! persist_openpath_classroom_runtime_config "$API_URL" "$CLASSROOM_NAME" ""; then
+            echo "✗ ERROR: configuración de aula inválida"
+            exit 1
+        fi
+
         if [ -n "$HEALTH_API_SECRET" ]; then
             cp "$HEALTH_API_SECRET_CONF" "$ETC_CONFIG_DIR/api-secret.conf"
             chown root:root "$ETC_CONFIG_DIR/api-secret.conf" 2>/dev/null || true
@@ -696,8 +693,7 @@ run_classroom_registration() {
 
         if register_machine "$(hostname)" "$CLASSROOM_NAME" "" "$VERSION" "$API_URL" "$REGISTRATION_TOKEN"; then
             MACHINE_REGISTERED="REGISTERED"
-            if [ -n "$TOKENIZED_URL" ]; then
-                echo "$TOKENIZED_URL" > "$WHITELIST_URL_CONF"
+            if [ -n "$TOKENIZED_URL" ] && is_tokenized_whitelist_url "$TOKENIZED_URL" && persist_openpath_whitelist_url "$TOKENIZED_URL"; then
                 WHITELIST_URL="$TOKENIZED_URL"
                 if [ -n "$REGISTERED_MACHINE_NAME" ]; then
                     persist_machine_name "$REGISTERED_MACHINE_NAME" || true

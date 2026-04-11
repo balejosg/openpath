@@ -92,39 +92,126 @@ teardown() {
 }
 
 @test "incluye comando setup para modo aula" {
-    run grep -n "setup           Asistente de configuración" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    run grep -n "setup           Asistente de configuración" "$PROJECT_DIR/linux/lib/runtime-cli.sh"
     [ "$status" -eq 0 ]
 }
 
 @test "status muestra seccion de enrollment" {
-    run grep -n "Enrolled:" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    run grep -n "Enrolled:" "$PROJECT_DIR/linux/lib/runtime-cli.sh"
     [ "$status" -eq 0 ]
 }
 
 @test "cmd_disable reuses shared disabled-mode transition helper" {
-    run grep -n "enter_disabled_mode" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    run grep -n "enter_disabled_mode" "$PROJECT_DIR/linux/lib/runtime-cli.sh"
     [ "$status" -eq 0 ]
 }
 
 @test "enroll soporta token por archivo o stdin" {
-    run grep -n -- "--token-file" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    run grep -n -- "--token-file" "$PROJECT_DIR/linux/lib/runtime-cli.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n -- "--token-stdin" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    run grep -n -- "--token-stdin" "$PROJECT_DIR/linux/lib/runtime-cli.sh"
     [ "$status" -eq 0 ]
 }
 
 @test "setup soporta enrollment token por classroom id" {
-    run grep -n -- "--classroom-id" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    run grep -n -- "--classroom-id" "$PROJECT_DIR/linux/lib/runtime-cli.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n -- "--enrollment-token" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    run grep -n -- "--enrollment-token" "$PROJECT_DIR/linux/lib/runtime-cli.sh"
     [ "$status" -eq 0 ]
 }
 
 @test "setup puede pedir datos por /dev/tty cuando stdin no es interactivo" {
-    run grep -n "/dev/tty" "$PROJECT_DIR/linux/scripts/runtime/openpath-cmd.sh"
+    run grep -n "/dev/tty" "$PROJECT_DIR/linux/lib/runtime-cli.sh"
     [ "$status" -eq 0 ]
+}
+
+@test "persist_openpath_enrollment_state writes classroom runtime state atomically" {
+    local helper_script="$TEST_TMP_DIR/persist-enrollment-state.sh"
+
+    cat > "$helper_script" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+project_dir="$1"
+state_dir="$2"
+
+export INSTALL_DIR="$project_dir/linux"
+export ETC_CONFIG_DIR="$state_dir/etc/openpath"
+export VAR_STATE_DIR="$state_dir/var/lib/openpath"
+mkdir -p "$ETC_CONFIG_DIR" "$VAR_STATE_DIR"
+
+source "$project_dir/linux/lib/common.sh"
+
+persist_openpath_enrollment_state \
+  "https://api.openpath.test" \
+  "Aula-Canary" \
+  "classroom-123" \
+  "https://api.openpath.test/w/token-123/whitelist.txt"
+
+printf 'api=%s\n' "$(cat "$ETC_CONFIG_DIR/api-url.conf")"
+printf 'classroom=%s\n' "$(cat "$ETC_CONFIG_DIR/classroom.conf")"
+printf 'classroom_id=%s\n' "$(cat "$ETC_CONFIG_DIR/classroom-id.conf")"
+printf 'whitelist=%s\n' "$(cat "$ETC_CONFIG_DIR/whitelist-url.conf")"
+EOF
+    chmod +x "$helper_script"
+
+    run "$helper_script" "$PROJECT_DIR" "$TEST_TMP_DIR"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"api=https://api.openpath.test"* ]]
+    [[ "$output" == *"classroom=Aula-Canary"* ]]
+    [[ "$output" == *"classroom_id=classroom-123"* ]]
+    [[ "$output" == *"whitelist=https://api.openpath.test/w/token-123/whitelist.txt"* ]]
+}
+
+@test "persist_openpath_enrollment_state preserves existing files when validation fails" {
+    local helper_script="$TEST_TMP_DIR/persist-enrollment-state-invalid.sh"
+
+    cat > "$helper_script" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+project_dir="$1"
+state_dir="$2"
+
+export INSTALL_DIR="$project_dir/linux"
+export ETC_CONFIG_DIR="$state_dir/etc/openpath"
+export VAR_STATE_DIR="$state_dir/var/lib/openpath"
+mkdir -p "$ETC_CONFIG_DIR" "$VAR_STATE_DIR"
+
+source "$project_dir/linux/lib/common.sh"
+
+printf '%s' 'https://existing.example/api' > "$ETC_CONFIG_DIR/api-url.conf"
+printf '%s' 'Existing Classroom' > "$ETC_CONFIG_DIR/classroom.conf"
+printf '%s' 'existing-id' > "$ETC_CONFIG_DIR/classroom-id.conf"
+printf '%s' 'https://existing.example/w/original/whitelist.txt' > "$ETC_CONFIG_DIR/whitelist-url.conf"
+
+if persist_openpath_enrollment_state \
+  "https://api.openpath.test" \
+  "Broken Classroom" \
+  "broken-id" \
+  "whitelist-dnsmasq/whitelist-url doesn't exist"; then
+  echo "unexpected-success"
+  exit 1
+fi
+
+printf 'api=%s\n' "$(cat "$ETC_CONFIG_DIR/api-url.conf")"
+printf 'classroom=%s\n' "$(cat "$ETC_CONFIG_DIR/classroom.conf")"
+printf 'classroom_id=%s\n' "$(cat "$ETC_CONFIG_DIR/classroom-id.conf")"
+printf 'whitelist=%s\n' "$(cat "$ETC_CONFIG_DIR/whitelist-url.conf")"
+EOF
+    chmod +x "$helper_script"
+
+    run "$helper_script" "$PROJECT_DIR" "$TEST_TMP_DIR"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"api=https://existing.example/api"* ]]
+    [[ "$output" == *"classroom=Existing Classroom"* ]]
+    [[ "$output" == *"classroom_id=existing-id"* ]]
+    [[ "$output" == *"whitelist=https://existing.example/w/original/whitelist.txt"* ]]
+    [[ "$output" != *"unexpected-success"* ]]
 }
 
 @test "health treats remote-disabled fail-open mode as expected state" {
@@ -184,7 +271,7 @@ find() {
 }
 
 awk '/^cmd_health\(\) \{/,/^}/' \
-    "$project_dir/linux/scripts/runtime/openpath-cmd.sh" > "$extracted_script"
+    "$project_dir/linux/lib/runtime-cli.sh" > "$extracted_script"
 source "$extracted_script"
 
 cmd_health
@@ -273,7 +360,7 @@ find() {
 }
 
 awk '/^cmd_health\(\) \{/,/^}/' \
-    "$project_dir/linux/scripts/runtime/openpath-cmd.sh" > "$extracted_script"
+    "$project_dir/linux/lib/runtime-cli.sh" > "$extracted_script"
 source "$extracted_script"
 
 cmd_health
@@ -354,7 +441,7 @@ find() {
 }
 
 awk '/^cmd_health\(\) \{/,/^}/' \
-    "$project_dir/linux/scripts/runtime/openpath-cmd.sh" > "$extracted_script"
+    "$project_dir/linux/lib/runtime-cli.sh" > "$extracted_script"
 source "$extracted_script"
 
 cmd_health
@@ -395,7 +482,7 @@ export BROWSER_POLICIES_HASH="$state_dir/browser-policies.hash"
 : > "$BROWSER_POLICIES_HASH"
 
 awk '/^reset_cached_whitelist_state\(\) \{/,/^}/' \
-    "$project_dir/linux/scripts/runtime/openpath-cmd.sh" > "$extracted_script"
+    "$project_dir/linux/lib/runtime-cli.sh" > "$extracted_script"
 source "$extracted_script"
 
 reset_cached_whitelist_state
@@ -428,6 +515,7 @@ state_dir="$2"
 extracted_script="$state_dir/cmd-enroll.sh"
 
 export ETC_CONFIG_DIR="$state_dir/etc"
+export INSTALL_DIR="$project_dir/linux"
 export WHITELIST_URL_CONF="$ETC_CONFIG_DIR/whitelist-url.conf"
 export WHITELIST_FILE="$state_dir/whitelist.txt"
 export SYSTEM_DISABLED_FLAG="$state_dir/system-disabled.flag"
@@ -452,9 +540,9 @@ hostname() { printf 'max12\n'; }
 
 {
     awk '/^cmd_enroll\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-cmd.sh"
+        "$project_dir/linux/lib/runtime-cli.sh"
     awk '/^reset_cached_whitelist_state\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-cmd.sh"
+        "$project_dir/linux/lib/runtime-cli.sh"
 } > "$extracted_script"
 set +e
 (
@@ -511,6 +599,8 @@ YELLOW=""
 BLUE=""
 NC=""
 
+source "$project_dir/linux/lib/common.sh"
+
 normalize_machine_name_value() { printf '%s\n' "$1"; }
 register_machine() {
     TOKENIZED_URL='https://classroompath.eu/w/token123/whitelist.txt'
@@ -526,12 +616,10 @@ dpkg() { printf 'Version: 4.1.15-1\n'; }
 hostname() { printf 'max12\n'; }
 
 {
-    awk '/^is_tokenized_whitelist_url\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-cmd.sh"
     awk '/^cmd_enroll\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-cmd.sh"
+        "$project_dir/linux/lib/runtime-cli.sh"
     awk '/^reset_cached_whitelist_state\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-cmd.sh"
+        "$project_dir/linux/lib/runtime-cli.sh"
 } > "$extracted_script"
 
 set +e
