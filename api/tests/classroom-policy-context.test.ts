@@ -123,7 +123,6 @@ await describe('classroom effective policy context', async () => {
     });
 
     const enroll = await ensureUserCanEnrollClassroom(teacher, classroom.id);
-    assert.strictEqual(enroll.ok, true);
     if (!enroll.ok) {
       throw new Error('Expected enroll access to succeed');
     }

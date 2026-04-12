@@ -283,10 +283,12 @@ await describe('Machine authentication scope regressions', async () => {
       };
     };
     assert.strictEqual(contextData.context?.groupId, '__unrestricted__');
-    assert.strictEqual(contextData.effectiveContext?.mode, 'unrestricted');
-    assert.strictEqual(contextData.effectiveContext?.reason, 'none');
-    assert.strictEqual(contextData.effectiveContext?.groupId, null);
-    assert.strictEqual(contextData.effectiveContext?.classroomId, grouplessClassroomId);
+    const effectiveContext = contextData.effectiveContext;
+    assert.ok(effectiveContext);
+    assert.strictEqual(effectiveContext.mode, 'unrestricted');
+    assert.strictEqual(effectiveContext.reason, 'none');
+    assert.strictEqual(effectiveContext.groupId, null);
+    assert.strictEqual(effectiveContext.classroomId, grouplessClassroomId);
 
     const eventsResponse = await fetch(`${API_URL}/api/machines/events`, {
       headers: { Authorization: `Bearer ${registration.machineToken}` },

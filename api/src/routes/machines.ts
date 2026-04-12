@@ -45,7 +45,7 @@ const FAIL_OPEN_RESPONSE = '#DESACTIVADO\n';
 function serializePolicyGroupId(params: {
   mode: 'grouped' | 'unrestricted';
   groupId: string | null;
-}) {
+}): string | null {
   return params.mode === 'unrestricted' ? UNRESTRICTED_GROUP_ID : params.groupId;
 }
 
