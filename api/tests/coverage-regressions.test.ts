@@ -228,7 +228,7 @@ await describe('coverage regressions', async () => {
     const firstRole = await roleStorage.assignRole({
       userId: firstUser.id,
       role: 'teacher',
-      groupIds: [groupId],
+      groupIds: ['group-a'],
       createdBy: 'legacy_admin',
     });
     assert.strictEqual((await roleStorage.getUserRoles(firstUser.id)).length, 1);
@@ -237,11 +237,11 @@ await describe('coverage regressions', async () => {
     assert.strictEqual(await roleStorage.hasAnyAdmins(), false);
     assert.strictEqual(await roleStorage.hasRole(firstUser.id, 'teacher'), true);
     assert.strictEqual(await roleStorage.isAdmin(firstUser.id), false);
-    assert.strictEqual(await roleStorage.canApproveForGroup(firstUser.id, groupId), true);
-    assert.deepStrictEqual(await roleStorage.getApprovalGroups(firstUser.id), [groupId]);
+    assert.strictEqual(await roleStorage.canApproveForGroup(firstUser.id, 'group-a'), true);
+    assert.deepStrictEqual(await roleStorage.getApprovalGroups(firstUser.id), ['group-a']);
     const expandedRole = await roleStorage.addGroupsToRole(firstRole.id, ['group-b']);
-    assert.deepStrictEqual([...(expandedRole?.groupIds ?? [])].sort(), [groupId, 'group-b']);
-    const trimmedRole = await roleStorage.removeGroupsFromRole(firstRole.id, [groupId]);
+    assert.deepStrictEqual([...(expandedRole?.groupIds ?? [])].sort(), ['group-a', 'group-b']);
+    const trimmedRole = await roleStorage.removeGroupsFromRole(firstRole.id, ['group-a']);
     assert.deepStrictEqual(trimmedRole?.groupIds, ['group-b']);
     assert.strictEqual((await roleStorage.getRolesByUser(firstUser.id)).length, 1);
     assert.strictEqual((await roleStorage.getRoleById(firstRole.id))?.id, firstRole.id);

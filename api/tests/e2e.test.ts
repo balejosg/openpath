@@ -41,13 +41,14 @@ let testDataDir: string | null = null;
 let adminToken: string | null = null;
 let teacherToken: string | null = null;
 let teacherId: string | null = null;
+let teacherGroupId: string | null = null;
 
 // Use unique emails for this test run to ensure isolation
 const ADMIN_EMAIL = uniqueEmail('maria-admin');
 const ADMIN_PASSWORD = 'AdminPassword123!';
 const TEACHER_EMAIL = uniqueEmail('pedro-teacher');
 const TEACHER_PASSWORD = 'TeacherPassword123!';
-const TEACHER_GROUP = 'informatica-3';
+const TEACHER_GROUP_NAME = 'informatica-3';
 
 // Wrap helpers with baseUrl
 const trpcMutate = (
@@ -139,13 +140,19 @@ await describe('E2E: Teacher Role Workflow (tRPC)', { timeout: 75000 }, async ()
       const token = adminToken ?? '';
       const response = await trpcMutate(
         'groups.create',
-        { name: TEACHER_GROUP, displayName: TEACHER_GROUP },
+        { name: TEACHER_GROUP_NAME, displayName: TEACHER_GROUP_NAME },
         { Authorization: `Bearer ${token}` }
       );
 
       assert.ok(
-        [200, 201, 409].includes(response.status),
-        `Expected 200, 201 or 409, got ${String(response.status)}`
+        [200, 201].includes(response.status),
+        `Expected 200 or 201, got ${String(response.status)}`
+      );
+      const res = await parseTRPC(response);
+      teacherGroupId = (res.data as { id?: string }).id ?? null;
+      assert.ok(
+        teacherGroupId !== null && teacherGroupId !== '',
+        'Should have valid teacherGroupId'
       );
     });
 
@@ -217,7 +224,7 @@ await describe('E2E: Teacher Role Workflow (tRPC)', { timeout: 75000 }, async ()
         {
           userId: String(teacherId),
           role: 'teacher',
-          groupIds: [TEACHER_GROUP],
+          groupIds: [String(teacherGroupId)],
         },
         { Authorization: `Bearer ${token}` }
       );
@@ -268,7 +275,7 @@ await describe('E2E: Teacher Role Workflow (tRPC)', { timeout: 75000 }, async ()
         domain: TEST_DOMAIN,
         reason: 'I need this for homework',
         requesterEmail: 'student@test.com',
-        groupId: TEACHER_GROUP,
+        groupId: String(teacherGroupId),
       });
 
       assert.strictEqual(response.status, 200);
@@ -285,7 +292,7 @@ await describe('E2E: Teacher Role Workflow (tRPC)', { timeout: 75000 }, async ()
         'requests.approve',
         {
           id: requestId,
-          groupId: TEACHER_GROUP,
+          groupId: String(teacherGroupId),
         },
         { Authorization: `Bearer ${token}` }
       );
