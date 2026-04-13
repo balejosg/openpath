@@ -16,7 +16,6 @@ import {
   getSseClientCount,
   registerSseClient,
 } from '../lib/rule-events.js';
-import { UNRESTRICTED_GROUP_ID } from '../lib/exemption-storage.js';
 import {
   buildWhitelistUrl,
   generateMachineToken,
@@ -29,6 +28,7 @@ import {
   getFirstParam,
   getBearerTokenValue,
   resolveMachineTokenAccess,
+  validateMachineHostnameAccess,
 } from '../lib/server-request-auth.js';
 import {
   buildLinuxAgentPackageManifest,
@@ -41,13 +41,6 @@ import {
 } from '../lib/server-assets.js';
 
 const FAIL_OPEN_RESPONSE = '#DESACTIVADO\n';
-
-function serializePolicyGroupId(params: {
-  mode: 'grouped' | 'unrestricted';
-  groupId: string | null;
-}): string | null {
-  return params.mode === 'unrestricted' ? UNRESTRICTED_GROUP_ID : params.groupId;
-}
 
 export function registerMachineRoutes(
   app: Express,
@@ -160,12 +153,8 @@ export function registerMachineRoutes(
         return;
       }
 
-      const normalizedHostname = hostname.trim().toLowerCase();
-      const reportedHostname = machine.reportedHostname?.trim().toLowerCase();
-      if (
-        normalizedHostname !== machine.hostname.trim().toLowerCase() &&
-        normalizedHostname !== reportedHostname
-      ) {
+      const hostnameAccess = validateMachineHostnameAccess(machine, hostname);
+      if (!hostnameAccess.ok) {
         res
           .status(403)
           .json({ success: false, error: 'Machine token is not valid for this hostname' });
@@ -533,7 +522,7 @@ export function registerMachineRoutes(
           return;
         }
 
-        const serializedGroupId = serializePolicyGroupId(effectiveContext);
+        const serializedGroupId = classroomStorage.serializePolicyGroupId(effectiveContext);
         if (!serializedGroupId) {
           res.status(404).json({ success: false, error: 'No active group for this machine' });
           return;

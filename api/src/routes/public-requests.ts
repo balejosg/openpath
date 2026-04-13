@@ -13,7 +13,7 @@ import {
   parseSubmitRequestPayload,
   parseWhitelistDomain,
 } from '../lib/public-request-input.js';
-import { resolveMachineTokenAccess } from '../lib/server-request-auth.js';
+import { resolveMachineTokenHostnameAccess } from '../lib/server-request-auth.js';
 
 async function requireValidMachineToken(params: {
   hostnameRaw: string;
@@ -22,26 +22,32 @@ async function requireValidMachineToken(params: {
   res: Response;
 }): Promise<{ ok: true; machineHostname: string; requestedHostname: string } | { ok: false }> {
   const hostname = normalizeHostInput(params.hostnameRaw);
-  const machine = await resolveMachineTokenAccess(params.token);
+  const access = await resolveMachineTokenHostnameAccess({
+    machineToken: params.token,
+    hostname,
+  });
 
-  if (!machine) {
+  if (!access.ok && access.error === 'invalid-token') {
     logger.warn(`${params.logContext} rejected: invalid machine token`, { hostname });
     params.res.status(403).json({ success: false, error: 'Invalid machine token' });
     return { ok: false };
   }
 
-  const requestedHostname = normalizeHostInput(hostname);
-  if (!classroomStorage.machineHostnameMatches(machine, requestedHostname)) {
+  if (!access.ok) {
     logger.warn(`${params.logContext} rejected: hostname mismatch`, {
-      requestedHostname,
-      machineHostname: machine.hostname.trim().toLowerCase(),
-      reportedHostname: machine.reportedHostname?.trim().toLowerCase(),
+      requestedHostname: access.requestedHostname,
+      machineHostname: access.machine?.hostname.trim().toLowerCase(),
+      reportedHostname: access.machine?.reportedHostname?.trim().toLowerCase(),
     });
     params.res.status(403).json({ success: false, error: 'Token is not valid for this hostname' });
     return { ok: false };
   }
 
-  return { ok: true, machineHostname: machine.hostname, requestedHostname };
+  return {
+    ok: true,
+    machineHostname: access.machine.hostname,
+    requestedHostname: access.requestedHostname,
+  };
 }
 
 function sendRequestServiceError(res: Response, error: { code: string; message: string }): void {

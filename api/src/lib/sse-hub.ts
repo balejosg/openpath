@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { serializePolicyGroupId } from './classroom-storage.js';
 
 export interface SseStream {
   write: (chunk: string) => boolean;
@@ -187,11 +188,7 @@ export function createSseHub(params: {
     if (!baseContext && (!exemptHostnames || exemptHostnames.size === 0)) return;
 
     const unrestrictedGroupId = params.unrestrictedGroupId ?? '__unrestricted__';
-    const baseGroupId = baseContext
-      ? baseContext.mode === 'unrestricted'
-        ? unrestrictedGroupId
-        : baseContext.groupId
-      : null;
+    const baseGroupId = baseContext ? serializePolicyGroupId(baseContext) : null;
 
     for (const id of Array.from(ids)) {
       const client = clientsById.get(id);

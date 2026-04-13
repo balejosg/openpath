@@ -58,6 +58,19 @@ await describe('classroom effective policy context', async () => {
     assert.strictEqual(context.classroomName, classroom.name);
   });
 
+  await test('serializePolicyGroupId emits the legacy unrestricted sentinel only at the wire boundary', async () => {
+    const { serializePolicyGroupId } = await import('../src/lib/classroom-storage.js');
+
+    assert.strictEqual(
+      serializePolicyGroupId({ mode: 'unrestricted', groupId: null }),
+      '__unrestricted__'
+    );
+    assert.strictEqual(
+      serializePolicyGroupId({ mode: 'grouped', groupId: 'group-123' }),
+      'group-123'
+    );
+  });
+
   await test('resolveEffectiveMachineEnforcementPolicyContext preserves grouped base context and flags exemptions as unrestricted', async () => {
     const groupId = `policy-default-group-${Date.now().toString()}`;
     await ensureGroupExists(groupId);

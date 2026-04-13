@@ -64,6 +64,11 @@ export interface EffectivePolicyContext {
   reason: EffectivePolicyContextReason;
 }
 
+export interface PolicyGroupIdSource {
+  mode: EffectivePolicyContextMode;
+  groupId: string | null;
+}
+
 export interface ClassroomPolicyScope {
   classroomId: string;
   classroomName: string;
@@ -154,9 +159,13 @@ function toEffectivePolicyContext(scope: ClassroomPolicyScope): EffectivePolicyC
   };
 }
 
+export function serializePolicyGroupId(context: PolicyGroupIdSource): string | null {
+  return context.mode === 'unrestricted' ? UNRESTRICTED_GROUP_ID : context.groupId;
+}
+
 function toLegacyWhitelistUrlResult(context: EffectivePolicyContext): WhitelistUrlResult {
   return {
-    groupId: context.mode === 'unrestricted' ? UNRESTRICTED_GROUP_ID : (context.groupId ?? ''),
+    groupId: serializePolicyGroupId(context) ?? '',
     classroomId: context.classroomId,
     classroomName: context.classroomName,
   };

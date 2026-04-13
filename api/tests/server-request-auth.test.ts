@@ -5,8 +5,12 @@ process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret';
 
 await describe('server request auth helpers', async () => {
-  const { getFirstParam, isCookieAuthenticatedMutation, isTrustedCsrfOrigin } =
-    await import('../src/lib/server-request-auth.js');
+  const {
+    getFirstParam,
+    isCookieAuthenticatedMutation,
+    isTrustedCsrfOrigin,
+    validateMachineHostnameAccess,
+  } = await import('../src/lib/server-request-auth.js');
 
   await test('detects cookie-authenticated mutation requests without bearer tokens', () => {
     process.env.OPENPATH_ACCESS_TOKEN_COOKIE_NAME = 'openpath_access';
@@ -46,5 +50,25 @@ await describe('server request auth helpers', async () => {
     assert.equal(getFirstParam(['first', 'second']), 'first');
     assert.equal(getFirstParam('only'), 'only');
     assert.equal(getFirstParam(undefined), undefined);
+  });
+
+  await test('validateMachineHostnameAccess accepts persisted and reported hostnames and rejects mismatches', () => {
+    const machine = {
+      hostname: 'lab-pc-01--abc123',
+      reportedHostname: 'Lab-PC-01',
+    };
+
+    assert.deepEqual(validateMachineHostnameAccess(machine, 'lab-pc-01--abc123'), {
+      ok: true,
+      requestedHostname: 'lab-pc-01--abc123',
+    });
+    assert.deepEqual(validateMachineHostnameAccess(machine, 'lab-pc-01'), {
+      ok: true,
+      requestedHostname: 'lab-pc-01',
+    });
+    assert.deepEqual(validateMachineHostnameAccess(machine, 'other-host'), {
+      ok: false,
+      requestedHostname: 'other-host',
+    });
   });
 });

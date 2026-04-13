@@ -7,6 +7,7 @@ import { logger } from '../lib/logger.js';
 import {
   getBearerTokenValue,
   resolveMachineTokenAccess,
+  validateMachineHostnameAccess,
   type AuthenticatedMachine,
 } from '../lib/server-request-auth.js';
 
@@ -100,7 +101,7 @@ export function machineMatchesHostname(
   machine: Pick<AuthenticatedMachine, 'hostname' | 'reportedHostname'>,
   hostname: string
 ): boolean {
-  return classroomStorage.machineHostnameMatches(machine, hostname);
+  return validateMachineHostnameAccess(machine, hostname).ok;
 }
 
 // Shared secret procedure (for machines)

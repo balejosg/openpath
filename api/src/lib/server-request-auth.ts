@@ -104,6 +104,21 @@ export async function verifyAccessTokenFromRequest(
 
 type MachineByToken = Awaited<ReturnType<typeof classroomStorage.getMachineByDownloadTokenHash>>;
 export type AuthenticatedMachine = NonNullable<MachineByToken>;
+type MachineHostnameRecord = Pick<AuthenticatedMachine, 'hostname' | 'reportedHostname'>;
+
+export function validateMachineHostnameAccess(
+  machine: MachineHostnameRecord,
+  hostname: string
+): { ok: true; requestedHostname: string } | { ok: false; requestedHostname: string } {
+  const requestedHostname = hostname.trim().toLowerCase();
+  if (!requestedHostname) {
+    return { ok: false, requestedHostname };
+  }
+
+  return classroomStorage.machineHostnameMatches(machine, requestedHostname)
+    ? { ok: true, requestedHostname }
+    : { ok: false, requestedHostname };
+}
 
 export async function resolveMachineTokenAccess(
   machineToken: string
@@ -116,6 +131,36 @@ export async function resolveMachineTokenAccess(
   const tokenHash = hashMachineToken(normalizedToken);
   const machine = await classroomStorage.getMachineByDownloadTokenHash(tokenHash);
   return machine ?? null;
+}
+
+export async function resolveMachineTokenHostnameAccess(params: {
+  machineToken: string;
+  hostname: string;
+}): Promise<
+  | { ok: true; machine: AuthenticatedMachine; requestedHostname: string }
+  | {
+      ok: false;
+      error: 'invalid-token' | 'hostname-mismatch';
+      requestedHostname: string;
+      machine?: AuthenticatedMachine;
+    }
+> {
+  const requestedHostname = params.hostname.trim().toLowerCase();
+  const machine = await resolveMachineTokenAccess(params.machineToken);
+  if (!machine) {
+    return { ok: false, error: 'invalid-token', requestedHostname };
+  }
+
+  const hostnameAccess = validateMachineHostnameAccess(machine, requestedHostname);
+  if (!hostnameAccess.ok) {
+    return { ok: false, error: 'hostname-mismatch', requestedHostname, machine };
+  }
+
+  return {
+    ok: true,
+    machine,
+    requestedHostname: hostnameAccess.requestedHostname,
+  };
 }
 
 export async function authenticateMachineToken(
