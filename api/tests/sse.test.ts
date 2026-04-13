@@ -10,19 +10,10 @@
 
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
-import type { Server } from 'node:http';
-import {
-  bootstrapAdminSession,
-  getAvailablePort,
-  trpcMutate,
-  parseTRPC,
-  bearerAuth,
-  assertStatus,
-  TEST_RUN_ID,
-  resetDb,
-} from './test-utils.js';
+import { trpcMutate, parseTRPC, bearerAuth, assertStatus, TEST_RUN_ID } from './test-utils.js';
+import { startHttpTestHarness } from './http-test-harness.js';
 import { createSseTestClient } from './sse-test-utils.js';
-import { closeConnection, pool } from '../src/db/index.js';
+import { pool } from '../src/db/index.js';
 import {
   runScheduleBoundaryTickOnce,
   stopDbEventBridge,
@@ -32,7 +23,6 @@ import { generateMachineToken, hashMachineToken } from '../src/lib/machine-downl
 import * as classroomStorage from '../src/lib/classroom-storage.js';
 import * as scheduleStorage from '../src/lib/schedule-storage.js';
 
-let PORT: number;
 let API_URL: string;
 
 // Global timeout - force exit if tests hang (30s)
@@ -42,7 +32,7 @@ const GLOBAL_TIMEOUT = setTimeout(() => {
 }, 30000);
 GLOBAL_TIMEOUT.unref();
 
-let server: Server | undefined;
+let harness: Awaited<ReturnType<typeof startHttpTestHarness>> | undefined;
 let ADMIN_TOKEN = '';
 
 // Test data
@@ -55,21 +45,19 @@ let testMachineToken: string;
 
 await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async () => {
   before(async () => {
-    await resetDb();
-
-    PORT = await getAvailablePort();
-    API_URL = `http://localhost:${String(PORT)}`;
-    process.env.PORT = String(PORT);
-    process.env.JWT_SECRET = 'test-jwt-secret';
-
-    const { app } = await import('../src/server.js');
-
-    server = app.listen(PORT, () => {
-      console.log(`SSE test server started on port ${String(PORT)}`);
+    harness = await startHttpTestHarness({
+      cleanup: async () => {
+        await stopDbEventBridge();
+        await stopScheduleBoundaryTicker();
+      },
+      env: {
+        JWT_SECRET: 'test-jwt-secret',
+      },
+      readyDelayMs: 1000,
+      resetDb: true,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    ADMIN_TOKEN = (await bootstrapAdminSession(API_URL, { name: 'SSE Test Admin' })).accessToken;
+    API_URL = harness.apiUrl;
+    ADMIN_TOKEN = (await harness.bootstrapAdminSession({ name: 'SSE Test Admin' })).accessToken;
 
     // Create a test group
     const groupResp = await trpcMutate(
@@ -103,20 +91,9 @@ await describe('SSE Endpoint (/api/machines/events)', { timeout: 30000 }, async 
   });
 
   after(async () => {
-    if (server !== undefined) {
-      if ('closeAllConnections' in server && typeof server.closeAllConnections === 'function') {
-        server.closeAllConnections();
-      }
-      await new Promise<void>((resolve) => {
-        server?.close(() => {
-          console.log('SSE test server closed');
-          resolve();
-        });
-      });
+    if (harness !== undefined) {
+      await harness.close();
     }
-    await stopDbEventBridge();
-    await stopScheduleBoundaryTicker();
-    await closeConnection();
   });
 
   // =========================================================================

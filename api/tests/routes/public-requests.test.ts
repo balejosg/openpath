@@ -1,17 +1,15 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert';
 import { createHash } from 'node:crypto';
-import type { Server } from 'node:http';
 import { sql } from 'drizzle-orm';
 import { getRows } from '../../src/lib/utils.js';
 
-const { ensureTestSchema, getAvailablePort } = await import('../test-utils.js');
+const { startHttpTestHarness } = await import('../http-test-harness.js');
 const { config, loadConfig } = await import('../../src/config.js');
-const { closeConnection, db } = await import('../../src/db/index.js');
+const { db } = await import('../../src/db/index.js');
 
-let port: number;
 let apiUrl: string;
-let server: Server | undefined;
+let harness: Awaited<ReturnType<typeof startHttpTestHarness>> | undefined;
 
 function hashMachineToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
@@ -19,36 +17,24 @@ function hashMachineToken(token: string): string {
 
 await describe('public-requests routes', async () => {
   before(async () => {
-    port = await getAvailablePort();
-    apiUrl = `http://localhost:${String(port)}`;
-
-    await ensureTestSchema();
-
-    const express = (await import('express')).default;
-    const { registerPublicRequestRoutes } = await import('../../src/routes/public-requests.js');
-    const app = express();
-    app.use(express.json());
-    registerPublicRequestRoutes(app);
-    await new Promise<void>((resolve) => {
-      server = app.listen(port, () => {
-        resolve();
-      });
+    harness = await startHttpTestHarness({
+      ensureSchema: true,
+      loadApp: async () => {
+        const express = (await import('express')).default;
+        const { registerPublicRequestRoutes } = await import('../../src/routes/public-requests.js');
+        const app = express();
+        app.use(express.json());
+        registerPublicRequestRoutes(app);
+        return app;
+      },
     });
+    apiUrl = harness.apiUrl;
   });
 
   after(async () => {
-    if (server !== undefined) {
-      if ('closeAllConnections' in server && typeof server.closeAllConnections === 'function') {
-        server.closeAllConnections();
-      }
-      await new Promise<void>((resolve) => {
-        server?.close(() => {
-          resolve();
-        });
-      });
+    if (harness !== undefined) {
+      await harness.close();
     }
-
-    await closeConnection();
   });
 
   await test('loadConfig disables machine auto-approval by default and only enables it explicitly', () => {

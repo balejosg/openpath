@@ -7,30 +7,26 @@
 
 import { test, describe, before, beforeEach, after } from 'node:test';
 import assert from 'node:assert';
-import type { Server } from 'node:http';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
   TEST_RUN_ID,
-  bootstrapAdminSession,
   uniqueEmail,
   trpcMutate as _trpcMutate,
   trpcQuery as _trpcQuery,
   parseTRPC,
   bearerAuth,
-  getAvailablePort,
   resetDb,
 } from './test-utils.js';
-import { closeConnection } from '../src/db/index.js';
+import { startHttpTestHarness } from './http-test-harness.js';
 import { buildMachineKey } from '../src/lib/classroom-storage.js';
 
 let ADMIN_TOKEN = '';
 const SHARED_SECRET = 'test-shared-secret';
 
-let PORT: number;
 let API_URL: string;
-let server: Server | undefined;
+let harness: Awaited<ReturnType<typeof startHttpTestHarness>> | undefined;
 let testDataDir: string | null = null;
 
 const trpcMutate = (
@@ -126,43 +122,37 @@ async function getEnrollmentTicket(classroomId: string, accessToken: string): Pr
 
 await describe('Machine registration regressions', async () => {
   before(async () => {
-    PORT = await getAvailablePort();
-    API_URL = `http://localhost:${String(PORT)}`;
-
-    process.env.PORT = String(PORT);
-    process.env.JWT_SECRET = 'test-jwt-secret';
-    process.env.SHARED_SECRET = SHARED_SECRET;
-
     testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpath-machine-registration-'));
-    process.env.DATA_DIR = testDataDir;
 
     const etcPath = path.join(process.cwd(), 'etc');
     if (!fs.existsSync(etcPath)) fs.mkdirSync(etcPath, { recursive: true });
 
-    const { app } = await import('../src/server.js');
-    server = app.listen(PORT);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    harness = await startHttpTestHarness({
+      env: {
+        DATA_DIR: testDataDir,
+        JWT_SECRET: 'test-jwt-secret',
+        SHARED_SECRET,
+      },
+      readyDelayMs: 1000,
+    });
+    API_URL = harness.apiUrl;
   });
 
   beforeEach(async () => {
     await resetDb();
-    ADMIN_TOKEN = (await bootstrapAdminSession(API_URL, { name: 'Machine Registration Admin' }))
-      .accessToken;
+    const activeHarness = harness;
+    if (activeHarness === undefined) {
+      throw new Error('Expected machine registration harness to be initialized');
+    }
+    ADMIN_TOKEN = (
+      await activeHarness.bootstrapAdminSession({ name: 'Machine Registration Admin' })
+    ).accessToken;
   });
 
   after(async () => {
-    if (server !== undefined) {
-      if ('closeAllConnections' in server && typeof server.closeAllConnections === 'function') {
-        server.closeAllConnections();
-      }
-      await new Promise<void>((resolve) => {
-        server?.close(() => {
-          resolve();
-        });
-      });
+    if (harness !== undefined) {
+      await harness.close();
     }
-
-    await closeConnection();
 
     if (testDataDir) {
       fs.rmSync(testDataDir, { recursive: true, force: true });

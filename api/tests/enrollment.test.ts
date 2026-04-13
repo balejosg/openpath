@@ -1,20 +1,13 @@
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert';
-import type { Server } from 'node:http';
-import {
-  getAvailablePort,
-  resetDb,
-  trpcMutate as _trpcMutate,
-  parseTRPC,
-  registerAndVerifyUser,
-} from './test-utils.js';
+import { trpcMutate as _trpcMutate, parseTRPC, registerAndVerifyUser } from './test-utils.js';
+import { startHttpTestHarness } from './http-test-harness.js';
 import { CANONICAL_GROUP_IDS, createFixtureClassroom } from './fixtures.js';
-import { closeConnection, db } from '../src/db/index.js';
+import { db } from '../src/db/index.js';
 import { sql } from 'drizzle-orm';
 
-let PORT: number;
 let API_URL: string;
-let server: Server | undefined;
+let harness: Awaited<ReturnType<typeof startHttpTestHarness>> | undefined;
 
 let teacherAccessToken: string;
 let classroomId: string;
@@ -29,18 +22,11 @@ const trpcMutate = (
 
 void describe('Enrollment API (secure tickets)', { timeout: 30000 }, async () => {
   before(async () => {
-    await resetDb();
-
-    PORT = await getAvailablePort();
-    API_URL = `http://localhost:${String(PORT)}`;
-    process.env.PORT = String(PORT);
-
-    const { app } = await import('../src/server.js');
-    server = app.listen(PORT, () => {
-      console.log(`Enrollment test server started on port ${String(PORT)}`);
+    harness = await startHttpTestHarness({
+      readyDelayMs: 1000,
+      resetDb: true,
     });
-
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    API_URL = harness.apiUrl;
 
     // Create a teacher user and login
     const email = `enroll-teacher-${String(Date.now())}@example.com`;
@@ -89,19 +75,9 @@ void describe('Enrollment API (secure tickets)', { timeout: 30000 }, async () =>
   });
 
   after(async () => {
-    await resetDb();
-
-    if (server !== undefined) {
-      if ('closeAllConnections' in server && typeof server.closeAllConnections === 'function') {
-        server.closeAllConnections();
-      }
-      await new Promise<void>((resolve) => {
-        server?.close(() => {
-          resolve();
-        });
-      });
+    if (harness !== undefined) {
+      await harness.close();
     }
-    await closeConnection();
   });
 
   await test('POST /api/enroll/:classroomId/ticket requires auth', async () => {
