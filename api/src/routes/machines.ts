@@ -3,25 +3,16 @@ import path from 'node:path';
 
 import type { Express, Request, Response } from 'express';
 
-import { getErrorMessage } from '@openpath/shared';
-
 import { logger } from '../lib/logger.js';
-import { config } from '../config.js';
 import * as classroomStorage from '../lib/classroom-storage.js';
 import * as groupsStorage from '../lib/groups-storage.js';
-import * as setupStorage from '../lib/setup-storage.js';
 import {
   ensureDbEventBridgeStarted,
   ensureScheduleBoundaryTickerStarted,
   getSseClientCount,
   registerSseClient,
 } from '../lib/rule-events.js';
-import {
-  buildWhitelistUrl,
-  generateMachineToken,
-  hashMachineToken,
-} from '../lib/machine-download-token.js';
-import { verifyEnrollmentToken } from '../lib/enrollment-token.js';
+import { hashMachineToken } from '../lib/machine-download-token.js';
 import {
   authenticateEnrollmentToken,
   authenticateMachineToken,
@@ -40,6 +31,10 @@ import {
   resolveLinuxAgentPackagePath,
   resolveWindowsAgentManifestFile,
 } from '../lib/server-assets.js';
+import {
+  registerMachineWithToken,
+  rotateMachineDownloadToken,
+} from '../services/machine-registration.service.js';
 
 const FAIL_OPEN_RESPONSE = '#DESACTIVADO\n';
 
@@ -54,21 +49,22 @@ function getWildcardPathParam(value: string | string[] | undefined): string {
   return value?.trim() ?? '';
 }
 
+function sendMachineServiceError(res: Response, error: { code: string; message: string }): void {
+  const statusMap: Record<string, number> = {
+    UNAUTHORIZED: 401,
+    FORBIDDEN: 403,
+    NOT_FOUND: 404,
+    BAD_REQUEST: 400,
+  };
+  res.status(statusMap[error.code] ?? 400).json({ success: false, error: error.message });
+}
+
 export function registerMachineRoutes(
   app: Express,
   deps: { getCurrentEvaluationTime: () => Date }
 ): void {
   app.post('/api/machines/register', (req: Request, res: Response): void => {
     void (async (): Promise<void> => {
-      const authHeader = req.headers.authorization;
-      if (authHeader?.startsWith('Bearer ') !== true) {
-        res.status(401).json({ success: false, error: 'Authorization header required' });
-        return;
-      }
-
-      const providedToken = authHeader.slice(7);
-      const enrollmentPayload = verifyEnrollmentToken(providedToken);
-
       const { hostname, classroomName, classroomId, version } = req.body as {
         hostname?: string;
         classroomName?: string;
@@ -76,80 +72,34 @@ export function registerMachineRoutes(
         version?: string;
       };
 
-      if (!hostname) {
-        res.status(400).json({ success: false, error: 'hostname is required' });
-        return;
-      }
-
-      const classroomLookup = await (async (): Promise<
-        | { ok: true; classroom: { id: string; name: string } }
-        | { ok: false; status: number; error: string }
-      > => {
-        if (enrollmentPayload) {
-          if (classroomId && classroomId !== enrollmentPayload.classroomId) {
-            return {
-              ok: false,
-              status: 403,
-              error: 'Enrollment token does not match classroom',
-            };
-          }
-
-          const classroom = await classroomStorage.getClassroomById(enrollmentPayload.classroomId);
-          if (!classroom) {
-            return { ok: false, status: 404, error: 'Classroom not found' };
-          }
-
-          return { ok: true, classroom };
-        }
-
-        const isValid = await setupStorage.validateRegistrationToken(providedToken);
-        if (!isValid) {
-          return { ok: false, status: 403, error: 'Invalid registration token' };
-        }
-
-        if (!classroomName) {
-          return { ok: false, status: 400, error: 'classroomName is required' };
-        }
-
-        const classroom = await classroomStorage.getClassroomByName(classroomName);
-        if (!classroom) {
-          return { ok: false, status: 404, error: `Classroom "${classroomName}" not found` };
-        }
-
-        return { ok: true, classroom };
-      })();
-
-      if (!classroomLookup.ok) {
-        res.status(classroomLookup.status).json({ success: false, error: classroomLookup.error });
-        return;
-      }
-
-      const { classroom } = classroomLookup;
-      const machineHostname = classroomStorage.buildMachineKey(classroom.id, hostname);
-
-      const machine = await classroomStorage.registerMachine({
-        hostname: machineHostname,
-        reportedHostname: hostname,
-        classroomId: classroom.id,
-        ...(version ? { version } : {}),
+      const result = await registerMachineWithToken({
+        authorizationHeader: req.headers.authorization,
+        hostname,
+        classroomName,
+        classroomId,
+        version,
       });
-
-      const token = generateMachineToken();
-      const tokenHash = hashMachineToken(token);
-      await classroomStorage.setMachineDownloadTokenHash(machine.id, tokenHash);
-
-      const publicUrl = config.publicUrl ?? `http://${config.host}:${String(config.port)}`;
-      const whitelistUrl = buildWhitelistUrl(publicUrl, token);
+      if (!result.ok) {
+        sendMachineServiceError(res, result.error);
+        return;
+      }
 
       res.json({
         success: true,
-        machineHostname: machine.hostname,
-        reportedHostname: machine.reportedHostname ?? hostname,
-        whitelistUrl,
-        classroomName: classroom.name,
-        classroomId: classroom.id,
+        machineHostname: result.data.machineHostname,
+        reportedHostname: result.data.reportedHostname,
+        whitelistUrl: result.data.whitelistUrl,
+        classroomName: result.data.classroomName,
+        classroomId: result.data.classroomId,
       });
-    })();
+    })().catch((error: unknown) => {
+      logger.error('Machine registration route failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Internal server error' });
+      }
+    });
   });
 
   app.post('/api/machines/:hostname/rotate-download-token', (req: Request, res: Response): void => {
@@ -173,15 +123,21 @@ export function registerMachineRoutes(
         return;
       }
 
-      const token = generateMachineToken();
-      const tokenHash = hashMachineToken(token);
-      await classroomStorage.setMachineDownloadTokenHash(machine.id, tokenHash);
+      const result = await rotateMachineDownloadToken(machine.id);
+      if (!result.ok) {
+        sendMachineServiceError(res, result.error);
+        return;
+      }
 
-      const publicUrl = config.publicUrl ?? `http://${config.host}:${String(config.port)}`;
-      const whitelistUrl = buildWhitelistUrl(publicUrl, token);
-
-      res.json({ success: true, whitelistUrl });
-    })();
+      res.json({ success: true, whitelistUrl: result.data.whitelistUrl });
+    })().catch((error: unknown) => {
+      logger.error('Rotate machine download token route failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, error: 'Internal server error' });
+      }
+    });
   });
 
   app.get('/api/agent/windows/bootstrap/manifest', (req: Request, res: Response): void => {
@@ -212,7 +168,9 @@ export function registerMachineRoutes(
           })),
         });
       } catch (error) {
-        logger.error('Error serving Windows bootstrap manifest', { error: getErrorMessage(error) });
+        logger.error('Error serving Windows bootstrap manifest', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         if (!res.headersSent) {
           res.status(500).json({ success: false, error: 'Internal error' });
         }
@@ -248,7 +206,9 @@ export function registerMachineRoutes(
         res.setHeader('Pragma', 'no-cache');
         res.type('text/plain').send(fileContents);
       } catch (error) {
-        logger.error('Error serving Windows bootstrap file', { error: getErrorMessage(error) });
+        logger.error('Error serving Windows bootstrap file', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         if (!res.headersSent) {
           res.status(500).json({ success: false, error: 'Internal error' });
         }
@@ -285,7 +245,9 @@ export function registerMachineRoutes(
           })),
         });
       } catch (error) {
-        logger.error('Error serving Windows agent manifest', { error: getErrorMessage(error) });
+        logger.error('Error serving Windows agent manifest', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         if (!res.headersSent) {
           res.status(500).json({ success: false, error: 'Internal error' });
         }
@@ -321,7 +283,9 @@ export function registerMachineRoutes(
         res.setHeader('Pragma', 'no-cache');
         res.type('text/plain').send(fileContents);
       } catch (error) {
-        logger.error('Error serving Windows agent file', { error: getErrorMessage(error) });
+        logger.error('Error serving Windows agent file', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         if (!res.headersSent) {
           res.status(500).json({ success: false, error: 'Internal error' });
         }
@@ -360,7 +324,9 @@ export function registerMachineRoutes(
           downloadPath: packageEntry.downloadPath,
         });
       } catch (error) {
-        logger.error('Error serving Linux agent manifest', { error: getErrorMessage(error) });
+        logger.error('Error serving Linux agent manifest', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         if (!res.headersSent) {
           res.status(500).json({ success: false, error: 'Internal error' });
         }
@@ -398,7 +364,9 @@ export function registerMachineRoutes(
         res.setHeader('Content-Disposition', `attachment; filename="${packageFileName}"`);
         res.type('application/vnd.debian.binary-package').send(packageContents);
       } catch (error) {
-        logger.error('Error serving Linux agent package', { error: getErrorMessage(error) });
+        logger.error('Error serving Linux agent package', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         if (!res.headersSent) {
           res.status(500).json({ success: false, error: 'Internal error' });
         }
@@ -498,7 +466,9 @@ export function registerMachineRoutes(
         await classroomStorage.updateMachineLastSeen(machine.hostname);
         res.type('text/plain').send(content);
       } catch (error) {
-        logger.error('Error serving tokenized whitelist', { error: getErrorMessage(error) });
+        logger.error('Error serving tokenized whitelist', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         res.setHeader('Cache-Control', 'no-store, max-age=0');
         res.setHeader('Pragma', 'no-cache');
         res.type('text/plain').send(FAIL_OPEN_RESPONSE);
@@ -583,7 +553,9 @@ export function registerMachineRoutes(
           });
         });
       } catch (error) {
-        logger.error('SSE endpoint error', { error: getErrorMessage(error) });
+        logger.error('SSE endpoint error', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         if (!res.headersSent) {
           res.status(500).json({ success: false, error: 'Internal error' });
         }
