@@ -68,6 +68,13 @@ cd api
 NODE_ENV=test PORT=3001 node --import tsx --test --test-concurrency=1 --test-force-exit tests/auth-registration.test.ts tests/auth-google-login.test.ts tests/auth-session.test.ts tests/auth-password.test.ts tests/auth-admin-guards.test.ts
 ```
 
+API smoke split example:
+
+```bash
+cd api
+NODE_ENV=test PORT=3006 node --import tsx --test --test-concurrency=1 --test-force-exit tests/api-basic-http.test.ts tests/api-submit-routes.test.ts tests/api-requests-trpc.test.ts tests/api-request-auth-guards.test.ts tests/lib/machine-proof.test.ts tests/lib/public-request-input.test.ts tests/lib/exemption-storage.test.ts tests/routes/public-requests.test.ts
+```
+
 ## Anti-Patterns
 
 - direct DB queries in routers

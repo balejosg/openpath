@@ -1,0 +1,341 @@
+import { describe, test } from 'node:test';
+import assert from 'node:assert';
+
+import { sql } from 'drizzle-orm';
+
+import { getRows } from '../src/lib/utils.js';
+import {
+  db,
+  getApiUrl,
+  insertMachineAccessContext,
+  registerRequestApiLifecycle,
+} from './request-api-test-harness.js';
+
+registerRequestApiLifecycle();
+
+void describe('Request API tests - public submit routes', async () => {
+  await describe('Auto Request Endpoint', async () => {
+    await test('should create a pending request to the active group and mark source', async () => {
+      const suffix = Date.now().toString();
+      const groupId = `grp-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const domain = `ajax-${suffix}.example.com`;
+      const reason = 'auto-allow ajax (xmlhttprequest)';
+      const token = `machine-token-${suffix}`;
+
+      await db.execute(
+        sql.raw(
+          "ALTER TABLE whitelist_rules ADD COLUMN IF NOT EXISTS source varchar(50) DEFAULT 'manual' NOT NULL"
+        )
+      );
+      await insertMachineAccessContext({
+        activeGroupId: groupId,
+        classroomId,
+        defaultGroupId: groupId,
+        hostname,
+        machineId,
+        token,
+      });
+
+      const response = await fetch(`${getApiUrl()}/api/requests/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          hostname,
+          token,
+          origin_page: `${classroomId}.school.local`,
+          reason,
+        }),
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = (await response.json()) as {
+        approved: boolean;
+        autoApproved: boolean;
+        groupId: string;
+        id: string;
+        source: string;
+        status: string;
+        success: boolean;
+      };
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.approved, false);
+      assert.strictEqual(data.autoApproved, false);
+      assert.strictEqual(data.status, 'pending');
+      assert.strictEqual(data.groupId, groupId);
+      assert.strictEqual(data.source, 'auto_extension');
+
+      const rows = getRows<{
+        group_id: string;
+        machine_hostname: string;
+        origin_page: string;
+        reason: string;
+        source: string;
+        status: string;
+      }>(
+        await db.execute(
+          sql.raw(
+            `SELECT status, group_id, source, machine_hostname, origin_page, reason FROM requests WHERE id='${data.id}' LIMIT 1`
+          )
+        )
+      );
+      assert.strictEqual(rows.length, 1);
+      const firstRow = rows[0];
+      assert.ok(firstRow);
+      assert.strictEqual(firstRow.status, 'pending');
+      assert.strictEqual(firstRow.group_id, groupId);
+      assert.strictEqual(firstRow.source, 'auto_extension');
+      assert.strictEqual(firstRow.machine_hostname, hostname);
+      assert.strictEqual(firstRow.origin_page, `${classroomId}.school.local`);
+      assert.ok(firstRow.reason.includes(reason));
+
+      assert.strictEqual(
+        getRows(
+          await db.execute(
+            sql.raw(
+              `SELECT id FROM whitelist_rules WHERE group_id='${groupId}' AND value='${domain}'`
+            )
+          )
+        ).length,
+        0
+      );
+
+      const duplicateResponse = await fetch(`${getApiUrl()}/api/requests/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          hostname,
+          token,
+          origin_page: `${classroomId}.school.local`,
+          reason,
+        }),
+      });
+
+      assert.strictEqual(duplicateResponse.status, 409);
+      const duplicateData = (await duplicateResponse.json()) as {
+        error?: string;
+        success: boolean;
+      };
+      assert.strictEqual(duplicateData.success, false);
+      assert.match(duplicateData.error ?? '', /pending request exists/i);
+    });
+  });
+
+  await describe('Submit Request Endpoint', async () => {
+    await test('should create pending request in active classroom group', async () => {
+      const suffix = `${Date.now().toString()}-submit-active`;
+      const activeGroupId = `grp-active-${suffix}`;
+      const defaultGroupId = `grp-default-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const domain = `manual-${suffix}.example.com`;
+      const token = `machine-token-${suffix}`;
+
+      await insertMachineAccessContext({
+        activeGroupId,
+        classroomId,
+        defaultGroupId,
+        hostname,
+        machineId,
+        token,
+      });
+
+      const response = await fetch(`${getApiUrl()}/api/requests/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          reason: 'Manual submit from extension',
+          token,
+          hostname,
+          origin_host: `${classroomId}.school.local`,
+          client_version: '2.0.0-test',
+        }),
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = (await response.json()) as {
+        groupId: string;
+        id: string;
+        source: string;
+        status: string;
+        success: boolean;
+      };
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.status, 'pending');
+      assert.strictEqual(data.groupId, activeGroupId);
+      assert.strictEqual(data.source, 'firefox-extension');
+
+      const rows = getRows<{
+        group_id: string;
+        machine_hostname: string;
+        origin_host: string;
+        source: string;
+        status: string;
+      }>(
+        await db.execute(
+          sql.raw(
+            `SELECT status, group_id, source, machine_hostname, origin_host FROM requests WHERE id='${data.id}' LIMIT 1`
+          )
+        )
+      );
+
+      assert.strictEqual(rows.length, 1);
+      const firstRow = rows[0];
+      assert.ok(firstRow);
+      assert.strictEqual(firstRow.status, 'pending');
+      assert.strictEqual(firstRow.group_id, activeGroupId);
+      assert.strictEqual(firstRow.source, 'firefox-extension');
+      assert.strictEqual(firstRow.machine_hostname, hostname);
+      assert.strictEqual(firstRow.origin_host, `${classroomId}.school.local`);
+    });
+
+    await test('should fallback to default group when no active group is set', async () => {
+      const suffix = `${Date.now().toString()}-submit-default`;
+      const defaultGroupId = `grp-default-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const domain = `manual-default-${suffix}.example.com`;
+      const token = `machine-token-${suffix}`;
+
+      await insertMachineAccessContext({
+        activeGroupId: null,
+        classroomId,
+        defaultGroupId,
+        hostname,
+        machineId,
+        token,
+      });
+
+      const response = await fetch(`${getApiUrl()}/api/requests/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          reason: 'Manual submit fallback default',
+          token,
+          hostname,
+        }),
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = (await response.json()) as {
+        groupId: string;
+        id: string;
+        status: string;
+        success: boolean;
+      };
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.status, 'pending');
+      assert.strictEqual(data.groupId, defaultGroupId);
+
+      const rows = getRows<{ group_id: string }>(
+        await db.execute(sql.raw(`SELECT group_id FROM requests WHERE id='${data.id}' LIMIT 1`))
+      );
+      assert.strictEqual(rows.length, 1);
+      const firstRow = rows[0];
+      assert.ok(firstRow);
+      assert.strictEqual(firstRow.group_id, defaultGroupId);
+    });
+
+    await test('should return 400 when the machine classroom is unrestricted because it has no group', async () => {
+      const suffix = `${Date.now().toString()}-submit-no-group`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const token = `machine-token-${suffix}`;
+
+      await insertMachineAccessContext({
+        activeGroupId: null,
+        classroomId,
+        defaultGroupId: null,
+        hostname,
+        machineId,
+        token,
+      });
+
+      const response = await fetch(`${getApiUrl()}/api/requests/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain: `submit-${suffix}.example.com`,
+          reason: 'This classroom has no default or active group',
+          token,
+          hostname,
+        }),
+      });
+
+      assert.strictEqual(response.status, 400);
+      const data = (await response.json()) as {
+        error?: string;
+        success: boolean;
+      };
+
+      assert.strictEqual(data.success, false);
+      assert.strictEqual(
+        data.error,
+        'Machine classroom is unrestricted and does not require access requests'
+      );
+    });
+
+    await test('should map duplicate pending requests to HTTP 409', async () => {
+      const suffix = `${Date.now().toString()}-submit-conflict`;
+      const groupId = `grp-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const token = `machine-token-${suffix}`;
+      const domain = `submit-${suffix}.example.com`;
+
+      await insertMachineAccessContext({
+        activeGroupId: groupId,
+        classroomId,
+        defaultGroupId: groupId,
+        hostname,
+        machineId,
+        token,
+      });
+
+      const firstResponse = await fetch(`${getApiUrl()}/api/requests/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          reason: 'First submit creates the pending request',
+          token,
+          hostname,
+        }),
+      });
+      assert.strictEqual(firstResponse.status, 200);
+
+      const duplicateResponse = await fetch(`${getApiUrl()}/api/requests/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          reason: 'Second submit should surface the conflict',
+          token,
+          hostname,
+        }),
+      });
+
+      assert.strictEqual(duplicateResponse.status, 409);
+      const data = (await duplicateResponse.json()) as {
+        error?: string;
+        success: boolean;
+      };
+
+      assert.strictEqual(data.success, false);
+      assert.match(data.error ?? '', /pending request exists/i);
+    });
+  });
+});
