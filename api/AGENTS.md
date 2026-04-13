@@ -51,7 +51,7 @@ Single-file example:
 
 ```bash
 cd api
-NODE_ENV=test PORT=3007 node --import tsx --test --test-force-exit tests/groups.test.ts
+NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/groups-auth.test.ts tests/groups-teacher-access.test.ts tests/groups-rule-ops.test.ts tests/groups-export.test.ts
 ```
 
 ## Anti-Patterns

@@ -1,0 +1,366 @@
+import { after, before, describe, test } from 'node:test';
+import assert from 'node:assert';
+
+import {
+  type GroupStats,
+  type Rule,
+  type SystemStatus,
+  startGroupsTestHarness,
+  uniqueGroupName,
+} from './groups-test-harness.js';
+import { assertStatus, bearerAuth, parseTRPC, TEST_RUN_ID } from './test-utils.js';
+
+let harness: Awaited<ReturnType<typeof startGroupsTestHarness>> | undefined;
+
+function getHarness(): Awaited<ReturnType<typeof startGroupsTestHarness>> {
+  if (harness === undefined) {
+    throw new Error('Expected groups test harness to be initialized');
+  }
+  return harness;
+}
+
+await describe(
+  'Groups Router - rules, bulk ops, clone and status',
+  { timeout: 30000 },
+  async () => {
+    before(async () => {
+      harness = await startGroupsTestHarness();
+    });
+
+    after(async () => {
+      if (harness !== undefined) {
+        await harness.close();
+      }
+    });
+
+    await describe('Rule CRUD Operations', async () => {
+      let ruleGroupId = '';
+      let testRuleId = '';
+
+      before(async () => {
+        ruleGroupId = (
+          await getHarness().createGroup({
+            displayName: 'Rule Test Group',
+            name: uniqueGroupName('rule-test'),
+          })
+        ).id;
+      });
+
+      await test('should list rules (initially empty)', async () => {
+        const response = await getHarness().trpcQuery(
+          'groups.listRules',
+          { groupId: ruleGroupId },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(response, 200);
+
+        const { data } = (await parseTRPC(response)) as { data?: Rule[] };
+        assert.ok(Array.isArray(data));
+        assert.strictEqual(data.length, 0);
+      });
+
+      await test('should create and list rules by type', async () => {
+        const whitelistResp = await getHarness().trpcMutate(
+          'groups.createRule',
+          {
+            groupId: ruleGroupId,
+            type: 'whitelist',
+            value: 'example.com',
+            comment: 'Test whitelist entry',
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(whitelistResp, 200);
+        const { data: whitelistData } = (await parseTRPC(whitelistResp)) as {
+          data?: { id: string };
+        };
+        testRuleId = whitelistData?.id ?? '';
+        assert.ok(testRuleId);
+
+        const blockedSubdomainResp = await getHarness().trpcMutate(
+          'groups.createRule',
+          {
+            groupId: ruleGroupId,
+            type: 'blocked_subdomain',
+            value: 'ads.example.com',
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(blockedSubdomainResp, 200);
+
+        const blockedPathResp = await getHarness().trpcMutate(
+          'groups.createRule',
+          {
+            groupId: ruleGroupId,
+            type: 'blocked_path',
+            value: '*/api/tracking',
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(blockedPathResp, 200);
+
+        const listResp = await getHarness().trpcQuery(
+          'groups.listRules',
+          { groupId: ruleGroupId },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(listResp, 200);
+        const { data: allRules } = (await parseTRPC(listResp)) as { data?: Rule[] };
+        assert.ok(Array.isArray(allRules));
+        assert.strictEqual(allRules.length, 3);
+
+        const whitelistOnlyResp = await getHarness().trpcQuery(
+          'groups.listRules',
+          {
+            groupId: ruleGroupId,
+            type: 'whitelist',
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(whitelistOnlyResp, 200);
+
+        const { data: whitelistRules } = (await parseTRPC(whitelistOnlyResp)) as { data?: Rule[] };
+        assert.ok(Array.isArray(whitelistRules));
+        assert.strictEqual(whitelistRules.length, 1);
+        assert.strictEqual(whitelistRules[0]?.type, 'whitelist');
+      });
+
+      await test('should reject duplicate rule', async () => {
+        const response = await getHarness().trpcMutate(
+          'groups.createRule',
+          {
+            groupId: ruleGroupId,
+            type: 'whitelist',
+            value: 'example.com',
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+
+        assert.strictEqual(response.status, 409);
+      });
+
+      await test('should delete a rule', async () => {
+        const response = await getHarness().trpcMutate(
+          'groups.deleteRule',
+          { id: testRuleId },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(response, 200);
+
+        const { data } = (await parseTRPC(response)) as { data?: { deleted: boolean } };
+        assert.strictEqual(data?.deleted, true);
+      });
+    });
+
+    await describe('Bulk Rule Operations', async () => {
+      let bulkGroupId = '';
+
+      before(async () => {
+        bulkGroupId = (
+          await getHarness().createGroup({
+            displayName: 'Bulk Test Group',
+            name: uniqueGroupName('bulk-test'),
+          })
+        ).id;
+      });
+
+      await test('should bulk create rules and skip duplicates', async () => {
+        const initialResp = await getHarness().trpcMutate(
+          'groups.bulkCreateRules',
+          {
+            groupId: bulkGroupId,
+            type: 'whitelist',
+            values: ['google.com', 'github.com', 'stackoverflow.com', 'mozilla.org'],
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(initialResp, 200);
+        const { data: initialData } = (await parseTRPC(initialResp)) as {
+          data?: { count: number };
+        };
+        assert.strictEqual(initialData?.count, 4);
+
+        const duplicateResp = await getHarness().trpcMutate(
+          'groups.bulkCreateRules',
+          {
+            groupId: bulkGroupId,
+            type: 'whitelist',
+            values: ['google.com', 'newdomain.com', 'stackoverflow.com'],
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(duplicateResp, 200);
+        const { data: duplicateData } = (await parseTRPC(duplicateResp)) as {
+          data?: { count: number };
+        };
+        assert.strictEqual(duplicateData?.count, 1);
+      });
+
+      await test('should bulk delete rules (admin) and return ordered rules payload', async () => {
+        const valueA = `bulk-delete-a-${TEST_RUN_ID}-${Math.random().toString(36).slice(2, 6)}.com`;
+        const valueB = `bulk-delete-b-${TEST_RUN_ID}-${Math.random().toString(36).slice(2, 6)}.com`;
+
+        const createAResp = await getHarness().trpcMutate(
+          'groups.createRule',
+          {
+            groupId: bulkGroupId,
+            type: 'whitelist',
+            value: valueA,
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(createAResp, 200);
+        const { data: createdA } = (await parseTRPC(createAResp)) as { data?: { id: string } };
+        const idA = createdA?.id ?? '';
+        assert.ok(idA);
+
+        const createBResp = await getHarness().trpcMutate(
+          'groups.createRule',
+          {
+            groupId: bulkGroupId,
+            type: 'whitelist',
+            value: valueB,
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(createBResp, 200);
+        const { data: createdB } = (await parseTRPC(createBResp)) as { data?: { id: string } };
+        const idB = createdB?.id ?? '';
+        assert.ok(idB);
+
+        const ids = [idB, '00000000-0000-0000-0000-000000000000', idA];
+        const bulkResp = await getHarness().trpcMutate(
+          'groups.bulkDeleteRules',
+          { ids },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(bulkResp, 200);
+
+        const { data } = (await parseTRPC(bulkResp)) as {
+          data?: { deleted: number; rules: Rule[] };
+        };
+        assert.ok(data);
+        assert.strictEqual(data.deleted, 2);
+        assert.strictEqual(data.rules.length, 2);
+        assert.strictEqual(data.rules[0]?.id, idB);
+        assert.strictEqual(data.rules[1]?.id, idA);
+
+        const listResp = await getHarness().trpcQuery(
+          'groups.listRules',
+          { groupId: bulkGroupId },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(listResp, 200);
+        const { data: remainingRules } = (await parseTRPC(listResp)) as { data?: Rule[] };
+        assert.ok(Array.isArray(remainingRules));
+        assert.ok(!remainingRules.some((rule) => rule.id === idA));
+        assert.ok(!remainingRules.some((rule) => rule.id === idB));
+      });
+    });
+
+    await describe('Clone Operations', async () => {
+      await test('should clone a group and copy its rules', async () => {
+        const source = await getHarness().createGroup({
+          displayName: 'Clone Source Group',
+          name: uniqueGroupName('clone-source'),
+        });
+
+        const seedRulesResp = await getHarness().trpcMutate(
+          'groups.bulkCreateRules',
+          {
+            groupId: source.id,
+            type: 'whitelist',
+            values: ['clone-source-a.example.com', 'clone-source-b.example.com'],
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(seedRulesResp, 200);
+
+        const cloneResp = await getHarness().trpcMutate(
+          'groups.clone',
+          {
+            sourceGroupId: source.id,
+            name: uniqueGroupName('clone-copy'),
+            displayName: 'Clone Copy Group',
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(cloneResp, 200);
+
+        const { data: clonedGroup } = (await parseTRPC(cloneResp)) as {
+          data?: { id: string; name: string };
+        };
+        const clonedGroupId = clonedGroup?.id ?? '';
+        assert.ok(clonedGroupId);
+        assert.notStrictEqual(clonedGroupId, source.id);
+
+        const listClonedRulesResp = await getHarness().trpcQuery(
+          'groups.listRules',
+          { groupId: clonedGroupId },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(listClonedRulesResp, 200);
+
+        const { data: clonedRules } = (await parseTRPC(listClonedRulesResp)) as { data?: Rule[] };
+        assert.ok(Array.isArray(clonedRules));
+        assert.strictEqual(clonedRules.length, 2);
+        assert.ok(clonedRules.some((rule) => rule.value === 'clone-source-a.example.com'));
+        assert.ok(clonedRules.some((rule) => rule.value === 'clone-source-b.example.com'));
+        assert.ok(clonedRules.every((rule) => rule.groupId === clonedGroupId));
+      });
+    });
+
+    await describe('Statistics and System Status', async () => {
+      await test('should return group statistics', async () => {
+        const response = await getHarness().trpcQuery(
+          'groups.stats',
+          undefined,
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(response, 200);
+
+        const { data } = (await parseTRPC(response)) as { data?: GroupStats };
+        assert.ok(data);
+        assert.ok(typeof data.groupCount === 'number');
+        assert.ok(typeof data.whitelistCount === 'number');
+        assert.ok(typeof data.blockedCount === 'number');
+      });
+
+      await test('should return system status and toggle it', async () => {
+        const statusResp = await getHarness().trpcQuery(
+          'groups.systemStatus',
+          undefined,
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(statusResp, 200);
+
+        const { data: initialStatus } = (await parseTRPC(statusResp)) as { data?: SystemStatus };
+        assert.ok(initialStatus);
+        assert.ok(typeof initialStatus.enabled === 'boolean');
+        assert.ok(typeof initialStatus.totalGroups === 'number');
+        assert.ok(typeof initialStatus.activeGroups === 'number');
+        assert.ok(typeof initialStatus.pausedGroups === 'number');
+
+        const toggleResp = await getHarness().trpcMutate(
+          'groups.toggleSystem',
+          {
+            enable: !initialStatus.enabled,
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+        assertStatus(toggleResp, 200);
+
+        const { data: toggledStatus } = (await parseTRPC(toggleResp)) as { data?: SystemStatus };
+        assert.strictEqual(toggledStatus?.enabled, !initialStatus.enabled);
+
+        await getHarness().trpcMutate(
+          'groups.toggleSystem',
+          {
+            enable: initialStatus.enabled,
+          },
+          bearerAuth(getHarness().adminToken)
+        );
+      });
+    });
+  }
+);
