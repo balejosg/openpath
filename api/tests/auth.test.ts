@@ -30,6 +30,7 @@ import type { Server } from 'node:http';
 import { OAuth2Client, type LoginTicket } from 'google-auth-library';
 import { getAvailablePort, resetDb } from './test-utils.js';
 import { closeConnection } from '../src/db/index.js';
+import { loadConfig } from '../src/config.js';
 import * as authLib from '../src/lib/auth.js';
 import * as userStorage from '../src/lib/user-storage.js';
 
@@ -480,8 +481,14 @@ await describe(
         assert.strictEqual(response.status, 401);
       });
 
-      await test('should use the deterministic test JWT secret fallback when unset', () => {
-        assert.strictEqual(authLib.JWT_SECRET, 'openpath-test-secret');
+      await test('should use the deterministic test JWT secret fallback when unset', async () => {
+        const config = loadConfig({
+          ...process.env,
+          NODE_ENV: 'test',
+          JWT_SECRET: undefined,
+        });
+
+        assert.strictEqual(config.jwtSecret, 'openpath-test-secret');
       });
 
       await test('should reject request with invalid token', async () => {
