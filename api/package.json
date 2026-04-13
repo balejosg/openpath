@@ -29,6 +29,7 @@
     "test:roles": "NODE_ENV=test PORT=3007 node --import tsx --test --test-force-exit tests/roles.test.ts",
     "test:groups": "NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/groups-auth.test.ts tests/groups-teacher-access.test.ts tests/groups-rule-ops.test.ts tests/groups-export.test.ts",
     "test:service-coverage": "NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/service-coverage-user-storage.test.ts tests/service-coverage-setup.test.ts tests/service-coverage-schema.test.ts tests/service-coverage-user-service.test.ts tests/service-coverage-auth-service.test.ts",
+    "test:coverage-regressions": "NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/coverage-regressions-storage.test.ts tests/coverage-regressions-legacy-storage.test.ts tests/coverage-regressions-router-validation.test.ts",
     "test:integration:api": "NODE_ENV=test node --import tsx --test --test-force-exit tests/integration/*.test.ts",
     "test:push": "NODE_ENV=test PORT=3003 node --import tsx --test --test-force-exit tests/push.test.ts",
     "test:security": "NODE_ENV=test PORT=3004 node --import tsx --test --test-concurrency=1 --test-force-exit tests/security-headers.test.ts tests/security-authorization.test.ts tests/security-auth.test.ts tests/security-input-validation.test.ts tests/security-privacy-rate-limits.test.ts",

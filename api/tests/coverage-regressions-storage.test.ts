@@ -1,68 +1,20 @@
 import assert from 'node:assert/strict';
-import type { Server } from 'node:http';
-import { after, before, beforeEach, describe, it } from 'node:test';
+import { describe, it } from 'node:test';
+
 import * as classroomStorage from '../src/lib/classroom-storage.js';
 import * as groupsStorage from '../src/lib/groups-storage.js';
 import * as roleStorage from '../src/lib/role-storage.js';
-import * as scheduleStorage from '../src/lib/schedule-storage.js';
 import * as settingsStorage from '../src/lib/settings-storage.js';
 import * as storage from '../src/lib/storage.js';
 import * as userStorage from '../src/lib/user-storage.js';
-import {
-  bearerAuth,
-  bootstrapAdminSession,
-  ensureTestSchema,
-  getAvailablePort,
-  parseTRPC,
-  resetDb,
-  trpcMutate,
-  uniqueDomain,
-  uniqueEmail,
-} from './test-utils.js';
 import { CANONICAL_GROUP_IDS } from './fixtures.js';
+import { registerCoverageRegressionLifecycle } from './coverage-regressions-test-harness.js';
+import { uniqueDomain, uniqueEmail } from './test-utils.js';
 
-type RawStorageModule = typeof import('../src/lib/storage.js');
+registerCoverageRegressionLifecycle();
 
-let server: Server | undefined;
-let baseUrl = '';
-
-before(async () => {
-  process.env.NODE_ENV = 'test';
-  process.env.JWT_SECRET = 'coverage-regressions-secret';
-
-  await ensureTestSchema();
-
-  const port = await getAvailablePort();
-  baseUrl = `http://localhost:${String(port)}`;
-
-  const { app } = await import('../src/server.js');
-  await new Promise<void>((resolve) => {
-    server = app.listen(port, () => {
-      resolve();
-    });
-  });
-});
-
-after(async () => {
-  if (server !== undefined) {
-    await new Promise<void>((resolve, reject) => {
-      server?.close((error) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve();
-      });
-    });
-  }
-});
-
-beforeEach(async () => {
-  await resetDb();
-});
-
-await describe('coverage regressions', async () => {
-  await it('covers storage CRUD helpers touched by the merge repair', async () => {
+void describe('coverage regressions - storage helpers', () => {
+  void it('covers storage CRUD helpers touched by the merge repair', async () => {
     const classroom = await classroomStorage.createClassroom({ name: 'Coverage Room A' });
     assert.ok(classroomStorage.buildMachineKey(classroom.id, 'Lab Host 01').includes('--'));
     assert.strictEqual(
@@ -284,149 +236,5 @@ await describe('coverage regressions', async () => {
     assert.strictEqual(await roleStorage.getApprovalGroups(secondUser.id), 'all');
     assert.deepStrictEqual(await roleStorage.getUsersWithRole('admin'), [secondUser.id]);
     assert.strictEqual(await roleStorage.revokeAllUserRoles(secondUser.id), 1);
-  });
-
-  await it('covers legacy request fallback queries and delete helper paths', async () => {
-    const dbModule = await import('../src/db/index.js');
-    const originalExecute = dbModule.db.execute.bind(dbModule.db);
-
-    const legacyRow = {
-      id: 'req_legacy_1',
-      domain: 'legacy.example.com',
-      reason: 'Legacy reason',
-      requester_email: 'legacy@example.com',
-      group_id: 'default',
-      status: 'pending',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      resolved_at: null,
-      resolved_by: null,
-      resolution_note: '',
-    };
-
-    let executeIndex = 0;
-    dbModule.db.execute = (() => {
-      executeIndex += 1;
-      if (executeIndex === 1) {
-        return Promise.resolve({ rows: [{ has_source: false }] } as never);
-      }
-      if (executeIndex <= 4) {
-        return Promise.resolve({ rows: [legacyRow] } as never);
-      }
-      return Promise.resolve({
-        rows: [{ ...legacyRow, id: 'req_legacy_2', domain: 'created.example.com' }],
-      } as never);
-    }) as unknown as typeof dbModule.db.execute;
-
-    try {
-      const tag = `legacy-storage-${String(Date.now())}-${Math.random().toString(16).slice(2)}`;
-      const rawStorage = (await import(`../src/lib/storage.ts?${tag}`)) as RawStorageModule;
-
-      assert.strictEqual((await rawStorage.getAllRequests()).length, 1);
-      assert.strictEqual((await rawStorage.getRequestsByGroup('default')).length, 1);
-      assert.strictEqual((await rawStorage.getRequestById('req_legacy_1'))?.id, 'req_legacy_1');
-
-      const created = await rawStorage.createRequest({
-        domain: 'created.example.com',
-        requesterEmail: 'created@example.com',
-        groupId: 'default',
-      });
-      assert.strictEqual(created.domain, 'created.example.com');
-    } finally {
-      dbModule.db.execute = originalExecute;
-    }
-  });
-
-  await it('covers the changed router validation branches', async () => {
-    const { accessToken } = await bootstrapAdminSession(baseUrl, {
-      email: uniqueEmail('coverage-admin'),
-      password: 'AdminPassword123!',
-      name: 'Coverage Admin',
-    });
-
-    const invalidRuleResponse = await trpcMutate(
-      baseUrl,
-      'groups.createRule',
-      {
-        groupId: 'group-1',
-        type: 'blocked_path',
-        value: 'not-a-valid-blocked-path',
-      },
-      bearerAuth(accessToken)
-    );
-    assert.strictEqual(invalidRuleResponse.status, 400);
-    const invalidRulePayload = await parseTRPC(invalidRuleResponse);
-    assert.match(invalidRulePayload.error ?? '', /slash|path/i);
-
-    const invalidBulkResponse = await trpcMutate(
-      baseUrl,
-      'groups.bulkCreateRules',
-      {
-        groupId: 'group-1',
-        type: 'blocked_path',
-        values: ['still-not-a-valid-blocked-path'],
-      },
-      bearerAuth(accessToken)
-    );
-    assert.strictEqual(invalidBulkResponse.status, 400);
-
-    const invalidExemptionResponse = await trpcMutate(
-      baseUrl,
-      'classrooms.createExemption',
-      {
-        machineId: 'machine-1',
-        classroomId: 'classroom-1',
-        scheduleId: 'not-a-uuid',
-      },
-      bearerAuth(accessToken)
-    );
-    assert.strictEqual(invalidExemptionResponse.status, 400);
-
-    const classroom = await classroomStorage.createClassroom({
-      name: 'Coverage Router Classroom',
-      defaultGroupId: 'default',
-    });
-    const machine = await classroomStorage.registerMachine({
-      hostname: 'coverage-router-machine',
-      classroomId: classroom.id,
-      version: '1.0.0',
-    });
-    const startAt = new Date();
-    startAt.setMinutes(Math.floor(startAt.getMinutes() / 15) * 15, 0, 0);
-    const endAt = new Date(startAt.getTime() + 15 * 60_000);
-    const schedule = await scheduleStorage.createOneOffSchedule({
-      classroomId: classroom.id,
-      teacherId: 'legacy_admin',
-      groupId: 'default',
-      startAt,
-      endAt,
-    });
-
-    const createExemptionResponse = await trpcMutate(
-      baseUrl,
-      'classrooms.createExemption',
-      {
-        machineId: machine.id,
-        classroomId: classroom.id,
-        scheduleId: schedule.id,
-      },
-      bearerAuth(accessToken)
-    );
-    assert.strictEqual(createExemptionResponse.status, 200);
-    const createdExemption = (await parseTRPC(createExemptionResponse)).data as { id: string };
-
-    const listExemptionsResponse = await fetch(
-      `${baseUrl}/trpc/classrooms.listExemptions?input=${encodeURIComponent(JSON.stringify({ classroomId: classroom.id }))}`,
-      { headers: bearerAuth(accessToken) }
-    );
-    assert.strictEqual(listExemptionsResponse.status, 200);
-
-    const deleteExemptionResponse = await trpcMutate(
-      baseUrl,
-      'classrooms.deleteExemption',
-      { id: createdExemption.id },
-      bearerAuth(accessToken)
-    );
-    assert.strictEqual(deleteExemptionResponse.status, 200);
   });
 });
