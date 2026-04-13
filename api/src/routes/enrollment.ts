@@ -1,6 +1,5 @@
 import type { Express, Request, Response } from 'express';
 
-import { logger } from '../lib/logger.js';
 import { getFirstParam, verifyAccessTokenFromRequest } from '../lib/server-request-auth.js';
 import { getPublicBaseUrl } from '../lib/server-assets.js';
 import {
@@ -8,6 +7,11 @@ import {
   buildWindowsEnrollmentBootstrap,
   issueEnrollmentTicket,
 } from '../services/enrollment.service.js';
+import {
+  createAsyncRouteHandler,
+  sendJsonInternalError,
+  sendTextInternalError,
+} from './route-helpers.js';
 
 function sendEnrollmentServiceErrorJson(
   res: Response,
@@ -38,9 +42,12 @@ function sendEnrollmentServiceErrorText(
 }
 
 export function registerEnrollmentRoutes(app: Express): void {
-  app.post('/api/enroll/:classroomId/ticket', (req: Request, res: Response): void => {
-    void (async (): Promise<void> => {
-      try {
+  app.post(
+    '/api/enroll/:classroomId/ticket',
+    createAsyncRouteHandler(
+      'Enrollment ticket error',
+      sendJsonInternalError,
+      async (req: Request, res: Response): Promise<void> => {
         const decoded = await verifyAccessTokenFromRequest(req);
         if (!decoded) {
           res.status(401).json({ success: false, error: 'Authorization required' });
@@ -64,18 +71,16 @@ export function registerEnrollmentRoutes(app: Express): void {
           classroomId: result.data.classroomId,
           classroomName: result.data.classroomName,
         });
-      } catch (error) {
-        logger.error('Enrollment ticket error', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        res.status(500).json({ success: false, error: 'Internal error' });
       }
-    })();
-  });
+    )
+  );
 
-  app.get('/api/enroll/:classroomId', (req: Request, res: Response): void => {
-    void (async (): Promise<void> => {
-      try {
+  app.get(
+    '/api/enroll/:classroomId',
+    createAsyncRouteHandler(
+      'Enrollment script error',
+      sendTextInternalError,
+      async (req: Request, res: Response): Promise<void> => {
         const classroomId = getFirstParam(req.params.classroomId);
         const result = await buildLinuxEnrollmentBootstrap({
           authorizationHeader: req.headers.authorization,
@@ -93,18 +98,16 @@ export function registerEnrollmentRoutes(app: Express): void {
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('Content-Disposition', 'inline; filename="enroll.sh"');
         res.send(result.data.script);
-      } catch (error) {
-        logger.error('Enrollment script error', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        res.status(500).send('Internal error');
       }
-    })();
-  });
+    )
+  );
 
-  app.get('/api/enroll/:classroomId/windows.ps1', (req: Request, res: Response): void => {
-    void (async (): Promise<void> => {
-      try {
+  app.get(
+    '/api/enroll/:classroomId/windows.ps1',
+    createAsyncRouteHandler(
+      'Windows enrollment script error',
+      sendTextInternalError,
+      async (req: Request, res: Response): Promise<void> => {
         const result = await buildWindowsEnrollmentBootstrap({
           authorizationHeader: req.headers.authorization,
           classroomId: getFirstParam(req.params.classroomId) ?? '',
@@ -121,12 +124,7 @@ export function registerEnrollmentRoutes(app: Express): void {
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('Content-Disposition', 'inline; filename="enroll.ps1"');
         res.send(result.data.script);
-      } catch (error) {
-        logger.error('Windows enrollment script error', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        res.status(500).send('Internal error');
       }
-    })();
-  });
+    )
+  );
 }

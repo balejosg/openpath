@@ -1,6 +1,5 @@
 import type { Express, Request, Response } from 'express';
 
-import { logger } from '../lib/logger.js';
 import {
   type AutoMachineRequestOutcome,
   handleAutoMachineRequest,
@@ -9,6 +8,7 @@ import {
   submitMachineRequest,
 } from '../services/public-request.service.js';
 import { parseAutoRequestPayload, parseSubmitRequestPayload } from '../lib/public-request-input.js';
+import { createAsyncRouteHandler, sendJsonInternalError } from './route-helpers.js';
 
 function sendRequestServiceError(res: Response, error: { code: string; message: string }): void {
   const statusMap: Record<string, number> = {
@@ -25,114 +25,108 @@ function sendRequestServiceError(res: Response, error: { code: string; message: 
 }
 
 export function registerPublicRequestRoutes(app: Express): void {
-  app.post('/api/requests/auto', (req: Request, res: Response): void => {
-    void (async (): Promise<void> => {
-      const body = parseAutoRequestPayload(req.body);
+  app.post(
+    '/api/requests/auto',
+    createAsyncRouteHandler(
+      'Auto request route failed',
+      sendJsonInternalError,
+      async (req: Request, res: Response): Promise<void> => {
+        const body = parseAutoRequestPayload(req.body);
 
-      if (!body.domainRaw || !body.hostnameRaw || !body.token) {
-        res.status(400).json({
-          success: false,
-          error: 'domain, hostname and token are required',
-        });
-        return;
-      }
-
-      const result: PublicRequestResult<AutoMachineRequestOutcome> = await handleAutoMachineRequest(
-        {
-          domainRaw: body.domainRaw,
-          hostnameRaw: body.hostnameRaw,
-          token: body.token,
-          originPage: body.originPageRaw.slice(0, 2048) || undefined,
-          reason: body.reasonRaw.slice(0, 200) || undefined,
+        if (!body.domainRaw || !body.hostnameRaw || !body.token) {
+          res.status(400).json({
+            success: false,
+            error: 'domain, hostname and token are required',
+          });
+          return;
         }
-      );
 
-      if (!result.ok) {
-        sendRequestServiceError(res, result.error);
-        return;
+        const result: PublicRequestResult<AutoMachineRequestOutcome> =
+          await handleAutoMachineRequest({
+            domainRaw: body.domainRaw,
+            hostnameRaw: body.hostnameRaw,
+            token: body.token,
+            originPage: body.originPageRaw.slice(0, 2048) || undefined,
+            reason: body.reasonRaw.slice(0, 200) || undefined,
+          });
+
+        if (!result.ok) {
+          sendRequestServiceError(res, result.error);
+          return;
+        }
+
+        if (!result.data.autoApproved) {
+          const pendingData: PendingMachineRequestOutcome = result.data;
+          res.json({
+            success: true,
+            id: pendingData.requestId,
+            approved: false,
+            autoApproved: false,
+            status: pendingData.requestStatus,
+            groupId: pendingData.groupId,
+            domain: pendingData.domain,
+            source: pendingData.source,
+          });
+          return;
+        }
+
+        res.json({
+          success: true,
+          approved: true,
+          autoApproved: true,
+          status: result.data.status,
+          groupId: result.data.groupId,
+          domain: result.data.domain,
+          source: result.data.source,
+          duplicate: result.data.duplicate,
+        });
       }
+    )
+  );
 
-      if (!result.data.autoApproved) {
-        const pendingData: PendingMachineRequestOutcome = result.data;
+  app.post(
+    '/api/requests/submit',
+    createAsyncRouteHandler(
+      'Request submit route failed',
+      sendJsonInternalError,
+      async (req: Request, res: Response): Promise<void> => {
+        const body = parseSubmitRequestPayload(req.body);
+
+        if (!body.domainRaw || !body.hostnameRaw || !body.token) {
+          res.status(400).json({
+            success: false,
+            error: 'domain, hostname and token are required',
+          });
+          return;
+        }
+
+        const created: PublicRequestResult<PendingMachineRequestOutcome> =
+          await submitMachineRequest({
+            domainRaw: body.domainRaw,
+            hostnameRaw: body.hostnameRaw,
+            token: body.token,
+            reason: body.reasonRaw.slice(0, 200) || undefined,
+            originHost: body.originHostRaw.slice(0, 255) || undefined,
+            originPage: body.originPageRaw.slice(0, 2048) || undefined,
+            clientVersion: body.clientVersionRaw.slice(0, 50) || undefined,
+            errorType: body.errorTypeRaw.slice(0, 100) || undefined,
+          });
+
+        if (!created.ok) {
+          sendRequestServiceError(res, created.error);
+          return;
+        }
+
+        const pendingData: PendingMachineRequestOutcome = created.data;
         res.json({
           success: true,
           id: pendingData.requestId,
-          approved: false,
-          autoApproved: false,
           status: pendingData.requestStatus,
           groupId: pendingData.groupId,
           domain: pendingData.domain,
           source: pendingData.source,
         });
-        return;
       }
-
-      res.json({
-        success: true,
-        approved: true,
-        autoApproved: true,
-        status: result.data.status,
-        groupId: result.data.groupId,
-        domain: result.data.domain,
-        source: result.data.source,
-        duplicate: result.data.duplicate,
-      });
-    })().catch((error: unknown) => {
-      logger.error('Auto request route failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, error: 'Internal server error' });
-      }
-    });
-  });
-
-  app.post('/api/requests/submit', (req: Request, res: Response): void => {
-    void (async (): Promise<void> => {
-      const body = parseSubmitRequestPayload(req.body);
-
-      if (!body.domainRaw || !body.hostnameRaw || !body.token) {
-        res.status(400).json({
-          success: false,
-          error: 'domain, hostname and token are required',
-        });
-        return;
-      }
-
-      const created: PublicRequestResult<PendingMachineRequestOutcome> = await submitMachineRequest(
-        {
-          domainRaw: body.domainRaw,
-          hostnameRaw: body.hostnameRaw,
-          token: body.token,
-          reason: body.reasonRaw.slice(0, 200) || undefined,
-          originHost: body.originHostRaw.slice(0, 255) || undefined,
-          originPage: body.originPageRaw.slice(0, 2048) || undefined,
-          clientVersion: body.clientVersionRaw.slice(0, 50) || undefined,
-          errorType: body.errorTypeRaw.slice(0, 100) || undefined,
-        }
-      );
-
-      if (!created.ok) {
-        sendRequestServiceError(res, created.error);
-        return;
-      }
-
-      const pendingData: PendingMachineRequestOutcome = created.data;
-      res.json({
-        success: true,
-        id: pendingData.requestId,
-        status: pendingData.requestStatus,
-        groupId: pendingData.groupId,
-        domain: pendingData.domain,
-        source: pendingData.source,
-      });
-    })().catch((error: unknown) => {
-      logger.error('Request submit route failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, error: 'Internal server error' });
-      }
-    });
-  });
+    )
+  );
 }
