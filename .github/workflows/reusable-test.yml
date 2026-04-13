@@ -58,6 +58,7 @@ jobs:
         with:
           build-shared: 'true'
           build-api: 'true'
+          build-extension: ${{ inputs.test-type == 'api' && 'true' || 'false' }}
 
       # Bash tests setup
       - name: Install BATS

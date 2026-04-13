@@ -204,6 +204,12 @@ describe('repository verification contract', () => {
       'reusable-test.yml should collect React SPA coverage before uploading to Codecov'
     );
     assert.ok(
+      reusableTestWorkflow.includes(
+        "build-extension: ${{ inputs.test-type == 'api' && 'true' || 'false' }}"
+      ),
+      'reusable-test.yml should build the Firefox extension assets for the API coverage lane because token-delivery tests assert Windows manifest entries from firefox-extension/dist'
+    );
+    assert.ok(
       reusableTestWorkflow.includes("inputs.test-type == 'web' && 'dashboard'"),
       'reusable-test.yml should map the dashboard lane to the dashboard Codecov flag'
     );
