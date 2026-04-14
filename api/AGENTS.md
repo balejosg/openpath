@@ -43,6 +43,7 @@ Prefer existing scripts because they already assign stable ports:
 ```bash
 npm run test:auth --workspace=@openpath/api      # PORT 3001
 npm run test:e2e --workspace=@openpath/api       # PORT 3002
+npm run test:healthcheck --workspace=@openpath/api
 npm run test:security --workspace=@openpath/api  # PORT 3004
 npm run test:setup --workspace=@openpath/api     # PORT 3005
 ```
