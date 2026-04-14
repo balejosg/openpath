@@ -23,6 +23,12 @@ import {
   type VerifyResponse,
 } from './lib/native-messaging-client.js';
 import {
+  fetchWithFallback,
+  submitBlockedDomainRequest as submitBlockedDomainRequestViaApi,
+  type SubmitBlockedDomainInput,
+  type SubmitBlockedDomainResult,
+} from './lib/request-api.js';
+import {
   BLOCKED_SCREEN_PATH,
   MAX_BLOCKED_PATH_RULES,
   PATH_BLOCKING_FILTER_TYPES,
@@ -48,29 +54,6 @@ interface AutoAllowApiResponse {
   success: boolean;
   status?: 'approved' | 'duplicate';
   duplicate?: boolean;
-  error?: string;
-}
-
-interface SubmitBlockedDomainApiResponse {
-  success?: boolean;
-  id?: string;
-  status?: 'pending' | 'approved' | 'rejected';
-  domain?: string;
-  error?: string;
-}
-
-interface SubmitBlockedDomainResult {
-  success: boolean;
-  id?: string;
-  status?: 'pending' | 'approved' | 'rejected';
-  domain?: string;
-  error?: string;
-}
-
-interface SubmitBlockedDomainInput {
-  domain?: string;
-  reason?: string;
-  origin?: string;
   error?: string;
 }
 
@@ -268,36 +251,6 @@ function isAutoAllowRequestType(type?: string): boolean {
   return AUTO_ALLOW_REQUEST_TYPES.has(type);
 }
 
-async function fetchWithFallback(
-  endpoints: string[],
-  path: string,
-  init: RequestInit,
-  timeoutMs: number
-): Promise<Response> {
-  let lastError: Error | null = null;
-
-  for (const endpoint of endpoints) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => {
-      controller.abort();
-    }, timeoutMs);
-
-    try {
-      const response = await fetch(`${endpoint}${path}`, {
-        ...init,
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-      return response;
-    } catch (error) {
-      clearTimeout(timeout);
-      lastError = error instanceof Error ? error : new Error(String(error));
-    }
-  }
-
-  throw lastError ?? new Error('No API endpoint available');
-}
-
 // ============================================================================
 // Native Messaging
 // ============================================================================
@@ -329,93 +282,18 @@ async function triggerLocalWhitelistUpdate(): Promise<boolean> {
 async function submitBlockedDomainRequest(
   input: SubmitBlockedDomainInput
 ): Promise<SubmitBlockedDomainResult> {
-  const domain = input.domain?.trim();
-  const reason = input.reason?.trim();
-
-  if (!domain || !reason || reason.length < 3) {
-    return { success: false, error: 'domain and reason are required' };
-  }
-
-  const requestConfig = await loadRequestConfig();
-  const endpoints = getRequestApiEndpoints(requestConfig);
-  if (!requestConfig.enableRequests || endpoints.length === 0) {
-    return {
-      success: false,
-      error: 'Configuracion incompleta para solicitar dominios',
-    };
-  }
-
-  const hostnameResponse = (await nativeMessagingClient.sendMessage({
-    action: 'get-hostname',
-  })) as {
-    success: boolean;
-    hostname?: string;
-    error?: string;
-  };
-  if (!hostnameResponse.success || !hostnameResponse.hostname) {
-    return {
-      success: false,
-      error: hostnameResponse.error ?? 'No se pudo obtener el hostname del equipo',
-    };
-  }
-
-  const tokenResponse = (await nativeMessagingClient.sendMessage({
-    action: 'get-machine-token',
-  })) as {
-    success: boolean;
-    token?: string;
-    error?: string;
-  };
-  if (!tokenResponse.success || !tokenResponse.token) {
-    return {
-      success: false,
-      error: tokenResponse.error ?? 'No se pudo obtener token de la maquina',
-    };
-  }
-
-  const requestBody = buildBlockedDomainSubmitBody({
-    domain,
-    reason,
-    token: tokenResponse.token,
-    hostname: hostnameResponse.hostname,
-    clientVersion: browser.runtime.getManifest().version,
-    origin: input.origin,
-    error: input.error,
+  return await submitBlockedDomainRequestViaApi(input, {
+    buildBlockedDomainSubmitBody,
+    getClientVersion: () => browser.runtime.getManifest().version,
+    getRequestApiEndpoints: (config) =>
+      getRequestApiEndpoints({
+        ...config,
+        debugMode: false,
+        sharedSecret: '',
+      }),
+    loadRequestConfig,
+    sendNativeMessage: (message) => nativeMessagingClient.sendMessage(message),
   });
-
-  const response = await fetchWithFallback(
-    endpoints,
-    '/api/requests/submit',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    },
-    requestConfig.requestTimeout
-  );
-
-  const payload = (await response
-    .json()
-    .catch((): SubmitBlockedDomainApiResponse => ({}))) as SubmitBlockedDomainApiResponse;
-
-  if (!response.ok || payload.success !== true) {
-    return {
-      success: false,
-      error: payload.error ?? `No se pudo enviar la solicitud (${response.status.toString()})`,
-    };
-  }
-
-  const result: SubmitBlockedDomainResult = { success: true };
-  if (payload.id) {
-    result.id = payload.id;
-  }
-  if (payload.status) {
-    result.status = payload.status;
-  }
-  if (payload.domain) {
-    result.domain = payload.domain;
-  }
-  return result;
 }
 
 async function autoAllowBlockedDomain(
