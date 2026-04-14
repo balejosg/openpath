@@ -247,7 +247,6 @@ test_release_tarball_simulation() {
 test_installer_extension_paths() {
     test_section "6/6" "Firefox installer path consistency"
 
-    local installer_sh="$PROJECT_ROOT/linux/install.sh"
     local installer_runtime_steps="$PROJECT_ROOT/linux/lib/install-runtime-steps.sh"
     local asset_helper="$PROJECT_ROOT/linux/lib/firefox-extension-assets.sh"
 
