@@ -56,6 +56,8 @@ export async function startApiTestRuntime(
   const host = '127.0.0.1';
   const apiUrl = `http://${host}:${String(port)}`;
   const previousEnv = applyEnvOverrides({
+    ADMIN_EMAIL: undefined,
+    ADMIN_PASSWORD: undefined,
     HOST: host,
     NODE_ENV: 'test',
     PORT: String(port),
