@@ -13,6 +13,7 @@
  */
 
 import { Browser, WebRequest, Runtime, WebNavigation } from 'webextension-polyfill';
+import { createAutoAllowWorkflow, isAutoAllowRequestType } from './lib/auto-allow-workflow.js';
 import { logger, getErrorMessage } from './lib/logger.js';
 import { getRequestApiEndpoints, loadRequestConfig } from './lib/config-storage.js';
 import { buildBlockedDomainSubmitBody } from './lib/blocked-request.js';
@@ -23,7 +24,6 @@ import {
   type VerifyResponse,
 } from './lib/native-messaging-client.js';
 import {
-  fetchWithFallback,
   submitBlockedDomainRequest as submitBlockedDomainRequestViaApi,
   type SubmitBlockedDomainInput,
   type SubmitBlockedDomainResult,
@@ -49,13 +49,6 @@ import {
 } from './lib/blocked-screen-contract.js';
 
 declare const browser: Browser;
-
-interface AutoAllowApiResponse {
-  success: boolean;
-  status?: 'approved' | 'duplicate';
-  duplicate?: boolean;
-  error?: string;
-}
 
 interface BlockedScreenContext {
   tabId: number;
@@ -97,7 +90,6 @@ const IGNORED_ERRORS = [
   'NS_ERROR_ABORT', // Navegación abortada
 ];
 
-const AUTO_ALLOW_REQUEST_TYPES = new Set(['xmlhttprequest', 'fetch']);
 const BLOCKED_SCREEN_ERRORS = new Set([
   'NS_ERROR_UNKNOWN_HOST',
   'NS_ERROR_PROXY_CONNECTION_REFUSED',
@@ -246,11 +238,6 @@ const {
   setDomainStatus,
 } = blockedMonitorState;
 
-function isAutoAllowRequestType(type?: string): boolean {
-  if (!type) return false;
-  return AUTO_ALLOW_REQUEST_TYPES.has(type);
-}
-
 // ============================================================================
 // Native Messaging
 // ============================================================================
@@ -271,14 +258,6 @@ async function isNativeHostAvailable(): Promise<boolean> {
   return await nativeMessagingClient.isAvailable();
 }
 
-async function triggerLocalWhitelistUpdate(): Promise<boolean> {
-  const success = await nativeMessagingClient.requestLocalWhitelistUpdate();
-  if (success) {
-    await refreshBlockedPathRules(true);
-  }
-  return success;
-}
-
 async function submitBlockedDomainRequest(
   input: SubmitBlockedDomainInput
 ): Promise<SubmitBlockedDomainResult> {
@@ -296,177 +275,22 @@ async function submitBlockedDomainRequest(
   });
 }
 
-async function autoAllowBlockedDomain(
-  tabId: number,
-  hostname: string,
-  origin: string | null,
-  requestType: string
-): Promise<void> {
-  const requestKey = `${tabId.toString()}:${hostname}:${origin ?? 'unknown'}`;
-  if (inFlightAutoRequests.has(requestKey)) {
-    return;
-  }
-
-  inFlightAutoRequests.add(requestKey);
-  setDomainStatus(tabId, hostname, {
-    state: 'pending',
-    updatedAt: Date.now(),
-    message: 'Enviando auto-aprobacion',
-    requestType,
-  });
-
-  try {
-    const requestConfig = await loadRequestConfig();
-    const endpoints = getRequestApiEndpoints(requestConfig);
-
-    if (!requestConfig.enableRequests) {
-      setDomainStatus(tabId, hostname, {
-        state: 'apiError',
-        updatedAt: Date.now(),
-        message: 'Auto-aprobacion deshabilitada por configuracion',
-        requestType,
-      });
-      return;
-    }
-
-    if (endpoints.length === 0) {
-      setDomainStatus(tabId, hostname, {
-        state: 'apiError',
-        updatedAt: Date.now(),
-        message: 'No hay endpoint API configurado',
-        requestType,
-      });
-      return;
-    }
-
-    const hostnameResponse = (await nativeMessagingClient.sendMessage({
-      action: 'get-hostname',
-    })) as {
-      success: boolean;
-      hostname?: string;
-      error?: string;
-    };
-
-    if (!hostnameResponse.success || !hostnameResponse.hostname) {
-      setDomainStatus(tabId, hostname, {
-        state: 'apiError',
-        updatedAt: Date.now(),
-        message: hostnameResponse.error ?? 'No se pudo obtener hostname del sistema',
-        requestType,
-      });
-      return;
-    }
-
-    const machineHostname = hostnameResponse.hostname;
-    const tokenResponse = (await nativeMessagingClient.sendMessage({
-      action: 'get-machine-token',
-    })) as {
-      success: boolean;
-      token?: string;
-      error?: string;
-    };
-    if (!tokenResponse.success || !tokenResponse.token) {
-      setDomainStatus(tabId, hostname, {
-        state: 'apiError',
-        updatedAt: Date.now(),
-        message: tokenResponse.error ?? 'No se pudo obtener token de la máquina',
-        requestType,
-      });
-      return;
-    }
-
-    const token = tokenResponse.token;
-
-    const reason = `auto-allow ajax (${requestType})`;
-    const response = await fetchWithFallback(
-      endpoints,
-      '/api/requests/auto',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: hostname,
-          origin_page: origin ?? 'desconocido',
-          token,
-          hostname: machineHostname,
-          reason,
-        }),
-      },
-      requestConfig.requestTimeout
-    );
-
-    const payload = (await response.json()) as AutoAllowApiResponse;
-    if (!response.ok || !payload.success) {
-      setDomainStatus(tabId, hostname, {
-        state: 'apiError',
-        updatedAt: Date.now(),
-        message: payload.error ?? 'Fallo de API al auto-aprobar',
-        requestType,
-      });
-      return;
-    }
-
-    const updateOk = await triggerLocalWhitelistUpdate();
-    if (!updateOk) {
-      setDomainStatus(tabId, hostname, {
-        state: 'localUpdateError',
-        updatedAt: Date.now(),
-        message: 'Regla creada; fallo actualizacion local',
-        requestType,
-      });
-      return;
-    }
-
-    const isDuplicate = payload.status === 'duplicate' || payload.duplicate === true;
-    setDomainStatus(tabId, hostname, {
-      state: isDuplicate ? 'duplicate' : 'autoApproved',
-      updatedAt: Date.now(),
-      message: isDuplicate ? 'Regla ya existente' : 'Auto-aprobado y actualizado',
-      requestType,
-    });
-  } catch (error) {
-    setDomainStatus(tabId, hostname, {
-      state: 'apiError',
-      updatedAt: Date.now(),
-      message: getErrorMessage(error),
-      requestType,
-    });
-  } finally {
-    inFlightAutoRequests.delete(requestKey);
-  }
-}
-
-async function retryLocalUpdate(tabId: number, hostname: string): Promise<{ success: boolean }> {
-  const currentStatus = domainStatuses[tabId]?.get(hostname);
-  const requestTypePatch = currentStatus?.requestType
-    ? { requestType: currentStatus.requestType }
-    : {};
-  setDomainStatus(tabId, hostname, {
-    state: 'pending',
-    updatedAt: Date.now(),
-    message: 'Reintentando actualizacion local',
-    ...requestTypePatch,
-  });
-
-  const success = await triggerLocalWhitelistUpdate();
-  if (success) {
-    setDomainStatus(tabId, hostname, {
-      state: 'autoApproved',
-      updatedAt: Date.now(),
-      message: 'Actualizacion local completada',
-      ...requestTypePatch,
-    });
-  } else {
-    setDomainStatus(tabId, hostname, {
-      state: 'localUpdateError',
-      updatedAt: Date.now(),
-      message: 'Sigue fallando la actualizacion local',
-      ...requestTypePatch,
-    });
-  }
-
-  return { success };
-}
+const { autoAllowBlockedDomain, retryLocalUpdate } = createAutoAllowWorkflow({
+  getErrorMessage,
+  getRequestApiEndpoints: (config) =>
+    getRequestApiEndpoints({
+      ...config,
+      debugMode: false,
+      sharedSecret: '',
+    }),
+  getStoredDomainStatus: (tabId, hostname) => domainStatuses[tabId]?.get(hostname),
+  inFlightAutoRequests,
+  loadRequestConfig,
+  refreshBlockedPathRules: () => refreshBlockedPathRules(true),
+  requestLocalWhitelistUpdate: () => nativeMessagingClient.requestLocalWhitelistUpdate(),
+  sendNativeMessage: (message) => nativeMessagingClient.sendMessage(message),
+  setDomainStatus,
+});
 
 // ============================================================================
 // Event Listeners

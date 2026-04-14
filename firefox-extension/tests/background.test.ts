@@ -6,6 +6,7 @@
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { mockBrowser, resetMockState, getBadgeForTab } from './mocks/browser.js';
+import { isAutoAllowRequestType, resolveAutoAllowState } from '../src/lib/auto-allow-workflow.js';
 import { createBlockedMonitorState } from '../src/lib/blocked-monitor-state.js';
 import {
   buildBlockedScreenRedirectUrl,
@@ -28,7 +29,6 @@ const BLOCKING_ERRORS = [
 ];
 
 const IGNORED_ERRORS = ['NS_BINDING_ABORTED', 'NS_ERROR_ABORT'];
-const AUTO_ALLOW_REQUEST_TYPES = new Set(['xmlhttprequest', 'fetch']);
 const BLOCKED_SCREEN_ERRORS = new Set([
   'NS_ERROR_UNKNOWN_HOST',
   'NS_ERROR_PROXY_CONNECTION_REFUSED',
@@ -39,14 +39,6 @@ interface MockOnErrorOccurredDetails {
   error: string;
   url: string;
 }
-
-type LocalDomainStatusState =
-  | 'detected'
-  | 'pending'
-  | 'autoApproved'
-  | 'duplicate'
-  | 'localUpdateError'
-  | 'apiError';
 
 /**
  * Map native host snake_case result to popup camelCase result
@@ -74,11 +66,6 @@ function isSupportedNativeCheckAction(action: string): boolean {
 
 function isSupportedNativeAvailabilityAction(action: string): boolean {
   return action === 'isNativeAvailable' || action === 'checkNative';
-}
-
-function isAutoAllowRequestType(type?: string): boolean {
-  if (!type) return false;
-  return AUTO_ALLOW_REQUEST_TYPES.has(type);
 }
 
 function isExtensionUrl(url: string): boolean {
@@ -115,26 +102,6 @@ async function handleForcedBlockedPathRefresh(
       error: error instanceof Error ? error.message : String(error),
     };
   }
-}
-
-function resolveAutoStatus(payload: {
-  apiSuccess: boolean;
-  duplicate: boolean;
-  localUpdateSuccess: boolean;
-}): LocalDomainStatusState {
-  if (!payload.apiSuccess) {
-    return 'apiError';
-  }
-
-  if (!payload.localUpdateSuccess) {
-    return 'localUpdateError';
-  }
-
-  if (payload.duplicate) {
-    return 'duplicate';
-  }
-
-  return 'autoApproved';
 }
 
 /**
@@ -858,7 +825,7 @@ void describe('Auto-Allow Flow', () => {
   });
 
   void test('should resolve autoApproved when api and local update succeed', () => {
-    const status = resolveAutoStatus({
+    const status = resolveAutoAllowState({
       apiSuccess: true,
       duplicate: false,
       localUpdateSuccess: true,
@@ -867,7 +834,7 @@ void describe('Auto-Allow Flow', () => {
   });
 
   void test('should resolve duplicate when rule already exists', () => {
-    const status = resolveAutoStatus({
+    const status = resolveAutoAllowState({
       apiSuccess: true,
       duplicate: true,
       localUpdateSuccess: true,
@@ -876,7 +843,7 @@ void describe('Auto-Allow Flow', () => {
   });
 
   void test('should resolve localUpdateError when update script fails', () => {
-    const status = resolveAutoStatus({
+    const status = resolveAutoAllowState({
       apiSuccess: true,
       duplicate: false,
       localUpdateSuccess: false,
@@ -885,7 +852,7 @@ void describe('Auto-Allow Flow', () => {
   });
 
   void test('should resolve apiError when API request fails', () => {
-    const status = resolveAutoStatus({
+    const status = resolveAutoAllowState({
       apiSuccess: false,
       duplicate: false,
       localUpdateSuccess: false,

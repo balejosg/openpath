@@ -1,0 +1,202 @@
+import assert from 'node:assert/strict';
+import { describe, test } from 'node:test';
+
+import {
+  createAutoAllowWorkflow,
+  isAutoAllowRequestType,
+  resolveAutoAllowState,
+} from '../src/lib/auto-allow-workflow.js';
+
+function createWorkflowFixture(
+  overrides: Partial<Parameters<typeof createAutoAllowWorkflow>[0]> = {}
+): {
+  fixture: {
+    inFlightAutoRequests: Set<string>;
+    refreshBlockedPathRulesCalls: number;
+    requestLocalWhitelistUpdateCalls: number;
+    sentMessages: unknown[];
+  };
+  statuses: Map<string, DomainStatus>;
+  workflow: ReturnType<typeof createAutoAllowWorkflow>;
+} {
+  const statuses = new Map<string, DomainStatus>();
+  const now = 1234567890;
+
+  const fixture = {
+    inFlightAutoRequests: new Set<string>(),
+    refreshBlockedPathRulesCalls: 0,
+    requestLocalWhitelistUpdateCalls: 0,
+    sentMessages: [] as unknown[],
+  };
+
+  const workflow = createAutoAllowWorkflow({
+    getErrorMessage: (error) => (error instanceof Error ? error.message : String(error)),
+    getRequestApiEndpoints: (config) =>
+      [config.requestApiUrl, ...config.fallbackApiUrls].filter((url) => url.length > 0),
+    getStoredDomainStatus: (_tabId, hostname) => statuses.get(hostname),
+    inFlightAutoRequests: fixture.inFlightAutoRequests,
+    loadRequestConfig: () =>
+      Promise.resolve({
+        enableRequests: true,
+        fallbackApiUrls: [],
+        requestApiUrl: 'https://api.example',
+        requestTimeout: 1000,
+      }),
+    now: () => now,
+    refreshBlockedPathRules: () => {
+      fixture.refreshBlockedPathRulesCalls += 1;
+      return Promise.resolve(true);
+    },
+    requestLocalWhitelistUpdate: () => {
+      fixture.requestLocalWhitelistUpdateCalls += 1;
+      return Promise.resolve(true);
+    },
+    sendNativeMessage: (message) => {
+      fixture.sentMessages.push(message);
+      if ((message as { action?: string }).action === 'get-hostname') {
+        return Promise.resolve({ success: true, hostname: 'lab-pc-01' });
+      }
+
+      return Promise.resolve({ success: true, token: 'machine-token' });
+    },
+    setDomainStatus: (_tabId, hostname, status) => {
+      statuses.set(hostname, status);
+    },
+    ...overrides,
+  });
+
+  return {
+    fixture,
+    statuses,
+    workflow,
+  };
+}
+
+await describe('auto allow workflow', async () => {
+  await test('detects request types eligible for auto-allow', () => {
+    assert.equal(isAutoAllowRequestType('xmlhttprequest'), true);
+    assert.equal(isAutoAllowRequestType('fetch'), true);
+    assert.equal(isAutoAllowRequestType('script'), false);
+  });
+
+  await test('resolves final states for auto-allow outcomes', () => {
+    assert.equal(
+      resolveAutoAllowState({
+        apiSuccess: true,
+        duplicate: false,
+        localUpdateSuccess: true,
+      }),
+      'autoApproved'
+    );
+    assert.equal(
+      resolveAutoAllowState({
+        apiSuccess: true,
+        duplicate: true,
+        localUpdateSuccess: true,
+      }),
+      'duplicate'
+    );
+    assert.equal(
+      resolveAutoAllowState({
+        apiSuccess: true,
+        duplicate: false,
+        localUpdateSuccess: false,
+      }),
+      'localUpdateError'
+    );
+  });
+
+  await test('marks a domain autoApproved after API and local update succeed', async () => {
+    const { fixture, statuses, workflow } = createWorkflowFixture({
+      fetchImpl: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ success: true, status: 'approved' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        ),
+    });
+
+    await workflow.autoAllowBlockedDomain(5, 'example.com', 'portal.school', 'xmlhttprequest');
+
+    assert.deepEqual(statuses.get('example.com'), {
+      message: 'Auto-aprobado y actualizado',
+      requestType: 'xmlhttprequest',
+      state: 'autoApproved',
+      updatedAt: 1234567890,
+    });
+    assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
+    assert.equal(fixture.refreshBlockedPathRulesCalls, 1);
+  });
+
+  await test('marks duplicate when the API reports an existing rule', async () => {
+    const { statuses, workflow } = createWorkflowFixture({
+      fetchImpl: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ success: true, status: 'duplicate' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        ),
+    });
+
+    await workflow.autoAllowBlockedDomain(5, 'example.com', null, 'fetch');
+
+    assert.equal(statuses.get('example.com')?.state, 'duplicate');
+    assert.equal(statuses.get('example.com')?.message, 'Regla ya existente');
+  });
+
+  await test('marks localUpdateError when the local refresh fails after API success', async () => {
+    const { statuses, workflow } = createWorkflowFixture({
+      fetchImpl: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ success: true, status: 'approved' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        ),
+      requestLocalWhitelistUpdate: () => Promise.resolve(false),
+    });
+
+    await workflow.autoAllowBlockedDomain(5, 'example.com', null, 'fetch');
+
+    assert.equal(statuses.get('example.com')?.state, 'localUpdateError');
+    assert.equal(statuses.get('example.com')?.message, 'Regla creada; fallo actualizacion local');
+  });
+
+  await test('marks apiError when the API request fails', async () => {
+    const { statuses, workflow } = createWorkflowFixture({
+      fetchImpl: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ success: false, error: 'bad request' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        ),
+    });
+
+    await workflow.autoAllowBlockedDomain(5, 'example.com', null, 'fetch');
+
+    assert.equal(statuses.get('example.com')?.state, 'apiError');
+    assert.equal(statuses.get('example.com')?.message, 'bad request');
+  });
+
+  await test('retries local updates preserving the prior request type', async () => {
+    const { statuses, workflow } = createWorkflowFixture();
+    statuses.set('example.com', {
+      state: 'localUpdateError',
+      updatedAt: 111,
+      requestType: 'fetch',
+    });
+
+    const result = await workflow.retryLocalUpdate(5, 'example.com');
+
+    assert.deepEqual(result, { success: true });
+    assert.deepEqual(statuses.get('example.com'), {
+      message: 'Actualizacion local completada',
+      requestType: 'fetch',
+      state: 'autoApproved',
+      updatedAt: 1234567890,
+    });
+  });
+});
