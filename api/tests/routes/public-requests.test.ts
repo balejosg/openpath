@@ -5,7 +5,7 @@ import { sql } from 'drizzle-orm';
 import { getRows } from '../../src/lib/utils.js';
 
 const { startHttpTestHarness } = await import('../http-test-harness.js');
-const { config, loadConfig } = await import('../../src/config.js');
+const { config, loadConfig, setConfigForTests } = await import('../../src/config.js');
 const { db } = await import('../../src/db/index.js');
 
 let apiUrl: string;
@@ -220,13 +220,14 @@ await describe('public-requests routes', async () => {
   });
 
   await test('POST /api/requests/auto can auto-approve immediately when the instance opts in explicitly', async () => {
-    const originalAutoApprove = config.autoApproveMachineRequests;
-    Object.defineProperty(config, 'autoApproveMachineRequests', {
-      value: true,
-      writable: true,
-      configurable: true,
-      enumerable: true,
-    });
+    const originalConfig = config;
+    setConfigForTests(
+      loadConfig({
+        ...process.env,
+        NODE_ENV: 'test',
+        AUTO_APPROVE_MACHINE_REQUESTS: 'true',
+      })
+    );
 
     try {
       const suffix = `${Date.now().toString()}-auto-approved`;
@@ -306,12 +307,7 @@ await describe('public-requests routes', async () => {
         0
       );
     } finally {
-      Object.defineProperty(config, 'autoApproveMachineRequests', {
-        value: originalAutoApprove,
-        writable: true,
-        configurable: true,
-        enumerable: true,
-      });
+      setConfigForTests(originalConfig);
     }
   });
 });
