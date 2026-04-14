@@ -89,6 +89,13 @@ cd api
 NODE_ENV=test PORT=3004 node --import tsx --test --test-concurrency=1 --test-force-exit tests/security-headers.test.ts tests/security-authorization.test.ts tests/security-auth.test.ts tests/security-input-validation.test.ts tests/security-privacy-rate-limits.test.ts
 ```
 
+Setup split example:
+
+```bash
+cd api
+NODE_ENV=test PORT=3005 node --import tsx --test --test-concurrency=1 --test-force-exit tests/setup-status.test.ts tests/setup-first-admin.test.ts tests/setup-token-validation.test.ts tests/setup-auth-guards.test.ts tests/setup.test.ts
+```
+
 SSE split example:
 
 ```bash
