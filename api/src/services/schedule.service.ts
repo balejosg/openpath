@@ -4,10 +4,10 @@
 
 import * as scheduleStorage from '../lib/schedule-storage.js';
 import * as auth from '../lib/auth.js';
-import { emitClassroomChanged } from '../lib/rule-events.js';
 import type { Schedule, OneOffSchedule, JWTPayload } from '../types/index.js';
 import { getErrorMessage } from '@openpath/shared';
 import { ensureUserCanAccessClassroom } from './classroom.service.js';
+import DomainEventsService from './domain-events.service.js';
 
 // =============================================================================
 // Types
@@ -189,7 +189,7 @@ export async function createSchedule(
       endTime: input.endTime,
     });
 
-    emitClassroomChanged(input.classroomId);
+    DomainEventsService.publishClassroomChanged(input.classroomId);
     return { ok: true, data: mapToWeeklySchedule(schedule) };
   } catch (error: unknown) {
     const message = getErrorMessage(error);
@@ -249,7 +249,7 @@ export async function createOneOffSchedule(
       endAt,
     });
 
-    emitClassroomChanged(input.classroomId);
+    DomainEventsService.publishClassroomChanged(input.classroomId);
     return { ok: true, data: mapToOneOffSchedule(schedule) };
   } catch (error: unknown) {
     const message = getErrorMessage(error);
@@ -319,7 +319,7 @@ export async function updateSchedule(
       };
     }
 
-    emitClassroomChanged(schedule.classroomId);
+    DomainEventsService.publishClassroomChanged(schedule.classroomId);
     return { ok: true, data: mapToWeeklySchedule(updated) };
   } catch (error: unknown) {
     const message = getErrorMessage(error);
@@ -410,7 +410,7 @@ export async function updateOneOffSchedule(
       };
     }
 
-    emitClassroomChanged(schedule.classroomId);
+    DomainEventsService.publishClassroomChanged(schedule.classroomId);
     return { ok: true, data: mapToOneOffSchedule(updated) };
   } catch (error: unknown) {
     const message = getErrorMessage(error);
@@ -453,7 +453,7 @@ export async function deleteSchedule(
 
   await scheduleStorage.deleteSchedule(id);
 
-  emitClassroomChanged(schedule.classroomId);
+  DomainEventsService.publishClassroomChanged(schedule.classroomId);
   return { ok: true, data: { success: true } };
 }
 

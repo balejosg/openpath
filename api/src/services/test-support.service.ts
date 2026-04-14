@@ -1,6 +1,6 @@
 import * as classroomStorage from '../lib/classroom-storage.js';
-import { runScheduleBoundaryTickOnce } from '../lib/rule-events.js';
 import { config } from '../config.js';
+import DomainEventsService from './domain-events.service.js';
 
 export interface MachineContextSnapshot {
   classroom: {
@@ -67,7 +67,7 @@ export function setAutoApproveMachineRequests(enabled: boolean): { enabled: bool
 }
 
 export async function tickScheduleBoundaries(at: Date): Promise<{ at: string }> {
-  await runScheduleBoundaryTickOnce(at);
+  await DomainEventsService.tickScheduleBoundaryEvents(at);
   return { at: at.toISOString() };
 }
 

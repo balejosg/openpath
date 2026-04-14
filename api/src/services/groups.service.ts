@@ -21,7 +21,7 @@ import type {
   ListRulesGroupedOptions,
 } from '../lib/groups-storage.js';
 import { validateRuleValue, cleanRuleValue, sanitizeSlug } from '@openpath/shared';
-import { emitAllWhitelistsChanged, emitWhitelistChanged } from '../lib/rule-events.js';
+import DomainEventsService from './domain-events.service.js';
 
 // =============================================================================
 // Types
@@ -174,7 +174,7 @@ export async function updateGroup(input: UpdateGroupInput): Promise<GroupsResult
 
   // Notify SSE clients if enabled state changed
   if (existing.enabled !== input.enabled) {
-    emitWhitelistChanged(input.id);
+    DomainEventsService.publishWhitelistChanged(input.id);
   }
 
   return { ok: true, data: updated };
@@ -193,7 +193,7 @@ export async function deleteGroup(id: string): Promise<GroupsResult<{ deleted: b
 
   // Notify SSE clients that this group's whitelist is gone
   if (deleted) {
-    emitWhitelistChanged(id);
+    DomainEventsService.publishWhitelistChanged(id);
   }
 
   return { ok: true, data: { deleted } };
@@ -259,7 +259,7 @@ export async function cloneGroup(
       return createdGroupId;
     });
 
-    emitWhitelistChanged(id);
+    DomainEventsService.publishWhitelistChanged(id);
 
     return { ok: true, data: { id, name } };
   } catch (err) {
@@ -387,7 +387,7 @@ export async function createRule(input: CreateRuleInput): Promise<GroupsResult<{
     };
   }
 
-  emitWhitelistChanged(input.groupId);
+  DomainEventsService.publishWhitelistChanged(input.groupId);
   return { ok: true, data: { id: result.id } };
 }
 
@@ -408,7 +408,7 @@ export async function deleteRule(
   const deleted = await withTransaction(async (tx) => groupsStorage.deleteRule(id, tx));
 
   if (deleted && ruleGroupId) {
-    emitWhitelistChanged(ruleGroupId);
+    DomainEventsService.publishWhitelistChanged(ruleGroupId);
   }
 
   return { ok: true, data: { deleted } };
@@ -434,7 +434,7 @@ export async function bulkDeleteRules(
   if (deleted > 0) {
     const affectedGroups = new Set(rules.map((r) => r.groupId));
     for (const gid of affectedGroups) {
-      emitWhitelistChanged(gid);
+      DomainEventsService.publishWhitelistChanged(gid);
     }
   }
 
@@ -503,7 +503,7 @@ export async function updateRule(input: UpdateRuleInput): Promise<GroupsResult<R
   }
 
   if (didChangeExport) {
-    emitWhitelistChanged(input.groupId);
+    DomainEventsService.publishWhitelistChanged(input.groupId);
   }
   return { ok: true, data: updated };
 }
@@ -529,7 +529,7 @@ export async function bulkCreateRules(
   );
 
   if (count > 0) {
-    emitWhitelistChanged(input.groupId);
+    DomainEventsService.publishWhitelistChanged(input.groupId);
   }
 
   return { ok: true, data: { count } };
@@ -554,7 +554,7 @@ export async function getSystemStatus(): Promise<SystemStatus> {
  */
 export async function toggleSystemStatus(enable: boolean): Promise<SystemStatus> {
   const result = await groupsStorage.toggleSystemStatus(enable);
-  emitAllWhitelistsChanged();
+  DomainEventsService.publishAllWhitelistsChanged();
   return result;
 }
 

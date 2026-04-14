@@ -5,9 +5,9 @@ import * as groupsStorage from '../lib/groups-storage.js';
 import { logger } from '../lib/logger.js';
 import { normalizeHostInput } from '../lib/machine-proof.js';
 import { parseWhitelistDomain } from '../lib/public-request-input.js';
-import { emitWhitelistChanged } from '../lib/rule-events.js';
 import { resolveMachineTokenHostnameAccess } from '../lib/server-request-auth.js';
 import type { CreateRuleResult } from '../lib/groups-storage.js';
+import DomainEventsService from './domain-events.service.js';
 import { createRequest, type RequestResult, type RequestServiceError } from './request.service.js';
 
 export type PublicRequestServiceError = RequestServiceError;
@@ -227,7 +227,7 @@ export async function handleAutoMachineRequest(
 
     const duplicate = created.error === 'Rule already exists';
     if (!duplicate) {
-      emitWhitelistChanged(context.data.groupId);
+      DomainEventsService.publishWhitelistChanged(context.data.groupId);
     }
 
     return {

@@ -9,7 +9,6 @@ import * as classroomStorage from '../lib/classroom-storage.js';
 import * as auth from '../lib/auth.js';
 import { config } from '../config.js';
 import { logger } from '../lib/logger.js';
-import { emitClassroomChanged } from '../lib/rule-events.js';
 import {
   MachineExemptionError,
   createMachineExemption,
@@ -31,6 +30,7 @@ import {
   type CurrentGroupSource as SharedCurrentGroupSource,
 } from '@openpath/shared/classroom-status';
 import type { JWTPayload } from '../types/index.js';
+import DomainEventsService from './domain-events.service.js';
 
 function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -462,7 +462,7 @@ export async function updateClassroom(
   }
 
   if (updates.defaultGroupId !== undefined) {
-    emitClassroomChanged(updated.id);
+    DomainEventsService.publishClassroomChanged(updated.id);
   }
 
   return { ok: true, data: updated };
@@ -493,7 +493,7 @@ export async function setClassroomActiveGroup(
     return { ok: false, error: { code: 'NOT_FOUND', message: 'Classroom not found' } };
   }
 
-  emitClassroomChanged(updated.id);
+  DomainEventsService.publishClassroomChanged(updated.id);
 
   const result = await getClassroom(input.id, user);
   if (!result.ok) {
@@ -526,7 +526,7 @@ export async function createExemptionForClassroom(
       createdBy: input.createdBy,
     });
 
-    emitClassroomChanged(input.classroomId);
+    DomainEventsService.publishClassroomChanged(input.classroomId);
 
     return {
       ok: true,
@@ -571,7 +571,7 @@ export async function deleteExemptionForClassroom(
     return { ok: false, error: { code: 'NOT_FOUND', message: 'Exemption not found' } };
   }
 
-  emitClassroomChanged(deleted.classroomId);
+  DomainEventsService.publishClassroomChanged(deleted.classroomId);
   return { ok: true, data: { success: true } };
 }
 

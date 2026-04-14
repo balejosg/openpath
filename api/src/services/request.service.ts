@@ -8,12 +8,12 @@ import * as push from '../lib/push.js';
 import * as auth from '../lib/auth.js';
 import { withTransaction } from '../db/index.js';
 import { logger } from '../lib/logger.js';
-import { emitWhitelistChanged } from '../lib/rule-events.js';
 import type { JWTPayload } from '../lib/auth.js';
 import type { CreateRequestData } from '../types/storage.js';
 import type { RequestStats } from '../types/storage.js';
 import type { DomainRequest, RequestStatus } from '../types/index.js';
 import { getErrorMessage } from '@openpath/shared';
+import DomainEventsService from './domain-events.service.js';
 
 interface ResolvedGroupTarget {
   id: string;
@@ -199,7 +199,7 @@ export async function approveRequest(
     });
 
     if (approval.createdRule) {
-      emitWhitelistChanged(resolvedTarget.id);
+      DomainEventsService.publishWhitelistChanged(resolvedTarget.id);
     }
 
     if (!approval.updated) {
