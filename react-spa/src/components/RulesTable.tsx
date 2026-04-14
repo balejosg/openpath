@@ -20,6 +20,7 @@ import { getRuleTypeBadge } from '../lib/ruleDetection';
 import type { Rule, RuleType } from '../lib/rules';
 import { useRuleEditor } from '../hooks/useRuleEditor';
 import { useRuleTableSort } from '../hooks/useRuleTableSort';
+import type { SortField } from '../hooks/useRuleTableSort';
 
 export type { Rule, RuleType };
 export type { SortConfig, SortDirection, SortField } from '../hooks/useRuleTableSort';
@@ -80,10 +81,12 @@ export const RulesTable: React.FC<RulesTableProps> = ({
 
   // Render sort indicator
   const renderSortIcon = (field: SortField) => {
-    if (sortConfig?.field !== field) {
+    const activeSort = sortConfig?.field === field ? sortConfig : null;
+
+    if (!activeSort) {
       return <ArrowUpDown size={14} className="text-slate-300" />;
     }
-    return sortConfig.direction === 'asc' ? (
+    return activeSort.direction === 'asc' ? (
       <ArrowUp size={14} className="text-blue-600" />
     ) : (
       <ArrowDown size={14} className="text-blue-600" />
