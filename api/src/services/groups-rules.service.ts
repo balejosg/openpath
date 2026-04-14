@@ -8,7 +8,7 @@ import type {
   Rule,
   RuleType,
 } from '../lib/groups-storage.js';
-import { validateRuleValue, cleanRuleValue } from '@openpath/shared';
+import { validateRuleValue, cleanRuleValue } from '@openpath/shared/rules-validation';
 import DomainEventsService from './domain-events.service.js';
 import type {
   BulkCreateRulesInput,
@@ -119,9 +119,25 @@ export async function createRule(
     return group;
   }
 
-  const result = await deps.withTransaction(async (tx) =>
-    deps.createRule(input.groupId, input.type, cleanedValue, input.comment ?? null, 'manual', tx)
-  );
+  const dispatcher = DomainEventsService.createDispatcher({
+    publishWhitelistChanged: deps.publishWhitelistChanged,
+  });
+  const result = await DomainEventsService.withQueuedEvents(async (events) => {
+    return deps.withTransaction(async (tx) => {
+      const created = await deps.createRule(
+        input.groupId,
+        input.type,
+        cleanedValue,
+        input.comment ?? null,
+        'manual',
+        tx
+      );
+      if (created.success && created.id) {
+        events.publishWhitelistChanged(input.groupId);
+      }
+      return created;
+    });
+  }, dispatcher);
 
   if (!result.success) {
     return {
@@ -137,7 +153,6 @@ export async function createRule(
     };
   }
 
-  deps.publishWhitelistChanged(input.groupId);
   return { ok: true, data: { id: result.id } };
 }
 
@@ -155,11 +170,18 @@ export async function deleteRule(
     ruleGroupId = rule?.groupId;
   }
 
-  const deleted = await deps.withTransaction(async (tx) => deps.deleteRule(id, tx));
-
-  if (deleted && ruleGroupId) {
-    deps.publishWhitelistChanged(ruleGroupId);
-  }
+  const dispatcher = DomainEventsService.createDispatcher({
+    publishWhitelistChanged: deps.publishWhitelistChanged,
+  });
+  const deleted = await DomainEventsService.withQueuedEvents(async (events) => {
+    return deps.withTransaction(async (tx) => {
+      const wasDeleted = await deps.deleteRule(id, tx);
+      if (wasDeleted && ruleGroupId) {
+        events.publishWhitelistChanged(ruleGroupId);
+      }
+      return wasDeleted;
+    });
+  }, dispatcher);
 
   return { ok: true, data: { deleted } };
 }
@@ -177,14 +199,23 @@ export async function bulkDeleteRules(
   }
 
   const rules = options?.rules ?? (await deps.getRulesByIds(ids));
-  const deleted = await deps.withTransaction(async (tx) => deps.bulkDeleteRules(ids, tx));
+  const dispatcher = DomainEventsService.createDispatcher({
+    publishWhitelistChanged: deps.publishWhitelistChanged,
+  });
+  const deleted = await DomainEventsService.withQueuedEvents(async (events) => {
+    return deps.withTransaction(async (tx) => {
+      const deletedCount = await deps.bulkDeleteRules(ids, tx);
 
-  if (deleted > 0) {
-    const affectedGroups = new Set(rules.map((rule) => rule.groupId));
-    for (const groupId of affectedGroups) {
-      deps.publishWhitelistChanged(groupId);
-    }
-  }
+      if (deletedCount > 0) {
+        const affectedGroups = new Set(rules.map((rule) => rule.groupId));
+        for (const groupId of affectedGroups) {
+          events.publishWhitelistChanged(groupId);
+        }
+      }
+
+      return deletedCount;
+    });
+  }, dispatcher);
 
   return { ok: true, data: { deleted, rules } };
 }
@@ -227,26 +258,30 @@ export async function updateRule(input: UpdateRuleInput): Promise<GroupsResult<R
     }
   }
 
-  const updated = await withTransaction(async (tx) =>
-    groupsStorage.updateRule(
-      {
-        id: input.id,
-        value: cleanedValue,
-        comment: input.comment,
-      },
-      tx
-    )
-  );
+  const updated = await DomainEventsService.withQueuedEvents(async (events) => {
+    return withTransaction(async (tx) => {
+      const result = await groupsStorage.updateRule(
+        {
+          id: input.id,
+          value: cleanedValue,
+          comment: input.comment,
+        },
+        tx
+      );
+
+      if (result && didChangeExport) {
+        events.publishWhitelistChanged(input.groupId);
+      }
+
+      return result;
+    });
+  });
 
   if (!updated) {
     return {
       ok: false,
       error: { code: 'CONFLICT', message: 'A rule with this value already exists' },
     };
-  }
-
-  if (didChangeExport) {
-    DomainEventsService.publishWhitelistChanged(input.groupId);
   }
 
   return { ok: true, data: updated };
@@ -263,13 +298,23 @@ export async function bulkCreateRules(
   const preservePath = input.type === 'blocked_path';
   const cleanedValues = input.values.map((value) => cleanRuleValue(value, preservePath));
 
-  const count = await withTransaction(async (tx) =>
-    groupsStorage.bulkCreateRules(input.groupId, input.type, cleanedValues, 'manual', tx)
-  );
+  const count = await DomainEventsService.withQueuedEvents(async (events) => {
+    return withTransaction(async (tx) => {
+      const createdCount = await groupsStorage.bulkCreateRules(
+        input.groupId,
+        input.type,
+        cleanedValues,
+        'manual',
+        tx
+      );
 
-  if (count > 0) {
-    DomainEventsService.publishWhitelistChanged(input.groupId);
-  }
+      if (createdCount > 0) {
+        events.publishWhitelistChanged(input.groupId);
+      }
+
+      return createdCount;
+    });
+  });
 
   return { ok: true, data: { count } };
 }

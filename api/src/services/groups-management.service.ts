@@ -1,8 +1,13 @@
 import * as groupsStorage from '../lib/groups-storage.js';
 import { withTransaction } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
-import type { GroupWithCounts, GroupStats, SystemStatus } from '../lib/groups-storage.js';
-import { sanitizeSlug } from '@openpath/shared';
+import type {
+  GroupVisibility,
+  GroupWithCounts,
+  GroupStats,
+  SystemStatus,
+} from '../lib/groups-storage.js';
+import { sanitizeSlug } from '@openpath/shared/slug';
 import DomainEventsService from './domain-events.service.js';
 import type {
   CloneGroupInput,
@@ -92,10 +97,23 @@ export async function createGroup(
   }
 
   try {
-    const id = await deps.createGroup(safeName, input.displayName, {
-      ...(input.visibility ? { visibility: input.visibility } : {}),
-      ...(input.ownerUserId !== undefined ? { ownerUserId: input.ownerUserId } : {}),
-    });
+    const rawVisibility: unknown = input.visibility;
+    const visibility =
+      rawVisibility === 'private' || rawVisibility === 'instance_public'
+        ? rawVisibility
+        : undefined;
+    const createOptions: {
+      ownerUserId?: string | null;
+      visibility?: GroupVisibility;
+    } = {};
+    if (visibility !== undefined) {
+      createOptions.visibility = visibility;
+    }
+    if (input.ownerUserId !== undefined) {
+      createOptions.ownerUserId = input.ownerUserId;
+    }
+
+    const id = await deps.createGroup(safeName, input.displayName, createOptions);
     return { ok: true, data: { id, name: safeName } };
   } catch (error) {
     if (error instanceof Error && error.message === 'UNIQUE_CONSTRAINT_VIOLATION') {
@@ -181,23 +199,28 @@ export async function cloneGroup(
   const name = await findAvailableGroupName(baseName, deps);
 
   try {
-    const id = await deps.withTransaction(async (tx) => {
-      const createdGroupId = await deps.createGroup(
-        name,
-        input.displayName,
-        {
-          visibility: 'private',
-          ownerUserId: input.ownerUserId,
-        },
-        tx
-      );
-
-      await deps.copyRulesToGroup({ fromGroupId: source.id, toGroupId: createdGroupId }, tx);
-      await deps.touchGroupUpdatedAt(createdGroupId, tx);
-      return createdGroupId;
+    const dispatcher = DomainEventsService.createDispatcher({
+      publishWhitelistChanged: deps.publishWhitelistChanged,
     });
+    const id = await DomainEventsService.withQueuedEvents(async (events) => {
+      return deps.withTransaction(async (tx) => {
+        const createdGroupId = await deps.createGroup(
+          name,
+          input.displayName,
+          {
+            visibility: 'private',
+            ownerUserId: input.ownerUserId,
+          },
+          tx
+        );
 
-    deps.publishWhitelistChanged(id);
+        await deps.copyRulesToGroup({ fromGroupId: source.id, toGroupId: createdGroupId }, tx);
+        await deps.touchGroupUpdatedAt(createdGroupId, tx);
+        events.publishWhitelistChanged(createdGroupId);
+        return createdGroupId;
+      });
+    }, dispatcher);
+
     return { ok: true, data: { id, name } };
   } catch (error) {
     if (error instanceof Error && error.message === 'UNIQUE_CONSTRAINT_VIOLATION') {

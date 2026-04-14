@@ -8,7 +8,8 @@ import { parseWhitelistDomain } from '../lib/public-request-input.js';
 import { resolveMachineTokenHostnameAccess } from '../lib/server-request-auth.js';
 import type { CreateRuleResult } from '../lib/groups-storage.js';
 import DomainEventsService from './domain-events.service.js';
-import { createRequest, type RequestResult, type RequestServiceError } from './request.service.js';
+import { createRequest } from './request-command.service.js';
+import type { RequestResult, RequestServiceError } from './request-service-shared.js';
 
 export type PublicRequestServiceError = RequestServiceError;
 export type PublicRequestResult<T> = RequestResult<T>;
@@ -207,16 +208,24 @@ export async function handleAutoMachineRequest(
     : `Auto-approved via Firefox extension${reasonText ? ` - ${reasonText}` : ''}`;
 
   try {
-    const created: CreateRuleResult = await withTransaction(async (tx) =>
-      groupsStorage.createRule(
-        context.data.groupId,
-        'whitelist',
-        context.data.domain,
-        sourceComment,
-        'auto_extension',
-        tx
-      )
-    );
+    const created: CreateRuleResult = await DomainEventsService.withQueuedEvents(async (events) => {
+      return withTransaction(async (tx) => {
+        const result = await groupsStorage.createRule(
+          context.data.groupId,
+          'whitelist',
+          context.data.domain,
+          sourceComment,
+          'auto_extension',
+          tx
+        );
+
+        if (result.success) {
+          events.publishWhitelistChanged(context.data.groupId);
+        }
+
+        return result;
+      });
+    });
 
     if (!created.success && created.error !== 'Rule already exists') {
       return {
@@ -226,10 +235,6 @@ export async function handleAutoMachineRequest(
     }
 
     const duplicate = created.error === 'Rule already exists';
-    if (!duplicate) {
-      DomainEventsService.publishWhitelistChanged(context.data.groupId);
-    }
-
     return {
       ok: true,
       data: {
