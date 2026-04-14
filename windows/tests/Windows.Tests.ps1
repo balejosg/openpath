@@ -1914,7 +1914,7 @@ Describe "Watchdog Script" {
 Describe "Installer" {
     Context "ACL lockdown" {
         It "Sets restrictive file permissions during installation" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $scriptPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Staging.ps1"
             $content = Get-Content $scriptPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
@@ -1925,7 +1925,7 @@ Describe "Installer" {
         }
 
         It "Grants local users read access to staged browser extension artifacts" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $scriptPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Staging.ps1"
             $content = Get-Content $scriptPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
@@ -1937,7 +1937,7 @@ Describe "Installer" {
         }
 
         It "Stages Firefox release assets beneath the user-readable browser-extension ACL root" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $scriptPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Staging.ps1"
             $content = Get-Content $scriptPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
@@ -1948,7 +1948,7 @@ Describe "Installer" {
         }
 
         It "Stages Chromium managed rollout metadata beneath the user-readable browser-extension ACL root" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $scriptPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Staging.ps1"
             $content = Get-Content $scriptPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
@@ -1961,7 +1961,7 @@ Describe "Installer" {
         }
 
         It "Stages Windows native host assets beneath the user-readable Firefox native directory" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $scriptPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Staging.ps1"
             $content = Get-Content $scriptPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
@@ -2055,7 +2055,7 @@ Describe "Installer" {
 
     Context "Enrollment extraction" {
         It "Uses Enroll-Machine script for classroom registration" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $scriptPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Enrollment.ps1"
             $enrollScriptPath = Join-Path $PSScriptRoot ".." "scripts" "Enroll-Machine.ps1"
             $content = Get-Content $scriptPath -Raw
 
@@ -2070,7 +2070,7 @@ Describe "Installer" {
 
     Context "Enrollment argument forwarding" {
         It "Uses named parameter splatting for classroom registration" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $scriptPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Enrollment.ps1"
             $content = Get-Content $scriptPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
@@ -2124,15 +2124,15 @@ Describe "Installer" {
 
     Context "Operational script installation" {
         It "Copies OpenPath.ps1 and Rotate-Token.ps1 into install root" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $scriptPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Staging.ps1"
             $content = Get-Content $scriptPath -Raw
 
             $content.Contains("'OpenPath.ps1', 'Rotate-Token.ps1'") | Should -BeTrue
         }
 
         It "Stages Chromium unmanaged browser install guidance when store URLs are configured" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
-            $content = Get-Content $scriptPath -Raw
+            $guidanceHelperPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.ChromiumGuidance.ps1"
+            $content = Get-Content $guidanceHelperPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 '$OpenPathRoot\browser-extension\chromium-unmanaged',
@@ -2143,8 +2143,8 @@ Describe "Installer" {
         }
 
         It "Opens unmanaged Chromium store guidance only during interactive installs" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
-            $content = Get-Content $scriptPath -Raw
+            $guidanceHelperPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.ChromiumGuidance.ps1"
+            $content = Get-Content $guidanceHelperPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 'if (-not $Unattended)',

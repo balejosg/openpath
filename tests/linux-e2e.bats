@@ -380,21 +380,21 @@ EOF
 }
 
 @test "windows installer stages Firefox release extension artifacts when available" {
-    run grep -nF '$OpenPathRoot\browser-extension\firefox' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF '$OpenPathRoot\browser-extension\firefox' "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF '$OpenPathRoot\browser-extension\firefox-release' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF '$OpenPathRoot\browser-extension\firefox-release' "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
     [ "$status" -eq 0 ]
 }
 
 @test "windows installer stages Chromium managed rollout metadata when available" {
-    run grep -nF '$chromiumManagedCandidates = @(' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF '$chromiumManagedCandidates = @(' "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'firefox-extension\build\chromium-managed' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF 'firefox-extension\build\chromium-managed' "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF '$OpenPathRoot\browser-extension\chromium-managed' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF '$OpenPathRoot\browser-extension\chromium-managed' "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
     [ "$status" -eq 0 ]
 }
 
@@ -405,7 +405,7 @@ EOF
     run grep -nF '[string]$EdgeExtensionStoreUrl = ""' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF '$OpenPathRoot\browser-extension\chromium-unmanaged' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF '$OpenPathRoot\browser-extension\chromium-unmanaged' "$PROJECT_DIR/windows/lib/install/Installer.ChromiumGuidance.ps1"
     [ "$status" -eq 0 ]
 }
 
@@ -548,11 +548,11 @@ EOF
 }
 
 @test "windows installer explains Firefox Release requires a signed extension distribution" {
-    run grep -nF 'Firefox Release extension auto-install requires a signed XPI distribution (AMO, HTTPS URL, or staged signed artifact).' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF 'Firefox Release extension auto-install requires a signed XPI distribution (AMO, HTTPS URL, or staged signed artifact).' "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
     [ "$status" -eq 0 ]
 }
 
 @test "windows installer explains that Chrome and Edge extension rollout requires managed distribution" {
-    run grep -nF 'Chrome/Edge force-install is not available on unmanaged Windows; use store guidance, Firefox auto-install, or a managed CRX/update-manifest rollout.' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF 'Chrome/Edge force-install is not available on unmanaged Windows; use store guidance, Firefox auto-install, or a managed CRX/update-manifest rollout.' "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
     [ "$status" -eq 0 ]
 }

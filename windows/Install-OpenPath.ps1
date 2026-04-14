@@ -72,6 +72,8 @@ $installerHelperRoot = Join-Path $scriptDir 'lib\install'
 
 . (Join-Path $installerHelperRoot 'Installer.ChromiumGuidance.ps1')
 . (Join-Path $installerHelperRoot 'Installer.Dns.ps1')
+. (Join-Path $installerHelperRoot 'Installer.Staging.ps1')
+. (Join-Path $installerHelperRoot 'Installer.Enrollment.ps1')
 
 function Write-InstallerNotice {
     param(
@@ -138,83 +140,17 @@ if (-not (Test-Path "$scriptDir\lib\*.psm1")) {
     }
 }
 
-# Validate enrollment parameters
-if ($RegistrationToken -and $EnrollmentToken) {
-    Write-Host "ERROR: -RegistrationToken and -EnrollmentToken cannot be used together" -ForegroundColor Red
-    exit 1
-}
+$enrollmentContext = Resolve-OpenPathInstallerEnrollmentContext `
+    -ApiBaseUrl $apiBaseUrl `
+    -Classroom $Classroom `
+    -ClassroomId $ClassroomId `
+    -RegistrationToken $RegistrationToken `
+    -EnrollmentToken $EnrollmentToken `
+    -Unattended:$Unattended
 
-if ($ClassroomId -and -not $EnrollmentToken) {
-    Write-Host "ERROR: -ClassroomId requires -EnrollmentToken" -ForegroundColor Red
-    exit 1
-}
-
-if ((($Classroom -or $ClassroomId -or $RegistrationToken -or $EnrollmentToken) -and -not $apiBaseUrl)) {
-    Write-Host "ERROR: -ApiUrl is required for classroom enrollment parameters" -ForegroundColor Red
-    exit 1
-}
-
-$classroomModeRequested = [bool]$apiBaseUrl -and (
-    [bool]$Classroom -or
-    [bool]$ClassroomId -or
-    [bool]$RegistrationToken -or
-    [bool]$EnrollmentToken -or
-    [bool]$env:OPENPATH_TOKEN -or
-    [bool]$env:OPENPATH_ENROLLMENT_TOKEN
-)
-
-if ($classroomModeRequested) {
-    if (-not $EnrollmentToken -and -not $RegistrationToken -and $env:OPENPATH_ENROLLMENT_TOKEN) {
-        $EnrollmentToken = $env:OPENPATH_ENROLLMENT_TOKEN
-    }
-
-    if (-not $EnrollmentToken -and -not $RegistrationToken -and $env:OPENPATH_TOKEN) {
-        $RegistrationToken = $env:OPENPATH_TOKEN
-    }
-
-    if (-not $EnrollmentToken -and -not $RegistrationToken) {
-        if ($Unattended) {
-            Write-Host "ERROR: Classroom mode requires -EnrollmentToken or -RegistrationToken in unattended mode" -ForegroundColor Red
-            exit 1
-        }
-
-        if ($ClassroomId) {
-            $EnrollmentToken = Read-Host "Enter enrollment token"
-        }
-        else {
-            $RegistrationToken = Read-Host "Enter registration token"
-        }
-    }
-
-    if ($RegistrationToken -and -not $Classroom) {
-        Write-Host "ERROR: -Classroom is required when using -RegistrationToken" -ForegroundColor Red
-        exit 1
-    }
-
-    if ($RegistrationToken) {
-        Write-Host "Validating registration token..." -ForegroundColor Yellow
-        try {
-            $validateBody = @{ token = $RegistrationToken } | ConvertTo-Json
-            $validateResponse = Invoke-RestMethod -Uri "$apiBaseUrl/api/setup/validate-token" `
-                -Method Post -Body $validateBody -ContentType "application/json" -ErrorAction Stop
-
-            if (-not $validateResponse.valid) {
-                Write-Host "ERROR: Invalid registration token" -ForegroundColor Red
-                exit 1
-            }
-            Write-Host "  Registration token validated" -ForegroundColor Green
-        }
-        catch {
-            Write-Host "ERROR: Failed to validate registration token: $_" -ForegroundColor Red
-            exit 1
-        }
-    }
-}
-
-if ($RegistrationToken -and $EnrollmentToken) {
-    Write-Host "ERROR: Enrollment token and registration token cannot be combined" -ForegroundColor Red
-    exit 1
-}
+$classroomModeRequested = [bool]$enrollmentContext.ClassroomModeRequested
+$RegistrationToken = [string]$enrollmentContext.RegistrationToken
+$EnrollmentToken = [string]$enrollmentContext.EnrollmentToken
 
 if (-not $HealthApiSecret -and $env:OPENPATH_HEALTH_API_SECRET) {
     $HealthApiSecret = $env:OPENPATH_HEALTH_API_SECRET
@@ -318,213 +254,18 @@ else {
 
 # Step 1: Create directory structure
 Show-InstallerProgress -Step 1 -Total 7 -Status 'Creando estructura de directorios'
-
-$dirs = @(
-    "$OpenPathRoot\lib",
-    "$OpenPathRoot\scripts",
-    "$OpenPathRoot\data\logs",
-    "$OpenPathRoot\browser-extension\firefox",
-    "$OpenPathRoot\browser-extension\firefox-release",
-    "$OpenPathRoot\browser-extension\chromium-managed",
-    "$OpenPathRoot\browser-extension\chromium-unmanaged"
-)
-
-foreach ($dir in $dirs) {
-    if (-not (Test-Path $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    }
-}
-Write-InstallerVerbose "  Estructura creada en $OpenPathRoot"
-
-# Lock down permissions: only SYSTEM and Administrators
-Write-InstallerVerbose "  Aplicando permisos restrictivos..."
-try {
-    $acl = Get-Acl $OpenPathRoot
-    $acl.SetAccessRuleProtection($true, $false) # Disable inheritance, remove inherited rules
-    # Remove all existing rules
-    $acl.Access | ForEach-Object { $acl.RemoveAccessRule($_) } | Out-Null
-    # Grant SYSTEM full control
-    $systemRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-        "NT AUTHORITY\SYSTEM", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
-    $acl.AddAccessRule($systemRule)
-    # Grant Administrators full control
-    $adminRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-        "BUILTIN\Administrators", "FullControl", "ContainerInherit,ObjectInherit", "None", "Allow")
-    $acl.AddAccessRule($adminRule)
-    Set-Acl $OpenPathRoot $acl
-    Write-InstallerVerbose "  Permisos aplicados (solo SYSTEM y Administradores)"
-}
-catch {
-    Write-Host "  ADVERTENCIA: No se pudieron restringir permisos: $_" -ForegroundColor Yellow
-}
-
-$browserExtensionAclPath = "$OpenPathRoot\browser-extension"
-if (Test-Path $browserExtensionAclPath) {
-    try {
-        $browserExtensionAcl = Get-Acl $browserExtensionAclPath
-        $usersReadRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-            "BUILTIN\Users", "ReadAndExecute", "ContainerInherit,ObjectInherit", "None", "Allow")
-        $browserExtensionAcl.AddAccessRule($usersReadRule)
-        Set-Acl $browserExtensionAclPath $browserExtensionAcl
-        Write-InstallerVerbose "  Read access granted for browser extension artifacts"
-    }
-    catch {
-        Write-Host "  ADVERTENCIA: No se pudo habilitar lectura para browser-extension: $_" -ForegroundColor Yellow
-    }
-}
+Initialize-OpenPathInstallDirectories -OpenPathRoot $OpenPathRoot
 
 # Step 2: Copy modules and scripts
 Show-InstallerProgress -Step 2 -Total 7 -Status 'Copiando modulos y scripts'
-
-# Copy lib modules
-Get-ChildItem "$scriptDir\lib\*.psm1" -ErrorAction SilentlyContinue | 
-    Copy-Item -Destination "$OpenPathRoot\lib\" -Force
-
-$browserPolicySpecCandidates = @(
-    (Join-Path $scriptDir 'runtime\browser-policy-spec.json'),
-    [System.IO.Path]::GetFullPath((Join-Path $scriptDir '..\runtime\browser-policy-spec.json'))
-)
-
-foreach ($browserPolicySpecSource in $browserPolicySpecCandidates) {
-    if (Test-Path $browserPolicySpecSource) {
-        Copy-Item $browserPolicySpecSource -Destination "$OpenPathRoot\lib\browser-policy-spec.json" -Force
-        break
-    }
-}
-
-# Copy scripts
-Get-ChildItem "$scriptDir\scripts\*.ps1" -ErrorAction SilentlyContinue | 
-    Copy-Item -Destination "$OpenPathRoot\scripts\" -Force
-
-# Copy root operational scripts
-$rootScripts = @('OpenPath.ps1', 'Rotate-Token.ps1')
-foreach ($rootScript in $rootScripts) {
-    $sourcePath = Join-Path $scriptDir $rootScript
-    if (Test-Path $sourcePath) {
-        Copy-Item $sourcePath -Destination (Join-Path $OpenPathRoot $rootScript) -Force
-    }
-}
-
-# Stage browser extension assets when the installer has access to the source tree.
-$browserExtensionCandidates = @(
-    (Join-Path $scriptDir 'browser-extension\firefox'),
-    (Join-Path $scriptDir 'firefox-extension'),
-    (Join-Path (Split-Path $scriptDir -Parent) 'firefox-extension')
-)
-$browserExtensionSource = $browserExtensionCandidates |
-    Where-Object { Test-Path (Join-Path $_ 'manifest.json') } |
-    Select-Object -First 1
-
-if ($browserExtensionSource) {
-    $browserExtensionTarget = "$OpenPathRoot\browser-extension\firefox"
-    $requiredItems = @('manifest.json', 'dist', 'popup', 'icons', 'blocked')
-    $missingItems = @(
-        $requiredItems | Where-Object { -not (Test-Path (Join-Path $browserExtensionSource $_)) }
-    )
-
-    if ($missingItems.Count -eq 0) {
-        Remove-Item $browserExtensionTarget -Recurse -Force -ErrorAction SilentlyContinue
-        New-Item -ItemType Directory -Path $browserExtensionTarget -Force | Out-Null
-
-        foreach ($item in $requiredItems) {
-            Copy-Item (Join-Path $browserExtensionSource $item) -Destination $browserExtensionTarget -Recurse -Force
-        }
-
-        if (Test-Path (Join-Path $browserExtensionSource 'native')) {
-            Copy-Item (Join-Path $browserExtensionSource 'native') -Destination $browserExtensionTarget -Recurse -Force
-        }
-
-        Write-InstallerVerbose "  Firefox development extension assets staged in $OpenPathRoot\browser-extension\firefox"
-    }
-    else {
-        Write-Host "  ADVERTENCIA: Firefox development extension source incomplete ($($missingItems -join ', '))" -ForegroundColor Yellow
-    }
-}
-else {
-    Write-Host "  ADVERTENCIA: Firefox development extension source not found; local unsigned bundle staging skipped" -ForegroundColor Yellow
-}
-
-$firefoxNativeHostTarget = "$OpenPathRoot\browser-extension\firefox\native"
-$nativeHostSourceRoot = Join-Path $scriptDir 'scripts'
-$nativeHostArtifacts = @('OpenPath-NativeHost.ps1', 'OpenPath-NativeHost.cmd')
-$missingNativeHostArtifacts = @(
-    $nativeHostArtifacts | Where-Object { -not (Test-Path (Join-Path $nativeHostSourceRoot $_)) }
-)
-
-if ($missingNativeHostArtifacts.Count -eq 0) {
-    New-Item -ItemType Directory -Path $firefoxNativeHostTarget -Force | Out-Null
-    foreach ($nativeHostArtifact in $nativeHostArtifacts) {
-        Copy-Item (Join-Path $nativeHostSourceRoot $nativeHostArtifact) `
-            -Destination (Join-Path $firefoxNativeHostTarget $nativeHostArtifact) `
-            -Force
-    }
-
-    Write-InstallerVerbose "  Firefox native host assets staged in $OpenPathRoot\browser-extension\firefox\native"
-}
-else {
-    Write-Host "  ADVERTENCIA: Firefox native host artifacts missing ($($missingNativeHostArtifacts -join ', '))" -ForegroundColor Yellow
-}
-
-$firefoxReleaseCandidates = @(
-    (Join-Path $scriptDir 'browser-extension\firefox-release'),
-    (Join-Path $scriptDir 'firefox-extension\build\firefox-release'),
-    (Join-Path (Split-Path $scriptDir -Parent) 'firefox-extension\build\firefox-release')
-)
-$firefoxReleaseSource = $firefoxReleaseCandidates |
-    Where-Object { Test-Path (Join-Path $_ 'metadata.json') } |
-    Select-Object -First 1
-
-if ($firefoxReleaseSource) {
-    $firefoxReleaseTarget = "$OpenPathRoot\browser-extension\firefox-release"
-    Remove-Item $firefoxReleaseTarget -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory -Path $firefoxReleaseTarget -Force | Out-Null
-
-    Copy-Item (Join-Path $firefoxReleaseSource 'metadata.json') -Destination (Join-Path $firefoxReleaseTarget 'metadata.json') -Force
-
-    $firefoxReleaseXpiSource = Join-Path $firefoxReleaseSource 'openpath-firefox-extension.xpi'
-    if (Test-Path $firefoxReleaseXpiSource) {
-        Copy-Item $firefoxReleaseXpiSource -Destination (Join-Path $firefoxReleaseTarget 'openpath-firefox-extension.xpi') -Force
-    }
-
-    Write-InstallerVerbose "  Signed Firefox Release artifacts staged in $OpenPathRoot\browser-extension\firefox-release"
-}
-elseif (-not ($FirefoxExtensionId -and $FirefoxExtensionInstallUrl)) {
-    Write-Host "  ADVERTENCIA: Firefox Release extension auto-install requires a signed XPI distribution (AMO, HTTPS URL, or staged signed artifact)." -ForegroundColor Yellow
-    Write-Host "  Firefox browser policies will be applied without extension auto-install until a signed distribution is configured." -ForegroundColor Yellow
-}
-
-$chromiumManagedCandidates = @(
-    (Join-Path $scriptDir 'browser-extension\chromium-managed'),
-    (Join-Path $scriptDir 'firefox-extension\build\chromium-managed'),
-    (Join-Path (Split-Path $scriptDir -Parent) 'firefox-extension\build\chromium-managed')
-)
-$chromiumManagedSource = $chromiumManagedCandidates |
-    Where-Object { Test-Path (Join-Path $_ 'metadata.json') } |
-    Select-Object -First 1
-
-if ($chromiumManagedSource) {
-    $chromiumManagedTarget = "$OpenPathRoot\browser-extension\chromium-managed"
-    Remove-Item $chromiumManagedTarget -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory -Path $chromiumManagedTarget -Force | Out-Null
-    Copy-Item (Join-Path $chromiumManagedSource 'metadata.json') -Destination (Join-Path $chromiumManagedTarget 'metadata.json') -Force
-    Write-InstallerVerbose "  Chromium managed rollout metadata staged in $OpenPathRoot\browser-extension\chromium-managed"
-}
-else {
-    Write-Host "  ADVERTENCIA: Chromium managed rollout metadata not found in browser-extension\chromium-managed or firefox-extension\build\chromium-managed; Edge/Chrome managed extension install skipped" -ForegroundColor Yellow
-}
-
-if (-not $chromiumManagedSource) {
-    if (-not (Install-OpenPathChromiumUnmanagedGuidance `
-        -ChromeStoreUrl $ChromeExtensionStoreUrl `
-        -EdgeStoreUrl $EdgeExtensionStoreUrl `
-        -Unattended:$Unattended)) {
-        Write-Host "  ADVERTENCIA: No Chromium store URLs configured; non-managed Chrome/Edge installs require user-initiated store install." -ForegroundColor Yellow
-    }
-}
-
-Write-Host "  Chrome/Edge force-install is not available on unmanaged Windows; use store guidance, Firefox auto-install, or a managed CRX/update-manifest rollout." -ForegroundColor Yellow
-
-Write-InstallerVerbose "  Modulos copiados"
+Copy-OpenPathInstallerRuntime `
+    -OpenPathRoot $OpenPathRoot `
+    -ScriptDir $scriptDir `
+    -Unattended:$Unattended `
+    -ChromeExtensionStoreUrl $ChromeExtensionStoreUrl `
+    -EdgeExtensionStoreUrl $EdgeExtensionStoreUrl `
+    -FirefoxExtensionId $FirefoxExtensionId `
+    -FirefoxExtensionInstallUrl $FirefoxExtensionInstallUrl
 
 # Import modules
 Import-Module "$OpenPathRoot\lib\Common.psm1" -Force
@@ -661,57 +402,19 @@ Write-InstallerVerbose "  Tareas registradas"
 # Register machine in classroom mode
 $machineRegistered = "NOT_REQUESTED"
 if ($classroomModeRequested) {
-    Write-InstallerVerbose "Registering machine in classroom..."
+    $enrollmentResult = Invoke-OpenPathInstallerEnrollment `
+        -OpenPathRoot $OpenPathRoot `
+        -ApiBaseUrl $apiBaseUrl `
+        -Classroom $Classroom `
+        -ClassroomId $ClassroomId `
+        -EnrollmentToken $EnrollmentToken `
+        -RegistrationToken $RegistrationToken `
+        -MachineName $MachineName `
+        -Unattended:$Unattended
 
-    $enrollScript = "$OpenPathRoot\scripts\Enroll-Machine.ps1"
-    if (-not (Test-Path $enrollScript)) {
-        $machineRegistered = "FAILED"
-        Write-Host "  Enrollment script not found: $enrollScript" -ForegroundColor Yellow
-    }
-    else {
-        try {
-            $enrollParams = @{
-                ApiUrl = $apiBaseUrl
-                OpenPathRoot = $OpenPathRoot
-            }
-            if ($Classroom) {
-                $enrollParams.Classroom = $Classroom
-            }
-            if ($ClassroomId) {
-                $enrollParams.ClassroomId = $ClassroomId
-            }
-            if ($EnrollmentToken) {
-                $enrollParams.EnrollmentToken = $EnrollmentToken
-            }
-            if ($MachineName) {
-                $enrollParams.MachineName = $MachineName
-            }
-            if ($RegistrationToken) {
-                $enrollParams.RegistrationToken = $RegistrationToken
-                $enrollParams.SkipTokenValidation = $true
-            }
-            if ($Unattended) {
-                $enrollParams.Unattended = $true
-            }
-
-            $enrollResult = & $enrollScript @enrollParams
-
-            if ($enrollResult -and $enrollResult.Success) {
-                $machineRegistered = "REGISTERED"
-                if ($enrollResult.WhitelistUrl) {
-                    $WhitelistUrl = [string]$enrollResult.WhitelistUrl
-                }
-                Write-InstallerVerbose "  Machine registration completed"
-            }
-            else {
-                $machineRegistered = "FAILED"
-                Write-Host "  Failed to register machine" -ForegroundColor Yellow
-            }
-        }
-        catch {
-            $machineRegistered = "FAILED"
-            Write-Host "  Error registering machine: $_" -ForegroundColor Yellow
-        }
+    $machineRegistered = [string]$enrollmentResult.MachineRegistered
+    if ($enrollmentResult.WhitelistUrl) {
+        $WhitelistUrl = [string]$enrollmentResult.WhitelistUrl
     }
 }
 

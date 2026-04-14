@@ -195,22 +195,22 @@ load 'test_helper'
 }
 
 @test "windows installer validates direct DNS candidates before picking upstream" {
-    run grep -nF 'function Test-InstallerDirectDnsServer' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF 'function Test-InstallerDirectDnsServer' "$PROJECT_DIR/windows/lib/install/Installer.Dns.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'function Test-InstallerDisfavoredDnsServer' "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF 'function Test-InstallerDisfavoredDnsServer' "$PROJECT_DIR/windows/lib/install/Installer.Dns.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF "'168.63.129.16'" "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF "'168.63.129.16'" "$PROJECT_DIR/windows/lib/install/Installer.Dns.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF "Resolve-DnsName -Name \$ProbeDomain -Server \$Server -DnsOnly -ErrorAction Stop" "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF "Resolve-DnsName -Name \$ProbeDomain -Server \$Server -DnsOnly -ErrorAction Stop" "$PROJECT_DIR/windows/lib/install/Installer.Dns.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF "@('8.8.8.8', '1.1.1.1', '9.9.9.9', '8.8.4.4')" "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF "@('8.8.8.8', '1.1.1.1', '9.9.9.9', '8.8.4.4')" "$PROJECT_DIR/windows/lib/install/Installer.Dns.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF "(@(\$preferredCandidates) + @(\$fallbackCandidates) + @(\$disfavoredCandidates))" "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    run grep -nF "(@(\$preferredCandidates) + @(\$fallbackCandidates) + @(\$disfavoredCandidates))" "$PROJECT_DIR/windows/lib/install/Installer.Dns.ps1"
     [ "$status" -eq 0 ]
 }
 
