@@ -45,6 +45,7 @@ npm run test:auth --workspace=@openpath/api      # PORT 3001
 npm run test:e2e --workspace=@openpath/api       # PORT 3002
 npm run test:healthcheck --workspace=@openpath/api
 npm run test:integration --workspace=@openpath/api
+npm run test:api-tokens --workspace=@openpath/api
 npm run test:machines --workspace=@openpath/api
 npm run test:schedules --workspace=@openpath/api
 npm run test:server --workspace=@openpath/api
