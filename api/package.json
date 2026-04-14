@@ -23,7 +23,7 @@
     "test": "NODE_ENV=test PORT=3006 node --import tsx --test --test-concurrency=1 --test-force-exit tests/api-basic-http.test.ts tests/api-submit-routes.test.ts tests/api-requests-trpc.test.ts tests/api-request-auth-guards.test.ts tests/lib/machine-proof.test.ts tests/lib/public-request-input.test.ts tests/lib/exemption-storage.test.ts tests/routes/public-requests.test.ts",
     "test:watch": "NODE_ENV=test PORT=3006 node --import tsx --test --watch tests/api.test.ts",
     "test:auth": "NODE_ENV=test PORT=3001 node --import tsx --test --test-concurrency=1 --test-force-exit tests/auth-registration.test.ts tests/auth-google-login.test.ts tests/auth-session.test.ts tests/auth-password.test.ts tests/auth-admin-guards.test.ts",
-    "test:google-auth": "NODE_ENV=test PORT=3010 node --import tsx tests/google-auth-runner.ts",
+    "test:google-auth": "NODE_ENV=test PORT=3010 node --import tsx --test --test-concurrency=1 --test-force-exit tests/google-auth-config.test.ts tests/google-auth-misconfig.test.ts tests/google-auth-invalid-token.test.ts",
     "test:health-status": "NODE_ENV=test node --import tsx --test --test-force-exit tests/health-status-normalization.test.ts tests/health-status-actions.test.ts tests/health-status-contract.test.ts",
     "test:healthcheck": "NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/healthcheck-live.test.ts tests/healthcheck-ready.test.ts tests/healthcheck-surface.test.ts",
     "test:backup": "NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/backup-surface.test.ts tests/backup-auth.test.ts tests/backup-recording.test.ts",

@@ -79,7 +79,7 @@ Google auth split example:
 
 ```bash
 cd api
-NODE_ENV=test PORT=3010 node --import tsx tests/google-auth-runner.ts
+NODE_ENV=test PORT=3010 node --import tsx --test --test-concurrency=1 --test-force-exit tests/google-auth-config.test.ts tests/google-auth-misconfig.test.ts tests/google-auth-invalid-token.test.ts
 ```
 
 Backup split example:

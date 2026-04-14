@@ -12,7 +12,7 @@ import {
 } from './test-utils.js';
 
 interface ListenableApp {
-  listen: (port: number, callback?: () => void) => Server;
+  listen: (port: number, host: string, callback?: () => void) => Server;
 }
 
 export interface StartHttpTestHarnessOptions {
@@ -105,8 +105,10 @@ export async function startHttpTestHarness(
   options: StartHttpTestHarnessOptions = {}
 ): Promise<HttpTestHarness> {
   const port = await getAvailablePort();
-  const apiUrl = `http://localhost:${String(port)}`;
+  const host = '127.0.0.1';
+  const apiUrl = `http://${host}:${String(port)}`;
   const previousEnv = applyEnvOverrides({
+    HOST: host,
     NODE_ENV: 'test',
     PORT: String(port),
     ...options.env,
@@ -136,7 +138,7 @@ export async function startHttpTestHarness(
           })();
 
     server = await new Promise<Server>((resolve) => {
-      const startedServer = app.listen(port, () => {
+      const startedServer = app.listen(port, host, () => {
         resolve(startedServer);
       });
     });
