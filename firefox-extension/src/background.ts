@@ -12,8 +12,9 @@
  * @version 2.0.0
  */
 
-import { Browser, WebRequest, Runtime, WebNavigation } from 'webextension-polyfill';
+import { Browser, WebRequest, WebNavigation } from 'webextension-polyfill';
 import { createAutoAllowWorkflow, isAutoAllowRequestType } from './lib/auto-allow-workflow.js';
+import { createBackgroundMessageHandler } from './lib/background-message-handler.js';
 import { logger, getErrorMessage } from './lib/logger.js';
 import { getRequestApiEndpoints, loadRequestConfig } from './lib/config-storage.js';
 import { buildBlockedDomainSubmitBody } from './lib/blocked-request.js';
@@ -42,11 +43,7 @@ import {
   type BlockedPathRulesState,
   type NativeBlockedPathsResponse,
 } from './lib/path-blocking.js';
-import {
-  SUBMIT_BLOCKED_DOMAIN_REQUEST_ACTION,
-  isSubmitBlockedDomainRequestMessage,
-  shouldClearBlockedMonitorStateOnNavigate,
-} from './lib/blocked-screen-contract.js';
+import { shouldClearBlockedMonitorStateOnNavigate } from './lib/blocked-screen-contract.js';
 
 declare const browser: Browser;
 
@@ -408,157 +405,45 @@ browser.tabs.onRemoved.addListener((tabId: number) => {
  * Listener: Mensajes del popup
  * Responde a solicitudes de datos del popup
  */
-browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.MessageSender) => {
-  const msg = message as {
-    action: string;
-    tabId: number;
-    domains?: string[];
-    hostname?: string;
-    domain?: string;
-    reason?: string;
-    origin?: string;
-    error?: string;
-  };
-
-  switch (msg.action) {
-    case 'getBlockedDomains':
-      return {
-        domains: getBlockedDomainsForTab(msg.tabId),
-      };
-
-    case 'getDomainStatuses':
-      return {
-        statuses: getDomainStatusesForTab(msg.tabId),
-      };
-
-    case 'getBlockedPathRulesDebug':
-      return {
-        success: true,
-        version: blockedPathRulesState.version,
-        count: blockedPathRulesState.rules.length,
-        rawRules: blockedPathRulesState.rules.map((rule) => rule.rawRule),
-        compiledPatterns: blockedPathRulesState.rules.flatMap((rule) => rule.compiledPatterns),
-      };
-
-    case 'getNativeBlockedPathsDebug':
-      try {
-        return (await nativeMessagingClient.sendMessage({
-          action: 'get-blocked-paths',
-        })) as NativeBlockedPathsResponse;
-      } catch (error) {
-        return {
-          success: false,
-          error: getErrorMessage(error),
-        };
-      }
-
-    case 'evaluateBlockedPathDebug': {
-      const targetUrl = (msg as { url?: string }).url ?? '';
-      const targetType = (msg as { type?: string }).type ?? '';
-      return {
-        success: true,
-        outcome: evaluatePathBlocking(
-          { type: targetType, url: targetUrl },
-          blockedPathRulesState.rules,
-          { extensionOrigin: browser.runtime.getURL('/') }
-        ),
-      };
+const handleRuntimeMessage = createBackgroundMessageHandler({
+  clearBlockedDomains,
+  evaluateBlockedPathDebug: (input) =>
+    evaluatePathBlocking({ type: input.type, url: input.url }, blockedPathRulesState.rules, {
+      extensionOrigin: browser.runtime.getURL('/'),
+    }),
+  forceBlockedPathRulesRefresh,
+  getBlockedDomainsForTab,
+  getDomainStatusesForTab,
+  getErrorMessage,
+  getMachineToken: () => nativeMessagingClient.sendMessage({ action: 'get-machine-token' }),
+  getNativeBlockedPathsDebug: async () =>
+    (await nativeMessagingClient.sendMessage({
+      action: 'get-blocked-paths',
+    })) as NativeBlockedPathsResponse,
+  getPathRulesDebug: () => ({
+    success: true,
+    version: blockedPathRulesState.version,
+    count: blockedPathRulesState.rules.length,
+    rawRules: blockedPathRulesState.rules.map((rule) => rule.rawRule),
+    compiledPatterns: blockedPathRulesState.rules.flatMap((rule) => rule.compiledPatterns),
+  }),
+  getSystemHostname: () => nativeMessagingClient.sendMessage({ action: 'get-hostname' }),
+  isNativeHostAvailable,
+  retryLocalUpdate,
+  submitBlockedDomainRequest,
+  triggerWhitelistUpdate: async (): Promise<NativeResponse> => {
+    const response = (await nativeMessagingClient.sendMessage({
+      action: 'update-whitelist',
+    })) as NativeResponse;
+    if (response.success) {
+      await refreshBlockedPathRules(true);
     }
-
-    case 'clearBlockedDomains':
-      clearBlockedDomains(msg.tabId);
-      return { success: true };
-
-    case 'checkWithNative':
-    case 'verifyDomains':
-      try {
-        const domainsToCheck = Array.isArray(msg.domains) ? msg.domains : [];
-        return await checkDomainsWithNative(domainsToCheck);
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        return {
-          success: false,
-          results: [],
-          error: errorMessage,
-        };
-      }
-
-    case 'isNativeAvailable':
-    case 'checkNative':
-      try {
-        const available = await isNativeHostAvailable();
-        return { available, success: available };
-      } catch {
-        return { available: false, success: false };
-      }
-
-    case 'getHostname':
-      try {
-        return await nativeMessagingClient.sendMessage({ action: 'get-hostname' });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        return { success: false, error: errorMessage };
-      }
-
-    case 'getMachineToken':
-      try {
-        return await nativeMessagingClient.sendMessage({ action: 'get-machine-token' });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        return { success: false, error: errorMessage };
-      }
-
-    case SUBMIT_BLOCKED_DOMAIN_REQUEST_ACTION:
-      try {
-        if (!isSubmitBlockedDomainRequestMessage(message)) {
-          return { success: false, error: 'domain and reason are required' };
-        }
-
-        const input: SubmitBlockedDomainInput = {};
-        if (msg.domain !== undefined) {
-          input.domain = msg.domain;
-        }
-        if (msg.reason !== undefined) {
-          input.reason = msg.reason;
-        }
-        if (msg.origin !== undefined) {
-          input.origin = msg.origin;
-        }
-        if (msg.error !== undefined) {
-          input.error = msg.error;
-        }
-        return await submitBlockedDomainRequest(input);
-      } catch (error) {
-        return { success: false, error: getErrorMessage(error) };
-      }
-
-    case 'triggerWhitelistUpdate':
-      try {
-        const response = (await nativeMessagingClient.sendMessage({
-          action: 'update-whitelist',
-        })) as NativeResponse;
-        if (response.success) {
-          await refreshBlockedPathRules(true);
-        }
-        return response;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        return { success: false, error: errorMessage };
-      }
-
-    case 'refreshBlockedPathRules':
-      return forceBlockedPathRulesRefresh();
-
-    case 'retryLocalUpdate':
-      if (!msg.hostname) {
-        return { success: false, error: 'hostname is required' };
-      }
-      return retryLocalUpdate(msg.tabId, msg.hostname);
-
-    default:
-      return { error: 'Unknown action' };
-  }
+    return response;
+  },
+  verifyDomains: checkDomainsWithNative,
 });
+
+browser.runtime.onMessage.addListener(handleRuntimeMessage);
 
 void initBlockedPathRules().then(() => {
   startBlockedPathRefreshLoop();

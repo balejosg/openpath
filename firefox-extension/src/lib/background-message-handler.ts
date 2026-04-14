@@ -1,0 +1,178 @@
+import type { Runtime } from 'webextension-polyfill';
+
+import {
+  SUBMIT_BLOCKED_DOMAIN_REQUEST_ACTION,
+  isSubmitBlockedDomainRequestMessage,
+} from './blocked-screen-contract.js';
+import type { NativeResponse, VerifyResponse } from './native-messaging-client.js';
+import type { SubmitBlockedDomainInput, SubmitBlockedDomainResult } from './request-api.js';
+
+interface BackgroundMessage {
+  action?: string;
+  domain?: string;
+  domains?: string[];
+  error?: string;
+  hostname?: string;
+  origin?: string;
+  reason?: string;
+  tabId: number;
+  type?: string;
+  url?: string;
+}
+
+export interface BackgroundMessageHandlerDeps {
+  clearBlockedDomains: (tabId: number) => void;
+  evaluateBlockedPathDebug: (input: { type: string; url: string }) => unknown;
+  forceBlockedPathRulesRefresh: () => Promise<{ success: boolean; error?: string }>;
+  getBlockedDomainsForTab: (tabId: number) => Record<string, unknown>;
+  getDomainStatusesForTab: (tabId: number) => Record<string, unknown>;
+  getErrorMessage: (error: unknown) => string;
+  getMachineToken: () => Promise<unknown>;
+  getNativeBlockedPathsDebug: () => Promise<unknown>;
+  getPathRulesDebug: () => {
+    compiledPatterns: string[];
+    count: number;
+    rawRules: string[];
+    success: true;
+    version: string;
+  };
+  getSystemHostname: () => Promise<unknown>;
+  isNativeHostAvailable: () => Promise<boolean>;
+  retryLocalUpdate: (tabId: number, hostname: string) => Promise<{ success: boolean }>;
+  submitBlockedDomainRequest: (
+    input: SubmitBlockedDomainInput
+  ) => Promise<SubmitBlockedDomainResult>;
+  triggerWhitelistUpdate: () => Promise<NativeResponse>;
+  verifyDomains: (domains: string[]) => Promise<VerifyResponse>;
+}
+
+export function buildSubmitBlockedDomainInput(
+  message: BackgroundMessage
+): SubmitBlockedDomainInput {
+  const input: SubmitBlockedDomainInput = {};
+  if (message.domain !== undefined) {
+    input.domain = message.domain;
+  }
+  if (message.reason !== undefined) {
+    input.reason = message.reason;
+  }
+  if (message.origin !== undefined) {
+    input.origin = message.origin;
+  }
+  if (message.error !== undefined) {
+    input.error = message.error;
+  }
+
+  return input;
+}
+
+export function createBackgroundMessageHandler(
+  deps: BackgroundMessageHandlerDeps
+): (message: unknown, sender: Runtime.MessageSender) => Promise<unknown> {
+  return async (message: unknown, _sender: Runtime.MessageSender): Promise<unknown> => {
+    const msg = message as BackgroundMessage;
+
+    switch (msg.action) {
+      case 'getBlockedDomains':
+        return {
+          domains: deps.getBlockedDomainsForTab(msg.tabId),
+        };
+
+      case 'getDomainStatuses':
+        return {
+          statuses: deps.getDomainStatusesForTab(msg.tabId),
+        };
+
+      case 'getBlockedPathRulesDebug':
+        return deps.getPathRulesDebug();
+
+      case 'getNativeBlockedPathsDebug':
+        try {
+          return await deps.getNativeBlockedPathsDebug();
+        } catch (error) {
+          return {
+            success: false,
+            error: deps.getErrorMessage(error),
+          };
+        }
+
+      case 'evaluateBlockedPathDebug':
+        return {
+          success: true,
+          outcome: deps.evaluateBlockedPathDebug({
+            type: msg.type ?? '',
+            url: msg.url ?? '',
+          }),
+        };
+
+      case 'clearBlockedDomains':
+        deps.clearBlockedDomains(msg.tabId);
+        return { success: true };
+
+      case 'checkWithNative':
+      case 'verifyDomains':
+        try {
+          return await deps.verifyDomains(Array.isArray(msg.domains) ? msg.domains : []);
+        } catch (error) {
+          return {
+            success: false,
+            results: [],
+            error: deps.getErrorMessage(error),
+          };
+        }
+
+      case 'isNativeAvailable':
+      case 'checkNative':
+        try {
+          const available = await deps.isNativeHostAvailable();
+          return { available, success: available };
+        } catch {
+          return { available: false, success: false };
+        }
+
+      case 'getHostname':
+        try {
+          return await deps.getSystemHostname();
+        } catch (error) {
+          return { success: false, error: deps.getErrorMessage(error) };
+        }
+
+      case 'getMachineToken':
+        try {
+          return await deps.getMachineToken();
+        } catch (error) {
+          return { success: false, error: deps.getErrorMessage(error) };
+        }
+
+      case SUBMIT_BLOCKED_DOMAIN_REQUEST_ACTION:
+        try {
+          if (!isSubmitBlockedDomainRequestMessage(message)) {
+            return { success: false, error: 'domain and reason are required' };
+          }
+
+          return await deps.submitBlockedDomainRequest(buildSubmitBlockedDomainInput(msg));
+        } catch (error) {
+          return { success: false, error: deps.getErrorMessage(error) };
+        }
+
+      case 'triggerWhitelistUpdate':
+        try {
+          return await deps.triggerWhitelistUpdate();
+        } catch (error) {
+          return { success: false, error: deps.getErrorMessage(error) };
+        }
+
+      case 'refreshBlockedPathRules':
+        return deps.forceBlockedPathRulesRefresh();
+
+      case 'retryLocalUpdate':
+        if (!msg.hostname) {
+          return { success: false, error: 'hostname is required' };
+        }
+        return deps.retryLocalUpdate(msg.tabId, msg.hostname);
+
+      default:
+        return { error: 'Unknown action' };
+    }
+  };
+}
