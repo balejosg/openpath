@@ -34,15 +34,19 @@ export async function updateSchedule(
   }
 
   try {
-    const updated = await scheduleStorage.updateSchedule(id, input);
+    const updated = await DomainEventsService.withQueuedEvents(async (events) => {
+      const refreshed = await scheduleStorage.updateSchedule(id, input);
+      if (refreshed) {
+        events.publishClassroomChanged(loaded.data.classroomId);
+      }
+      return refreshed;
+    });
     if (!updated) {
       return {
         ok: false,
         error: { code: 'NOT_FOUND', message: 'Schedule not found after update' },
       };
     }
-
-    DomainEventsService.publishClassroomChanged(loaded.data.classroomId);
     return { ok: true, data: mapToWeeklySchedule(updated) };
   } catch (error: unknown) {
     const message = toErrorMessage(error);
@@ -82,15 +86,19 @@ export async function updateOneOffSchedule(
   }
 
   try {
-    const updated = await scheduleStorage.updateOneOffSchedule(id, updates.data);
+    const updated = await DomainEventsService.withQueuedEvents(async (events) => {
+      const refreshed = await scheduleStorage.updateOneOffSchedule(id, updates.data);
+      if (refreshed) {
+        events.publishClassroomChanged(loaded.data.classroomId);
+      }
+      return refreshed;
+    });
     if (!updated) {
       return {
         ok: false,
         error: { code: 'NOT_FOUND', message: 'Schedule not found after update' },
       };
     }
-
-    DomainEventsService.publishClassroomChanged(loaded.data.classroomId);
     return { ok: true, data: mapToOneOffSchedule(updated) };
   } catch (error: unknown) {
     const message = toErrorMessage(error);
@@ -110,7 +118,9 @@ export async function deleteSchedule(
     return loaded;
   }
 
-  await scheduleStorage.deleteSchedule(id);
-  DomainEventsService.publishClassroomChanged(loaded.data.classroomId);
+  await DomainEventsService.withQueuedEvents(async (events) => {
+    await scheduleStorage.deleteSchedule(id);
+    events.publishClassroomChanged(loaded.data.classroomId);
+  });
   return { ok: true, data: { success: true } };
 }

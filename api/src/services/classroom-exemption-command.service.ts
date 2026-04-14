@@ -26,14 +26,17 @@ export async function createExemptionForClassroom(
   }
 
   try {
-    const created = await createMachineExemption({
-      machineId: input.machineId,
-      classroomId: input.classroomId,
-      scheduleId: input.scheduleId,
-      createdBy: input.createdBy,
+    const created = await DomainEventsService.withQueuedEvents(async (events) => {
+      const exemption = await createMachineExemption({
+        machineId: input.machineId,
+        classroomId: input.classroomId,
+        scheduleId: input.scheduleId,
+        createdBy: input.createdBy,
+      });
+      events.publishClassroomChanged(input.classroomId);
+      return exemption;
     });
 
-    DomainEventsService.publishClassroomChanged(input.classroomId);
     return { ok: true, data: toMachineExemptionInfo(created) };
   } catch (error: unknown) {
     if (error instanceof MachineExemptionError) {
@@ -61,12 +64,16 @@ export async function deleteExemptionForClassroom(
     return access;
   }
 
-  const deleted = await deleteMachineExemption(exemptionId);
+  const deleted = await DomainEventsService.withQueuedEvents(async (events) => {
+    const removed = await deleteMachineExemption(exemptionId);
+    if (removed) {
+      events.publishClassroomChanged(removed.classroomId);
+    }
+    return removed;
+  });
   if (!deleted) {
     return { ok: false, error: { code: 'NOT_FOUND', message: 'Exemption not found' } };
   }
-
-  DomainEventsService.publishClassroomChanged(deleted.classroomId);
   return { ok: true, data: { success: true } };
 }
 

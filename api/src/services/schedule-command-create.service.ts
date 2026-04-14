@@ -27,16 +27,18 @@ export async function createSchedule(
   }
 
   try {
-    const schedule = await scheduleStorage.createSchedule({
-      classroomId: input.classroomId,
-      teacherId: user.sub,
-      groupId: input.groupId,
-      dayOfWeek: input.dayOfWeek,
-      startTime: input.startTime,
-      endTime: input.endTime,
+    const schedule = await DomainEventsService.withQueuedEvents(async (events) => {
+      const created = await scheduleStorage.createSchedule({
+        classroomId: input.classroomId,
+        teacherId: user.sub,
+        groupId: input.groupId,
+        dayOfWeek: input.dayOfWeek,
+        startTime: input.startTime,
+        endTime: input.endTime,
+      });
+      events.publishClassroomChanged(input.classroomId);
+      return created;
     });
-
-    DomainEventsService.publishClassroomChanged(input.classroomId);
     return { ok: true, data: mapToWeeklySchedule(schedule) };
   } catch (error: unknown) {
     const message = toErrorMessage(error);
@@ -71,15 +73,17 @@ export async function createOneOffSchedule(
   }
 
   try {
-    const schedule = await scheduleStorage.createOneOffSchedule({
-      classroomId: input.classroomId,
-      teacherId: user.sub,
-      groupId: input.groupId,
-      startAt,
-      endAt,
+    const schedule = await DomainEventsService.withQueuedEvents(async (events) => {
+      const created = await scheduleStorage.createOneOffSchedule({
+        classroomId: input.classroomId,
+        teacherId: user.sub,
+        groupId: input.groupId,
+        startAt,
+        endAt,
+      });
+      events.publishClassroomChanged(input.classroomId);
+      return created;
     });
-
-    DomainEventsService.publishClassroomChanged(input.classroomId);
     return { ok: true, data: mapToOneOffSchedule(schedule) };
   } catch (error: unknown) {
     const message = toErrorMessage(error);

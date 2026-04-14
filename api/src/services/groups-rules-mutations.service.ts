@@ -40,8 +40,11 @@ export async function createRule(
   const dispatcher = DomainEventsService.createDispatcher({
     publishWhitelistChanged: deps.publishWhitelistChanged,
   });
-  const result = await DomainEventsService.withQueuedEvents(async (events) => {
-    return deps.withTransaction(async (tx) => {
+  const result = await DomainEventsService.withDbTransactionEvents<
+    Awaited<ReturnType<GroupsRulesDependencies['createRule']>>
+  >(
+    deps.withTransaction,
+    async (tx, events) => {
       const created = await deps.createRule(
         input.groupId,
         input.type,
@@ -54,8 +57,9 @@ export async function createRule(
         events.publishWhitelistChanged(input.groupId);
       }
       return created;
-    });
-  }, dispatcher);
+    },
+    dispatcher
+  );
 
   if (!result.success) {
     return {
@@ -91,15 +95,17 @@ export async function deleteRule(
   const dispatcher = DomainEventsService.createDispatcher({
     publishWhitelistChanged: deps.publishWhitelistChanged,
   });
-  const deleted = await DomainEventsService.withQueuedEvents(async (events) => {
-    return deps.withTransaction(async (tx) => {
+  const deleted = await DomainEventsService.withDbTransactionEvents<boolean>(
+    deps.withTransaction,
+    async (tx, events) => {
       const wasDeleted = await deps.deleteRule(id, tx);
       if (wasDeleted && ruleGroupId) {
         events.publishWhitelistChanged(ruleGroupId);
       }
       return wasDeleted;
-    });
-  }, dispatcher);
+    },
+    dispatcher
+  );
 
   return { ok: true, data: { deleted } };
 }
@@ -120,8 +126,9 @@ export async function bulkDeleteRules(
   const dispatcher = DomainEventsService.createDispatcher({
     publishWhitelistChanged: deps.publishWhitelistChanged,
   });
-  const deleted = await DomainEventsService.withQueuedEvents(async (events) => {
-    return deps.withTransaction(async (tx) => {
+  const deleted = await DomainEventsService.withDbTransactionEvents<number>(
+    deps.withTransaction,
+    async (tx, events) => {
       const deletedCount = await deps.bulkDeleteRules(ids, tx);
 
       if (deletedCount > 0) {
@@ -132,8 +139,9 @@ export async function bulkDeleteRules(
       }
 
       return deletedCount;
-    });
-  }, dispatcher);
+    },
+    dispatcher
+  );
 
   return { ok: true, data: { deleted, rules } };
 }
@@ -176,8 +184,9 @@ export async function updateRule(input: UpdateRuleInput): Promise<GroupsResult<R
     }
   }
 
-  const updated = await DomainEventsService.withQueuedEvents(async (events) => {
-    return defaultRulesDependencies.withTransaction(async (tx) => {
+  const updated = await DomainEventsService.withDbTransactionEvents<Rule | null>(
+    defaultRulesDependencies.withTransaction,
+    async (tx, events) => {
       const result = await (defaultRulesDependencies.updateRule ?? groupsStorage.updateRule)(
         {
           id: input.id,
@@ -192,8 +201,8 @@ export async function updateRule(input: UpdateRuleInput): Promise<GroupsResult<R
       }
 
       return result;
-    });
-  });
+    }
+  );
 
   if (!updated) {
     return {
@@ -216,8 +225,9 @@ export async function bulkCreateRules(
   const preservePath = input.type === 'blocked_path';
   const cleanedValues = input.values.map((value) => cleanRuleValue(value, preservePath));
 
-  const count = await DomainEventsService.withQueuedEvents(async (events) => {
-    return defaultRulesDependencies.withTransaction(async (tx) => {
+  const count = await DomainEventsService.withDbTransactionEvents<number>(
+    defaultRulesDependencies.withTransaction,
+    async (tx, events) => {
       const createdCount = await (
         defaultRulesDependencies.bulkCreateRules ?? groupsStorage.bulkCreateRules
       )(input.groupId, input.type, cleanedValues, 'manual', tx);
@@ -227,8 +237,8 @@ export async function bulkCreateRules(
       }
 
       return createdCount;
-    });
-  });
+    }
+  );
 
   return { ok: true, data: { count } };
 }

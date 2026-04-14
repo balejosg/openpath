@@ -36,6 +36,67 @@ void test('withTransactionEvents publishes queued events after success', async (
   assert.deepEqual(published, ['group-a', 'group-b']);
 });
 
+void test('withTransactionEvents deduplicates repeated events after commit', async () => {
+  const published: { classroomId: string; now?: Date | undefined; type: string }[] = [];
+
+  const dispatcher = DomainEventsService.createDispatcher({
+    publishClassroomChanged: (classroomId, now) => {
+      published.push({ classroomId, now, type: 'classroom.changed' });
+    },
+    publishWhitelistChanged: (groupId) => {
+      published.push({ classroomId: groupId, type: 'whitelist.changed' });
+    },
+  });
+
+  await DomainEventsService.withTransactionEvents(
+    (operation) => operation({} as never),
+    (_tx, events) => {
+      events.publishWhitelistChanged('group-a');
+      events.publishWhitelistChanged('group-a');
+      events.publishClassroomChanged('room-1', new Date('2026-04-14T09:00:00.000Z'));
+      events.publishClassroomChanged('room-1', new Date('2026-04-14T09:05:00.000Z'));
+      return Promise.resolve(undefined);
+    },
+    dispatcher
+  );
+
+  assert.deepEqual(published, [
+    { classroomId: 'group-a', type: 'whitelist.changed' },
+    {
+      classroomId: 'room-1',
+      now: new Date('2026-04-14T09:05:00.000Z'),
+      type: 'classroom.changed',
+    },
+  ]);
+});
+
+void test('withTransactionEvents collapses group-level events into global whitelist refreshes', async () => {
+  const published: string[] = [];
+
+  const dispatcher = DomainEventsService.createDispatcher({
+    publishAllWhitelistsChanged: () => {
+      published.push('all');
+    },
+    publishWhitelistChanged: (groupId) => {
+      published.push(groupId);
+    },
+  });
+
+  await DomainEventsService.withTransactionEvents(
+    (operation) => operation({} as never),
+    (_tx, events) => {
+      events.publishWhitelistChanged('group-a');
+      events.publishWhitelistChanged('group-b');
+      events.publishAllWhitelistsChanged();
+      events.publishWhitelistChanged('group-c');
+      return Promise.resolve(undefined);
+    },
+    dispatcher
+  );
+
+  assert.deepEqual(published, ['all']);
+});
+
 void test('withTransactionEvents does not publish queued events after failure', async () => {
   const published: string[] = [];
 

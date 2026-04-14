@@ -208,8 +208,9 @@ export async function handleAutoMachineRequest(
     : `Auto-approved via Firefox extension${reasonText ? ` - ${reasonText}` : ''}`;
 
   try {
-    const created: CreateRuleResult = await DomainEventsService.withQueuedEvents(async (events) => {
-      return withTransaction(async (tx) => {
+    const created: CreateRuleResult = await DomainEventsService.withDbTransactionEvents(
+      withTransaction,
+      async (tx, events) => {
         const result = await groupsStorage.createRule(
           context.data.groupId,
           'whitelist',
@@ -224,8 +225,8 @@ export async function handleAutoMachineRequest(
         }
 
         return result;
-      });
-    });
+      }
+    );
 
     if (!created.success && created.error !== 'Rule already exists') {
       return {

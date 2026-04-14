@@ -48,13 +48,15 @@ export async function updateClassroom(
   id: string,
   updates: UpdateClassroomData
 ): Promise<ClassroomResult<Awaited<ReturnType<typeof classroomStorage.updateClassroom>>>> {
-  const updated = await classroomStorage.updateClassroom(id, updates);
+  const updated = await DomainEventsService.withQueuedEvents(async (events) => {
+    const refreshed = await classroomStorage.updateClassroom(id, updates);
+    if (refreshed && updates.defaultGroupId !== undefined) {
+      events.publishClassroomChanged(refreshed.id);
+    }
+    return refreshed;
+  });
   if (!updated) {
     return { ok: false, error: { code: 'NOT_FOUND', message: 'Classroom not found' } };
-  }
-
-  if (updates.defaultGroupId !== undefined) {
-    DomainEventsService.publishClassroomChanged(updated.id);
   }
 
   return { ok: true, data: updated };
@@ -80,12 +82,16 @@ export async function setClassroomActiveGroup(
     };
   }
 
-  const updated = await classroomStorage.setActiveGroup(input.id, input.groupId);
+  const updated = await DomainEventsService.withQueuedEvents(async (events) => {
+    const refreshed = await classroomStorage.setActiveGroup(input.id, input.groupId);
+    if (refreshed) {
+      events.publishClassroomChanged(refreshed.id);
+    }
+    return refreshed;
+  });
   if (!updated) {
     return { ok: false, error: { code: 'NOT_FOUND', message: 'Classroom not found' } };
   }
-
-  DomainEventsService.publishClassroomChanged(updated.id);
 
   const result = await getClassroom(input.id, user);
   if (!result.ok) {

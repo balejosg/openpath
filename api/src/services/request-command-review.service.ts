@@ -63,41 +63,42 @@ export async function approveRequest(
   }
 
   try {
-    const approval = await DomainEventsService.withQueuedEvents(async (events) => {
-      return withTransaction(async (tx) => {
-        const ruleResult = await groupsStorage.createRule(
-          resolvedTarget.id,
-          'whitelist',
-          request.domain,
-          null,
-          'manual',
-          tx
-        );
+    const approval = await DomainEventsService.withDbTransactionEvents<{
+      createdRule: boolean;
+      updated: StoredDomainRequest | null;
+    }>(withTransaction, async (tx, events) => {
+      const ruleResult = await groupsStorage.createRule(
+        resolvedTarget.id,
+        'whitelist',
+        request.domain,
+        null,
+        'manual',
+        tx
+      );
 
-        if (!ruleResult.success && ruleResult.error !== 'Rule already exists') {
-          throw new Error(ruleResult.error ?? 'Failed to add domain to whitelist');
+      if (!ruleResult.success && ruleResult.error !== 'Rule already exists') {
+        throw new Error(ruleResult.error ?? 'Failed to add domain to whitelist');
+      }
+
+      const updated = await updateStoredRequestStatus(
+        request.id,
+        'approved',
+        user.name,
+        `Added to ${resolvedTarget.name}`,
+        {
+          executor: tx,
+          expectedStatus: 'pending',
         }
+      );
 
-        const updated = await updateStoredRequestStatus(
-          request.id,
-          'approved',
-          user.name,
-          `Added to ${resolvedTarget.name}`,
-          {
-            executor: tx,
-            expectedStatus: 'pending',
-          }
-        );
+      if (ruleResult.success) {
+        events.publishWhitelistChanged(resolvedTarget.id);
+      }
 
-        if (ruleResult.success) {
-          events.publishWhitelistChanged(resolvedTarget.id);
-        }
-
-        return {
-          updated,
-          createdRule: ruleResult.success,
-        };
-      });
+      return {
+        updated,
+        createdRule: ruleResult.success,
+      };
     });
 
     if (!approval.updated) {

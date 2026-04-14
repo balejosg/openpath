@@ -99,18 +99,28 @@ export async function updateGroup(
     return { ok: false, error: { code: 'NOT_FOUND', message: 'Group not found' } };
   }
 
-  await deps.updateGroup(input.id, input.displayName, input.enabled, input.visibility);
+  const dispatcher = DomainEventsService.createDispatcher({
+    publishWhitelistChanged: deps.publishWhitelistChanged,
+  });
+  const updated = await DomainEventsService.withQueuedEvents(async (events) => {
+    await deps.updateGroup(input.id, input.displayName, input.enabled, input.visibility);
 
-  const updated = await deps.getGroupById(input.id);
+    const refreshed = await deps.getGroupById(input.id);
+    if (!refreshed) {
+      return null;
+    }
+
+    if (existing.enabled !== input.enabled) {
+      events.publishWhitelistChanged(input.id);
+    }
+
+    return refreshed;
+  }, dispatcher);
   if (!updated) {
     return {
       ok: false,
       error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch updated group' },
     };
-  }
-
-  if (existing.enabled !== input.enabled) {
-    deps.publishWhitelistChanged(input.id);
   }
 
   return { ok: true, data: updated };
@@ -128,10 +138,16 @@ export async function deleteGroup(
     return { ok: false, error: { code: 'NOT_FOUND', message: 'Group not found' } };
   }
 
-  const deleted = await deps.deleteGroup(id);
-  if (deleted) {
-    deps.publishWhitelistChanged(id);
-  }
+  const dispatcher = DomainEventsService.createDispatcher({
+    publishWhitelistChanged: deps.publishWhitelistChanged,
+  });
+  const deleted = await DomainEventsService.withQueuedEvents(async (events) => {
+    const didDelete = await deps.deleteGroup(id);
+    if (didDelete) {
+      events.publishWhitelistChanged(id);
+    }
+    return didDelete;
+  }, dispatcher);
 
   return { ok: true, data: { deleted } };
 }
@@ -162,8 +178,9 @@ export async function cloneGroup(
     const dispatcher = DomainEventsService.createDispatcher({
       publishWhitelistChanged: deps.publishWhitelistChanged,
     });
-    const id = await DomainEventsService.withQueuedEvents(async (events) => {
-      return deps.withTransaction(async (tx) => {
+    const id = await DomainEventsService.withDbTransactionEvents<string>(
+      deps.withTransaction,
+      async (tx, events) => {
         const createdGroupId = await deps.createGroup(
           name,
           input.displayName,
@@ -178,8 +195,9 @@ export async function cloneGroup(
         await deps.touchGroupUpdatedAt(createdGroupId, tx);
         events.publishWhitelistChanged(createdGroupId);
         return createdGroupId;
-      });
-    }, dispatcher);
+      },
+      dispatcher
+    );
 
     return { ok: true, data: { id, name } };
   } catch (error) {
@@ -201,7 +219,13 @@ export async function toggleSystemStatus(
     'publishAllWhitelistsChanged' | 'toggleSystemStatus'
   > = defaultManagementDependencies
 ): Promise<SystemStatus> {
-  const result = await deps.toggleSystemStatus(enable);
-  deps.publishAllWhitelistsChanged();
-  return result;
+  const dispatcher = DomainEventsService.createDispatcher({
+    publishAllWhitelistsChanged: deps.publishAllWhitelistsChanged,
+  });
+
+  return DomainEventsService.withQueuedEvents(async (events) => {
+    const result = await deps.toggleSystemStatus(enable);
+    events.publishAllWhitelistsChanged();
+    return result;
+  }, dispatcher);
 }
