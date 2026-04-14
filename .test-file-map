@@ -83,3 +83,12 @@ firefox-extension/src/lib/popup-controller.ts|firefox-extension/tests/popup.test
 firefox-extension/src/lib/popup-controller-state.ts|firefox-extension/tests/popup.test.ts,firefox-extension/tests/popup-submit-contract.test.ts
 firefox-extension/src/lib/popup-domain-controller.ts|firefox-extension/tests/popup.test.ts,firefox-extension/tests/popup-runtime.test.ts
 firefox-extension/src/lib/popup-request-controller.ts|firefox-extension/tests/popup.test.ts,firefox-extension/tests/popup-submit-contract.test.ts,firefox-extension/tests/popup-request-actions.test.ts
+linux/install.sh|tests/install.bats,tests/linux-e2e.bats
+linux/lib/common.sh|tests/install.bats,tests/captive-portal.bats,tests/openpath-update.bats
+linux/lib/install-helpers.sh|tests/install.bats,tests/linux-e2e.bats
+linux/lib/runtime-cli.sh|tests/install.bats
+linux/lib/runtime-cli-system.sh|tests/install.bats
+linux/lib/common-connectivity.sh|tests/install.bats,tests/captive-portal.bats
+linux/lib/common-registration.sh|tests/install.bats,tests/openpath-update.bats
+windows/scripts/Update-OpenPath.ps1|windows/tests/Windows.Tests.ps1
+windows/lib/Update.Runtime.psm1|windows/tests/Windows.Tests.ps1

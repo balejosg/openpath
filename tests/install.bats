@@ -75,6 +75,20 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "linux installer composes shared install helper modules" {
+    run grep -nF 'source "$INSTALLER_SOURCE_DIR/lib/install-helpers.sh"' "$PROJECT_DIR/linux/install.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'source "$INSTALL_DIR/lib/runtime-cli-system.sh"' "$PROJECT_DIR/linux/lib/runtime-cli.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'source "$(dirname "${BASH_SOURCE[0]}")/common-connectivity.sh"' "$PROJECT_DIR/linux/lib/common.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'source "$(dirname "${BASH_SOURCE[0]}")/common-registration.sh"' "$PROJECT_DIR/linux/lib/common.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "install.sh allows installer contract runs without a whitelist URL" {
     run grep -nF 'if [ -n "$WHITELIST_URL" ]; then' "$PROJECT_DIR/linux/install.sh"
     [ "$status" -eq 0 ]
@@ -494,16 +508,16 @@ EOF
 }
 
 @test "install.sh hardens apt operations against stale package indexes" {
-    run grep -n "apt_update_with_retry()" "$PROJECT_DIR/linux/install.sh"
+    run grep -n "apt_update_with_retry()" "$PROJECT_DIR/linux/lib/install-helpers.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n "rm -rf /var/lib/apt/lists/\\*" "$PROJECT_DIR/linux/install.sh"
+    run grep -n "rm -rf /var/lib/apt/lists/\\*" "$PROJECT_DIR/linux/lib/install-helpers.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n -- "-o Acquire::Retries=3 update -qq" "$PROJECT_DIR/linux/install.sh"
+    run grep -n -- "-o Acquire::Retries=3 update -qq" "$PROJECT_DIR/linux/lib/install-helpers.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n "apt_install_with_retry()" "$PROJECT_DIR/linux/install.sh"
+    run grep -n "apt_install_with_retry()" "$PROJECT_DIR/linux/lib/install-helpers.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -527,7 +541,7 @@ EOF
     run grep -n -- '--verbose' "$PROJECT_DIR/linux/install.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n 'show_progress()' "$PROJECT_DIR/linux/install.sh"
+    run grep -n 'show_progress()' "$PROJECT_DIR/linux/lib/install-helpers.sh"
     [ "$status" -eq 0 ]
 
     run grep -n 'INSTALLER_STEP_TOTAL=15' "$PROJECT_DIR/linux/install.sh"

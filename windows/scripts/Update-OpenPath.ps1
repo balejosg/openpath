@@ -53,6 +53,7 @@ Initialize-OpenPathScriptSession `
     'Set-AllBrowserPolicy'
 ) `
     -ScriptName 'Update-OpenPath.ps1' | Out-Null
+Import-Module "$OpenPathRoot\lib\Update.Runtime.psm1" -Force
 
 $mutex = $null
 $lockAcquired = $false
@@ -61,116 +62,6 @@ $exitCode = 0
 $whitelistPath = "$OpenPathRoot\data\whitelist.txt"
 $backupPath = "$OpenPathRoot\data\whitelist.backup.txt"
 $staleFailsafeStatePath = "$OpenPathRoot\data\stale-failsafe-state.json"
-
-function Clear-StaleFailsafeState {
-    if (Test-Path $staleFailsafeStatePath) {
-        Remove-Item $staleFailsafeStatePath -Force -ErrorAction SilentlyContinue
-        Write-OpenPathLog "Cleared stale fail-safe marker"
-    }
-}
-
-function Enter-StaleWhitelistFailsafe {
-    param(
-        [Parameter(Mandatory = $true)]
-        [PSCustomObject]$Config,
-
-        [Parameter(Mandatory = $true)]
-        [double]$WhitelistAgeHours
-    )
-
-    $controlDomains = @()
-    $whitelistHost = Get-HostFromUrl -Url $Config.whitelistUrl
-    if ($whitelistHost) {
-        $controlDomains += $whitelistHost
-    }
-
-    if ($Config.PSObject.Properties['apiUrl']) {
-        $apiHost = Get-HostFromUrl -Url $Config.apiUrl
-        if ($apiHost) {
-            $controlDomains += $apiHost
-        }
-    }
-
-    $controlDomains = @($controlDomains | Where-Object { $_ } | Sort-Object -Unique)
-
-    Write-OpenPathLog "Entering stale-whitelist fail-safe mode (age=$WhitelistAgeHours h)" -Level WARN
-    Update-AcrylicHost -WhitelistedDomains $controlDomains -BlockedSubdomains @()
-    Restore-OpenPathProtectedMode -Config $Config | Out-Null
-
-    @{
-        enteredAt = (Get-Date -Format 'o')
-        whitelistAgeHours = [Math]::Round($WhitelistAgeHours, 2)
-        controlDomains = $controlDomains
-    } | ConvertTo-Json -Depth 8 | Set-Content $staleFailsafeStatePath -Encoding UTF8
-
-    Write-OpenPathLog "Stale fail-safe active. Control domains: $($controlDomains -join ', ')" -Level WARN
-}
-
-function Restore-OpenPathCheckpoint {
-    param(
-        [Parameter(Mandatory = $true)]
-        [PSCustomObject]$Config
-    )
-
-    $restoreResult = Restore-OpenPathLatestCheckpoint -Config $Config -WhitelistPath $whitelistPath
-    if (-not $restoreResult.Success) {
-        if ($restoreResult.Error) {
-            Write-OpenPathLog $restoreResult.Error -Level WARN
-        }
-        else {
-            Write-OpenPathLog 'Checkpoint rollback failed for unknown reason' -Level WARN
-        }
-        return $false
-    }
-
-    try {
-        Clear-StaleFailsafeState
-        Write-OpenPathLog "Checkpoint rollback applied from $($restoreResult.CheckpointPath)" -Level WARN
-        return $true
-    }
-    catch {
-        Write-OpenPathLog "Checkpoint rollback failed: $_" -Level WARN
-        return $false
-    }
-}
-
-function Write-UpdateCatchLog {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Message,
-
-        [ValidateSet('INFO', 'WARN', 'ERROR')]
-        [string]$Level = 'INFO'
-    )
-
-    if (Get-Command -Name 'Write-OpenPathLog' -ErrorAction SilentlyContinue) {
-        Write-OpenPathLog -Message $Message -Level $Level
-        return
-    }
-
-    $fallbackEntry = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [$Level] [Update-OpenPath.ps1] [PID:$PID] $Message"
-    switch ($Level) {
-        'ERROR' { Write-Error $fallbackEntry -ErrorAction Continue }
-        'WARN' { Write-Warning $fallbackEntry }
-        default { Write-Information $fallbackEntry -InformationAction Continue }
-    }
-}
-
-function Sync-FirefoxNativeHostMirror {
-    param(
-        [Parameter(Mandatory = $true)]
-        [PSCustomObject]$Config,
-
-        [switch]$ClearWhitelist
-    )
-
-    try {
-        Sync-OpenPathFirefoxNativeHostState -Config $Config -WhitelistPath $whitelistPath -ClearWhitelist:$ClearWhitelist | Out-Null
-    }
-    catch {
-        Write-OpenPathLog "Firefox native host mirror sync failed: $_" -Level WARN
-    }
-}
 
 try {
     $mutex = [System.Threading.Mutex]::new($false, $script:UpdateMutexName)
@@ -261,11 +152,11 @@ try {
                 throw "No local whitelist available and download failed"
             }
 
-            Sync-FirefoxNativeHostMirror -Config $config
+            Sync-FirefoxNativeHostMirror -Config $config -WhitelistPath $whitelistPath
 
             $cachedAgeHours = Get-OpenPathFileAgeHours -Path $whitelistPath
             if ($enableStaleFailsafe -and $staleWhitelistMaxAgeHours -gt 0 -and $cachedAgeHours -ge $staleWhitelistMaxAgeHours) {
-                Enter-StaleWhitelistFailsafe -Config $config -WhitelistAgeHours $cachedAgeHours
+                Enter-StaleWhitelistFailsafe -Config $config -WhitelistAgeHours $cachedAgeHours -StaleFailsafeStatePath $staleFailsafeStatePath
                 $runtimeHealth = Get-OpenPathRuntimeHealth
                 Send-OpenPathHealthReport -Status 'STALE_FAILSAFE' `
                     -DnsServiceRunning $runtimeHealth.DnsServiceRunning `
@@ -286,7 +177,7 @@ try {
         }
         else {
             if ($whitelist.PSObject.Properties['NotModified'] -and $whitelist.NotModified) {
-                Sync-FirefoxNativeHostMirror -Config $config
+                Sync-FirefoxNativeHostMirror -Config $config -WhitelistPath $whitelistPath
                 Write-OpenPathLog "Whitelist not modified (ETag) - skipping apply"
 
                 try {
@@ -315,9 +206,9 @@ try {
 
                 # Remove browser policies
                 Remove-BrowserPolicy
-                Sync-FirefoxNativeHostMirror -Config $config -ClearWhitelist
+                Sync-FirefoxNativeHostMirror -Config $config -WhitelistPath $whitelistPath -ClearWhitelist
 
-                Clear-StaleFailsafeState
+                Clear-StaleFailsafeState -StaleFailsafeStatePath $staleFailsafeStatePath
 
                 $runtimeHealth = Get-OpenPathRuntimeHealth
                 Send-OpenPathHealthReport -Status 'FAIL_OPEN' `
@@ -335,7 +226,7 @@ try {
                     -BlockedSubdomains $whitelist.BlockedSubdomains `
                     -BlockedPaths $whitelist.BlockedPaths
                 $serializedWhitelist | Set-Content $whitelistPath -Encoding UTF8
-                Sync-FirefoxNativeHostMirror -Config $config
+                Sync-FirefoxNativeHostMirror -Config $config -WhitelistPath $whitelistPath
 
                 # Update Acrylic DNS hosts
                 Update-AcrylicHost -WhitelistedDomains $whitelist.Whitelist -BlockedSubdomains $whitelist.BlockedSubdomains
@@ -348,7 +239,7 @@ try {
                     Set-AllBrowserPolicy -BlockedPaths $whitelist.BlockedPaths
                 }
 
-                Clear-StaleFailsafeState
+                Clear-StaleFailsafeState -StaleFailsafeStatePath $staleFailsafeStatePath
 
                 $runtimeHealth = Get-OpenPathRuntimeHealth
                 Send-OpenPathHealthReport -Status 'HEALTHY' `
@@ -374,10 +265,10 @@ catch {
     $rollbackSucceeded = $false
     if ($checkpointRollbackEnabled -and $config) {
         Write-UpdateCatchLog 'Attempting checkpoint rollback...' -Level WARN
-        $rollbackSucceeded = Restore-OpenPathCheckpoint -Config $config
+        $rollbackSucceeded = Restore-OpenPathCheckpoint -Config $config -WhitelistPath $whitelistPath -StaleFailsafeStatePath $staleFailsafeStatePath
         if ($rollbackSucceeded) {
             $rollbackMethod = 'checkpoint'
-            Sync-FirefoxNativeHostMirror -Config $config
+            Sync-FirefoxNativeHostMirror -Config $config -WhitelistPath $whitelistPath
         }
     }
 
@@ -386,7 +277,7 @@ catch {
         Write-UpdateCatchLog 'Falling back to backup whitelist rollback...' -Level WARN
         try {
             Copy-Item $backupPath $whitelistPath -Force
-            Sync-FirefoxNativeHostMirror -Config $config
+            Sync-FirefoxNativeHostMirror -Config $config -WhitelistPath $whitelistPath
             $backupContent = Get-ValidWhitelistDomainsFromFile -Path $whitelistPath
             Update-AcrylicHost -WhitelistedDomains $backupContent -BlockedSubdomains @() -ErrorAction SilentlyContinue
             Restore-OpenPathProtectedMode -Config $config -ErrorAction SilentlyContinue | Out-Null
