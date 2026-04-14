@@ -9,8 +9,6 @@ import {
 import { RequestStatusSchema, CreateRequestDTOSchema } from '../../types/index.js';
 import { TRPCError } from '@trpc/server';
 import { CreateRequestData } from '../../types/storage.js';
-import * as storage from '../../lib/storage.js';
-import * as groupsStorage from '../../lib/groups-storage.js';
 import { stripUndefined } from '../../lib/utils.js';
 import RequestService from '../../services/request.service.js';
 
@@ -46,9 +44,11 @@ export const requestsRouter = router({
    * Public endpoint for polling status.
    */
   getStatus: publicProcedure.input(z.object({ id: z.string() })).query(async ({ input }) => {
-    const request = await storage.getRequestById(input.id);
-    if (!request) throw new TRPCError({ code: 'NOT_FOUND', message: 'Request not found' });
-    return { id: request.id, domain: request.domain, status: request.status };
+    const result = await RequestService.getRequestStatus(input.id);
+    if (!result.ok) {
+      throw new TRPCError({ code: result.error.code, message: result.error.message });
+    }
+    return result.data;
   }),
 
   /**
@@ -112,29 +112,23 @@ export const requestsRouter = router({
    * Admin endpoint.
    */
   stats: adminProcedure.query(async () => {
-    return await storage.getStats();
+    return await RequestService.getStats();
   }),
 
   // Protected: List groups
   listGroups: protectedProcedure.query(async ({ ctx }) => {
-    const allGroups = await groupsStorage.getAllGroups();
-    const userGroups = RequestService.getApprovalGroupsForUser(ctx.user);
-    const filteredGroups =
-      userGroups === 'all'
-        ? allGroups
-        : allGroups.filter((g) => userGroups.includes(g.name) || userGroups.includes(g.id));
-    return filteredGroups.map((g) => ({ id: g.id, name: g.name, path: g.id }));
+    return await RequestService.listGroupsForUser(ctx.user);
   }),
 
   // Admin: List blocked domains for a group
   listBlocked: adminProcedure.input(z.object({ groupId: z.string() })).query(async ({ input }) => {
-    return await groupsStorage.getBlockedSubdomains(input.groupId);
+    return await RequestService.listBlockedDomains(input.groupId);
   }),
 
   // Protected: Check if domain is blocked in a group
   check: protectedProcedure
     .input(z.object({ domain: z.string(), groupId: z.string() }))
     .mutation(async ({ input }) => {
-      return await groupsStorage.isDomainBlocked(input.groupId, input.domain);
+      return await RequestService.checkDomainBlocked(input.groupId, input.domain);
     }),
 });

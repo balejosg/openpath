@@ -11,6 +11,7 @@ import { logger } from '../lib/logger.js';
 import { emitWhitelistChanged } from '../lib/rule-events.js';
 import type { JWTPayload } from '../lib/auth.js';
 import type { CreateRequestData } from '../types/storage.js';
+import type { RequestStats } from '../types/storage.js';
 import type { DomainRequest, RequestStatus } from '../types/index.js';
 import { getErrorMessage } from '@openpath/shared';
 
@@ -90,6 +91,27 @@ export async function createRequest(
       error: { code: 'BAD_REQUEST', message: getErrorMessage(error) },
     };
   }
+}
+
+/**
+ * Get request status by ID.
+ */
+export async function getRequestStatus(
+  id: string
+): Promise<RequestResult<Pick<DomainRequest, 'id' | 'domain' | 'status'>>> {
+  const request = await storage.getRequestById(id);
+  if (!request) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Request not found' } };
+  }
+
+  return {
+    ok: true,
+    data: {
+      id: request.id,
+      domain: request.domain,
+      status: request.status,
+    },
+  };
 }
 
 /**
@@ -285,6 +307,52 @@ export async function deleteRequest(id: string): Promise<RequestResult<{ success
 }
 
 /**
+ * Get aggregate request statistics.
+ */
+export async function getStats(): Promise<RequestStats> {
+  return await storage.getStats();
+}
+
+/**
+ * List groups the user can approve requests for.
+ */
+export async function listGroupsForUser(
+  user: JWTPayload
+): Promise<{ id: string; name: string; path: string }[]> {
+  const allGroups = await groupsStorage.getAllGroups();
+  const userGroups = auth.getApprovalGroups(user);
+  const filteredGroups =
+    userGroups === 'all'
+      ? allGroups
+      : allGroups.filter(
+          (group) => userGroups.includes(group.name) || userGroups.includes(group.id)
+        );
+
+  return filteredGroups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    path: group.id,
+  }));
+}
+
+/**
+ * List blocked domains for a specific group.
+ */
+export async function listBlockedDomains(groupId: string): Promise<string[]> {
+  return await groupsStorage.getBlockedSubdomains(groupId);
+}
+
+/**
+ * Check whether a domain is blocked in a specific group.
+ */
+export async function checkDomainBlocked(
+  groupId: string,
+  domain: string
+): Promise<{ blocked: boolean; matchedRule: string | null }> {
+  return await groupsStorage.isDomainBlocked(groupId, domain);
+}
+
+/**
  * Get approval groups for user
  */
 export function getApprovalGroupsForUser(user: JWTPayload): string[] | 'all' {
@@ -297,10 +365,15 @@ export function getApprovalGroupsForUser(user: JWTPayload): string[] | 'all' {
 
 export default {
   createRequest,
+  getRequestStatus,
   approveRequest,
   rejectRequest,
   listRequests,
   getRequest,
   deleteRequest,
+  getStats,
+  listGroupsForUser,
+  listBlockedDomains,
+  checkDomainBlocked,
   getApprovalGroupsForUser,
 };
