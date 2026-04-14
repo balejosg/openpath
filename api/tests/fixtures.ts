@@ -1,4 +1,4 @@
-import { sanitizeSlug } from '@openpath/shared';
+import { sanitizeSlug } from '@openpath/shared/slug';
 import { sql } from 'drizzle-orm';
 
 import { db } from '../src/db/index.js';
@@ -74,9 +74,13 @@ export async function ensureWhitelistGroup(
   const enabled = options.enabled ?? true;
 
   await db.execute(sql`
+    DELETE FROM whitelist_groups
+    WHERE id = ${groupId} OR name = ${name}
+  `);
+
+  await db.execute(sql`
     INSERT INTO whitelist_groups (id, name, display_name, enabled)
     VALUES (${groupId}, ${name}, ${displayName}, ${enabled ? 1 : 0})
-    ON CONFLICT (id) DO NOTHING
   `);
 }
 

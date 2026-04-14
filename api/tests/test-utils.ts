@@ -12,6 +12,7 @@
  */
 
 import { createServer } from 'node:net';
+import { setTimeout as delay } from 'node:timers/promises';
 import jwt from 'jsonwebtoken';
 import { seedBaselineWhitelistGroups } from './fixtures.js';
 
@@ -386,30 +387,39 @@ export async function bootstrapAdminSession(
     password,
     name,
   });
-  if (![200, 201, 409].includes(setupResponse.status)) {
+  if (![200, 201, 403, 409].includes(setupResponse.status)) {
     throw new Error(
       `Expected setup.createFirstAdmin to succeed, got ${String(setupResponse.status)}`
     );
   }
 
-  const loginResponse = await trpcMutate(baseUrl, 'auth.login', {
-    email,
-    password,
-  });
-  if (loginResponse.status !== 200) {
-    throw new Error(`Expected auth.login to succeed, got ${String(loginResponse.status)}`);
+  const maxAttempts = 5;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const loginResponse = await trpcMutate(baseUrl, 'auth.login', {
+      email,
+      password,
+    });
+    if (loginResponse.status === 200) {
+      const authData = (await parseTRPC(loginResponse)).data as {
+        accessToken?: string;
+        user?: { roles?: { role?: string }[] };
+      };
+      const accessToken = authData.accessToken;
+      const hasAdminRole = authData.user?.roles?.some((role) => role.role === 'admin') ?? false;
+
+      if (accessToken !== undefined && accessToken !== '' && hasAdminRole) {
+        return {
+          accessToken,
+          email,
+          password,
+        };
+      }
+    }
+
+    await delay(100);
   }
 
-  const authData = (await parseTRPC(loginResponse)).data as { accessToken?: string };
-  if (authData.accessToken === undefined || authData.accessToken === '') {
-    throw new Error('Expected bootstrap admin login to return an access token');
-  }
-
-  return {
-    accessToken: authData.accessToken,
-    email,
-    password,
-  };
+  throw new Error('Expected bootstrap admin login to return an admin access token');
 }
 
 export async function registerAndVerifyUser(

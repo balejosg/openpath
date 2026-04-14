@@ -13,6 +13,7 @@ import path from 'node:path';
 import {
   TEST_RUN_ID,
   uniqueEmail,
+  createLegacyAdminAccessToken,
   trpcMutate as _trpcMutate,
   trpcQuery as _trpcQuery,
   parseTRPC,
@@ -120,7 +121,7 @@ async function getEnrollmentTicket(classroomId: string, accessToken: string): Pr
   return data.enrollmentToken;
 }
 
-await describe('Machine registration regressions', async () => {
+await describe('Machine registration regressions', { concurrency: false }, async () => {
   before(async () => {
     testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openpath-machine-registration-'));
 
@@ -140,13 +141,7 @@ await describe('Machine registration regressions', async () => {
 
   beforeEach(async () => {
     await resetDb();
-    const activeHarness = harness;
-    if (activeHarness === undefined) {
-      throw new Error('Expected machine registration harness to be initialized');
-    }
-    ADMIN_TOKEN = (
-      await activeHarness.bootstrapAdminSession({ name: 'Machine Registration Admin' })
-    ).accessToken;
+    ADMIN_TOKEN = createLegacyAdminAccessToken();
   });
 
   after(async () => {

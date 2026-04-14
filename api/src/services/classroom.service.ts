@@ -7,6 +7,21 @@
 
 import * as classroomStorage from '../lib/classroom-storage.js';
 import * as auth from '../lib/auth.js';
+import { config } from '../config.js';
+import { logger } from '../lib/logger.js';
+import { emitClassroomChanged } from '../lib/rule-events.js';
+import {
+  MachineExemptionError,
+  createMachineExemption,
+  deleteMachineExemption,
+  getActiveMachineExemptionsByClassroom,
+  getMachineExemptionById,
+} from '../lib/exemption-storage.js';
+import {
+  buildWhitelistUrl,
+  generateMachineToken,
+  hashMachineToken,
+} from '../lib/machine-download-token.js';
 
 import {
   calculateClassroomMachineStatus as calculateMachineStatus,
@@ -14,8 +29,18 @@ import {
   type ClassroomMachineStatus as SharedMachineStatus,
   type ClassroomStatus as SharedClassroomStatus,
   type CurrentGroupSource as SharedCurrentGroupSource,
-} from '@openpath/shared';
+} from '@openpath/shared/classroom-status';
 import type { JWTPayload } from '../types/index.js';
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function normalizeCurrentGroupSource(value: unknown): CurrentGroupSource {
+  return value === 'manual' || value === 'schedule' || value === 'default' || value === 'none'
+    ? value
+    : 'none';
+}
 
 // =============================================================================
 // Types
@@ -81,6 +106,49 @@ export interface UpdateClassroomData {
   activeGroupId?: string;
 }
 
+export interface CreateClassroomInput {
+  name: string;
+  displayName: string;
+  defaultGroupId?: string | undefined;
+}
+
+export interface SetActiveGroupInput {
+  id: string;
+  groupId: string | null;
+}
+
+export interface CreateMachineExemptionInput {
+  machineId: string;
+  classroomId: string;
+  scheduleId: string;
+  createdBy: string;
+}
+
+export interface MachineExemptionInfo {
+  id: string;
+  machineId: string;
+  machineHostname?: string;
+  classroomId: string;
+  scheduleId: string;
+  createdBy: string | null;
+  createdAt: string | null;
+  expiresAt: string;
+}
+
+export interface ClassroomMachineListItem {
+  id: string;
+  hostname: string;
+  classroomId: string | null;
+  version: string | null;
+  lastSeen: string | null;
+  hasDownloadToken: boolean;
+  downloadTokenLastRotatedAt: string | null;
+}
+
+export interface RotateMachineTokenResult {
+  whitelistUrl: string;
+}
+
 // Use standard tRPC error codes for easy mapping
 export type ClassroomServiceError =
   | { code: 'BAD_REQUEST'; message: string }
@@ -135,7 +203,7 @@ async function resolveClassroomAccessScope(
     defaultGroupId: scope.defaultGroupId,
     activeGroupId: scope.activeGroupId,
     currentGroupId: scope.currentGroupId,
-    currentGroupSource: scope.currentGroupSource,
+    currentGroupSource: normalizeCurrentGroupSource(scope.currentGroupSource),
   };
 }
 
@@ -220,7 +288,7 @@ export async function listClassrooms(user?: JWTPayload): Promise<ClassroomWithMa
       createdAt: c.createdAt.toISOString(),
       updatedAt: c.updatedAt.toISOString(),
       currentGroupId: scope?.currentGroupId ?? null,
-      currentGroupSource: scope?.currentGroupSource ?? 'none',
+      currentGroupSource: normalizeCurrentGroupSource(scope?.currentGroupSource),
       machines,
       machineCount: machines.length,
       status,
@@ -268,7 +336,7 @@ export async function getClassroom(
     createdAt: (classroom.createdAt ?? new Date()).toISOString(),
     updatedAt: (classroom.updatedAt ?? new Date()).toISOString(),
     currentGroupId: scope?.currentGroupId ?? null,
-    currentGroupSource: scope?.currentGroupSource ?? 'none',
+    currentGroupSource: normalizeCurrentGroupSource(scope?.currentGroupSource),
     machines,
     machineCount: machines.length,
     status,
@@ -354,11 +422,245 @@ export async function registerMachine(
   };
 }
 
+export async function createClassroom(
+  input: CreateClassroomInput
+): Promise<ClassroomResult<Awaited<ReturnType<typeof classroomStorage.createClassroom>>>> {
+  try {
+    const createData = {
+      name: input.name,
+      displayName: input.displayName,
+      ...(input.defaultGroupId !== undefined ? { defaultGroupId: input.defaultGroupId } : {}),
+    };
+
+    const created = await classroomStorage.createClassroom(createData);
+    return { ok: true, data: created };
+  } catch (error) {
+    logger.error('classrooms.create error', { error: formatErrorMessage(error), input });
+    if (error instanceof Error) {
+      if (error.message.includes('already exists')) {
+        return { ok: false, error: { code: 'CONFLICT', message: error.message } };
+      }
+      if (error.message.includes('invalid')) {
+        return { ok: false, error: { code: 'BAD_REQUEST', message: error.message } };
+      }
+    }
+
+    return {
+      ok: false,
+      error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create classroom' },
+    };
+  }
+}
+
+export async function updateClassroom(
+  id: string,
+  updates: UpdateClassroomData
+): Promise<ClassroomResult<Awaited<ReturnType<typeof classroomStorage.updateClassroom>>>> {
+  const updated = await classroomStorage.updateClassroom(id, updates);
+  if (!updated) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Classroom not found' } };
+  }
+
+  if (updates.defaultGroupId !== undefined) {
+    emitClassroomChanged(updated.id);
+  }
+
+  return { ok: true, data: updated };
+}
+
+export async function setClassroomActiveGroup(
+  user: JWTPayload,
+  input: SetActiveGroupInput
+): Promise<ClassroomResult<{ classroom: ClassroomWithMachines; currentGroupId: string | null }>> {
+  const access = await ensureUserCanAccessClassroom(user, input.id);
+  if (!access.ok) {
+    return access;
+  }
+
+  if (
+    input.groupId !== null &&
+    !auth.isAdminToken(user) &&
+    !auth.canApproveGroup(user, input.groupId)
+  ) {
+    return {
+      ok: false,
+      error: { code: 'FORBIDDEN', message: 'You can only set groups within your assigned scope' },
+    };
+  }
+
+  const updated = await classroomStorage.setActiveGroup(input.id, input.groupId);
+  if (!updated) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Classroom not found' } };
+  }
+
+  emitClassroomChanged(updated.id);
+
+  const result = await getClassroom(input.id, user);
+  if (!result.ok) {
+    return result;
+  }
+
+  return {
+    ok: true,
+    data: {
+      classroom: result.data,
+      currentGroupId: result.data.currentGroupId,
+    },
+  };
+}
+
+export async function createExemptionForClassroom(
+  user: JWTPayload,
+  input: CreateMachineExemptionInput
+): Promise<ClassroomResult<MachineExemptionInfo>> {
+  const access = await ensureUserCanAccessClassroom(user, input.classroomId);
+  if (!access.ok) {
+    return access;
+  }
+
+  try {
+    const created = await createMachineExemption({
+      machineId: input.machineId,
+      classroomId: input.classroomId,
+      scheduleId: input.scheduleId,
+      createdBy: input.createdBy,
+    });
+
+    emitClassroomChanged(input.classroomId);
+
+    return {
+      ok: true,
+      data: {
+        id: created.id,
+        machineId: created.machineId,
+        classroomId: created.classroomId,
+        scheduleId: created.scheduleId,
+        createdBy: created.createdBy ?? null,
+        createdAt: created.createdAt ? created.createdAt.toISOString() : null,
+        expiresAt: created.expiresAt.toISOString(),
+      },
+    };
+  } catch (error: unknown) {
+    if (error instanceof MachineExemptionError) {
+      return { ok: false, error: { code: error.code, message: error.message } };
+    }
+
+    return {
+      ok: false,
+      error: { code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create machine exemption' },
+    };
+  }
+}
+
+export async function deleteExemptionForClassroom(
+  user: JWTPayload,
+  exemptionId: string
+): Promise<ClassroomResult<{ success: true }>> {
+  const existing = await getMachineExemptionById(exemptionId);
+  if (!existing) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Exemption not found' } };
+  }
+
+  const access = await ensureUserCanAccessClassroom(user, existing.classroomId);
+  if (!access.ok) {
+    return access;
+  }
+
+  const deleted = await deleteMachineExemption(exemptionId);
+  if (!deleted) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Exemption not found' } };
+  }
+
+  emitClassroomChanged(deleted.classroomId);
+  return { ok: true, data: { success: true } };
+}
+
+export async function listExemptionsForClassroom(
+  user: JWTPayload,
+  classroomId: string
+): Promise<ClassroomResult<{ classroomId: string; exemptions: MachineExemptionInfo[] }>> {
+  const access = await ensureUserCanAccessClassroom(user, classroomId);
+  if (!access.ok) {
+    return access;
+  }
+
+  const rows = await getActiveMachineExemptionsByClassroom(classroomId, new Date());
+  return {
+    ok: true,
+    data: {
+      classroomId,
+      exemptions: rows.map((entry) => ({
+        id: entry.id,
+        machineId: entry.machineId,
+        machineHostname: entry.machineHostname,
+        classroomId: entry.classroomId,
+        scheduleId: entry.scheduleId,
+        createdBy: entry.createdBy,
+        createdAt: entry.createdAt ? entry.createdAt.toISOString() : null,
+        expiresAt: entry.expiresAt.toISOString(),
+      })),
+    },
+  };
+}
+
+export async function deleteClassroom(id: string): Promise<ClassroomResult<{ success: true }>> {
+  if (!(await classroomStorage.deleteClassroom(id))) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Classroom not found' } };
+  }
+
+  return { ok: true, data: { success: true } };
+}
+
+export async function listMachines(classroomId?: string): Promise<ClassroomMachineListItem[]> {
+  const allMachines = await classroomStorage.getAllMachines(classroomId);
+  return allMachines.map((machine) => ({
+    id: machine.id,
+    hostname: machine.hostname,
+    classroomId: machine.classroomId,
+    version: machine.version,
+    lastSeen: machine.lastSeen?.toISOString() ?? null,
+    hasDownloadToken: machine.downloadTokenHash !== null,
+    downloadTokenLastRotatedAt: machine.downloadTokenLastRotatedAt?.toISOString() ?? null,
+  }));
+}
+
+export async function rotateMachineToken(
+  machineId: string
+): Promise<ClassroomResult<RotateMachineTokenResult>> {
+  const machine = await classroomStorage.getMachineById(machineId);
+  if (!machine) {
+    return { ok: false, error: { code: 'NOT_FOUND', message: 'Machine not found' } };
+  }
+
+  const token = generateMachineToken();
+  const tokenHash = hashMachineToken(token);
+  await classroomStorage.setMachineDownloadTokenHash(machineId, tokenHash);
+
+  const publicUrl = config.publicUrl ?? `http://${config.host}:${String(config.port)}`;
+  const whitelistUrl = buildWhitelistUrl(publicUrl, token);
+
+  logger.info('Machine download token rotated via dashboard', {
+    machineId,
+    hostname: machine.hostname,
+  });
+
+  return { ok: true, data: { whitelistUrl } };
+}
+
 // =============================================================================
 // Default Export
 // =============================================================================
 
 export default {
+  createClassroom,
+  updateClassroom,
+  setClassroomActiveGroup,
+  createExemptionForClassroom,
+  deleteExemptionForClassroom,
+  listExemptionsForClassroom,
+  deleteClassroom,
+  listMachines,
+  rotateMachineToken,
   registerMachine,
   listClassrooms,
   getClassroom,
