@@ -1,0 +1,18 @@
+# Explicit source -> test suite mappings for split suites.
+# Format:
+#   <source path>|<test path 1>,<test path 2>,...
+
+api/src/server.ts|api/tests/app.test.ts,api/tests/server-runtime.test.ts,api/tests/server-assets.test.ts,api/tests/server-request-auth.test.ts,api/tests/server-setup-cookie.test.ts
+api/src/trpc/routers/groups.ts|api/tests/groups-auth.test.ts,api/tests/groups-teacher-access.test.ts,api/tests/groups-rule-ops.test.ts,api/tests/groups-export.test.ts
+api/src/trpc/routers/auth.ts|api/tests/auth-registration.test.ts,api/tests/auth-google-login.test.ts,api/tests/auth-session.test.ts,api/tests/auth-password.test.ts,api/tests/auth-admin-guards.test.ts
+api/src/trpc/routers/push.ts|api/tests/push-vapid.test.ts,api/tests/push-subscription.test.ts,api/tests/push-status.test.ts,api/tests/push-unsubscribe.test.ts
+api/src/trpc/routers/schedules.ts|api/tests/schedules-time-utils.test.ts,api/tests/schedules-crud.test.ts,api/tests/schedules-query.test.ts,api/tests/schedules-current.test.ts
+api/src/trpc/routers/healthcheck.ts|api/tests/healthcheck-live.test.ts,api/tests/healthcheck-ready.test.ts,api/tests/healthcheck-surface.test.ts
+api/src/routes/machines.ts|api/tests/machines-enrollment-routes.test.ts,api/tests/machines-delivery-routes.test.ts,api/tests/machines-events-routes.test.ts
+api/src/trpc/routers/classrooms.ts|api/tests/classrooms-crud.test.ts,api/tests/classrooms-machines.test.ts,api/tests/classrooms-cleanup.test.ts
+api/src/trpc/routers/api-tokens.ts|api/tests/api-tokens-auth-guards.test.ts,api/tests/api-tokens-removed-procedures.test.ts
+api/src/lib/health-status.ts|api/tests/health-status-normalization.test.ts,api/tests/health-status-actions.test.ts,api/tests/health-status-contract.test.ts
+api/src/lib/auth.ts|api/tests/auth-registration.test.ts,api/tests/auth-google-login.test.ts,api/tests/auth-session.test.ts,api/tests/auth-password.test.ts,api/tests/auth-admin-guards.test.ts,api/tests/session-cookies.test.ts,api/tests/email-verification.test.ts
+api/src/lib/push.ts|api/tests/push-vapid.test.ts,api/tests/push-subscription.test.ts,api/tests/push-status.test.ts,api/tests/push-unsubscribe.test.ts
+api/src/lib/schedule-storage.ts|api/tests/schedules-time-utils.test.ts,api/tests/schedules-crud.test.ts,api/tests/schedules-query.test.ts,api/tests/schedules-current.test.ts
+api/src/server-assets.ts|api/tests/server-assets.test.ts,api/tests/server-request-auth.test.ts,api/tests/server-setup-cookie.test.ts

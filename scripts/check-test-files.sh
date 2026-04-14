@@ -21,6 +21,7 @@ declare -a missing_tests=()
 checked_count=0
 skipped_count=0
 allowlisted_count=0
+manifested_count=0
 
 # Load allowlist (grandfathered files)
 declare -A ALLOWLIST
@@ -31,6 +32,23 @@ if [[ -f ".test-allowlist" ]]; then
     [[ "$line" == \#* ]] && continue
     ALLOWLIST["$line"]=1
   done < ".test-allowlist"
+fi
+
+# Load explicit source -> test suite mappings for split suites
+declare -A TEST_FILE_MAP
+if [[ -f ".test-file-map" ]]; then
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    [[ "$line" == \#* ]] && continue
+
+    src_file="${line%%|*}"
+    mapped_tests="${line#*|}"
+
+    [[ -z "$src_file" ]] && continue
+    [[ -z "$mapped_tests" ]] && continue
+
+    TEST_FILE_MAP["$src_file"]="$mapped_tests"
+  done < ".test-file-map"
 fi
 
 is_allowlisted() {
@@ -99,6 +117,20 @@ is_excluded() {
 # Check if test file exists for a source file
 test_exists_for() {
   local src_file="$1"
+  local mapped_tests
+  mapped_tests="${TEST_FILE_MAP[$src_file]:-}"
+
+  if [[ -n "$mapped_tests" ]]; then
+    IFS=',' read -r -a explicit_tests <<< "$mapped_tests"
+    for explicit_test in "${explicit_tests[@]}"; do
+      if [[ ! -f "$explicit_test" ]]; then
+        return 1
+      fi
+    done
+    ((manifested_count++)) || true
+    return 0
+  fi
+
   local test_name
   test_name=$(basename "$src_file" .ts)
   test_name=$(basename "$test_name" .tsx)
@@ -179,6 +211,7 @@ done
 echo "Checked: $checked_count source files"
 echo "Skipped: $skipped_count files (excluded patterns)"
 echo "Allowlisted: $allowlisted_count files (grandfathered, tech debt)"
+echo "Manifested: $manifested_count files (split-suite mappings)"
 echo ""
 
 if [[ ${#missing_tests[@]} -gt 0 ]]; then
@@ -186,6 +219,15 @@ if [[ ${#missing_tests[@]} -gt 0 ]]; then
   echo ""
   for file in "${missing_tests[@]}"; do
     echo -e "  ${YELLOW}$file${NC}"
+    mapped_tests="${TEST_FILE_MAP[$file]:-}"
+    if [[ -n "$mapped_tests" ]]; then
+      IFS=',' read -r -a explicit_tests <<< "$mapped_tests"
+      echo "    Expected mapped suites:"
+      for explicit_test in "${explicit_tests[@]}"; do
+        echo "      - $explicit_test"
+      done
+      continue
+    fi
     test_name=$(basename "$file" .ts)
     test_name=$(basename "$test_name" .tsx)
     if [[ "$file" == api/src/* ]]; then
