@@ -18,6 +18,11 @@ import { getRequestApiEndpoints, loadRequestConfig } from './lib/config-storage.
 import { buildBlockedDomainSubmitBody } from './lib/blocked-request.js';
 import { createBlockedMonitorState } from './lib/blocked-monitor-state.js';
 import {
+  createNativeMessagingClient,
+  type NativeResponse,
+  type VerifyResponse,
+} from './lib/native-messaging-client.js';
+import {
   BLOCKED_SCREEN_PATH,
   MAX_BLOCKED_PATH_RULES,
   PATH_BLOCKING_FILTER_TYPES,
@@ -38,37 +43,6 @@ import {
 } from './lib/blocked-screen-contract.js';
 
 declare const browser: Browser;
-
-interface NativeResponse {
-  success: boolean;
-  [key: string]: unknown;
-}
-
-interface NativeCheckResult {
-  domain: string;
-  in_whitelist: boolean;
-  resolved_ip?: string;
-  error?: string;
-}
-
-interface NativeCheckResponse {
-  success: boolean;
-  results?: NativeCheckResult[];
-  error?: string;
-}
-
-interface VerifyResult {
-  domain: string;
-  inWhitelist: boolean;
-  resolvedIp?: string;
-  error?: string;
-}
-
-interface VerifyResponse {
-  success: boolean;
-  results: VerifyResult[];
-  error?: string;
-}
 
 interface AutoAllowApiResponse {
   success: boolean;
@@ -119,12 +93,12 @@ const blockedMonitorState = createBlockedMonitorState(
   }
 );
 
-// Estado de Native Messaging
-
-let nativePort: Runtime.Port | null = null;
-
 // Nombre del host de Native Messaging
 const NATIVE_HOST_NAME = 'whitelist_native_host';
+const nativeMessagingClient = createNativeMessagingClient({
+  hostName: NATIVE_HOST_NAME,
+  logger,
+});
 
 // Errores que indican bloqueo (no ruido)
 const BLOCKING_ERRORS = [
@@ -191,7 +165,7 @@ async function redirectToBlockedScreen(context: BlockedScreenContext): Promise<v
 
 async function refreshBlockedPathRules(force = false): Promise<boolean> {
   try {
-    const response = (await sendNativeMessage({
+    const response = (await nativeMessagingClient.sendMessage({
       action: 'get-blocked-paths',
     })) as NativeBlockedPathsResponse;
     if (!response.success) {
@@ -329,136 +303,27 @@ async function fetchWithFallback(
 // ============================================================================
 
 /**
- * Conecta con el host de Native Messaging
- * @returns true si la conexión fue exitosa
- */
-async function connectNativeHost(): Promise<boolean> {
-  return new Promise((resolve) => {
-    try {
-      nativePort = browser.runtime.connectNative(NATIVE_HOST_NAME);
-
-      nativePort.onDisconnect.addListener((_port: Runtime.Port) => {
-        logger.info('[Monitor] Native host desconectado', { lastError: browser.runtime.lastError });
-
-        nativePort = null;
-      });
-
-      logger.info('[Monitor] Native host conectado');
-      resolve(true);
-    } catch (error) {
-      logger.error('[Monitor] Error conectando Native host', { error: getErrorMessage(error) });
-
-      resolve(false);
-    }
-  });
-}
-
-/**
- * Envía un mensaje al host de Native Messaging y espera respuesta
- * @param message - Mensaje a enviar
- * @returns Respuesta del host
- */
-async function sendNativeMessage(message: unknown): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const attempt = async (): Promise<void> => {
-      try {
-        // Intentar conectar si no está conectado
-        if (!nativePort) {
-          const connected = await connectNativeHost();
-          if (!connected) {
-            reject(new Error('No se pudo conectar con el host nativo'));
-            return;
-          }
-        }
-
-        // Usar sendNativeMessage para comunicación simple
-        const response = await browser.runtime.sendNativeMessage(
-          NATIVE_HOST_NAME,
-          message as object
-        );
-
-        resolve(response);
-      } catch (error) {
-        logger.error('[Monitor] Error en Native Messaging', { error: getErrorMessage(error) });
-        reject(error instanceof Error ? error : new Error(String(error)));
-      }
-    };
-    void attempt();
-  });
-}
-
-/**
  * Verifica dominios usando el sistema de whitelist local
  * @param domains - Lista de dominios a verificar
  * @returns Resultado de la verificación
  */
 async function checkDomainsWithNative(domains: string[]): Promise<VerifyResponse> {
-  try {
-    const response = await sendNativeMessage({
-      action: 'check',
-      domains: domains,
-    });
-
-    const nativeResponse = response as NativeCheckResponse;
-    const mappedResults: VerifyResult[] = (nativeResponse.results ?? []).map((result) => {
-      const mapped: VerifyResult = {
-        domain: result.domain,
-        inWhitelist: result.in_whitelist,
-      };
-
-      if (result.resolved_ip !== undefined) {
-        mapped.resolvedIp = result.resolved_ip;
-      }
-
-      if (result.error !== undefined) {
-        mapped.error = result.error;
-      }
-
-      return mapped;
-    });
-
-    const verifyResponse: VerifyResponse = {
-      success: nativeResponse.success,
-      results: mappedResults,
-    };
-
-    if (nativeResponse.error !== undefined) {
-      verifyResponse.error = nativeResponse.error;
-    }
-
-    return verifyResponse;
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-    return {
-      success: false,
-      results: [],
-      error: errorMessage,
-    };
-  }
+  return await nativeMessagingClient.checkDomains(domains);
 }
 
 /**
  * Verifica si el host de Native Messaging está disponible
  */
 async function isNativeHostAvailable(): Promise<boolean> {
-  try {
-    const response = (await sendNativeMessage({ action: 'ping' })) as NativeResponse;
-    return response.success;
-  } catch {
-    return false;
-  }
+  return await nativeMessagingClient.isAvailable();
 }
 
 async function triggerLocalWhitelistUpdate(): Promise<boolean> {
-  try {
-    const response = (await sendNativeMessage({ action: 'update-whitelist' })) as NativeResponse;
-    if (response.success) {
-      await refreshBlockedPathRules(true);
-    }
-    return response.success;
-  } catch {
-    return false;
+  const success = await nativeMessagingClient.requestLocalWhitelistUpdate();
+  if (success) {
+    await refreshBlockedPathRules(true);
   }
+  return success;
 }
 
 async function submitBlockedDomainRequest(
@@ -480,7 +345,9 @@ async function submitBlockedDomainRequest(
     };
   }
 
-  const hostnameResponse = (await sendNativeMessage({ action: 'get-hostname' })) as {
+  const hostnameResponse = (await nativeMessagingClient.sendMessage({
+    action: 'get-hostname',
+  })) as {
     success: boolean;
     hostname?: string;
     error?: string;
@@ -492,7 +359,9 @@ async function submitBlockedDomainRequest(
     };
   }
 
-  const tokenResponse = (await sendNativeMessage({ action: 'get-machine-token' })) as {
+  const tokenResponse = (await nativeMessagingClient.sendMessage({
+    action: 'get-machine-token',
+  })) as {
     success: boolean;
     token?: string;
     error?: string;
@@ -592,7 +461,9 @@ async function autoAllowBlockedDomain(
       return;
     }
 
-    const hostnameResponse = (await sendNativeMessage({ action: 'get-hostname' })) as {
+    const hostnameResponse = (await nativeMessagingClient.sendMessage({
+      action: 'get-hostname',
+    })) as {
       success: boolean;
       hostname?: string;
       error?: string;
@@ -609,7 +480,9 @@ async function autoAllowBlockedDomain(
     }
 
     const machineHostname = hostnameResponse.hostname;
-    const tokenResponse = (await sendNativeMessage({ action: 'get-machine-token' })) as {
+    const tokenResponse = (await nativeMessagingClient.sendMessage({
+      action: 'get-machine-token',
+    })) as {
       success: boolean;
       token?: string;
       error?: string;
@@ -867,7 +740,7 @@ browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.
 
     case 'getNativeBlockedPathsDebug':
       try {
-        return (await sendNativeMessage({
+        return (await nativeMessagingClient.sendMessage({
           action: 'get-blocked-paths',
         })) as NativeBlockedPathsResponse;
       } catch (error) {
@@ -919,7 +792,7 @@ browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.
 
     case 'getHostname':
       try {
-        return await sendNativeMessage({ action: 'get-hostname' });
+        return await nativeMessagingClient.sendMessage({ action: 'get-hostname' });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return { success: false, error: errorMessage };
@@ -927,7 +800,7 @@ browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.
 
     case 'getMachineToken':
       try {
-        return await sendNativeMessage({ action: 'get-machine-token' });
+        return await nativeMessagingClient.sendMessage({ action: 'get-machine-token' });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return { success: false, error: errorMessage };
@@ -959,7 +832,7 @@ browser.runtime.onMessage.addListener(async (message: unknown, _sender: Runtime.
 
     case 'triggerWhitelistUpdate':
       try {
-        const response = (await sendNativeMessage({
+        const response = (await nativeMessagingClient.sendMessage({
           action: 'update-whitelist',
         })) as NativeResponse;
         if (response.success) {
