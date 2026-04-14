@@ -91,6 +91,9 @@ api/tests/runtime/db.ts|api/tests/auth.service.test.ts,api/tests/context.test.ts
 api/tests/runtime/identifiers.ts|api/tests/groups-rule-ops.test.ts,api/tests/groups-teacher-access.test.ts,api/tests/machine-auth-scope-enrollment.test.ts,api/tests/machine-auth-scope-boundaries.test.ts,api/tests/machine-auth-scope-operational.test.ts
 api/tests/runtime/trpc.ts|api/tests/groups-auth.test.ts,api/tests/groups-export.test.ts,api/tests/setup-status.test.ts,api/tests/setup-first-admin.test.ts,api/tests/setup-token-validation.test.ts,api/tests/setup-auth-guards.test.ts,api/tests/e2e-admin-bootstrap.test.ts,api/tests/e2e-teacher-profile.test.ts,api/tests/e2e-teacher-requests.test.ts,api/tests/e2e-teacher-boundaries.test.ts
 api/tests/runtime/auth.ts|api/tests/auth-registration.test.ts,api/tests/email-verification.test.ts,api/tests/setup-status.test.ts,api/tests/setup-first-admin.test.ts,api/tests/setup-token-validation.test.ts,api/tests/setup-auth-guards.test.ts,api/tests/e2e-admin-bootstrap.test.ts,api/tests/e2e-teacher-profile.test.ts,api/tests/e2e-teacher-requests.test.ts,api/tests/e2e-teacher-boundaries.test.ts
+api/src/lib/exemption-storage-command.ts|api/tests/lib/exemption-storage.test.ts,api/tests/classroom-policy-context.test.ts
+api/src/lib/exemption-storage-query.ts|api/tests/lib/exemption-storage.test.ts,api/tests/classroom-policy-context.test.ts
+api/src/lib/exemption-storage-shared.ts|api/tests/lib/exemption-storage.test.ts,api/tests/classroom-policy-context.test.ts
 dashboard/src/index.ts|dashboard/tests/api.test.ts
 dashboard/src/app.ts|dashboard/tests/api.test.ts
 dashboard/src/app-middleware.ts|dashboard/tests/api.test.ts
@@ -135,6 +138,9 @@ react-spa/src/hooks/useDashboardViewModel.ts|react-spa/src/views/__tests__/Dashb
 react-spa/src/hooks/useRuleEditor.ts|react-spa/src/components/__tests__/RulesTable.test.tsx,react-spa/src/components/__tests__/HierarchicalRulesTable.test.tsx
 react-spa/src/hooks/useBulkImportModalState.ts|react-spa/src/components/__tests__/BulkImportModal.test.tsx
 react-spa/src/lib/rule-groups.ts|react-spa/src/components/__tests__/HierarchicalRulesTable.test.tsx
+react-spa/src/app-navigation.ts|react-spa/src/__tests__/app-navigation.test.ts
+react-spa/src/app-auth-content.tsx|react-spa/src/__tests__/app-auth-content.test.tsx
+react-spa/src/app-main-content.tsx|react-spa/src/__tests__/app-main-content.test.tsx
 firefox-extension/src/lib/background-runtime.ts|firefox-extension/tests/background.test.ts,firefox-extension/tests/background-message-handler.test.ts,firefox-extension/tests/native-host-contract.test.ts
 firefox-extension/src/lib/background-listeners.ts|firefox-extension/tests/background.test.ts,firefox-extension/tests/background-message-handler.test.ts
 firefox-extension/src/lib/background-path-rules.ts|firefox-extension/tests/background.test.ts,firefox-extension/tests/background-message-handler.test.ts
