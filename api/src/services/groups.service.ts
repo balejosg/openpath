@@ -6,12 +6,10 @@
  */
 
 import * as groupsStorage from '../lib/groups-storage.js';
-import * as auth from '../lib/auth.js';
 import { withTransaction } from '../db/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import type {
   GroupWithCounts,
-  GroupVisibility,
   Rule,
   RuleType,
   GroupStats,
@@ -23,196 +21,46 @@ import type {
 } from '../lib/groups-storage.js';
 import { validateRuleValue, cleanRuleValue, sanitizeSlug } from '@openpath/shared';
 import DomainEventsService from './domain-events.service.js';
-import type { JWTPayload } from '../lib/auth.js';
+import {
+  canUserAccessGroup,
+  canUserViewGroup,
+  ensureUserCanAccessGroupId,
+  ensureUserCanViewGroupId,
+  getGroupById,
+  getGroupByName,
+  listGroups,
+  listGroupsVisibleToUser,
+  listLibraryGroups,
+} from './groups-access.service.js';
+import type {
+  BulkCreateRulesInput,
+  CloneGroupInput,
+  CreateGroupInput,
+  CreateRuleInput,
+  ExportResult,
+  GroupsResult,
+  UpdateGroupInput,
+  UpdateRuleInput,
+} from './groups-service-shared.js';
+export type {
+  BulkCreateRulesInput,
+  CloneGroupInput,
+  CreateGroupInput,
+  CreateRuleInput,
+  ExportResult,
+  GroupsResult,
+  GroupsServiceError,
+  UpdateGroupInput,
+  UpdateRuleInput,
+} from './groups-service-shared.js';
 
 // =============================================================================
 // Types
 // =============================================================================
 
-/** Standard tRPC error codes for easy mapping */
-export type GroupsServiceError =
-  | { code: 'BAD_REQUEST'; message: string }
-  | { code: 'FORBIDDEN'; message: string }
-  | { code: 'NOT_FOUND'; message: string }
-  | { code: 'CONFLICT'; message: string }
-  | { code: 'INTERNAL_SERVER_ERROR'; message: string };
-
-export type GroupsResult<T> = { ok: true; data: T } | { ok: false; error: GroupsServiceError };
-
-export interface CreateGroupInput {
-  name: string;
-  displayName: string;
-  visibility?: GroupVisibility | undefined;
-  ownerUserId?: string | null | undefined;
-}
-
-export interface UpdateGroupInput {
-  id: string;
-  displayName: string;
-  enabled: boolean;
-  visibility?: GroupVisibility | undefined;
-}
-
-export interface CreateRuleInput {
-  groupId: string;
-  type: RuleType;
-  value: string;
-  comment?: string | undefined;
-}
-
-export interface BulkCreateRulesInput {
-  groupId: string;
-  type: RuleType;
-  values: string[];
-}
-
-export interface UpdateRuleInput {
-  id: string;
-  groupId: string;
-  value?: string | undefined;
-  comment?: string | null | undefined;
-}
-
-export interface ExportResult {
-  name: string;
-  content: string;
-}
-
-export interface CloneGroupInput {
-  sourceGroupId: string;
-  name?: string | undefined;
-  displayName: string;
-  ownerUserId: string;
-}
-
-type GroupAccessShape = Pick<GroupWithCounts, 'id' | 'name' | 'ownerUserId'>;
-type GroupViewShape = Pick<GroupWithCounts, 'id' | 'name' | 'ownerUserId' | 'visibility'>;
-
 // =============================================================================
 // Service Implementation
 // =============================================================================
-
-/**
- * List all groups with their rule counts.
- */
-export async function listGroups(): Promise<GroupWithCounts[]> {
-  return groupsStorage.getAllGroups();
-}
-
-export function canUserAccessGroup(user: JWTPayload, group: GroupAccessShape): boolean {
-  if (group.ownerUserId && group.ownerUserId === user.sub) {
-    return true;
-  }
-
-  return auth.canApproveGroup(user, group.id) || auth.canApproveGroup(user, group.name);
-}
-
-export function canUserViewGroup(user: JWTPayload, group: GroupViewShape): boolean {
-  if (canUserAccessGroup(user, group)) {
-    return true;
-  }
-
-  return group.visibility === 'instance_public';
-}
-
-export async function ensureUserCanAccessGroupId(
-  user: JWTPayload,
-  groupId: string
-): Promise<GroupsResult<void>> {
-  if (auth.canApproveGroup(user, groupId)) {
-    return { ok: true, data: undefined };
-  }
-
-  const groupResult = await getGroupById(groupId);
-  if (!groupResult.ok) {
-    return { ok: false, error: groupResult.error };
-  }
-
-  if (groupResult.data.ownerUserId && groupResult.data.ownerUserId === user.sub) {
-    return { ok: true, data: undefined };
-  }
-
-  if (auth.canApproveGroup(user, groupResult.data.name)) {
-    return { ok: true, data: undefined };
-  }
-
-  return {
-    ok: false,
-    error: { code: 'FORBIDDEN', message: 'You do not have access to this group' },
-  };
-}
-
-export async function ensureUserCanViewGroupId(
-  user: JWTPayload,
-  groupId: string
-): Promise<GroupsResult<void>> {
-  if (auth.canApproveGroup(user, groupId)) {
-    return { ok: true, data: undefined };
-  }
-
-  const groupResult = await getGroupById(groupId);
-  if (groupResult.ok) {
-    if (canUserViewGroup(user, groupResult.data)) {
-      return { ok: true, data: undefined };
-    }
-
-    return {
-      ok: false,
-      error: { code: 'FORBIDDEN', message: 'You do not have access to this group' },
-    };
-  }
-
-  if (groupResult.error.code !== 'NOT_FOUND') {
-    return { ok: false, error: groupResult.error };
-  }
-
-  const normalized = groupId.endsWith('.txt') ? groupId.slice(0, -4) : groupId;
-  const byName = await getGroupByName(normalized);
-  if (!byName.ok) {
-    return byName;
-  }
-
-  if (canUserViewGroup(user, byName.data)) {
-    return { ok: true, data: undefined };
-  }
-
-  return {
-    ok: false,
-    error: { code: 'FORBIDDEN', message: 'You do not have access to this group' },
-  };
-}
-
-export async function listGroupsVisibleToUser(user: JWTPayload): Promise<GroupWithCounts[]> {
-  const groups = await listGroups();
-  return groups.filter((group) => canUserAccessGroup(user, group));
-}
-
-export async function listLibraryGroups(): Promise<GroupWithCounts[]> {
-  const groups = await listGroups();
-  return groups.filter((group) => group.visibility === 'instance_public');
-}
-
-/**
- * Get a group by ID.
- */
-export async function getGroupById(id: string): Promise<GroupsResult<GroupWithCounts>> {
-  const group = await groupsStorage.getGroupById(id);
-  if (!group) {
-    return { ok: false, error: { code: 'NOT_FOUND', message: 'Group not found' } };
-  }
-  return { ok: true, data: group };
-}
-
-/**
- * Get a group by name.
- */
-export async function getGroupByName(name: string): Promise<GroupsResult<GroupWithCounts>> {
-  const group = await groupsStorage.getGroupByName(name);
-  if (!group) {
-    return { ok: false, error: { code: 'NOT_FOUND', message: 'Group not found' } };
-  }
-  return { ok: true, data: group };
-}
 
 /**
  * Create a new group.
