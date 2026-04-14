@@ -88,6 +88,14 @@ react-spa/src/components/dashboard/DashboardQuickAccessSection.tsx|react-spa/src
 react-spa/src/components/classrooms/ClassroomListPane.tsx|react-spa/src/views/__tests__/Classrooms.test.tsx
 react-spa/src/components/classrooms/NewClassroomModal.tsx|react-spa/src/views/__tests__/Classrooms.test.tsx
 react-spa/src/components/classrooms/EnrollClassroomModal.tsx|react-spa/src/views/__tests__/Classrooms.test.tsx
+react-spa/src/views/Users.tsx|react-spa/src/views/__tests__/Users.test.tsx
+react-spa/src/components/users/UserRoleBadge.tsx|react-spa/src/views/__tests__/Users.test.tsx
+react-spa/src/components/users/UsersToolbar.tsx|react-spa/src/views/__tests__/Users.test.tsx
+react-spa/src/components/users/UsersTable.tsx|react-spa/src/views/__tests__/Users.test.tsx
+react-spa/src/components/users/UsersEditModal.tsx|react-spa/src/views/__tests__/Users.test.tsx
+react-spa/src/components/users/UsersCreateModal.tsx|react-spa/src/views/__tests__/Users.test.tsx
+react-spa/src/components/users/UsersResetDialogs.tsx|react-spa/src/views/__tests__/Users.test.tsx
+react-spa/src/components/users/UsersDeleteDialog.tsx|react-spa/src/views/__tests__/Users.test.tsx
 react-spa/src/components/RulesTable.tsx|react-spa/src/components/__tests__/RulesTable.test.tsx
 react-spa/src/components/HierarchicalRulesTable.tsx|react-spa/src/components/__tests__/HierarchicalRulesTable.test.tsx
 react-spa/src/components/BulkImportModal.tsx|react-spa/src/components/__tests__/BulkImportModal.test.tsx
