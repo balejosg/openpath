@@ -238,13 +238,16 @@ load 'test_helper'
     run grep -n 'raw.githubusercontent.com' "$PROJECT_DIR/linux/lib/common-protected-domains.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n 'raw.githubusercontent.com' "$PROJECT_DIR/windows/lib/Common.psm1"
+    run grep -n 'Common.Domains.ps1' "$PROJECT_DIR/windows/lib/Common.psm1"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'raw.githubusercontent.com' "$PROJECT_DIR/windows/lib/internal/Common.Domains.ps1"
     [ "$status" -eq 0 ]
 
     run grep -n 'balejosg.github.io' "$PROJECT_DIR/linux/lib/common-protected-domains.sh"
     [ "$status" -ne 0 ]
 
-    run grep -n 'balejosg.github.io' "$PROJECT_DIR/windows/lib/Common.psm1"
+    run grep -n 'balejosg.github.io' "$PROJECT_DIR/windows/lib/internal/Common.Domains.ps1"
     [ "$status" -ne 0 ]
 }
 
