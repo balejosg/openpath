@@ -110,6 +110,13 @@ cd api
 NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/classrooms-crud.test.ts tests/classrooms-machines.test.ts tests/classrooms-cleanup.test.ts
 ```
 
+Blocked domains split example:
+
+```bash
+cd api
+NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/blocked-domains-check.test.ts tests/blocked-domains-list.test.ts tests/blocked-domains-approval.test.ts
+```
+
 ## Anti-Patterns
 
 - direct DB queries in routers

@@ -27,6 +27,7 @@
     "test:setup": "NODE_ENV=test PORT=3005 node --import tsx --test --test-force-exit tests/setup.test.ts",
     "test:e2e": "NODE_ENV=test PORT=3002 node --import tsx --test --test-force-exit tests/e2e.test.ts",
     "test:roles": "NODE_ENV=test PORT=3007 node --import tsx --test --test-force-exit tests/roles.test.ts",
+    "test:blocked-domains": "NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/blocked-domains-check.test.ts tests/blocked-domains-list.test.ts tests/blocked-domains-approval.test.ts",
     "test:groups": "NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/groups-auth.test.ts tests/groups-teacher-access.test.ts tests/groups-rule-ops.test.ts tests/groups-export.test.ts",
     "test:service-coverage": "NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/service-coverage-user-storage.test.ts tests/service-coverage-setup.test.ts tests/service-coverage-schema.test.ts tests/service-coverage-user-service.test.ts tests/service-coverage-auth-service.test.ts",
     "test:coverage-regressions": "NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/coverage-regressions-storage.test.ts tests/coverage-regressions-legacy-storage.test.ts tests/coverage-regressions-router-validation.test.ts",
