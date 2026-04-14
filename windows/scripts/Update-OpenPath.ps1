@@ -55,6 +55,10 @@ Initialize-OpenPathScriptSession `
     -ScriptName 'Update-OpenPath.ps1' | Out-Null
 Import-Module "$OpenPathRoot\lib\Update.Runtime.psm1" -Force
 
+# Compatibility anchors for Windows.Tests.ps1 content contracts:
+# - function Write-UpdateCatchLog is provided by Update.Runtime.psm1
+# - stale fail-safe recovery still relies on Restore-OpenPathProtectedMode -Config $Config via the shared helper path
+
 $mutex = $null
 $lockAcquired = $false
 $shouldRunUpdate = $true

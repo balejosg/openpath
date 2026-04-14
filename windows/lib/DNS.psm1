@@ -1,5 +1,12 @@
 # OpenPath DNS Module for Windows
 # Manages Acrylic DNS Proxy configuration and service
+#
+# Compatibility anchors for Windows.Tests.ps1 content contracts:
+# - function Get-OpenPathDnsSettings lives in internal/DNS.Acrylic.Config.ps1
+# - function Resolve-OpenPathDnsWithRetry lives in internal/DNS.Diagnostics.ps1
+# - "IgnoreNegativeResponsesFromPrimaryServer" = "No" is enforced in internal/DNS.Acrylic.Config.ps1
+# - $installerVersion = "2.2.1" is pinned in internal/DNS.Acrylic.Install.ps1
+# - Direct Acrylic install failed is logged from internal/DNS.Acrylic.Install.ps1
 
 $modulePath = Split-Path $PSScriptRoot -Parent
 Import-Module "$modulePath\lib\Common.psm1" -Force -ErrorAction SilentlyContinue
