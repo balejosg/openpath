@@ -103,6 +103,13 @@ cd api
 npm --prefix .. run build --workspace=@openpath/shared && NODE_ENV=test PORT=3002 node --import tsx --test --test-concurrency=1 --test-force-exit tests/e2e-admin-bootstrap.test.ts tests/e2e-teacher-profile.test.ts tests/e2e-teacher-requests.test.ts tests/e2e-teacher-boundaries.test.ts tests/e2e.test.ts
 ```
 
+Push split example:
+
+```bash
+cd api
+NODE_ENV=test PORT=3003 node --import tsx --test --test-concurrency=1 --test-force-exit tests/push-vapid.test.ts tests/push-subscription.test.ts tests/push-status.test.ts tests/push-unsubscribe.test.ts tests/push.test.ts
+```
+
 SSE split example:
 
 ```bash
