@@ -68,6 +68,13 @@ cd api
 NODE_ENV=test PORT=3001 node --import tsx --test --test-concurrency=1 --test-force-exit tests/auth-registration.test.ts tests/auth-google-login.test.ts tests/auth-session.test.ts tests/auth-password.test.ts tests/auth-admin-guards.test.ts
 ```
 
+Backup split example:
+
+```bash
+cd api
+NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/backup-surface.test.ts tests/backup-auth.test.ts tests/backup-recording.test.ts tests/backup.test.ts
+```
+
 API smoke split example:
 
 ```bash
