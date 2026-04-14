@@ -1,17 +1,11 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import {
-  addRuleWithDetection,
-  bulkCreateRulesAction,
-  bulkDeleteRulesWithUndoAction,
-  deleteRuleWithUndoAction,
-  updateRuleAction,
-} from '../lib/rules-actions';
+import { useRulesFilters, type RulesFilterType } from './useRulesFilters';
 import type { Rule, RuleType } from '../lib/rules';
 import type { DomainGroup } from '../lib/rule-groups';
 import { useGroupedRulesData } from './useGroupedRulesData';
+import { useManagedRulesActions } from './useManagedRulesActions';
 import { useGroupedRulesSelection } from './useGroupedRulesSelection';
 
-export type FilterType = 'all' | 'allowed' | 'blocked';
+export type FilterType = RulesFilterType;
 export type { DomainGroup } from '../lib/rule-groups';
 
 interface UseGroupedRulesManagerOptions {
@@ -72,13 +66,7 @@ export function useGroupedRulesManager({
   groupId,
   onToast,
 }: UseGroupedRulesManagerOptions): UseGroupedRulesManagerReturn {
-  // Data state
-  // Pagination state
-  const [page, setPage] = useState(1);
-
-  // Filter state
-  const [filter, setFilter] = useState<FilterType>('all');
-  const [search, setSearch] = useState('');
+  const { filter, page, search, setFilter, setPage, setSearch } = useRulesFilters();
 
   // Counts for tabs
   const { counts, domainGroups, error, loading, refetch, totalGroups, totalPages, totalRules } =
@@ -88,8 +76,6 @@ export function useGroupedRulesManager({
       page,
       search,
     });
-
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const {
     clearSelection,
     deselectGroup,
@@ -103,87 +89,15 @@ export function useGroupedRulesManager({
     domainGroups,
     resetKeys: [page, filter, search],
   });
-
-  // Debounced search
-  useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    searchTimeoutRef.current = setTimeout(() => {
-      setPage(1); // Reset to first page on search
-    }, 300);
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [search]);
-
-  // Reset page when filter changes
-  useEffect(() => {
-    setPage(1);
-  }, [filter]);
-
-  // Add rule
-  const addRule = useCallback(
-    async (value: string): Promise<boolean> => {
-      return addRuleWithDetection(value, {
-        groupId,
-        onToast,
-        fetchRules: refetch,
-        fetchCounts: refetch,
-      });
-    },
-    [groupId, onToast, refetch]
-  );
-
-  // Delete rule with undo
-  const deleteRule = useCallback(
-    async (rule: Rule): Promise<void> => {
-      await deleteRuleWithUndoAction(rule, { onToast, fetchRules: refetch, fetchCounts: refetch });
-    },
-    [onToast, refetch]
-  );
-
-  // Update rule
-  const updateRule = useCallback(
-    async (id: string, data: { value?: string; comment?: string | null }): Promise<boolean> => {
-      return updateRuleAction(id, data, { groupId, onToast, fetchRules: refetch });
-    },
-    [groupId, onToast, refetch]
-  );
-
-  // Bulk delete rules with undo
-  const bulkDeleteRules = useCallback(async (): Promise<void> => {
-    if (selectedIds.size === 0) return;
-
-    const idsToDelete = Array.from(selectedIds);
-
-    await bulkDeleteRulesWithUndoAction({
-      ids: idsToDelete,
+  const { addRule, bulkCreateRules, bulkDeleteRules, deleteRule, updateRule } =
+    useManagedRulesActions({
       clearSelection,
+      groupId,
       onToast,
-      fetchRules: refetch,
-      fetchCounts: refetch,
+      refetchCounts: refetch,
+      refetchRules: refetch,
+      selectedIds,
     });
-  }, [selectedIds, clearSelection, onToast, refetch]);
-
-  // Bulk create rules
-  const bulkCreateRules = useCallback(
-    async (values: string[], type: RuleType): Promise<{ created: number; total: number }> => {
-      if (values.length === 0) return { created: 0, total: 0 };
-
-      return bulkCreateRulesAction(values, type, {
-        groupId,
-        onToast,
-        fetchRules: refetch,
-        fetchCounts: refetch,
-      });
-    },
-    [groupId, onToast, refetch]
-  );
 
   const hasMore = page < totalPages;
 

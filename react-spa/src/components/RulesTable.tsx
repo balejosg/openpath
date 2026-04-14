@@ -1,26 +1,11 @@
 import React from 'react';
-import {
-  Trash2,
-  Edit2,
-  Check,
-  Ban,
-  Route,
-  Loader2,
-  Square,
-  CheckSquare,
-  Minus,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
-  X,
-  Save,
-} from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { getRuleTypeBadge } from '../lib/ruleDetection';
 import type { Rule, RuleType } from '../lib/rules';
+import { RulesTableHeader } from './rules-table/RulesTableHeader';
+import { RulesTableRow } from './rules-table/RulesTableRow';
 import { useRuleEditor } from '../hooks/useRuleEditor';
 import { useRuleTableSort } from '../hooks/useRuleTableSort';
-import type { SortField } from '../hooks/useRuleTableSort';
 
 export type { Rule, RuleType };
 export type { SortConfig, SortDirection, SortField } from '../hooks/useRuleTableSort';
@@ -79,37 +64,6 @@ export const RulesTable: React.FC<RulesTableProps> = ({
   });
   const { handleSort, sortConfig, sortedRules } = useRuleTableSort(rules);
 
-  // Render sort indicator
-  const renderSortIcon = (field: SortField) => {
-    const activeSort = sortConfig?.field === field ? sortConfig : null;
-
-    if (!activeSort) {
-      return <ArrowUpDown size={14} className="text-slate-300" />;
-    }
-    return activeSort.direction === 'asc' ? (
-      <ArrowUp size={14} className="text-blue-600" />
-    ) : (
-      <ArrowDown size={14} className="text-blue-600" />
-    );
-  };
-
-  const getTypeIcon = (type: RuleType) => {
-    switch (type) {
-      case 'whitelist':
-        return <Check size={12} className="text-green-600" />;
-      case 'blocked_subdomain':
-        return <Ban size={12} className="text-red-600" />;
-      case 'blocked_path':
-        return <Route size={12} className="text-red-600" />;
-    }
-  };
-
-  const getTypeBadgeClass = (type: RuleType) => {
-    return type === 'whitelist'
-      ? 'bg-green-100 text-green-700 border-green-200'
-      : 'bg-red-100 text-red-700 border-red-200';
-  };
-
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -146,218 +100,40 @@ export const RulesTable: React.FC<RulesTableProps> = ({
     <div className={cn('bg-white border border-slate-200 rounded-lg overflow-hidden', className)}>
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-bold tracking-wider">
-              {hasSelectionFeature && (
-                <th className="px-4 py-3 w-10">
-                  <button
-                    onClick={onToggleSelectAll}
-                    className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
-                    title={isAllSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
-                  >
-                    {isAllSelected ? (
-                      <CheckSquare size={18} className="text-blue-600" />
-                    ) : hasSelection ? (
-                      <Minus size={18} className="text-blue-400" />
-                    ) : (
-                      <Square size={18} />
-                    )}
-                  </button>
-                </th>
-              )}
-              <th className="px-4 py-3">
-                <button
-                  onClick={() => handleSort('value')}
-                  className="flex items-center gap-1 hover:text-slate-700 transition-colors group/sort"
-                  data-testid="sort-value"
-                >
-                  Valor
-                  <span className="opacity-50 group-hover/sort:opacity-100 transition-opacity">
-                    {renderSortIcon('value')}
-                  </span>
-                </button>
-              </th>
-              <th className="px-4 py-3 w-32">
-                <button
-                  onClick={() => handleSort('type')}
-                  className="flex items-center gap-1 hover:text-slate-700 transition-colors group/sort"
-                  data-testid="sort-type"
-                >
-                  Tipo
-                  <span className="opacity-50 group-hover/sort:opacity-100 transition-opacity">
-                    {renderSortIcon('type')}
-                  </span>
-                </button>
-              </th>
-              <th className="px-4 py-3 hidden md:table-cell">Comentario</th>
-              <th className="px-4 py-3 w-28 hidden sm:table-cell">
-                <button
-                  onClick={() => handleSort('createdAt')}
-                  className="flex items-center gap-1 hover:text-slate-700 transition-colors group/sort"
-                  data-testid="sort-createdAt"
-                >
-                  Fecha
-                  <span className="opacity-50 group-hover/sort:opacity-100 transition-opacity">
-                    {renderSortIcon('createdAt')}
-                  </span>
-                </button>
-              </th>
-              {!readOnly && <th className="px-4 py-3 w-20 text-right">Acciones</th>}
-            </tr>
-          </thead>
+          <RulesTableHeader
+            hasSelection={hasSelection}
+            hasSelectionFeature={hasSelectionFeature}
+            isAllSelected={isAllSelected}
+            onSort={handleSort}
+            onToggleSelectAll={onToggleSelectAll}
+            readOnly={readOnly}
+            sortConfig={sortConfig}
+          />
           <tbody className="divide-y divide-slate-100">
-            {sortedRules.map((rule) => {
-              const isSelected = selectedIds?.has(rule.id) ?? false;
-              const isEditing = editingId === rule.id;
-              return (
-                <tr
-                  key={rule.id}
-                  className={cn(
-                    'hover:bg-slate-50 transition-colors group',
-                    isSelected && 'bg-blue-50 hover:bg-blue-100',
-                    isEditing && 'bg-amber-50 hover:bg-amber-50'
-                  )}
-                >
-                  {hasSelectionFeature && (
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => onToggleSelection(rule.id)}
-                        className="p-1 text-slate-400 hover:text-slate-600 transition-colors"
-                        title={isSelected ? 'Deseleccionar' : 'Seleccionar'}
-                        disabled={isEditing}
-                      >
-                        {isSelected ? (
-                          <CheckSquare size={18} className="text-blue-600" />
-                        ) : (
-                          <Square size={18} />
-                        )}
-                      </button>
-                    </td>
-                  )}
-                  <td className="px-4 py-3">
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onKeyDown={handleEditKeyDown}
-                        className="w-full px-2 py-1 text-sm font-mono border border-amber-300 rounded focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white"
-                        autoFocus
-                        data-testid="edit-value-input"
-                      />
-                    ) : (
-                      <span
-                        className={cn(
-                          'text-sm text-slate-800 font-mono break-all',
-                          onSave && 'cursor-pointer hover:text-blue-600'
-                        )}
-                        onClick={() => onSave && startEdit(rule)}
-                        onDoubleClick={() => onSave && startEdit(rule)}
-                        title={onSave ? 'Haz clic para editar' : undefined}
-                      >
-                        {rule.value}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span
-                        className={cn(
-                          'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border font-medium',
-                          getTypeBadgeClass(rule.type)
-                        )}
-                      >
-                        {getTypeIcon(rule.type)}
-                        {getRuleTypeBadge(rule.type)}
-                      </span>
-                      {rule.source === 'auto_extension' && (
-                        <span className="inline-flex items-center px-2 py-0.5 text-xs rounded-full border font-medium bg-cyan-50 text-cyan-700 border-cyan-200">
-                          Auto (Firefox)
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell">
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editComment}
-                        onChange={(e) => setEditComment(e.target.value)}
-                        onKeyDown={handleEditKeyDown}
-                        placeholder="Comentario (opcional)"
-                        className="w-full px-2 py-1 text-sm border border-amber-300 rounded focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-white"
-                        data-testid="edit-comment-input"
-                      />
-                    ) : (
-                      <span
-                        className={cn(
-                          'text-sm text-slate-500 truncate max-w-xs block',
-                          onSave && 'cursor-pointer hover:text-blue-600'
-                        )}
-                        onClick={() => onSave && startEdit(rule)}
-                        onDoubleClick={() => onSave && startEdit(rule)}
-                        title={onSave ? 'Haz clic para editar' : undefined}
-                      >
-                        {rule.comment ?? '-'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 hidden sm:table-cell">
-                    <span className="text-xs text-slate-400">{formatDate(rule.createdAt)}</span>
-                  </td>
-                  {!readOnly && (
-                    <td className="px-4 py-3">
-                      {isEditing ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => void saveEdit()}
-                            disabled={isSaving || !editValue.trim()}
-                            className="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Guardar (Enter)"
-                            data-testid="save-edit-button"
-                          >
-                            {isSaving ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                              <Save size={14} />
-                            )}
-                          </button>
-                          <button
-                            onClick={cancelEdit}
-                            disabled={isSaving}
-                            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded transition-colors disabled:opacity-50"
-                            title="Cancelar (Esc)"
-                            data-testid="cancel-edit-button"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {onSave && (
-                            <button
-                              onClick={() => startEdit(rule)}
-                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                              title="Editar"
-                              data-testid="edit-button"
-                            >
-                              <Edit2 size={14} />
-                            </button>
-                          )}
-                          <button
-                            onClick={() => onDelete(rule)}
-                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Eliminar"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
+            {sortedRules.map((rule) => (
+              <RulesTableRow
+                key={rule.id}
+                canEdit={onSave !== undefined}
+                editComment={editComment}
+                editValue={editValue}
+                formatDate={formatDate}
+                hasOnSave={onSave !== undefined}
+                hasSelectionFeature={hasSelectionFeature}
+                isEditing={editingId === rule.id}
+                isSaving={isSaving}
+                isSelected={selectedIds?.has(rule.id) ?? false}
+                onCancelEdit={cancelEdit}
+                onDelete={onDelete}
+                onHandleEditKeyDown={handleEditKeyDown}
+                onSaveEdit={saveEdit}
+                onSetEditComment={setEditComment}
+                onSetEditValue={setEditValue}
+                onStartEdit={startEdit}
+                onToggleSelection={onToggleSelection}
+                readOnly={readOnly}
+                rule={rule}
+              />
+            ))}
           </tbody>
         </table>
       </div>
