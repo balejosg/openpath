@@ -13,9 +13,7 @@
     "allowJs": true,
     "jsx": "react-jsx",
     "paths": {
-      "@/*": ["./*"],
-      "@openpath/shared": ["../shared/src/index.ts"],
-      "@openpath/shared/*": ["../shared/src/*"]
+      "@/*": ["./*"]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true,

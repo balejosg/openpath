@@ -51,7 +51,7 @@ export interface Classroom {
 export interface ClassroomExemption {
   id: string;
   machineId: string;
-  machineHostname: string;
+  machineHostname?: string;
   classroomId: string;
   scheduleId: string;
   createdBy: string | null;
