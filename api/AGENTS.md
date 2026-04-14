@@ -117,6 +117,13 @@ cd api
 NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/blocked-domains-check.test.ts tests/blocked-domains-list.test.ts tests/blocked-domains-approval.test.ts
 ```
 
+Roles split example:
+
+```bash
+cd api
+NODE_ENV=test node --import tsx --test --test-concurrency=1 --test-force-exit tests/roles-assignment.test.ts tests/roles-revoke.test.ts tests/roles-authorization.test.ts tests/roles-list-teachers.test.ts
+```
+
 ## Anti-Patterns
 
 - direct DB queries in routers
