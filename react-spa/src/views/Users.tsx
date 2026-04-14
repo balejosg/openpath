@@ -1,15 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import { Search, Filter, Mail, Edit2, Trash, Key, Loader2, AlertCircle } from 'lucide-react';
-import { User, UserRole } from '../types';
+import { UserRole } from '../types';
 import type { CreateUserRole } from '../lib/roles';
-import { DEFAULT_CREATE_USER_ROLE, USER_ROLE_LABELS } from '../lib/roles';
-import { useUsersList } from '../hooks/useUsersList';
-import { useUsersActions } from '../hooks/useUsersActions';
-import { downloadFile } from '../lib/download';
-import { buildUsersCsvExport } from '../lib/exportUsers';
+import { USER_ROLE_LABELS } from '../lib/roles';
 import { getEsActiveInactiveLabel } from '../lib/status';
 import { DangerConfirmDialog } from '../components/ui/ConfirmDialog';
 import { Modal } from '../components/ui/Modal';
+import { useUsersViewModel } from '../hooks/useUsersViewModel';
 
 const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
   const styles = {
@@ -28,167 +25,65 @@ const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
   );
 };
 
-const PAGE_SIZE = 10;
-
-type ResetFlowState =
-  | { status: 'idle' }
-  | { status: 'confirm'; user: User }
-  | { status: 'success'; user: User; token: string };
-
 const UsersView = () => {
-  const { users, hasData, loading, fetching, error, fetchUsers } = useUsersList();
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showNewModal, setShowNewModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [pageIndex, setPageIndex] = useState(0);
-  const [resetFlow, setResetFlow] = useState<ResetFlowState>({ status: 'idle' });
-
-  // Edit form state
-  const [editName, setEditName] = useState('');
-  const [editEmail, setEditEmail] = useState('');
-
-  // New user form state
-  const [newName, setNewName] = useState('');
-  const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<CreateUserRole>(DEFAULT_CREATE_USER_ROLE);
-  const [exportMessage, setExportMessage] = useState<string | null>(null);
-
   const {
+    hasData,
+    fetching,
+    error,
+    fetchUsers,
+    filteredUsers,
+    visibleUsers,
+    showInitialLoading,
+    searchQuery,
+    setSearchQuery,
+    exportMessage,
+    handleExportUsers,
+    setPageIndex,
+    rangeStart,
+    rangeEnd,
+    totalCount,
+    hasPreviousPage,
+    hasNextPage,
+    showEditModal,
+    selectedUser,
+    editName,
+    setEditName,
+    editEmail,
+    setEditEmail,
+    openEditModal,
+    closeEditModal,
+    saveEdit,
+    showNewModal,
+    newName,
+    setNewName,
+    newEmail,
+    setNewEmail,
+    newPassword,
+    setNewPassword,
+    newRole,
+    setNewRole,
+    openNewModal,
+    closeNewModal,
+    createUser,
+    resetNewUserForm,
     saving,
     deleting,
-    resettingPassword,
     createError,
     setCreateError,
     deleteError,
     deleteTarget,
+    resetFlow,
+    resetUser,
+    generatedResetToken,
+    resettingPassword,
     resetError,
-    handleSaveEdit,
-    handleCreateUser,
+    requestPasswordReset,
+    closeResetFlow,
+    confirmGenerateResetToken,
     requestDeleteUser,
     clearDeleteState,
     handleConfirmDeleteUser,
-    clearResetError,
-    handleGenerateResetToken,
-  } = useUsersActions();
-
-  // Filter users based on search
-  const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return users;
-    const query = searchQuery.toLowerCase();
-    return users.filter(
-      (user) => user.name.toLowerCase().includes(query) || user.email.toLowerCase().includes(query)
-    );
-  }, [users, searchQuery]);
-
-  useEffect(() => {
-    setPageIndex(0);
-  }, [searchQuery]);
-
-  useEffect(() => {
-    const maxPageIndex = Math.max(0, Math.ceil(filteredUsers.length / PAGE_SIZE) - 1);
-    setPageIndex((current) => Math.min(current, maxPageIndex));
-  }, [filteredUsers.length]);
-
-  const handleEdit = (user: User) => {
-    setSelectedUser(user);
-    setEditName(user.name);
-    setEditEmail(user.email);
-    setShowEditModal(true);
-  };
-
-  const handleSaveEditSubmit = async () => {
-    if (!selectedUser) return;
-
-    const ok = await handleSaveEdit({
-      id: selectedUser.id,
-      name: editName,
-      email: editEmail,
-    });
-
-    if (ok) {
-      setShowEditModal(false);
-    }
-  };
-
-  const closeEditModal = () => {
-    if (saving) return;
-    setShowEditModal(false);
-  };
-
-  const closeNewModal = () => {
-    if (saving) return;
-    setShowNewModal(false);
-  };
-
-  const handleCreateUserSubmit = async () => {
-    const result = await handleCreateUser({
-      name: newName,
-      email: newEmail,
-      password: newPassword,
-      role: newRole,
-    });
-
-    if (!result.ok) return;
-
-    setNewName('');
-    setNewEmail('');
-    setNewPassword('');
-    setNewRole(DEFAULT_CREATE_USER_ROLE);
-    setShowNewModal(false);
-  };
-
-  const handleExportUsers = () => {
-    if (filteredUsers.length === 0) {
-      setExportMessage('No hay usuarios para exportar');
-      return;
-    }
-
-    const exportData = buildUsersCsvExport(filteredUsers);
-    downloadFile(exportData.content, exportData.filename, exportData.mimeType);
-
-    setExportMessage('Exportación iniciada');
-  };
-
-  const visibleUsers = useMemo(() => {
-    const start = pageIndex * PAGE_SIZE;
-    return filteredUsers.slice(start, start + PAGE_SIZE);
-  }, [filteredUsers, pageIndex]);
-
-  const visibleCount = visibleUsers.length;
-  const totalCount = filteredUsers.length;
-  const rangeStart = visibleCount === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
-  const rangeEnd = visibleCount === 0 ? 0 : pageIndex * PAGE_SIZE + visibleCount;
-  const hasPreviousPage = pageIndex > 0;
-  const hasNextPage = rangeEnd < totalCount;
-  const showInitialLoading = loading && !hasData;
-  const resetUser = resetFlow.status === 'idle' ? null : resetFlow.user;
-  const generatedResetToken = resetFlow.status === 'success' ? resetFlow.token : '';
-
-  const requestPasswordReset = (user: User) => {
-    clearResetError();
-    setResetFlow({ status: 'confirm', user });
-  };
-
-  const closeResetFlow = () => {
-    if (resettingPassword) return;
-    clearResetError();
-    setResetFlow({ status: 'idle' });
-  };
-
-  const confirmGenerateResetToken = async () => {
-    if (resetFlow.status !== 'confirm') return;
-
-    const result = await handleGenerateResetToken({ email: resetFlow.user.email });
-    if (!result.ok) return;
-
-    setResetFlow({
-      status: 'success',
-      user: resetFlow.user,
-      token: result.token,
-    });
-  };
+  } = useUsersViewModel();
 
   return (
     <div className="space-y-6">
@@ -199,7 +94,7 @@ const UsersView = () => {
           <p className="text-slate-500 text-sm">Administra los accesos y roles de la plataforma.</p>
         </div>
         <button
-          onClick={() => setShowNewModal(true)}
+          onClick={openNewModal}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
         >
           + Nuevo Usuario
@@ -321,7 +216,7 @@ const UsersView = () => {
                     <td className="px-6 py-3 text-right">
                       <div className="flex items-center justify-end gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <button
-                          onClick={() => handleEdit(user)}
+                          onClick={() => openEditModal(user)}
                           aria-label={`Editar usuario ${user.name}`}
                           className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                           title="Editar"
@@ -363,7 +258,7 @@ const UsersView = () => {
             <span>
               Mostrando {rangeStart}-{rangeEnd} de {totalCount} usuarios
             </span>
-            {fetching && users.length > 0 && (
+            {fetching && totalCount > 0 && (
               <span
                 className="inline-flex items-center gap-1 text-slate-400"
                 aria-label="Actualizando usuarios"
@@ -452,7 +347,7 @@ const UsersView = () => {
                 Cancelar
               </button>
               <button
-                onClick={() => void handleSaveEditSubmit()}
+                onClick={() => void saveEdit()}
                 disabled={saving}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
               >
@@ -530,11 +425,7 @@ const UsersView = () => {
               <button
                 onClick={() => {
                   closeNewModal();
-                  setNewName('');
-                  setNewEmail('');
-                  setNewPassword('');
-                  setNewRole(DEFAULT_CREATE_USER_ROLE);
-                  setCreateError('');
+                  resetNewUserForm();
                 }}
                 disabled={saving}
                 className="flex-1 px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -542,7 +433,7 @@ const UsersView = () => {
                 Cancelar
               </button>
               <button
-                onClick={() => void handleCreateUserSubmit()}
+                onClick={() => void createUser()}
                 disabled={saving}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 flex items-center justify-center gap-2"
               >
