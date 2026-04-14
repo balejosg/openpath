@@ -248,9 +248,10 @@ test_installer_extension_paths() {
     test_section "6/6" "Firefox installer path consistency"
 
     local installer_sh="$PROJECT_ROOT/linux/install.sh"
+    local installer_runtime_steps="$PROJECT_ROOT/linux/lib/install-runtime-steps.sh"
     local asset_helper="$PROJECT_ROOT/linux/lib/firefox-extension-assets.sh"
 
-    if grep -Fq 'stage_firefox_installation_bundle "$INSTALLER_SOURCE_DIR/firefox-extension" "$staged_ext_dir"' "$installer_sh"; then
+    if grep -Fq 'stage_firefox_installation_bundle "$INSTALLER_SOURCE_DIR/firefox-extension" "$staged_ext_dir"' "$installer_runtime_steps"; then
         test_pass "installer delegates unpacked Firefox asset staging to the shared helper"
     else
         test_fail "installer does not call the shared Firefox asset staging helper"
@@ -288,7 +289,7 @@ test_installer_extension_paths() {
         test_pass "Firefox asset helper no longer requires dist/config.js"
     fi
 
-    if grep -q 'cp "\$ext_source/background.js"' "$installer_sh"; then
+    if grep -q 'cp "\$ext_source/background.js"' "$installer_runtime_steps"; then
         test_fail "installer still references legacy root background.js"
     else
         test_pass "installer no longer references legacy root background.js"

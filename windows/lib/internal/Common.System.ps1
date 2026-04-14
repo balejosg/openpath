@@ -1,5 +1,3 @@
-# PSScriptAnalyzer: Test-AdminPrivileges is a valid noun form (privileges is a valid singular concept)
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', '', Scope = 'Function', Target = 'Test-AdminPrivileges')]
 function Test-AdminPrivileges {
     <#
     .SYNOPSIS
