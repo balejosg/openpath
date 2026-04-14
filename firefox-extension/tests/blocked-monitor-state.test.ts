@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { createBlockedMonitorState } from '../src/lib/blocked-monitor-state.js';
 
-test('blocked-monitor-state stores blocked domains and serializes them by tab', () => {
+void test('blocked-monitor-state stores blocked domains and serializes them by tab', () => {
   const badgeCalls: { text?: string; color?: string }[] = [];
   const state = createBlockedMonitorState(
     {

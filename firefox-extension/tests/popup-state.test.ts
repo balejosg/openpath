@@ -7,7 +7,7 @@ import {
   shouldEnableRequestAction,
 } from '../src/lib/popup-state.js';
 
-test('popup-state utilities normalize tab hostname and request state', () => {
+void test('popup-state utilities normalize tab hostname and request state', () => {
   assert.equal(extractTabHostname('https://example.test/page'), 'example.test');
   assert.equal(extractTabHostname(undefined), 'Desconocido');
   assert.equal(
