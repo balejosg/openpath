@@ -68,6 +68,13 @@ cd api
 NODE_ENV=test PORT=3001 node --import tsx --test --test-concurrency=1 --test-force-exit tests/auth-registration.test.ts tests/auth-google-login.test.ts tests/auth-session.test.ts tests/auth-password.test.ts tests/auth-admin-guards.test.ts
 ```
 
+Google auth split example:
+
+```bash
+cd api
+NODE_ENV=test PORT=3010 node --import tsx tests/google-auth-runner.ts
+```
+
 Backup split example:
 
 ```bash
