@@ -89,12 +89,25 @@ async function closeServer(server: Server | undefined): Promise<void> {
   });
 }
 
+async function resetProcessTestState(
+  env: Readonly<Record<string, string | undefined>> = process.env
+): Promise<void> {
+  const [{ loadConfig, setConfigForTests }, { resetTokenStore }] = await Promise.all([
+    import('../src/config.js'),
+    import('../src/lib/token-store.js'),
+  ]);
+
+  setConfigForTests(loadConfig(env));
+  resetTokenStore();
+}
+
 export async function startHttpTestHarness(
   options: StartHttpTestHarnessOptions = {}
 ): Promise<HttpTestHarness> {
   const port = await getAvailablePort();
   const apiUrl = `http://localhost:${String(port)}`;
   const previousEnv = applyEnvOverrides({
+    NODE_ENV: 'test',
     PORT: String(port),
     ...options.env,
   });
@@ -109,10 +122,18 @@ export async function startHttpTestHarness(
       await ensureTestSchema();
     }
 
+    await resetProcessTestState(process.env);
+
     const app =
       options.loadApp !== undefined
         ? await options.loadApp()
-        : (await import('../src/server.js')).app;
+        : await (async (): Promise<ListenableApp> => {
+            const [{ createApp }, { loadConfig }] = await Promise.all([
+              import('../src/app.js'),
+              import('../src/config.js'),
+            ]);
+            return (await createApp(loadConfig(process.env))).app;
+          })();
 
     server = await new Promise<Server>((resolve) => {
       const startedServer = app.listen(port, () => {
@@ -127,6 +148,7 @@ export async function startHttpTestHarness(
     await closeServer(server);
     await closeConnection();
     restoreEnv(previousEnv);
+    await resetProcessTestState(process.env);
     throw error;
   }
 
@@ -151,6 +173,7 @@ export async function startHttpTestHarness(
 
       await closeConnection();
       restoreEnv(previousEnv);
+      await resetProcessTestState(process.env);
     },
     port,
     trpcMutate: (procedure, input, headers = {}) =>
