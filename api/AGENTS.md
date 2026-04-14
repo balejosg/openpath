@@ -96,6 +96,13 @@ cd api
 NODE_ENV=test PORT=3005 node --import tsx --test --test-concurrency=1 --test-force-exit tests/setup-status.test.ts tests/setup-first-admin.test.ts tests/setup-token-validation.test.ts tests/setup-auth-guards.test.ts tests/setup.test.ts
 ```
 
+E2E teacher split example:
+
+```bash
+cd api
+npm --prefix .. run build --workspace=@openpath/shared && NODE_ENV=test PORT=3002 node --import tsx --test --test-concurrency=1 --test-force-exit tests/e2e-admin-bootstrap.test.ts tests/e2e-teacher-profile.test.ts tests/e2e-teacher-requests.test.ts tests/e2e-teacher-boundaries.test.ts tests/e2e.test.ts
+```
+
 SSE split example:
 
 ```bash
