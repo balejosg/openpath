@@ -1,11 +1,9 @@
 import * as scheduleStorage from '../lib/schedule-storage.js';
 import * as auth from '../lib/auth.js';
 import type { JWTPayload } from '../types/index.js';
-import { getErrorMessage } from '@openpath/shared';
 import { ensureUserCanAccessClassroom } from './classroom.service.js';
 import DomainEventsService from './domain-events.service.js';
-import type { OneOffSchedule, Schedule } from '../types/index.js';
-import type { ScheduleResult } from './schedule-service-shared.js';
+import type { OneOffSchedule, Schedule, ScheduleResult } from './schedule-service-shared.js';
 import { mapToOneOffSchedule, mapToWeeklySchedule } from './schedule-service-shared.js';
 
 function conflictResult(): ScheduleResult<never> {
@@ -17,6 +15,10 @@ function conflictResult(): ScheduleResult<never> {
 
 function badRequestResult(message: string): ScheduleResult<never> {
   return { ok: false, error: { code: 'BAD_REQUEST', message } };
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export async function createSchedule(
@@ -58,7 +60,7 @@ export async function createSchedule(
     DomainEventsService.publishClassroomChanged(input.classroomId);
     return { ok: true, data: mapToWeeklySchedule(schedule) };
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
+    const message = toErrorMessage(error);
     if (message === 'Schedule conflict') {
       return conflictResult();
     }
@@ -112,7 +114,7 @@ export async function createOneOffSchedule(
     DomainEventsService.publishClassroomChanged(input.classroomId);
     return { ok: true, data: mapToOneOffSchedule(schedule) };
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
+    const message = toErrorMessage(error);
     if (message === 'Schedule conflict') {
       return conflictResult();
     }
@@ -175,7 +177,7 @@ export async function updateSchedule(
     DomainEventsService.publishClassroomChanged(schedule.classroomId);
     return { ok: true, data: mapToWeeklySchedule(updated) };
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
+    const message = toErrorMessage(error);
     if (message === 'Schedule conflict') {
       return conflictResult();
     }
@@ -260,7 +262,7 @@ export async function updateOneOffSchedule(
     DomainEventsService.publishClassroomChanged(schedule.classroomId);
     return { ok: true, data: mapToOneOffSchedule(updated) };
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
+    const message = toErrorMessage(error);
     if (message === 'Schedule conflict') {
       return conflictResult();
     }

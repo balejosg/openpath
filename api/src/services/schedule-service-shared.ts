@@ -1,4 +1,27 @@
-import type { Schedule, OneOffSchedule } from '../types/index.js';
+export interface Schedule {
+  id: string;
+  classroomId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  groupId: string;
+  teacherId: string;
+  recurrence?: string;
+  createdAt: string;
+  updatedAt?: string | undefined;
+}
+
+export interface OneOffSchedule {
+  id: string;
+  classroomId: string;
+  startAt: string;
+  endAt: string;
+  groupId: string;
+  teacherId: string;
+  recurrence: 'one_off';
+  createdAt: string;
+  updatedAt?: string | undefined;
+}
 
 export type ScheduleServiceError =
   | { code: 'NOT_FOUND'; message: string }

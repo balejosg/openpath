@@ -1,8 +1,13 @@
 import * as scheduleStorage from '../lib/schedule-storage.js';
 import * as auth from '../lib/auth.js';
-import type { Schedule, OneOffSchedule, JWTPayload } from '../types/index.js';
+import type { JWTPayload } from '../types/index.js';
 import { ensureUserCanAccessClassroom } from './classroom.service.js';
-import type { ClassroomScheduleResult, ScheduleResult } from './schedule-service-shared.js';
+import type {
+  ClassroomScheduleResult,
+  OneOffSchedule,
+  Schedule,
+  ScheduleResult,
+} from './schedule-service-shared.js';
 import { mapToOneOffSchedule, mapToWeeklySchedule } from './schedule-service-shared.js';
 
 export async function getSchedulesByClassroom(
