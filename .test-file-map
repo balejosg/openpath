@@ -65,7 +65,16 @@ api/src/services/classroom-classroom-command.service.ts|api/tests/classroom-comm
 api/src/services/classroom-machine-command.service.ts|api/tests/classroom-command.service.test.ts,api/tests/classrooms-machines.test.ts
 api/src/services/classroom-exemption-command.service.ts|api/tests/classroom-command.service.test.ts,api/tests/classrooms-cleanup.test.ts
 react-spa/src/components/dashboard/DashboardQuickAccessSection.tsx|react-spa/src/views/__tests__/Dashboard.test.tsx
+react-spa/src/components/classrooms/ClassroomListPane.tsx|react-spa/src/views/__tests__/Classrooms.test.tsx
+react-spa/src/components/classrooms/NewClassroomModal.tsx|react-spa/src/views/__tests__/Classrooms.test.tsx
+react-spa/src/components/classrooms/EnrollClassroomModal.tsx|react-spa/src/views/__tests__/Classrooms.test.tsx
+react-spa/src/components/RulesTable.tsx|react-spa/src/components/__tests__/RulesTable.test.tsx
+react-spa/src/components/HierarchicalRulesTable.tsx|react-spa/src/components/__tests__/HierarchicalRulesTable.test.tsx
+react-spa/src/components/BulkImportModal.tsx|react-spa/src/components/__tests__/BulkImportModal.test.tsx
 react-spa/src/hooks/useUsersViewModel.ts|react-spa/src/views/__tests__/Users.test.tsx
 react-spa/src/hooks/useDashboardViewModel.ts|react-spa/src/views/__tests__/Dashboard.test.tsx
+react-spa/src/hooks/useRuleEditor.ts|react-spa/src/components/__tests__/RulesTable.test.tsx,react-spa/src/components/__tests__/HierarchicalRulesTable.test.tsx
+react-spa/src/hooks/useBulkImportModalState.ts|react-spa/src/components/__tests__/BulkImportModal.test.tsx
+react-spa/src/lib/rule-groups.ts|react-spa/src/components/__tests__/HierarchicalRulesTable.test.tsx
 firefox-extension/src/lib/background-runtime.ts|firefox-extension/tests/background.test.ts,firefox-extension/tests/background-message-handler.test.ts,firefox-extension/tests/native-host-contract.test.ts
 firefox-extension/src/lib/popup-controller.ts|firefox-extension/tests/popup.test.ts,firefox-extension/tests/popup-submit-contract.test.ts

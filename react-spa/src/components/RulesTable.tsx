@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import {
   Trash2,
   Edit2,
@@ -18,6 +18,7 @@ import {
 import { cn } from '../lib/utils';
 import { getRuleTypeBadge } from '../lib/ruleDetection';
 import type { Rule, RuleType } from '../lib/rules';
+import { useRuleEditor } from '../hooks/useRuleEditor';
 
 export type { Rule, RuleType };
 
@@ -65,73 +66,24 @@ export const RulesTable: React.FC<RulesTableProps> = ({
   hasSelection,
 }) => {
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const [editComment, setEditComment] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
 
   const hasSelectionFeature =
     !readOnly && selectedIds !== undefined && onToggleSelection !== undefined;
-
-  // Start editing a rule
-  const startEdit = useCallback((rule: Rule) => {
-    setEditingId(rule.id);
-    setEditValue(rule.value);
-    setEditComment(rule.comment ?? '');
-  }, []);
-
-  // Cancel editing
-  const cancelEdit = useCallback(() => {
-    setEditingId(null);
-    setEditValue('');
-    setEditComment('');
-  }, []);
-
-  // Save edited rule
-  const saveEdit = useCallback(async () => {
-    if (!editingId || !onSave || isSaving) return;
-
-    const rule = rules.find((r) => r.id === editingId);
-    if (!rule) return;
-
-    // Check if anything changed
-    const valueChanged = editValue.trim() !== rule.value;
-    const commentChanged = editComment !== (rule.comment ?? '');
-
-    if (!valueChanged && !commentChanged) {
-      cancelEdit();
-      return;
-    }
-
-    if (!editValue.trim()) {
-      return; // Don't save empty value
-    }
-
-    setIsSaving(true);
-    const success = await onSave(editingId, {
-      value: valueChanged ? editValue.trim() : undefined,
-      comment: commentChanged ? editComment.trim() || null : undefined,
-    });
-
-    if (success) {
-      cancelEdit();
-    }
-    setIsSaving(false);
-  }, [editingId, editValue, editComment, rules, onSave, isSaving, cancelEdit]);
-
-  // Handle keyboard events in edit mode
-  const handleEditKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        void saveEdit();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        cancelEdit();
-      }
-    },
-    [saveEdit, cancelEdit]
-  );
+  const {
+    cancelEdit,
+    editComment,
+    editingId,
+    editValue,
+    handleEditKeyDown,
+    isSaving,
+    saveEdit,
+    setEditComment,
+    setEditValue,
+    startEdit,
+  } = useRuleEditor({
+    onSave,
+    resolveRule: (id) => rules.find((rule) => rule.id === id),
+  });
 
   // Handle column header click for sorting
   const handleSort = useCallback((field: SortField) => {

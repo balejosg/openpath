@@ -16,18 +16,11 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { getRuleTypeBadge } from '../lib/ruleDetection';
-import { getRootDomain } from '@openpath/shared/domain';
 import type { Rule } from '../lib/rules';
+import { useRuleEditor } from '../hooks/useRuleEditor';
+import { toDomainGroups, type DomainGroup } from '../lib/rule-groups';
 
-// =============================================================================
-// Types
-// =============================================================================
-
-export interface DomainGroup {
-  root: string;
-  rules: Rule[];
-  status: 'allowed' | 'blocked' | 'mixed';
-}
+export type { DomainGroup } from '../lib/rule-groups';
 
 interface HierarchicalRulesTableProps {
   /** Individual rules to be grouped client-side (legacy mode) */
@@ -70,10 +63,6 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
   hasSelection,
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const [editComment, setEditComment] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
 
   const canEdit = !readOnly && onSave !== undefined;
   const hasSelectionFeature =
@@ -82,39 +71,31 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
     onToggleSelection !== undefined &&
     onToggleSelectAll !== undefined;
 
-  // Group rules by root domain (client-side grouping if no pre-grouped data)
   const groups = useMemo(() => {
-    // If pre-grouped data is provided, use it directly
     if (preGroupedDomains && preGroupedDomains.length > 0) {
       return preGroupedDomains;
     }
 
-    // Otherwise, group rules client-side (legacy mode)
     if (!rules || rules.length === 0) {
       return [];
     }
 
-    const grouped = new Map<string, DomainGroup>();
-
-    rules.forEach((rule) => {
-      const root = getRootDomain(rule.value);
-      const existing = grouped.get(root);
-      if (existing) {
-        existing.rules.push(rule);
-      } else {
-        grouped.set(root, { root, rules: [rule], status: 'mixed' });
-      }
-    });
-
-    // Determine group status
-    grouped.forEach((group) => {
-      const allAllowed = group.rules.every((r) => r.type === 'whitelist');
-      const allBlocked = group.rules.every((r) => r.type !== 'whitelist');
-      group.status = allAllowed ? 'allowed' : allBlocked ? 'blocked' : 'mixed';
-    });
-
-    return Array.from(grouped.values()).sort((a, b) => a.root.localeCompare(b.root));
+    return toDomainGroups(rules);
   }, [rules, preGroupedDomains]);
+  const allRules = useMemo(() => groups.flatMap((group) => group.rules), [groups]);
+  const {
+    cancelEdit,
+    editingId,
+    editValue,
+    handleEditKeyDown,
+    isSaving,
+    saveEdit,
+    setEditValue,
+    startEdit,
+  } = useRuleEditor({
+    onSave,
+    resolveRule: (id) => allRules.find((rule) => rule.id === id),
+  });
 
   // Toggle group expansion
   const toggleGroup = useCallback((root: string) => {
@@ -128,67 +109,6 @@ export const HierarchicalRulesTable: React.FC<HierarchicalRulesTableProps> = ({
       return next;
     });
   }, []);
-
-  // Start editing a rule
-  const startEdit = useCallback((rule: Rule) => {
-    setEditingId(rule.id);
-    setEditValue(rule.value);
-    setEditComment(rule.comment ?? '');
-  }, []);
-
-  // Cancel editing
-  const cancelEdit = useCallback(() => {
-    setEditingId(null);
-    setEditValue('');
-    setEditComment('');
-  }, []);
-
-  // Save edited rule
-  const saveEdit = useCallback(async () => {
-    if (!editingId || !onSave || isSaving) return;
-
-    // Find rule in groups
-    const allRules = groups.flatMap((g) => g.rules);
-    const rule = allRules.find((r) => r.id === editingId);
-    if (!rule) return;
-
-    const valueChanged = editValue.trim() !== rule.value;
-    const commentChanged = editComment !== (rule.comment ?? '');
-
-    if (!valueChanged && !commentChanged) {
-      cancelEdit();
-      return;
-    }
-
-    if (!editValue.trim()) {
-      return;
-    }
-
-    setIsSaving(true);
-    const success = await onSave(editingId, {
-      value: valueChanged ? editValue.trim() : undefined,
-      comment: commentChanged ? editComment.trim() || null : undefined,
-    });
-
-    if (success) {
-      cancelEdit();
-    }
-    setIsSaving(false);
-  }, [editingId, editValue, editComment, groups, onSave, isSaving, cancelEdit]);
-
-  // Handle keyboard events in edit mode
-  const handleEditKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        void saveEdit();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        cancelEdit();
-      }
-    },
-    [saveEdit, cancelEdit]
-  );
 
   // Loading state
   if (loading) {

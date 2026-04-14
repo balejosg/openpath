@@ -1,12 +1,10 @@
-import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import React from 'react';
 import { Upload, FileText, AlertCircle, FileUp, Table, Info } from 'lucide-react';
 import type { RuleType } from '@openpath/shared/rules-validation';
 import { Modal } from './ui/Modal';
 import { Button } from './ui/Button';
 import { cn } from '../lib/utils';
-import { parseCSV, type CSVParseResult } from '../lib/csv-parser';
-import { validateRuleValue } from '../lib/ruleDetection';
-import { reportError } from '../lib/reportError';
+import { useBulkImportModalState } from '../hooks/useBulkImportModalState';
 
 interface BulkImportModalProps {
   isOpen: boolean;
@@ -71,188 +69,38 @@ export const BulkImportModal: React.FC<BulkImportModalProps> = ({
   onImport,
   initialText = '',
 }) => {
-  const [text, setText] = useState(initialText);
-  const [ruleType, setRuleType] = useState<RuleType>('whitelist');
-  const [isImporting, setIsImporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const dropZoneRef = useRef<HTMLDivElement>(null);
-  const dragCounter = useRef(0);
-
-  // Sync text when initialText changes (e.g., file dropped on parent)
-  useEffect(() => {
-    if (initialText) {
-      setText(initialText);
-    }
-  }, [initialText]);
-
-  // Parse text using the CSV parser
-  const parseResult: CSVParseResult = useMemo(() => {
-    if (!text.trim()) {
-      return {
-        values: [],
-        format: 'plain-text',
-        totalRows: 0,
-        skippedRows: 0,
-        warnings: [],
-      };
-    }
-    return parseCSV(text);
-  }, [text]);
-
-  // Validate each parsed value against the selected rule type
-  const validationResults = useMemo(() => {
-    const valid: string[] = [];
-    const invalid: { value: string; error: string }[] = [];
-
-    for (const value of parseResult.values) {
-      const result = validateRuleValue(value, ruleType);
-      if (result.valid) {
-        valid.push(value);
-      } else {
-        invalid.push({ value, error: result.error ?? 'Formato inválido' });
-      }
-    }
-
-    return { valid, invalid };
-  }, [parseResult.values, ruleType]);
-
-  const valueCount = parseResult.values.length;
-  const validCount = validationResults.valid.length;
-  const invalidCount = validationResults.invalid.length;
-
-  const handleImport = async () => {
-    if (validCount === 0) {
-      setError(
-        invalidCount > 0
-          ? 'Ningún valor tiene formato válido. Corrige los errores antes de importar.'
-          : RULE_TYPE_UI[ruleType].emptyError
-      );
-      return;
-    }
-
-    setIsImporting(true);
-    setError(null);
-
-    try {
-      const result = await onImport(validationResults.valid, ruleType);
-
-      if (result.created > 0) {
-        // Success - close modal
-        setText('');
-        setRuleType('whitelist');
-        onClose();
-      } else {
-        setError('Todas las reglas ya existen');
-      }
-    } catch (err) {
-      reportError('Import failed:', err);
-      setError('Error al importar reglas');
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  const handleClose = () => {
-    if (!isImporting) {
-      setText('');
-      setRuleType('whitelist');
-      setError(null);
-      onClose();
-    }
-  };
-
-  // Read file contents
-  const readFileContents = useCallback((file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target?.result;
-        if (typeof content === 'string') {
-          resolve(content);
-        } else {
-          reject(new Error('Failed to read file'));
-        }
-      };
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsText(file);
-    });
-  }, []);
-
-  // Handle dropped files
-  const handleFileDrop = useCallback(
-    async (files: FileList | null) => {
-      if (!files || files.length === 0) return;
-
-      setError(null);
-      const validFiles: File[] = [];
-
-      // Filter for text files
-      for (const file of files) {
-        if (
-          file.type === 'text/plain' ||
-          file.name.endsWith('.txt') ||
-          file.name.endsWith('.csv') ||
-          file.name.endsWith('.list')
-        ) {
-          validFiles.push(file);
-        }
-      }
-
-      if (validFiles.length === 0) {
-        setError('Solo se permiten archivos de texto (.txt, .csv, .list)');
-        return;
-      }
-
-      try {
-        const contents = await Promise.all(validFiles.map(readFileContents));
-        const combinedContent = contents.join('\n');
-
-        // Append to existing text or set if empty
-        setText((prev) => (prev ? `${prev}\n${combinedContent}` : combinedContent));
-      } catch {
-        setError('Error al leer los archivos');
-      }
+  const {
+    dropZoneRef,
+    error,
+    handleClose,
+    handleDragEnter,
+    handleDragLeave,
+    handleDragOver,
+    handleDrop,
+    handleImport,
+    invalidCount,
+    isDragOver,
+    isImporting,
+    parseResult,
+    ruleType,
+    setError,
+    setRuleType,
+    setText,
+    text,
+    validCount,
+    validationResults,
+    valueCount,
+  } = useBulkImportModalState({
+    emptyErrorByType: {
+      whitelist: RULE_TYPE_UI.whitelist.emptyError,
+      blocked_subdomain: RULE_TYPE_UI.blocked_subdomain.emptyError,
+      blocked_path: RULE_TYPE_UI.blocked_path.emptyError,
     },
-    [readFileContents]
-  );
-
-  // Drag event handlers
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current++;
-    if (e.dataTransfer.items.length > 0) {
-      setIsDragOver(true);
-    }
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter.current--;
-    if (dragCounter.current === 0) {
-      setIsDragOver(false);
-    }
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragOver(false);
-      dragCounter.current = 0;
-
-      const { files } = e.dataTransfer;
-      void handleFileDrop(files);
-    },
-    [handleFileDrop]
-  );
+    initialText,
+    isOpen,
+    onClose,
+    onImport,
+  });
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title="Importar reglas" className="max-w-2xl">
