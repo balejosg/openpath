@@ -11,13 +11,7 @@ import {
   loadRequestConfig,
   type RequestConfig,
 } from './lib/config-storage.js';
-import {
-  extractTabHostname,
-  normalizeBlockedDomains,
-  normalizeDomainStatuses,
-  shouldEnableRequestAction,
-  type BlockedDomainsData,
-} from './lib/popup-state.js';
+import { shouldEnableRequestAction, type BlockedDomainsData } from './lib/popup-state.js';
 import {
   buildRequestDomainOptions,
   retryPopupDomainLocalUpdate,
@@ -26,10 +20,17 @@ import {
 } from './lib/popup-request-actions.js';
 import {
   buildVerifyResultViewModels,
-  resolveNativeAvailabilityState,
   verifyPopupDomains,
   type VerifyResult,
 } from './lib/popup-native-actions.js';
+import {
+  buildBlockedDomainsClipboardText,
+  checkPopupNativeAvailability,
+  clearPopupDomainsForTab,
+  loadPopupDomainSnapshot,
+  loadPopupDomainStatuses,
+  resolveActivePopupTab,
+} from './lib/popup-runtime.js';
 import {
   buildBlockedDomainListItems,
   buildRequestStatusPresentation,
@@ -120,13 +121,11 @@ async function loadBlockedDomains(): Promise<void> {
   if (currentTabId === null) return;
 
   try {
-    const response = await browser.runtime.sendMessage({
-      action: 'getBlockedDomains',
-      tabId: currentTabId,
-    });
-
-    blockedDomainsData = normalizeBlockedDomains(response);
-    await loadDomainStatuses();
+    const snapshot = await loadPopupDomainSnapshot(currentTabId, (message) =>
+      browser.runtime.sendMessage(message)
+    );
+    blockedDomainsData = snapshot.blockedDomainsData;
+    domainStatusesData = snapshot.domainStatusesData;
     renderDomainsList();
   } catch (error) {
     logger.error('[Popup] Error loading blocked domains', { error: getErrorMessage(error) });
@@ -139,15 +138,9 @@ async function loadBlockedDomains(): Promise<void> {
 async function loadDomainStatuses(): Promise<void> {
   if (currentTabId === null) return;
 
-  try {
-    const response = await browser.runtime.sendMessage({
-      action: 'getDomainStatuses',
-      tabId: currentTabId,
-    });
-    domainStatusesData = normalizeDomainStatuses(response);
-  } catch {
-    domainStatusesData = {};
-  }
+  domainStatusesData = await loadPopupDomainStatuses(currentTabId, (message) =>
+    browser.runtime.sendMessage(message)
+  );
 }
 
 /**
@@ -202,10 +195,9 @@ function renderDomainsList(): void {
  * Copy blocked domains list to clipboard
  */
 async function copyToClipboard(): Promise<void> {
-  const hostnames = Object.keys(blockedDomainsData).sort();
-  if (hostnames.length === 0) return;
+  const text = buildBlockedDomainsClipboardText(blockedDomainsData);
+  if (!text) return;
 
-  const text = hostnames.join('\n');
   try {
     await navigator.clipboard.writeText(text);
     showToast('Copiado al portapapeles');
@@ -222,10 +214,7 @@ async function clearDomains(): Promise<void> {
   if (currentTabId === null) return;
 
   try {
-    await browser.runtime.sendMessage({
-      action: 'clearBlockedDomains',
-      tabId: currentTabId,
-    });
+    await clearPopupDomainsForTab(currentTabId, (message) => browser.runtime.sendMessage(message));
     blockedDomainsData = {};
     domainStatusesData = {};
     renderDomainsList();
@@ -249,9 +238,8 @@ function hideRequestSection(): void {
  */
 async function checkNativeAvailable(): Promise<void> {
   try {
-    const response = await browser.runtime.sendMessage({ action: 'isNativeAvailable' });
-    const nativeState = resolveNativeAvailabilityState(
-      response as { available?: boolean; success?: boolean; version?: string }
+    const nativeState = await checkPopupNativeAvailability((message) =>
+      browser.runtime.sendMessage(message)
     );
     isNativeAvailable = nativeState.available;
     nativeStatusEl.textContent = nativeState.label;
@@ -489,21 +477,15 @@ async function init(): Promise<void> {
 
     // Obtener pestaña activa
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-
-    if (tabs.length === 0) {
-      tabDomainEl.textContent = 'Sin pestaña activa';
+    const activeTab = resolveActivePopupTab(tabs);
+    if (activeTab.errorText) {
+      tabDomainEl.textContent = activeTab.errorText;
       return;
     }
-
-    const tab = tabs[0];
-    if (!tab?.id) {
-      tabDomainEl.textContent = 'Error: Pestaña inválida';
-      return;
-    }
-    currentTabId = tab.id;
+    currentTabId = activeTab.currentTabId ?? null;
 
     // Mostrar hostname de la pestaña actual
-    tabDomainEl.textContent = extractTabHostname(tab.url ?? '');
+    tabDomainEl.textContent = activeTab.currentTabHostname ?? 'Error';
 
     // Cargar dominios bloqueados
     await loadBlockedDomains();
