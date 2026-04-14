@@ -1,8 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import type { Context } from './context.js';
 import * as auth from '../lib/auth.js';
-import * as classroomStorage from '../lib/classroom-storage.js';
-import { verifyEnrollmentToken } from '../lib/enrollment-token.js';
 import { logger } from '../lib/logger.js';
 import {
   getBearerTokenValue,
@@ -10,6 +8,7 @@ import {
   validateMachineHostnameAccess,
   type AuthenticatedMachine,
 } from '../lib/server-request-auth.js';
+import EnrollmentService from '../services/enrollment.service.js';
 
 function getRequestId(ctx?: Context): string | undefined {
   const raw = ctx?.req.headers['x-request-id'];
@@ -69,20 +68,18 @@ export async function requireEnrollmentTokenAccess(
   req: Context['req']
 ): Promise<{ classroomId: string; classroomName: string }> {
   const token = getBearerToken(req, 'Enrollment token required');
-  const payload = verifyEnrollmentToken(token);
-  if (!payload) {
-    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Invalid enrollment token' });
+  const access = await EnrollmentService.resolveEnrollmentTokenAccess(`Bearer ${token}`);
+  if (!access.ok) {
+    const code =
+      access.error.code === 'FORBIDDEN'
+        ? 'UNAUTHORIZED'
+        : access.error.code === 'MISCONFIGURED'
+          ? 'INTERNAL_SERVER_ERROR'
+          : access.error.code;
+    throw new TRPCError({ code, message: access.error.message });
   }
 
-  const classroom = await classroomStorage.getClassroomById(payload.classroomId);
-  if (!classroom) {
-    throw new TRPCError({ code: 'NOT_FOUND', message: 'Classroom not found' });
-  }
-
-  return {
-    classroomId: classroom.id,
-    classroomName: classroom.name,
-  };
+  return access.data;
 }
 
 export async function requireMachineTokenAccess(

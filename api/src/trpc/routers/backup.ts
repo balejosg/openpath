@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, publicProcedure, sharedSecretProcedure } from '../trpc.js';
-import { recordBackup } from '../../lib/settings-storage.js';
+import BackupService from '../../services/backup.service.js';
 
 export const backupRouter = router({
   /**
@@ -32,12 +32,6 @@ export const backupRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const success = await recordBackup(input.status, input.sizeBytes);
-
-      if (!success) {
-        return { success: false, error: 'Failed to record backup' };
-      }
-
-      return { success: true, recordedAt: new Date().toISOString() };
+      return await BackupService.recordBackupCompletion(input);
     }),
 });

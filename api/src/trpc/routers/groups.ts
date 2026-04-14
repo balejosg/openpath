@@ -10,91 +10,22 @@ import { TRPCError } from '@trpc/server';
 import { router, adminProcedure, teacherProcedure } from '../trpc.js';
 import { GroupsService } from '../../services/groups.service.js';
 import * as auth from '../../lib/auth.js';
-import * as roleStorage from '../../lib/role-storage.js';
+import UserService from '../../services/user.service.js';
 import type { JWTPayload } from '../../lib/auth.js';
 import { GroupVisibility as GroupVisibilitySchema, validateRuleValue } from '@openpath/shared';
 
-function canAccessGroup(
-  user: JWTPayload,
-  group: { id: string; name: string; ownerUserId?: string | null }
-): boolean {
-  // Admins can access everything (handled inside canApproveGroup)
-  if (group.ownerUserId && group.ownerUserId === user.sub) return true;
-  return auth.canApproveGroup(user, group.id) || auth.canApproveGroup(user, group.name);
-}
-
-function canViewGroup(
-  user: JWTPayload,
-  group: { id: string; name: string; visibility?: string | null; ownerUserId?: string | null }
-): boolean {
-  if (canAccessGroup(user, group)) return true;
-  return group.visibility === 'instance_public';
-}
-
 async function assertCanAccessGroupId(user: JWTPayload, groupId: string): Promise<void> {
-  // Fast path: role stores group IDs
-  if (auth.canApproveGroup(user, groupId)) return;
-
-  // Slow path: role stores group names
-  const groupResult = await GroupsService.getGroupById(groupId);
-  if (!groupResult.ok) {
-    throw new TRPCError({ code: groupResult.error.code, message: groupResult.error.message });
+  const access = await GroupsService.ensureUserCanAccessGroupId(user, groupId);
+  if (!access.ok) {
+    throw new TRPCError({ code: access.error.code, message: access.error.message });
   }
-
-  const group = groupResult.data;
-
-  if (group.ownerUserId && group.ownerUserId === user.sub) return;
-  if (auth.canApproveGroup(user, group.name)) return;
-  throw new TRPCError({ code: 'FORBIDDEN', message: 'You do not have access to this group' });
 }
 
 async function assertCanViewGroupId(user: JWTPayload, groupId: string): Promise<void> {
-  // Fast path: role stores group IDs/names
-  if (auth.canApproveGroup(user, groupId)) return;
-
-  // Try by ID
-  const groupResult = await GroupsService.getGroupById(groupId);
-  if (groupResult.ok) {
-    if (canViewGroup(user, groupResult.data)) return;
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'You do not have access to this group' });
+  const access = await GroupsService.ensureUserCanViewGroupId(user, groupId);
+  if (!access.ok) {
+    throw new TRPCError({ code: access.error.code, message: access.error.message });
   }
-
-  if (groupResult.error.code !== 'NOT_FOUND') {
-    throw new TRPCError({ code: groupResult.error.code, message: groupResult.error.message });
-  }
-
-  // Try by name (legacy)
-  const normalized = groupId.endsWith('.txt') ? groupId.slice(0, -4) : groupId;
-  const byName = await GroupsService.getGroupByName(normalized);
-  if (!byName.ok) {
-    throw new TRPCError({ code: byName.error.code, message: byName.error.message });
-  }
-
-  if (canViewGroup(user, byName.data)) return;
-  throw new TRPCError({ code: 'FORBIDDEN', message: 'You do not have access to this group' });
-}
-
-async function addGroupToTeacherRole(params: {
-  userId: string;
-  groupId: string;
-  createdBy: string;
-}): Promise<void> {
-  const existingRoles = await roleStorage.getUserRoles(params.userId);
-  const teacherRole = existingRoles.find((r) => r.role === 'teacher');
-
-  if (!teacherRole) {
-    await roleStorage.assignRole({
-      userId: params.userId,
-      role: 'teacher',
-      groupIds: [params.groupId],
-      createdBy: params.createdBy,
-    });
-    return;
-  }
-
-  const current = Array.isArray(teacherRole.groupIds) ? teacherRole.groupIds : [];
-  if (current.includes(params.groupId)) return;
-  await roleStorage.addGroupsToRole(teacherRole.id, [params.groupId]);
 }
 
 const teacherGroupIdProcedure = <TSchema extends z.ZodType>(
@@ -251,16 +182,14 @@ export const groupsRouter = router({
    * @returns Array of groups with whitelistCount, blockedSubdomainCount, blockedPathCount
    */
   list: teacherProcedure.query(async ({ ctx }) => {
-    const groups = await GroupsService.listGroups();
-    return groups.filter((g) => canAccessGroup(ctx.user, g));
+    return await GroupsService.listGroupsVisibleToUser(ctx.user);
   }),
 
   /**
    * List instance-public groups for browsing/cloning.
    */
   libraryList: teacherProcedure.query(async () => {
-    const groups = await GroupsService.listGroups();
-    return groups.filter((g) => g.visibility === 'instance_public');
+    return await GroupsService.listLibraryGroups();
   }),
 
   /**
@@ -277,7 +206,7 @@ export const groupsRouter = router({
 
     const source = sourceResult.data;
 
-    if (!canViewGroup(ctx.user, source)) {
+    if (!GroupsService.canUserViewGroup(ctx.user, source)) {
       throw new TRPCError({ code: 'FORBIDDEN', message: 'You do not have access to this group' });
     }
 
@@ -292,7 +221,7 @@ export const groupsRouter = router({
     }
 
     if (!auth.isAdminToken(ctx.user)) {
-      await addGroupToTeacherRole({
+      await UserService.ensureTeacherRoleGroupAccess({
         userId: ctx.user.sub,
         groupId: result.data.id,
         createdBy: ctx.user.sub,
@@ -316,7 +245,7 @@ export const groupsRouter = router({
         throw new TRPCError({ code: result.error.code, message: result.error.message });
       }
 
-      if (!canViewGroup(ctx.user, result.data)) {
+      if (!GroupsService.canUserViewGroup(ctx.user, result.data)) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'You do not have access to this group' });
       }
       return result.data;
@@ -336,7 +265,7 @@ export const groupsRouter = router({
         throw new TRPCError({ code: result.error.code, message: result.error.message });
       }
 
-      if (!canViewGroup(ctx.user, result.data)) {
+      if (!GroupsService.canUserViewGroup(ctx.user, result.data)) {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'You do not have access to this group' });
       }
       return result.data;
@@ -361,7 +290,7 @@ export const groupsRouter = router({
     }
 
     if (!isAdmin) {
-      await addGroupToTeacherRole({
+      await UserService.ensureTeacherRoleGroupAccess({
         userId: ctx.user.sub,
         groupId: result.data.id,
         createdBy: ctx.user.sub,

@@ -30,6 +30,11 @@ export interface EnrollmentScriptOutput {
   script: string;
 }
 
+export interface EnrollmentTokenAccess {
+  classroomId: string;
+  classroomName: string;
+}
+
 function hasEnrollmentRole(roles: readonly unknown[]): boolean {
   return roles.some((role): boolean => {
     if (typeof role !== 'object' || role === null) {
@@ -187,6 +192,42 @@ async function resolveEnrollmentContext(input: {
   };
 }
 
+export async function resolveEnrollmentTokenAccess(
+  authorizationHeader?: string
+): Promise<EnrollmentServiceResult<EnrollmentTokenAccess>> {
+  if (authorizationHeader?.startsWith('Bearer ') !== true) {
+    return {
+      ok: false,
+      error: { code: 'UNAUTHORIZED', message: 'Authorization header required' },
+    };
+  }
+
+  const enrollmentToken = authorizationHeader.slice(7);
+  const payload = verifyEnrollmentToken(enrollmentToken);
+  if (!payload) {
+    return {
+      ok: false,
+      error: { code: 'FORBIDDEN', message: 'Invalid enrollment token' },
+    };
+  }
+
+  const classroom = await classroomStorage.getClassroomById(payload.classroomId);
+  if (!classroom) {
+    return {
+      ok: false,
+      error: { code: 'NOT_FOUND', message: 'Classroom not found' },
+    };
+  }
+
+  return {
+    ok: true,
+    data: {
+      classroomId: classroom.id,
+      classroomName: classroom.name,
+    },
+  };
+}
+
 export async function issueEnrollmentTicket(input: {
   classroomId: string;
   user: JWTPayload;
@@ -297,4 +338,5 @@ export default {
   buildLinuxEnrollmentBootstrap,
   buildWindowsEnrollmentBootstrap,
   issueEnrollmentTicket,
+  resolveEnrollmentTokenAccess,
 };

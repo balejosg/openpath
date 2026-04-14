@@ -1,9 +1,7 @@
 import type { CreateExpressContextOptions } from '@trpc/server/adapters/express';
 import * as auth from '../lib/auth.js';
 import type { JWTPayload } from '../lib/auth.js';
-import * as roleStorage from '../lib/role-storage.js';
-import { logger } from '../lib/logger.js';
-import { normalizeUserRoleString } from '@openpath/shared/roles';
+import AuthContextService from '../services/auth-context.service.js';
 
 export interface Context {
   user: JWTPayload | null;
@@ -46,29 +44,8 @@ export async function createContext({ req, res }: CreateExpressContextOptions): 
     if (user) break;
   }
 
-  // Sync role/group assignments from DB so group permissions don't depend on stale JWT claims.
   if (user) {
-    try {
-      const dbRoles = await roleStorage.getUserRoles(user.sub);
-      const normalizedRoles: JWTPayload['roles'] = [];
-      for (const r of dbRoles) {
-        const role = normalizeUserRoleString(r.role);
-        if (!role) continue;
-        normalizedRoles.push({ role, groupIds: r.groupIds ?? [] });
-      }
-
-      if (normalizedRoles.length > 0) {
-        user = {
-          ...user,
-          roles: normalizedRoles,
-        } as JWTPayload;
-      }
-    } catch (err) {
-      logger.warn('Failed to sync user roles from DB', {
-        userId: user.sub,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
+    user = await AuthContextService.syncJwtRolesFromDb(user);
   }
 
   return { user, req, res };

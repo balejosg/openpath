@@ -269,6 +269,32 @@ export async function listTeachers(): Promise<roleStorage.TeacherInfo[]> {
   return await roleStorage.getAllTeachers();
 }
 
+export async function ensureTeacherRoleGroupAccess(input: {
+  userId: string;
+  groupId: string;
+  createdBy: string;
+}): Promise<void> {
+  const existingRoles = await roleStorage.getUserRoles(input.userId);
+  const teacherRole = existingRoles.find((roleInfo) => roleInfo.role === 'teacher');
+
+  if (!teacherRole) {
+    await roleStorage.assignRole({
+      userId: input.userId,
+      role: 'teacher',
+      groupIds: [input.groupId],
+      createdBy: input.createdBy,
+    });
+    return;
+  }
+
+  const currentGroups = Array.isArray(teacherRole.groupIds) ? teacherRole.groupIds : [];
+  if (currentGroups.includes(input.groupId)) {
+    return;
+  }
+
+  await roleStorage.addGroupsToRole(teacherRole.id, [input.groupId]);
+}
+
 /**
  * Register a new user
  */
@@ -302,4 +328,5 @@ export default {
   assignRole,
   revokeRole,
   listTeachers,
+  ensureTeacherRoleGroupAccess,
 };
