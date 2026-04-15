@@ -14,7 +14,7 @@ function isTestFile(pathname: string): boolean {
 
 function collectDirectoryTests(input: string, cwd: string): string[] {
   const pattern = `${toPosixPath(input).replace(/\/$/u, '')}/${TEST_GLOB}`;
-  return globSync(pattern, { cwd, nodir: true }).map(toPosixPath).sort();
+  return globSync(pattern, { cwd }).map(toPosixPath).sort();
 }
 
 function resolveSingleInput(input: string, cwd: string): string[] {
@@ -30,7 +30,7 @@ function resolveSingleInput(input: string, cwd: string): string[] {
   }
 
   if (GLOB_CHARS.test(input)) {
-    const matches = globSync(input, { cwd, nodir: true }).map(toPosixPath).sort();
+    const matches = globSync(input, { cwd }).map(toPosixPath).sort();
     return matches.length > 0 ? matches.filter(isTestFile) : [toPosixPath(input)];
   }
 
