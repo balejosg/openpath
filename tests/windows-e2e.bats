@@ -78,10 +78,13 @@ load 'test_helper'
     run grep -nF "Common.Http.ps1" "$PROJECT_DIR/windows/lib/Common.psm1"
     [ "$status" -eq 0 ]
 
-    run grep -nF "function Ensure-OpenPathHttpAssembly" "$PROJECT_DIR/windows/lib/internal/Common.Http.ps1"
+    run grep -nF "Common.Http.Assembly.ps1" "$PROJECT_DIR/windows/lib/internal/Common.Http.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF "Add-Type -AssemblyName 'System.Net.Http' -ErrorAction Stop" "$PROJECT_DIR/windows/lib/internal/Common.Http.ps1"
+    run grep -nF "function Ensure-OpenPathHttpAssembly" "$PROJECT_DIR/windows/lib/internal/Common.Http.Assembly.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Add-Type -AssemblyName 'System.Net.Http' -ErrorAction Stop" "$PROJECT_DIR/windows/lib/internal/Common.Http.Assembly.ps1"
     [ "$status" -eq 0 ]
 }
 
@@ -187,16 +190,19 @@ load 'test_helper'
 }
 
 @test "windows firewall does not install a global DNS port 53 block that overrides Acrylic" {
-    run grep -nF 'OpenPath-DNS-Block-DNS-UDP' "$PROJECT_DIR/windows/lib/Firewall.psm1"
+    run grep -nF 'OpenPath-DNS-Block-DNS-UDP' "$PROJECT_DIR/windows/lib/internal/Firewall.Policy.ps1"
     [ "$status" -ne 0 ]
 
-    run grep -nF 'OpenPath-DNS-Block-DNS-TCP' "$PROJECT_DIR/windows/lib/Firewall.psm1"
+    run grep -nF 'OpenPath-DNS-Block-DNS-TCP' "$PROJECT_DIR/windows/lib/internal/Firewall.Policy.ps1"
     [ "$status" -ne 0 ]
 
-    run grep -nF 'DisplayName "$script:RulePrefix-Allow-$($target.Name)-$protocol"' "$PROJECT_DIR/windows/lib/Firewall.psm1"
+    run grep -nF 'Firewall.Policy.ps1' "$PROJECT_DIR/windows/lib/Firewall.psm1"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'Block-Known-DNS-' "$PROJECT_DIR/windows/lib/Firewall.psm1"
+    run grep -nF 'DisplayName "$script:RulePrefix-Allow-$($target.Name)-$protocol"' "$PROJECT_DIR/windows/lib/internal/Firewall.Policy.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Block-Known-DNS-' "$PROJECT_DIR/windows/lib/internal/Firewall.Policy.ps1"
     [ "$status" -eq 0 ]
 }
 

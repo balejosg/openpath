@@ -1,7 +1,7 @@
 Describe "Whitelist Validation" {
     Context "Content validation" {
         It "Common module validates minimum domain count" {
-            $modulePath = Join-Path $PSScriptRoot ".." "lib" "internal" "Common.Http.ps1"
+            $modulePath = Join-Path $PSScriptRoot ".." "lib" "internal" "Common.Http.Whitelist.ps1"
             $content = Get-Content $modulePath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(

@@ -190,3 +190,16 @@ linux/scripts/runtime/openpath-update.sh|tests/openpath-update.bats,tests/linux-
 linux/scripts/runtime/openpath-self-update.sh|tests/linux-e2e.bats
 windows/scripts/Update-OpenPath.ps1|windows/tests/Windows.Tests.ps1
 windows/lib/Update.Runtime.psm1|windows/tests/Windows.Tests.ps1
+windows/lib/Firewall.psm1|windows/tests/Windows.Tests.ps1,tests/windows-e2e.bats
+windows/lib/internal/Firewall.Catalog.ps1|windows/tests/Windows.Tests.ps1,tests/windows-e2e.bats
+windows/lib/internal/Firewall.Policy.ps1|windows/tests/Windows.Tests.ps1,tests/windows-e2e.bats
+windows/lib/internal/Firewall.State.ps1|windows/tests/Windows.Tests.ps1,tests/windows-e2e.bats
+windows/lib/internal/Common.Http.ps1|windows/tests/Windows.Tests.ps1,tests/windows-e2e.bats
+windows/lib/internal/Common.Http.Assembly.ps1|windows/tests/Windows.Tests.ps1,tests/windows-e2e.bats
+windows/lib/internal/Common.Http.Whitelist.ps1|windows/tests/Windows.Tests.ps1
+windows/lib/internal/Common.Http.Health.ps1|windows/tests/Windows.Tests.ps1
+windows/lib/internal/Common.Http.Version.ps1|windows/tests/Windows.Tests.ps1
+windows/Install-OpenPath.ps1|windows/tests/Windows.Tests.ps1,tests/windows-e2e.bats
+windows/lib/install/Installer.Progress.ps1|windows/tests/Windows.Tests.ps1
+windows/lib/install/Installer.Config.ps1|windows/tests/Windows.Tests.ps1
+windows/lib/install/Installer.Runtime.ps1|windows/tests/Windows.Tests.ps1

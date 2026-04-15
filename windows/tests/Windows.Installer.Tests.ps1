@@ -124,19 +124,25 @@ Describe "Installer" {
     Context "Checkpoint defaults" {
         It "Configures checkpoint rollback defaults during install" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $configHelperPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Config.ps1"
             $content = Get-Content $scriptPath -Raw
+            $configHelper = Get-Content $configHelperPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
+                'New-OpenPathInstallerConfig',
+                'Installer.Config.ps1'
+            )
+            Assert-ContentContainsAll -Content $configHelper -Needles @(
                 'enableCheckpointRollback',
                 'maxCheckpoints',
                 'enableDohIpBlocking',
                 'dohResolverIps',
                 'vpnBlockRules',
-                'torBlockPorts'
+                'torBlockPorts',
+                'Get-DefaultDohResolverIps',
+                'Get-DefaultVpnBlockRules',
+                'Get-DefaultTorBlockPorts'
             )
-            $content.Contains('Get-DefaultDohResolverIps') | Should -BeTrue
-            $content.Contains('Get-DefaultVpnBlockRules') | Should -BeTrue
-            $content.Contains('Get-DefaultTorBlockPorts') | Should -BeTrue
         }
     }
 
@@ -260,16 +266,22 @@ Describe "Installer" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
             $guidanceHelperPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.ChromiumGuidance.ps1"
+            $progressHelperPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Progress.ps1"
             $guidanceHelper = Get-Content $guidanceHelperPath -Raw
+            $progressHelper = Get-Content $progressHelperPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 '[CmdletBinding()]',
+                'Show-InstallerProgress -Step 1 -Total 7 -Status ''Creando estructura de directorios''',
+                'Installer.Progress.ps1',
+                "Installer.ChromiumGuidance.ps1"
+            )
+
+            Assert-ContentContainsAll -Content $progressHelper -Needles @(
                 'function Show-InstallerProgress',
                 'Write-Progress -Activity ''Installing OpenPath''',
                 'function Write-InstallerVerbose',
-                'Write-Verbose $Message',
-                'Show-InstallerProgress -Step 1 -Total 7 -Status ''Creando estructura de directorios''',
-                "Installer.ChromiumGuidance.ps1"
+                'Write-Verbose $Message'
             )
 
             Assert-ContentContainsAll -Content $guidanceHelper -Needles @(
@@ -304,8 +316,14 @@ Describe "Installer" {
         It "Derives the suggested nslookup domain from the shared probe list" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
+            $runtimeHelperPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Runtime.ps1"
+            $runtimeHelper = Get-Content $runtimeHelperPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
+                'Write-OpenPathInstallerSummary',
+                'Installer.Runtime.ps1'
+            )
+            Assert-ContentContainsAll -Content $runtimeHelper -Needles @(
                 'Get-OpenPathDnsProbeDomains',
                 'nslookup $dnsProbeDomain 127.0.0.1'
             )
@@ -356,4 +374,3 @@ Describe "Uninstaller" {
         }
     }
 }
-

@@ -73,7 +73,7 @@ Describe "Update Script" {
     Context "Health report" {
         It "Sends health report to API after successful update" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
-            $commonPath = Join-Path $PSScriptRoot ".." "lib" "internal" "Common.Http.ps1"
+            $commonPath = Join-Path $PSScriptRoot ".." "lib" "internal" "Common.Http.Health.ps1"
             $updateContent = Get-Content $scriptPath -Raw
             $commonContent = Get-Content $commonPath -Raw
 
@@ -109,4 +109,3 @@ Describe "Update Script" {
         }
     }
 }
-
