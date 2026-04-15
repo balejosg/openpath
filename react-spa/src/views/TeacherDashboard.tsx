@@ -1,325 +1,59 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { Folder, Loader2, ShieldCheck, ShieldOff, MonitorPlay, Calendar } from 'lucide-react';
-import { trpc } from '../lib/trpc';
-import { isTeacherGroupsFeatureEnabled } from '../lib/auth';
-import {
-  selectActiveClassroomRowsFromModels,
-  selectClassroomControlConfirmation,
-} from '../lib/classroom-selectors';
-import { reportError } from '../lib/reportError';
-import { useAllowedGroups } from '../hooks/useAllowedGroups';
-import { useClassroomListModelsQuery } from '../hooks/useClassroomsList';
-import { GroupLabel } from '../components/groups/GroupLabel';
-import { GroupSelect } from '../components/groups/GroupSelect';
+import React from 'react';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { TeacherActiveClassroomsCard } from '../components/teacher/TeacherActiveClassroomsCard';
+import { TeacherClassroomControlCard } from '../components/teacher/TeacherClassroomControlCard';
+import { TeacherDashboardHero } from '../components/teacher/TeacherDashboardHero';
+import { useTeacherDashboardViewModel } from '../hooks/useTeacherDashboardViewModel';
 
 interface TeacherDashboardProps {
   onNavigateToRules?: (group: { id: string; name: string }) => void;
 }
 
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }) => {
-  const teacherGroupsEnabled = isTeacherGroupsFeatureEnabled();
-  const shouldPoll = import.meta.env.MODE !== 'test';
-  const {
-    data: classrooms,
-    loading: classroomsLoading,
-    error: classroomsError,
-    refetchClassrooms,
-  } = useClassroomListModelsQuery({
-    refetchIntervalMs: shouldPoll ? 30000 : false,
-    refetchOnWindowFocus: shouldPoll,
-  });
-
-  const {
-    groups,
-    groupById,
-    isLoading: groupsLoading,
-    error: groupsQueryError,
-  } = useAllowedGroups();
-
-  const groupsError = groupsQueryError ? 'No se pudieron cargar tus grupos' : null;
-
-  const [selectedClassroomForControl, setSelectedClassroomForControl] = useState<string>('');
-  const [selectedGroupForControl, setSelectedGroupForControl] = useState<string>('');
-  const [controlLoading, setControlLoading] = useState(false);
-  const [controlError, setControlError] = useState<string | null>(null);
-  const [controlConfirm, setControlConfirm] = useState<{
-    classroomId: string;
-    nextGroupId: string | null;
-    currentName: string;
-    nextName: string;
-  } | null>(null);
-
-  const activeGroupsByClassroom = useMemo(() => {
-    return selectActiveClassroomRowsFromModels(classrooms, groupById);
-  }, [classrooms, groupById]);
-
-  const activeClassrooms = activeGroupsByClassroom;
-
-  const applyControlChange = useCallback(
-    async (classroomId: string, nextGroupId: string | null) => {
-      setControlLoading(true);
-      setControlError(null);
-      try {
-        await trpc.classrooms.setActiveGroup.mutate({
-          id: classroomId,
-          groupId: nextGroupId,
-        });
-        await refetchClassrooms();
-        setSelectedClassroomForControl('');
-        setSelectedGroupForControl('');
-        return true;
-      } catch (e) {
-        reportError('Failed to apply active group:', e);
-        setControlError('Error al aplicar el grupo al aula');
-        return false;
-      } finally {
-        setControlLoading(false);
-      }
-    },
-    [refetchClassrooms]
-  );
-
-  const handleTakeControl = () => {
-    if (!selectedClassroomForControl) return;
-
-    const nextGroupId = selectedGroupForControl || null;
-    const confirmation = selectClassroomControlConfirmation({
-      classrooms,
-      groupById,
-      classroomId: selectedClassroomForControl,
-      nextGroupId,
-    });
-
-    if (confirmation) {
-      setControlConfirm(confirmation);
-      return;
-    }
-
-    void applyControlChange(selectedClassroomForControl, nextGroupId);
-  };
-
-  const handleReleaseClass = async (classroomId: string) => {
-    try {
-      await trpc.classrooms.setActiveGroup.mutate({
-        id: classroomId,
-        groupId: null,
-      });
-      await refetchClassrooms();
-    } catch (e) {
-      reportError('Failed to release classroom:', e);
-    }
-  };
+  const viewModel = useTeacherDashboardViewModel();
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            ¡Hola, Profesor!
-          </h2>
-          <p className="text-slate-500 text-sm mt-1 mb-4">
-            Desde aquí puedes gestionar el acceso a internet de tus aulas de forma rápida.
-          </p>
-
-          {classroomsLoading ? (
-            <div className="flex items-center gap-2 mt-3 text-sm text-slate-500">
-              <Loader2 size={14} className="animate-spin text-slate-400" />
-              Verificando estado...
-            </div>
-          ) : activeClassrooms.length > 0 ? (
-            <div className="flex items-center gap-2 text-green-700 bg-green-50 px-3 py-2 rounded-lg border border-green-200 w-fit">
-              <ShieldCheck size={20} />
-              <span className="font-medium text-sm">
-                Hay {activeClassrooms.length} aula(s) con grupo vigente en este momento.
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200 w-fit">
-              <ShieldOff size={20} />
-              <span className="font-medium text-sm">
-                No hay aulas con grupo vigente en este momento.
-              </span>
-            </div>
-          )}
-
-          {classroomsError && !classroomsLoading && (
-            <div className="mt-3 text-sm text-red-600">
-              {classroomsError}{' '}
-              <button
-                type="button"
-                onClick={() => void refetchClassrooms()}
-                className="underline hover:text-red-800"
-              >
-                Reintentar
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+      <TeacherDashboardHero
+        classroomsLoading={viewModel.classroomsLoading}
+        activeCount={viewModel.activeClassrooms.length}
+        classroomsError={viewModel.classroomsError}
+        onRetry={() => void viewModel.refetchClassrooms()}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <MonitorPlay className="text-blue-500" size={20} />
-            Control Mando de Aula
-          </h3>
-          <p className="text-sm text-slate-500 mb-4">
-            Selecciona un aula y aplícale instantáneamente una de tus políticas. Esto anulará
-            cualquier política por defecto.
-          </p>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Aula</label>
-              <select
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none"
-                value={selectedClassroomForControl}
-                onChange={(e) => setSelectedClassroomForControl(e.target.value)}
-              >
-                <option value="">Seleccionar Aula...</option>
-                {classrooms.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.displayName || c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Política a aplicar
-              </label>
-              <GroupSelect
-                id="teacher-control-group"
-                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:border-blue-500 outline-none"
-                value={selectedGroupForControl}
-                onChange={setSelectedGroupForControl}
-                disabled={groupsLoading || !!groupsError || groups.length === 0}
-                groups={groups}
-                includeNoneOption
-                noneLabel="Restaurar por defecto (Sin Grupo)"
-                inactiveBehavior="hide"
-              />
-
-              {groupsError && <p className="mt-2 text-xs text-red-600">{groupsError}</p>}
-
-              {!groupsLoading && !groupsError && groups.length === 0 && (
-                <p className="mt-2 text-xs text-slate-500 italic">
-                  {teacherGroupsEnabled
-                    ? 'No tienes políticas. Ve a "Mis Políticas" para crear una.'
-                    : 'No tienes políticas asignadas. Pide a un administrador que te asigne una.'}
-                </p>
-              )}
-
-              {(() => {
-                if (!onNavigateToRules) return null;
-                if (!selectedGroupForControl) return null;
-                const selected = groupById.get(selectedGroupForControl);
-                if (!selected) return null;
-
-                return (
-                  <button
-                    type="button"
-                    onClick={() => onNavigateToRules({ id: selected.id, name: selected.name })}
-                    className="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium underline"
-                  >
-                    Gestionar reglas de esta política
-                  </button>
-                );
-              })()}
-            </div>
-
-            <button
-              onClick={handleTakeControl}
-              disabled={!selectedClassroomForControl || controlLoading}
-              className="w-full mt-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
-            >
-              {controlLoading && <Loader2 size={16} className="animate-spin" />}
-              {selectedGroupForControl ? 'Aplicar Política' : 'Liberar Aula'}
-            </button>
-
-            {controlError && <p className="text-xs text-red-600">{controlError}</p>}
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm flex flex-col">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-            <Calendar className="text-indigo-500" size={20} />
-            Aulas con Grupo Vigente
-          </h3>
-
-          <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
-            {classroomsLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-              </div>
-            ) : activeClassrooms.length === 0 ? (
-              <div className="text-center py-8">
-                <Folder className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <p className="text-slate-500 text-sm">No hay aulas activas en este momento.</p>
-              </div>
-            ) : (
-              activeClassrooms.map((c) => (
-                <div
-                  key={c.classroomId}
-                  className="border border-slate-200 rounded-lg p-4 bg-slate-50 flex items-center justify-between"
-                >
-                  <div>
-                    <h4 className="font-semibold text-slate-800 text-sm">{c.classroomName}</h4>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Usando:{' '}
-                      <GroupLabel
-                        variant="text"
-                        className="font-medium text-slate-700"
-                        groupId={c.groupId}
-                        group={c.group}
-                        source={c.source}
-                      />
-                    </p>
-                  </div>
-                  {c.hasManualOverride && c.source === 'manual' && groupById.has(c.groupId) && (
-                    <button
-                      onClick={() => void handleReleaseClass(c.classroomId)}
-                      className="text-xs bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg transition-colors font-medium shadow-sm"
-                    >
-                      Terminar Clase
-                    </button>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <TeacherClassroomControlCard viewModel={viewModel} onNavigateToRules={onNavigateToRules} />
+        <TeacherActiveClassroomsCard viewModel={viewModel} />
       </div>
 
       <ConfirmDialog
-        isOpen={controlConfirm !== null}
+        isOpen={viewModel.controlConfirm !== null}
         title="Confirmar cambio"
-        confirmLabel={controlConfirm?.nextGroupId ? 'Reemplazar' : 'Liberar Aula'}
+        confirmLabel={viewModel.controlConfirm?.nextGroupId ? 'Reemplazar' : 'Liberar Aula'}
         cancelLabel="Cancelar"
-        isLoading={controlLoading}
-        errorMessage={controlConfirm ? (controlError ?? undefined) : undefined}
+        isLoading={viewModel.controlLoading}
+        errorMessage={viewModel.controlConfirm ? (viewModel.controlError ?? undefined) : undefined}
         onClose={() => {
-          setControlConfirm(null);
-          setControlError(null);
+          viewModel.setControlConfirm(null);
+          viewModel.setControlError(null);
         }}
         onConfirm={async () => {
-          if (!controlConfirm) return;
-          const ok = await applyControlChange(
-            controlConfirm.classroomId,
-            controlConfirm.nextGroupId
+          if (!viewModel.controlConfirm) return;
+          const ok = await viewModel.applyControlChange(
+            viewModel.controlConfirm.classroomId,
+            viewModel.controlConfirm.nextGroupId
           );
           if (!ok) return;
-          setControlConfirm(null);
+          viewModel.setControlConfirm(null);
         }}
       >
         <p className="text-sm text-slate-600">
           El aula ya tiene una política aplicada manualmente (
-          <strong>{controlConfirm?.currentName}</strong>).
+          <strong>{viewModel.controlConfirm?.currentName}</strong>).
         </p>
         <p className="text-sm text-slate-600">
-          {controlConfirm?.nextGroupId ? 'Reemplazar por' : 'Liberar (sin grupo)'}:{' '}
-          <strong>{controlConfirm?.nextName}</strong>?
+          {viewModel.controlConfirm?.nextGroupId ? 'Reemplazar por' : 'Liberar (sin grupo)'}:{' '}
+          <strong>{viewModel.controlConfirm?.nextName}</strong>?
         </p>
       </ConfirmDialog>
     </div>
