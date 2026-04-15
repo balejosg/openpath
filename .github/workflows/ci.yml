@@ -49,7 +49,8 @@ jobs:
     name: Detect Relevant Changes
     runs-on: ubuntu-latest
     outputs:
-      os_bound: ${{ steps.filter.outputs.os_bound }}
+      linux_bound: ${{ steps.filter.outputs.linux_bound }}
+      windows_bound: ${{ steps.filter.outputs.windows_bound }}
       delivery_contracts: ${{ steps.filter.outputs.delivery_contracts }}
 
     steps:
@@ -66,7 +67,8 @@ jobs:
           set -euo pipefail
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "os_bound=true" >> "$GITHUB_OUTPUT"
+            echo "linux_bound=true" >> "$GITHUB_OUTPUT"
+            echo "windows_bound=true" >> "$GITHUB_OUTPUT"
             echo "delivery_contracts=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -91,18 +93,24 @@ jobs:
             echo "(none)"
           fi
 
-          os_bound=false
+          linux_bound=false
+          windows_bound=false
           delivery_contracts=false
 
-          if echo "$changed_files" | grep -Eq '^(linux/|windows/|tests/|\.github/workflows/ci\.yml$)'; then
-            os_bound=true
+          if echo "$changed_files" | grep -Eq '^(linux/|tests/|\.github/workflows/ci\.yml$)'; then
+            linux_bound=true
+          fi
+
+          if echo "$changed_files" | grep -Eq '^(windows/|tests/e2e/Windows-E2E\.Tests\.ps1|\.github/workflows/ci\.yml$)'; then
+            windows_bound=true
           fi
 
           if echo "$changed_files" | grep -Eq '^(api/|firefox-extension/|windows/|tests/|\.github/workflows/ci\.yml$)'; then
             delivery_contracts=true
           fi
 
-          echo "os_bound=$os_bound" >> "$GITHUB_OUTPUT"
+          echo "linux_bound=$linux_bound" >> "$GITHUB_OUTPUT"
+          echo "windows_bound=$windows_bound" >> "$GITHUB_OUTPUT"
           echo "delivery_contracts=$delivery_contracts" >> "$GITHUB_OUTPUT"
 
   # ============================================
@@ -112,7 +120,7 @@ jobs:
     name: Linux Agent Tests (BATS)
     runs-on: ubuntu-latest
     needs: detect-relevant-changes
-    if: needs.detect-relevant-changes.outputs.os_bound == 'true'
+    if: needs.detect-relevant-changes.outputs.linux_bound == 'true'
     outputs:
       tests_passed: ${{ steps.job-status.outputs.tests_passed }}
 
@@ -170,7 +178,7 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 15
     needs: detect-relevant-changes
-    if: needs.detect-relevant-changes.outputs.os_bound == 'true'
+    if: needs.detect-relevant-changes.outputs.windows_bound == 'true'
     outputs:
       tests_passed: ${{ steps.job-status.outputs.tests_passed }}
 

@@ -169,6 +169,37 @@ test('required Windows CI keeps the direct Pester lane and emits bounded lineage
   const windowsProcessReporter = readText('tests/e2e/ci/report-windows-processes.ps1');
 
   assert.ok(
+    ciWorkflow.includes('linux_bound: ${{ steps.filter.outputs.linux_bound }}'),
+    'ci.yml should publish a dedicated linux_bound output from Detect Relevant Changes'
+  );
+  assert.ok(
+    ciWorkflow.includes('windows_bound: ${{ steps.filter.outputs.windows_bound }}'),
+    'ci.yml should publish a dedicated windows_bound output from Detect Relevant Changes'
+  );
+  assert.ok(
+    ciWorkflow.includes('echo "linux_bound=true" >> "$GITHUB_OUTPUT"'),
+    'ci.yml should mark linux_bound true during workflow_dispatch runs'
+  );
+  assert.ok(
+    ciWorkflow.includes('echo "windows_bound=true" >> "$GITHUB_OUTPUT"'),
+    'ci.yml should mark windows_bound true during workflow_dispatch runs'
+  );
+  assert.ok(
+    ciWorkflow.includes('linux_bound=false') && ciWorkflow.includes('windows_bound=false'),
+    'ci.yml should initialize linux_bound and windows_bound independently'
+  );
+  assert.ok(
+    ciWorkflow.includes("grep -Eq '^(linux/|tests/|\\.github/workflows/ci\\.yml$)'"),
+    'ci.yml should route generic tests/ and linux/ changes to the Linux lane'
+  );
+  assert.ok(
+    ciWorkflow.includes(
+      "grep -Eq '^(windows/|tests/e2e/Windows-E2E\\.Tests\\.ps1|\\.github/workflows/ci\\.yml$)'"
+    ),
+    'ci.yml should only route Windows-specific paths to the Windows lane'
+  );
+
+  assert.ok(
     ciWorkflow.includes('runs-on: windows-2025'),
     'ci.yml should pin the required Windows Pester lane to windows-2025'
   );
@@ -195,12 +226,20 @@ test('required Windows CI keeps the direct Pester lane and emits bounded lineage
     'ci.yml should not persist checkout credentials because the required CI lanes do not need authenticated git after checkout'
   );
   assert.ok(
+    linuxJobBlock.includes("if: needs.detect-relevant-changes.outputs.linux_bound == 'true'"),
+    'ci.yml should gate the Linux lane on the dedicated linux_bound output'
+  );
+  assert.ok(
     linuxJobBlock.includes('uses: actions/checkout@v6'),
     'ci.yml should keep the Linux lane on actions/checkout because the Windows-specific checkout workaround should stay isolated to the required Pester job'
   );
   assert.ok(
     linuxJobBlock.includes('persist-credentials: false'),
     'ci.yml should disable persisted checkout credentials for the Linux lane checkout'
+  );
+  assert.ok(
+    windowsJobBlock.includes("if: needs.detect-relevant-changes.outputs.windows_bound == 'true'"),
+    'ci.yml should gate the Windows lane on the dedicated windows_bound output'
   );
   assert.ok(
     windowsJobBlock.includes('uses: actions/checkout@v6'),
