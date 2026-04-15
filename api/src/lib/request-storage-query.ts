@@ -5,30 +5,26 @@
 
 import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { db, requests } from '../db/index.js';
-import { getRows } from './utils.js';
 import type { DomainRequest, RequestStatus } from '../types/index.js';
 import type { RequestStats } from '../types/storage.js';
 import {
-  type LegacyRequestRow,
   hasRequestMetadataColumns,
-  legacyRowToStorageType,
   normalizeRequestDomain,
   toStorageType,
 } from './request-storage-shared.js';
+import { readLegacyRequest, readLegacyRequests } from './request-storage-legacy.js';
 
 export async function getAllRequests(
   status: RequestStatus | null = null
 ): Promise<DomainRequest[]> {
   if (!(await hasRequestMetadataColumns())) {
-    return getRows<LegacyRequestRow>(
-      await db.execute(sql`
-        SELECT id, domain, reason, requester_email, group_id, status,
-               created_at, updated_at, resolved_at, resolved_by, resolution_note
-        FROM requests
-        ${status !== null ? sql`WHERE status = ${status}` : sql``}
-        ORDER BY created_at DESC
-      `)
-    ).map((row) => legacyRowToStorageType(row));
+    return readLegacyRequests(sql`
+      SELECT id, domain, reason, requester_email, group_id, status,
+             created_at, updated_at, resolved_at, resolved_by, resolution_note
+      FROM requests
+      ${status !== null ? sql`WHERE status = ${status}` : sql``}
+      ORDER BY created_at DESC
+    `);
   }
 
   const conditions = status !== null ? eq(requests.status, status) : undefined;
@@ -42,15 +38,13 @@ export async function getAllRequests(
 
 export async function getRequestsByGroup(groupId: string): Promise<DomainRequest[]> {
   if (!(await hasRequestMetadataColumns())) {
-    return getRows<LegacyRequestRow>(
-      await db.execute(sql`
-        SELECT id, domain, reason, requester_email, group_id, status,
-               created_at, updated_at, resolved_at, resolved_by, resolution_note
-        FROM requests
-        WHERE group_id = ${groupId}
-        ORDER BY created_at DESC
-      `)
-    ).map((row) => legacyRowToStorageType(row));
+    return readLegacyRequests(sql`
+      SELECT id, domain, reason, requester_email, group_id, status,
+             created_at, updated_at, resolved_at, resolved_by, resolution_note
+      FROM requests
+      WHERE group_id = ${groupId}
+      ORDER BY created_at DESC
+    `);
   }
 
   const result = await db
@@ -64,17 +58,13 @@ export async function getRequestsByGroup(groupId: string): Promise<DomainRequest
 
 export async function getRequestById(id: string): Promise<DomainRequest | null> {
   if (!(await hasRequestMetadataColumns())) {
-    const row = getRows<LegacyRequestRow>(
-      await db.execute(sql`
-        SELECT id, domain, reason, requester_email, group_id, status,
-               created_at, updated_at, resolved_at, resolved_by, resolution_note
-        FROM requests
-        WHERE id = ${id}
-        LIMIT 1
-      `)
-    )[0];
-
-    return row ? legacyRowToStorageType(row) : null;
+    return readLegacyRequest(sql`
+      SELECT id, domain, reason, requester_email, group_id, status,
+             created_at, updated_at, resolved_at, resolved_by, resolution_note
+      FROM requests
+      WHERE id = ${id}
+      LIMIT 1
+    `);
   }
 
   const result = await db.select().from(requests).where(eq(requests.id, id)).limit(1);

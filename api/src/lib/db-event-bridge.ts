@@ -1,6 +1,6 @@
 import type { Notification, PoolClient } from 'pg';
 import { getErrorMessage } from '@openpath/shared';
-import { pool } from '../db/index.js';
+import { listenToPgChannel, sendPgNotification, stopListeningToPgChannel } from '../db/notify.js';
 import { logger } from './logger.js';
 
 export type DbEventPayload =
@@ -30,7 +30,7 @@ export function createDbEventBridge(params: {
 
   async function notify(event: DbEventPayload): Promise<void> {
     try {
-      await pool.query('SELECT pg_notify($1, $2)', [channel, JSON.stringify(event)]);
+      await sendPgNotification(channel, event);
     } catch (error: unknown) {
       logger.warn('Failed to NOTIFY DB event channel', {
         channel,
@@ -93,20 +93,18 @@ export function createDbEventBridge(params: {
 
     startPromise = (async (): Promise<void> => {
       try {
-        const c = await pool.connect();
+        const c = await listenToPgChannel({
+          channel,
+          onNotification: (msg: Notification) => {
+            handleNotificationPayload(msg.payload ?? null);
+          },
+          onError: (err: unknown) => {
+            logger.warn('DB event bridge client error', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          },
+        });
         client = c;
-
-        c.on('notification', (msg: Notification) => {
-          handleNotificationPayload(msg.payload ?? null);
-        });
-
-        c.on('error', (err: unknown) => {
-          logger.warn('DB event bridge client error', {
-            error: err instanceof Error ? err.message : String(err),
-          });
-        });
-
-        await c.query(`LISTEN ${channel}`);
         logger.info('DB event bridge listening', { channel });
       } catch (error: unknown) {
         logger.warn('Failed to start DB event bridge', { error: getErrorMessage(error) });
@@ -131,20 +129,7 @@ export function createDbEventBridge(params: {
     startPromise = null;
 
     try {
-      await c.query(`UNLISTEN ${channel}`);
-    } catch {
-      // ignore
-    }
-
-    try {
-      c.removeAllListeners('notification');
-      c.removeAllListeners('error');
-    } catch {
-      // ignore
-    }
-
-    try {
-      c.release();
+      await stopListeningToPgChannel({ channel, client: c });
     } catch {
       // ignore
     }

@@ -11,13 +11,15 @@ import { getRowCount, getRows } from './utils.js';
 import type { DomainRequest, RequestStatus } from '../types/index.js';
 import type { CreateRequestData } from '../types/storage.js';
 import {
-  type LegacyRequestRow,
   hasRequestMetadataColumns,
-  legacyRowToStorageType,
   normalizeRequestDomain,
-  resolveRequestGroupId,
   toStorageType,
 } from './request-storage-shared.js';
+import {
+  legacyRowToStorageType,
+  type LegacyRequestRow,
+  resolveRequestGroupId,
+} from './request-storage-legacy.js';
 
 export async function createRequest(requestData: CreateRequestData): Promise<DomainRequest> {
   const id = `req_${uuidv4().slice(0, 8)}`;

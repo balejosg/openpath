@@ -1,6 +1,6 @@
 import { describe, test, after } from 'node:test';
 import assert from 'node:assert';
-import { pool } from '../src/db/index.js';
+import { sendPgNotification } from '../src/db/notify.js';
 import { createDbEventBridge, type DbEventPayload } from '../src/lib/db-event-bridge.js';
 import { TEST_RUN_ID } from './test-utils.js';
 
@@ -44,15 +44,8 @@ await describe('DB Event Bridge', async () => {
       }, 4000);
     });
 
-    await pool.query('SELECT pg_notify($1, $2)', [
-      channel,
-      JSON.stringify({ type: 'group', groupId: 'g1', origin: 'instance-b' }),
-    ]);
-
-    await pool.query('SELECT pg_notify($1, $2)', [
-      channel,
-      JSON.stringify({ type: 'group', groupId: 'ignored', origin: 'instance-a' }),
-    ]);
+    await sendPgNotification(channel, { type: 'group', groupId: 'g1', origin: 'instance-b' });
+    await sendPgNotification(channel, { type: 'group', groupId: 'ignored', origin: 'instance-a' });
 
     await gotEvent;
 

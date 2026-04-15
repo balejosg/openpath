@@ -1,7 +1,7 @@
 import { after, before, describe, test } from 'node:test';
 import assert from 'node:assert';
 
-import { pool } from '../src/db/index.js';
+import { sendPgNotification } from '../src/db/notify.js';
 import * as classroomStorage from '../src/lib/classroom-storage.js';
 import * as scheduleStorage from '../src/lib/schedule-storage.js';
 import { createSseTestClient } from './sse-test-utils.js';
@@ -78,10 +78,10 @@ void describe('SSE Endpoint - real-time event propagation', { timeout: 30000 }, 
       await client.waitFor((event) => event.event === 'connected', 5000, 'connected event');
 
       notifyTimeoutId = setTimeout(() => {
-        void pool.query('SELECT pg_notify($1, $2)', [
-          'openpath_events',
-          JSON.stringify({ type: 'group', groupId: getHarness().testGroupId }),
-        ]);
+        void sendPgNotification('openpath_events', {
+          type: 'group',
+          groupId: getHarness().testGroupId,
+        });
       }, 250);
 
       const changeEvent = (await client.waitFor(
@@ -201,10 +201,10 @@ void describe('SSE Endpoint - real-time event propagation', { timeout: 30000 }, 
       notifyTimeoutId = setTimeout(() => {
         void (async (): Promise<void> => {
           await classroomStorage.setActiveGroup(machineA.classroomId, overrideGroupId);
-          await pool.query('SELECT pg_notify($1, $2)', [
-            'openpath_events',
-            JSON.stringify({ type: 'classroom', classroomId: machineA.classroomId }),
-          ]);
+          await sendPgNotification('openpath_events', {
+            type: 'classroom',
+            classroomId: machineA.classroomId,
+          });
         })();
       }, 250);
 
