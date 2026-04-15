@@ -7,15 +7,43 @@ on:
     branches: [main]
 
 permissions:
+  actions: read
   contents: write
   pages: write
   id-token: write
 
 jobs:
+  ci-success:
+    name: Inspect CI Success summary job
+    runs-on: ubuntu-latest
+    outputs:
+      ci_success_conclusion: ${{ steps.inspect.outputs.ci_success_conclusion }}
+
+    steps:
+      - name: Recover CI Success conclusion
+        id: inspect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ci_success_conclusion="$(
+            gh api repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/jobs \
+              --paginate \
+              --jq '.jobs[] | select(.name == "CI Success") | .conclusion' \
+              | tail -n 1
+          )"
+
+          if [ -z "$ci_success_conclusion" ]; then
+            echo "::error title=Missing CI Success summary job::Expected the triggering CI workflow to publish a CI Success summary job."
+            exit 1
+          fi
+
+          echo "ci_success_conclusion=$ci_success_conclusion" >> "$GITHUB_OUTPUT"
+
   build-prerelease:
     name: Build Prerelease Package
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    needs: ci-success
+    if: ${{ needs.ci-success.outputs.ci_success_conclusion == 'success' }}
     outputs:
       version: ${{ steps.version.outputs.version }}
 

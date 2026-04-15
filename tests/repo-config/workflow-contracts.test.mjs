@@ -53,6 +53,35 @@ describe('repository verification contract', () => {
   });
 });
 
+test('prerelease deb publish keys off the CI Success summary job instead of the workflow conclusion', () => {
+  const prereleaseWorkflow = readText('.github/workflows/prerelease-deb.yml');
+
+  assert.ok(
+    prereleaseWorkflow.includes('Inspect CI Success summary job'),
+    'prerelease-deb.yml should inspect the CI Success summary job before building prerelease artifacts'
+  );
+  assert.ok(
+    prereleaseWorkflow.includes('actions/runs/${{ github.event.workflow_run.id }}/jobs'),
+    'prerelease-deb.yml should query the triggering CI workflow jobs so it can recover the canonical CI Success result'
+  );
+  assert.ok(
+    prereleaseWorkflow.includes('select(.name == "CI Success")'),
+    'prerelease-deb.yml should key prerelease publishing off the CI Success summary job'
+  );
+  assert.ok(
+    prereleaseWorkflow.includes('ci_success_conclusion'),
+    'prerelease-deb.yml should expose the recovered CI Success job conclusion as an output'
+  );
+  assert.ok(
+    prereleaseWorkflow.includes("needs.ci-success.outputs.ci_success_conclusion == 'success'"),
+    'prerelease-deb.yml should allow prerelease publishing when the CI Success summary job passed'
+  );
+  assert.ok(
+    !prereleaseWorkflow.includes("github.event.workflow_run.conclusion == 'success'"),
+    'prerelease-deb.yml should not depend on the overall CI workflow conclusion because the Windows workaround can end the workflow as cancelled after a successful CI Success summary'
+  );
+});
+
 test('Codecov coverage uploads stay wired to active workflows and the README badge targets the app UI', () => {
   const readme = readText('README.md');
   const reusableTestWorkflow = readText('.github/workflows/reusable-test.yml');
