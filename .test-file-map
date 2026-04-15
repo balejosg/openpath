@@ -97,6 +97,12 @@ api/tests/runtime/db.ts|api/tests/auth.service.test.ts,api/tests/context.test.ts
 api/tests/runtime/identifiers.ts|api/tests/groups-rule-ops.test.ts,api/tests/groups-teacher-access.test.ts,api/tests/machine-auth-scope-enrollment.test.ts,api/tests/machine-auth-scope-boundaries.test.ts,api/tests/machine-auth-scope-operational.test.ts
 api/tests/runtime/trpc.ts|api/tests/groups-auth.test.ts,api/tests/groups-export.test.ts,api/tests/setup-status.test.ts,api/tests/setup-first-admin.test.ts,api/tests/setup-token-validation.test.ts,api/tests/setup-auth-guards.test.ts,api/tests/e2e-admin-bootstrap.test.ts,api/tests/e2e-teacher-profile.test.ts,api/tests/e2e-teacher-requests.test.ts,api/tests/e2e-teacher-boundaries.test.ts
 api/tests/runtime/auth.ts|api/tests/auth-registration.test.ts,api/tests/email-verification.test.ts,api/tests/setup-status.test.ts,api/tests/setup-first-admin.test.ts,api/tests/setup-token-validation.test.ts,api/tests/setup-auth-guards.test.ts,api/tests/e2e-admin-bootstrap.test.ts,api/tests/e2e-teacher-profile.test.ts,api/tests/e2e-teacher-requests.test.ts,api/tests/e2e-teacher-boundaries.test.ts
+api/src/lib/groups-storage-rules.ts|api/tests/groups-storage-rules.test.ts
+api/src/lib/groups-storage-rules-shared.ts|api/tests/groups-storage-rules.test.ts
+api/src/lib/groups-storage-rules-query.ts|api/tests/groups-storage-rules.test.ts
+api/src/lib/groups-storage-rules-grouping.ts|api/tests/groups-storage-rules.test.ts
+api/src/lib/groups-storage-rules-copy.ts|api/tests/groups-storage-rules.test.ts
+api/src/lib/groups-storage-rules-mutation.ts|api/tests/groups-storage-rules.test.ts
 api/src/lib/exemption-storage-command.ts|api/tests/lib/exemption-storage.test.ts,api/tests/classroom-policy-context.test.ts
 api/src/lib/exemption-storage-query.ts|api/tests/lib/exemption-storage.test.ts,api/tests/classroom-policy-context.test.ts
 api/src/lib/exemption-storage-shared.ts|api/tests/lib/exemption-storage.test.ts,api/tests/classroom-policy-context.test.ts
