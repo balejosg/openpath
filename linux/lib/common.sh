@@ -285,11 +285,21 @@ CRITICAL_FILES=(
     "$INSTALL_DIR/lib/common.sh"
     "$INSTALL_DIR/lib/dns.sh"
     "$INSTALL_DIR/lib/firewall.sh"
+    "$INSTALL_DIR/lib/firewall-rule-helpers.sh"
+    "$INSTALL_DIR/lib/firewall-snapshot.sh"
+    "$INSTALL_DIR/lib/firewall-runtime.sh"
     "$INSTALL_DIR/lib/captive-portal.sh"
     "$INSTALL_DIR/lib/browser.sh"
+    "$INSTALL_DIR/lib/browser-process.sh"
+    "$INSTALL_DIR/lib/browser-firefox.sh"
+    "$INSTALL_DIR/lib/browser-native-host.sh"
     "$INSTALL_DIR/lib/chromium-managed-extension.sh"
     "$INSTALL_DIR/lib/firefox-policy.sh"
     "$INSTALL_DIR/lib/firefox-managed-extension.sh"
+    "$INSTALL_DIR/lib/openpath-update-whitelist.sh"
+    "$INSTALL_DIR/lib/openpath-update-runtime.sh"
+    "$INSTALL_DIR/lib/openpath-self-update-metadata.sh"
+    "$INSTALL_DIR/lib/openpath-self-update-package.sh"
     "$INSTALL_DIR/libexec/browser-json.py"
     "$INSTALL_DIR/libexec/browser-policy-spec.json"
     "$INSTALL_DIR/lib/services.sh"
@@ -309,7 +319,20 @@ load_libraries() {
 
     libexec_dir="$(cd "$lib_dir/.." && pwd)/libexec"
 
-    for helper_lib in chromium-managed-extension.sh firefox-policy.sh firefox-managed-extension.sh; do
+    for helper_lib in \
+        chromium-managed-extension.sh \
+        firefox-policy.sh \
+        firefox-managed-extension.sh \
+        browser-process.sh \
+        browser-firefox.sh \
+        browser-native-host.sh \
+        firewall-rule-helpers.sh \
+        firewall-snapshot.sh \
+        firewall-runtime.sh \
+        openpath-update-whitelist.sh \
+        openpath-update-runtime.sh \
+        openpath-self-update-metadata.sh \
+        openpath-self-update-package.sh; do
         if [ ! -f "$lib_dir/$helper_lib" ]; then
             log_error "Required library not found: $lib_dir/$helper_lib"
             return 1

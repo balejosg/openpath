@@ -20,370 +20,53 @@ set -o pipefail
 ################################################################################
 # openpath-update.sh - Whitelist update script
 # Part of the OpenPath DNS system
-#
-# Runs periodically (via timer) to:
-# - Download the whitelist from the API/GitHub
-# - Update the dnsmasq configuration
-# - Apply browser policies
-# - Detect remote deactivation
 ################################################################################
 
-# Load common.sh first (defines OPENPATH_LOCK_FILE and shared functions)
 INSTALL_DIR="/usr/local/lib/openpath"
 source "$INSTALL_DIR/lib/common.sh"
 
-# Cleanup on exit (normal or error)
 trap openpath_lock_cleanup EXIT
 
-# Acquire exclusive lock with timeout (prevents race with captive-portal-detector)
 if ! openpath_lock_acquire 30; then
     echo "Could not acquire lock after 30s - another process may be stuck"
     exit 1
 fi
 
-# Load additional libraries
 if ! load_libraries; then
     echo "ERROR: Could not load required OpenPath libraries"
     exit 1
 fi
 
-# Whitelist URL - always reads from whitelist-url.conf
-# In Classroom mode, install.sh saves the tokenized URL during registration
-get_whitelist_url() {
-    if [ -f "$WHITELIST_URL_CONF" ]; then
-        cat "$WHITELIST_URL_CONF"
-    else
-        echo "${WHITELIST_URL:-$DEFAULT_WHITELIST_URL}"
-    fi
-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$INSTALL_DIR/lib/openpath-update-whitelist.sh" ]; then
+    # shellcheck source=/usr/local/lib/openpath/lib/openpath-update-whitelist.sh
+    source "$INSTALL_DIR/lib/openpath-update-whitelist.sh"
+    # shellcheck source=/usr/local/lib/openpath/lib/openpath-update-runtime.sh
+    source "$INSTALL_DIR/lib/openpath-update-runtime.sh"
+else
+    # shellcheck source=../../lib/openpath-update-whitelist.sh
+    source "$SCRIPT_DIR/../../lib/openpath-update-whitelist.sh"
+    # shellcheck source=../../lib/openpath-update-runtime.sh
+    source "$SCRIPT_DIR/../../lib/openpath-update-runtime.sh"
+fi
 
-append_fail_safe_allow_domain() {
-    local domain="$1"
-
-    if validate_domain "$domain"; then
-        local safe_domain
-        safe_domain=$(sanitize_domain "$domain")
-        echo "server=/${safe_domain}/${PRIMARY_DNS}" >> "$DNSMASQ_CONF"
-        log "Fail-safe allows control-plane domain: $safe_domain"
-    else
-        log_warn "Fail-safe cannot allow invalid control-plane domain: ${domain:-<empty>}"
-    fi
-}
-
+# shellcheck disable=SC2034  # WHITELIST_URL is consumed by sourced helper modules.
 WHITELIST_URL=$(get_whitelist_url)
 
-# NOTE: check_captive_portal() is now defined in common.sh
-# to avoid code duplication with captive-portal-detector.sh
-
-# Validate whitelist content format
-# Returns 0 if valid, 1 if invalid
-# Checks that the file contains enough domain-like lines (defense against HTML error pages)
-validate_whitelist_content() {
-    local file="$1"
-    local first_line=""
-    local valid_lines
-    local has_openpath_sections=false
-
-    first_line=$(grep -v '^[[:space:]]*$' "$file" | head -n 1 2>/dev/null || true)
-    if ! echo "$first_line" | grep -iq "^#.*DESACTIVADO"; then
-        valid_lines=$(grep -cP '^[a-zA-Z0-9*].*\.[a-zA-Z]{2,}' "$file" 2>/dev/null || echo 0)
-        if grep -Eq '^## (WHITELIST|BLOCKED-SUBDOMAINS|BLOCKED-PATHS)$' "$file" 2>/dev/null; then
-            has_openpath_sections=true
-        fi
-
-        if [ "$valid_lines" -lt "${MIN_VALID_DOMAINS:-5}" ]; then
-            if [ "$valid_lines" -gt 0 ] && [ "$has_openpath_sections" = true ]; then
-                return 0
-            fi
-            log_warn "Downloaded whitelist does not look valid ($valid_lines domain-like lines, need ${MIN_VALID_DOMAINS:-5})"
-            return 1
-        fi
-    fi
-
-    # Enforce max domains limit
-    local total_lines
-    total_lines=$(wc -l < "$file" 2>/dev/null || echo 0)
-    if [ "$total_lines" -gt "${MAX_DOMAINS:-500}" ]; then
-        log_warn "Whitelist has $total_lines lines, truncating to ${MAX_DOMAINS:-500}"
-        local truncated="${file}.truncated"
-        head -n "${MAX_DOMAINS:-500}" "$file" > "$truncated"
-        mv "$truncated" "$file"
-    fi
-
-    return 0
-}
-
-# Download whitelist
-download_whitelist() {
-    log "Downloading whitelist from: $WHITELIST_URL"
-    
-    local temp_file="${WHITELIST_FILE}.tmp"
-    local headers_file="${WHITELIST_FILE}.headers.tmp"
-    local etag_file="${WHITELIST_FILE}.etag"
-    local current_etag=""
-
-    if [ -f "$etag_file" ]; then
-        current_etag=$(tr -d '\r\n' < "$etag_file" 2>/dev/null || true)
-    fi
-    
-    # Build curl args (gzip + conditional ETag)
-    local curl_args=(
-        -L -f -sS --compressed
-        --connect-timeout 15
-        -D "$headers_file"
-        -o "$temp_file"
-    )
-
-    if [ -n "$current_etag" ]; then
-        curl_args+=( -H "If-None-Match: $current_etag" )
-    fi
-
-    if timeout 30 curl "${curl_args[@]}" "$WHITELIST_URL" 2>/dev/null; then
-        local status=""
-        local new_etag=""
-
-        # Parse final HTTP status + last ETag (handles redirects)
-        while IFS= read -r line; do
-            if [[ "$line" =~ ^HTTP/[^[:space:]]+[[:space:]]+([0-9]{3}) ]]; then
-                status="${BASH_REMATCH[1]}"
-            elif [[ "$line" =~ ^[Ee][Tt][Aa][Gg]: ]]; then
-                new_etag="${line#*:}"
-                new_etag="${new_etag//$'\r'/}"
-                new_etag="${new_etag#"${new_etag%%[![:space:]]*}"}"
-                new_etag="${new_etag%"${new_etag##*[![:space:]]}"}"
-            fi
-        done < "$headers_file"
-
-        if [ "$status" = "304" ]; then
-            rm -f "$temp_file" "$headers_file"
-            log "✓ Whitelist unchanged (ETag match)"
-            return 0
-        fi
-
-        if [ -s "$temp_file" ]; then
-            # Validate content format before accepting
-            if validate_whitelist_content "$temp_file"; then
-                mv "$temp_file" "$WHITELIST_FILE"
-                rm -f "$headers_file"
-                if [ -n "$new_etag" ]; then
-                    printf '%s\n' "$new_etag" > "$etag_file" 2>/dev/null || true
-                fi
-                log "✓ Whitelist downloaded successfully"
-                return 0
-            else
-                log_warn "Whitelist content validation failed - rejecting download"
-                rm -f "$temp_file" "$headers_file"
-                return 1
-            fi
-        fi
-    fi
-    
-    rm -f "$temp_file" "$headers_file"
-    log "⚠ Error downloading whitelist"
-    return 1
-}
-
-# Verificar desactivación remota
-check_emergency_disable() {
-    if [ -f "$WHITELIST_FILE" ]; then
-        local first_line
-        first_line=$(grep -v '^[[:space:]]*$' "$WHITELIST_FILE" | head -n 1)
-        if echo "$first_line" | grep -iq "^#.*DESACTIVADO"; then
-            return 0
-        fi
-    fi
-    return 1
-}
-
-# Limpiar sistema (modo fail-open)
-cleanup_system() {
-    log "=== Activando modo fail-open ==="
-    
-    # Limpiar firewall
-    log "Desactivando firewall..."
-    log "Limpiando políticas de navegadores..."
-    log "Configurando dnsmasq en modo passthrough..."
-
-    log "Reiniciando dnsmasq..."
-    # Limpiar conexiones
-    log "Limpiando conexiones..."
-    enter_fail_open_mode "$PRIMARY_DNS"
-
-    log "=== Sistema en modo fail-open ==="
-}
-
-# Forzar aplicación de cambios
-force_apply_changes() {
-    log "Forzando aplicación de cambios..."
-    
-    flush_connections
-    flush_dns_cache
-    force_browser_close
-    
-    log "✓ Cambios aplicados"
-}
-
-# Verificar si la configuración cambió
-has_config_changed() {
-    if [ ! -f "$DNSMASQ_CONF_HASH" ]; then
-        return 0
-    fi
-
-    local new_hash
-    new_hash=$(sha256sum "$DNSMASQ_CONF" 2>/dev/null | cut -d' ' -f1)
-    local old_hash
-    old_hash=$(cat "$DNSMASQ_CONF_HASH" 2>/dev/null)
-    
-    [ "$new_hash" != "$old_hash" ]
-}
-
-sync_runtime_browser_integrations() {
-    generate_firefox_policies
-    generate_chromium_policies
-    apply_search_engine_policies
-    sync_firefox_managed_extension_policy "/usr/share/openpath/firefox-release" || true
-}
-
-resolve_captive_portal_preflight() {
-    local captive_portal_state
-    captive_portal_state=$(get_captive_portal_state)
-
-    printf 'CAPTIVE_PORTAL_STATE=%s\n' "$captive_portal_state"
-    case "$captive_portal_state" in
-        PORTAL)
-            printf 'CAPTIVE_PORTAL_ACTION=defer_for_authentication\n'
-            ;;
-        NO_NETWORK)
-            printf 'CAPTIVE_PORTAL_ACTION=continue_without_network_confirmation\n'
-            ;;
-        *)
-            printf 'CAPTIVE_PORTAL_ACTION=continue\n'
-            ;;
-    esac
-}
-
-apply_captive_portal_preflight() {
-    local captive_portal_action="${1:-continue}"
-
-    case "$captive_portal_action" in
-        defer_for_authentication)
-            log "⚠ Portal cautivo detectado - desactivando firewall para autenticación"
-            deactivate_firewall
-            return 1
-            ;;
-        continue_without_network_confirmation)
-            log "⚠ Sin conectividad para validar portal cautivo - manteniendo enforcement actual"
-            ;;
-    esac
-
-    return 0
-}
-
-resolve_whitelist_download_plan() {
-    local download_succeeded="${1:-false}"
-    local max_age_hours="${WHITELIST_MAX_AGE_HOURS:-24}"
-
-    if [ "$download_succeeded" = true ]; then
-        printf 'WHITELIST_DOWNLOAD_PLAN=continue\n'
-        return 0
-    fi
-
-    if [ ! -f "$WHITELIST_FILE" ]; then
-        printf 'WHITELIST_DOWNLOAD_PLAN=fail_open\n'
-        return 0
-    fi
-
-    if [ "$max_age_hours" -le 0 ] 2>/dev/null; then
-        printf 'WHITELIST_DOWNLOAD_PLAN=reuse_cached\n'
-        return 0
-    fi
-
-    local file_age_seconds
-    file_age_seconds=$(( $(date +%s) - $(stat -c %Y "$WHITELIST_FILE" 2>/dev/null || echo 0) ))
-    local max_age_seconds=$(( max_age_hours * 3600 ))
-
-    if [ "$file_age_seconds" -ge "$max_age_seconds" ]; then
-        printf 'WHITELIST_DOWNLOAD_PLAN=fail_safe\n'
-        printf 'WHITELIST_AGE_HOURS=%s\n' "$(( file_age_seconds / 3600 ))"
-        printf 'WHITELIST_CONTROL_HOST=%s\n' "$(get_url_host "$WHITELIST_URL")"
-        return 0
-    fi
-
-    printf 'WHITELIST_DOWNLOAD_PLAN=reuse_cached\n'
-    printf 'WHITELIST_REMAINING_HOURS=%s\n' "$(( (max_age_seconds - file_age_seconds) / 3600 ))"
-}
-
-apply_whitelist_download_plan() {
-    local whitelist_download_plan="${1:-continue}"
-    local whitelist_age_hours="${2:-0}"
-    local whitelist_remaining_hours="${3:-0}"
-    local whitelist_control_host="${4:-}"
-
-    case "$whitelist_download_plan" in
-        continue)
-            return 0
-            ;;
-        fail_open)
-            log "⚠ Error al descargar - usando whitelist existente"
-            log "⚠ Sin whitelist disponible - modo fail-open"
-            cleanup_system
-            return 1
-            ;;
-        reuse_cached)
-            log "⚠ Error al descargar - usando whitelist existente"
-            log "Whitelist age OK (expires in ~${whitelist_remaining_hours}h)"
-            return 0
-            ;;
-        fail_safe)
-            log "⚠ Error al descargar - usando whitelist existente"
-            log_warn "⚠ Whitelist expired: ${whitelist_age_hours}h old (max: ${WHITELIST_MAX_AGE_HOURS:-24}h)"
-            log_warn "Entering fail-safe mode — blocking all DNS until fresh whitelist"
-
-            cat > "$DNSMASQ_CONF" << EOF
-# FAIL-SAFE MODE — whitelist expired (${whitelist_age_hours}h old, max ${WHITELIST_MAX_AGE_HOURS:-24}h)
-# Blocks all domains by default
-no-resolv
-resolv-file=/run/dnsmasq/resolv.conf
-listen-address=127.0.0.1
-bind-interfaces
-server=$PRIMARY_DNS
-# Block all domains by default (return NXDOMAIN)
-address=/#/
-EOF
-
-            append_fail_safe_allow_domain "$whitelist_control_host"
-
-            rm -f "$DNSMASQ_CONF_HASH" 2>/dev/null || true
-            systemctl restart dnsmasq 2>/dev/null || true
-            log "=== Sistema en modo fail-safe (whitelist expirada) ==="
-            return 1
-            ;;
-    esac
-
-    log_warn "Unknown whitelist download plan: $whitelist_download_plan"
-    return 1
-}
-
-# Lógica principal
 main() {
     log "=== Iniciando actualización de whitelist ==="
-    
-    # Inicializar
+
     init_directories
+    # shellcheck disable=SC2034  # PRIMARY_DNS is consumed by sourced helper modules.
     PRIMARY_DNS=$(detect_primary_dns)
-    
-    # CRÍTICO: Verificar portal cautivo ANTES de cualquier cambio.
-    # Solo una señal real de portal cautivo debe relajar enforcement.
+
     local CAPTIVE_PORTAL_ACTION="continue"
     # shellcheck disable=SC1090,SC2154
     eval "$(resolve_captive_portal_preflight)"
     if ! apply_captive_portal_preflight "$CAPTIVE_PORTAL_ACTION"; then
-        # No continuar hasta que el usuario se autentique.
-        # El servicio captive-portal-detector.service se encargará de reactivar.
         return 0
     fi
-    
-    # Descargar whitelist
+
     local download_succeeded=false
     local WHITELIST_DOWNLOAD_PLAN="continue"
     local WHITELIST_AGE_HOURS=0
@@ -402,17 +85,13 @@ main() {
         "${WHITELIST_CONTROL_HOST:-}"; then
         return 0
     fi
-    
-    # SIEMPRE verificar desactivación (tanto si se descargó como si usamos el existente)
+
     if check_emergency_disable; then
-        # Solo actuar si es una NUEVA desactivación (transición)
         if [ ! -f "$SYSTEM_DISABLED_FLAG" ]; then
             log "=== SISTEMA DESACTIVADO REMOTAMENTE ==="
             cleanup_system
-            # Cerrar navegadores solo en la transición activo → desactivado
             log "Cerrando navegadores por desactivación del sistema..."
             force_browser_close
-            # Marcar sistema como desactivado
             touch "$SYSTEM_DISABLED_FLAG"
         else
             log "Sistema ya desactivado - sin cambios"
@@ -420,32 +99,22 @@ main() {
         return
     fi
 
-    # Si llegamos aquí, el sistema está activo - borrar flag si existía
     if [ -f "$SYSTEM_DISABLED_FLAG" ]; then
         log "Sistema reactivándose desde modo desactivado"
         rm -f "$SYSTEM_DISABLED_FLAG"
     fi
-    
-    # Parsear secciones
+
     parse_whitelist_sections "$WHITELIST_FILE"
-    
-    # Guardar estado del firewall ANTES de hacer cambios
+
     local firewall_was_inactive=false
     if [ "$(check_firewall_status)" != "active" ]; then
         firewall_was_inactive=true
     fi
 
-    # Save checkpoint before applying changes (for rollback if something breaks)
     save_checkpoint "pre-update"
-
-    # Generar configuración
     generate_dnsmasq_config
-
-    # Generar políticas de navegadores (WebsiteFilter + SearchEngines)
     sync_runtime_browser_integrations
 
-    # Verificar si las políticas de navegador cambiaron
-    # Comparar contra hash guardado de ejecución anterior, no contra hash pre-regeneración
     local new_policies_hash
     new_policies_hash=$(get_policies_hash)
     local old_policies_hash=""
@@ -457,23 +126,19 @@ main() {
     if [ "$old_policies_hash" != "$new_policies_hash" ]; then
         policies_changed=true
         log "Detectados cambios en políticas de navegador"
-        # Guardar nuevo hash
         echo "$new_policies_hash" > "$BROWSER_POLICIES_HASH"
     fi
-    
+
     local dns_config_changed=false
     local dns_healthy=false
 
-    # Aplicar cambios de dnsmasq si es necesario
     if has_config_changed; then
         dns_config_changed=true
         log "Detectados cambios en configuración DNS - aplicando..."
-        
+
         if restart_dnsmasq; then
-            # Guardar hash
             sha256sum "$DNSMASQ_CONF" | cut -d' ' -f1 > "$DNSMASQ_CONF_HASH"
-            
-            # Verificar DNS
+
             if verify_dns; then
                 dns_healthy=true
                 log "✓ DNS funcional"
@@ -486,7 +151,6 @@ main() {
             return
         fi
     else
-        # Sin cambios en DNS, pero verificar firewall
         if verify_dns; then
             dns_healthy=true
         else
@@ -501,7 +165,7 @@ main() {
         "$FLUSH_CONNECTIONS" \
         "$FLUSH_REASON" \
         "$ACTIVATION_CONTEXT"
-    
+
     log "=== Actualización completada ==="
 }
 

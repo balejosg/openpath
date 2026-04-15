@@ -25,8 +25,7 @@ extracted_script="${TMPDIR:-/tmp}/openpath-update-validate.$$.$RANDOM.sh"
 
 log_warn() { :; }
 
-awk '/^validate_whitelist_content\(\) \{/,/^}/' \
-    "$project_dir/linux/scripts/runtime/openpath-update.sh" > "$extracted_script"
+cp "$project_dir/linux/lib/openpath-update-whitelist.sh" "$extracted_script"
 source "$extracted_script"
 
 MIN_VALID_DOMAINS=5
@@ -62,8 +61,7 @@ extracted_script="${TMPDIR:-/tmp}/openpath-update-validate.$$.$RANDOM.sh"
 
 log_warn() { :; }
 
-awk '/^validate_whitelist_content\(\) \{/,/^}/' \
-    "$project_dir/linux/scripts/runtime/openpath-update.sh" > "$extracted_script"
+cp "$project_dir/linux/lib/openpath-update-whitelist.sh" "$extracted_script"
 source "$extracted_script"
 
 MIN_VALID_DOMAINS=5
@@ -139,16 +137,7 @@ force_browser_close() { :; }
 sha256sum() { printf 'deadbeef  %s\n' "$1"; }
 
 {
-    awk '/^resolve_captive_portal_preflight\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-update.sh"
-    awk '/^apply_captive_portal_preflight\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-update.sh"
-    awk '/^resolve_whitelist_download_plan\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-update.sh"
-    awk '/^apply_whitelist_download_plan\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-update.sh"
-    awk '/^sync_runtime_browser_integrations\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-update.sh"
+    cat "$project_dir/linux/lib/openpath-update-runtime.sh"
     awk '/^main\(\) \{/,/^}/' \
         "$project_dir/linux/scripts/runtime/openpath-update.sh"
 } > "$extracted_script"
@@ -231,16 +220,7 @@ force_browser_close() { :; }
 sha256sum() { printf 'deadbeef  %s\n' "$1"; }
 
 {
-    awk '/^resolve_captive_portal_preflight\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-update.sh"
-    awk '/^apply_captive_portal_preflight\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-update.sh"
-    awk '/^resolve_whitelist_download_plan\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-update.sh"
-    awk '/^apply_whitelist_download_plan\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-update.sh"
-    awk '/^sync_runtime_browser_integrations\(\) \{/,/^}/' \
-        "$project_dir/linux/scripts/runtime/openpath-update.sh"
+    cat "$project_dir/linux/lib/openpath-update-runtime.sh"
     awk '/^main\(\) \{/,/^}/' \
         "$project_dir/linux/scripts/runtime/openpath-update.sh"
 } > "$extracted_script"
@@ -303,8 +283,7 @@ add_extension_to_policies \
   "$state_dir/openpath.xpi" \
   "https://downloads.example/openpath-managed.xpi"
 
-awk '/^cleanup_system\(\) \{/,/^}/' \
-    "$project_dir/linux/scripts/runtime/openpath-update.sh" > "$cleanup_script"
+cp "$project_dir/linux/lib/openpath-update-runtime.sh" "$cleanup_script"
 source "$cleanup_script"
 
 cleanup_system
@@ -336,7 +315,7 @@ EOF
 }
 
 @test "openpath-update reuses shared fail-open transition and runtime reconciliation helpers" {
-    run grep -n "enter_fail_open_mode" "$PROJECT_DIR/linux/scripts/runtime/openpath-update.sh"
+    run grep -n "enter_fail_open_mode" "$PROJECT_DIR/linux/lib/openpath-update-runtime.sh"
     [ "$status" -eq 0 ]
 
     run grep -n "build_runtime_reconciliation_plan" "$PROJECT_DIR/linux/scripts/runtime/openpath-update.sh"
@@ -347,23 +326,23 @@ EOF
 }
 
 @test "openpath-update extracts browser integration synchronization into a dedicated helper" {
-    run grep -n "sync_runtime_browser_integrations()" "$PROJECT_DIR/linux/scripts/runtime/openpath-update.sh"
+    run grep -n "sync_runtime_browser_integrations()" "$PROJECT_DIR/linux/lib/openpath-update-runtime.sh"
     [ "$status" -eq 0 ]
 }
 
 @test "openpath-update extracts captive portal preflight into explicit decision helpers" {
-    run grep -n "resolve_captive_portal_preflight()" "$PROJECT_DIR/linux/scripts/runtime/openpath-update.sh"
+    run grep -n "resolve_captive_portal_preflight()" "$PROJECT_DIR/linux/lib/openpath-update-runtime.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n "apply_captive_portal_preflight()" "$PROJECT_DIR/linux/scripts/runtime/openpath-update.sh"
+    run grep -n "apply_captive_portal_preflight()" "$PROJECT_DIR/linux/lib/openpath-update-runtime.sh"
     [ "$status" -eq 0 ]
 }
 
 @test "openpath-update extracts whitelist download fallback into explicit decision helpers" {
-    run grep -n "resolve_whitelist_download_plan()" "$PROJECT_DIR/linux/scripts/runtime/openpath-update.sh"
+    run grep -n "resolve_whitelist_download_plan()" "$PROJECT_DIR/linux/lib/openpath-update-runtime.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n "apply_whitelist_download_plan()" "$PROJECT_DIR/linux/scripts/runtime/openpath-update.sh"
+    run grep -n "apply_whitelist_download_plan()" "$PROJECT_DIR/linux/lib/openpath-update-runtime.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -398,8 +377,7 @@ sync_firefox_managed_extension_policy() {
     record_call "sync_firefox_managed_extension_policy:$1"
 }
 
-awk '/^sync_runtime_browser_integrations\(\) \{/,/^}/' \
-    "$project_dir/linux/scripts/runtime/openpath-update.sh" > "$extracted_script"
+cp "$project_dir/linux/lib/openpath-update-runtime.sh" "$extracted_script"
 source "$extracted_script"
 
 sync_runtime_browser_integrations

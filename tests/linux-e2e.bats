@@ -6,7 +6,7 @@
 load 'test_helper'
 
 @test "linux self-update script supports overriding release metadata for test harnesses" {
-    run grep -nF 'OPENPATH_SELF_UPDATE_API' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+    run grep -nF 'OPENPATH_SELF_UPDATE_API' "$PROJECT_DIR/linux/lib/openpath-self-update-metadata.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -14,7 +14,7 @@ load 'test_helper'
     run grep -nF '/api/agent/linux/manifest' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'get_machine_token_from_whitelist_url_file' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+    run grep -nF 'get_machine_token_from_whitelist_url_file' "$PROJECT_DIR/linux/lib/openpath-self-update-metadata.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -22,11 +22,11 @@ load 'test_helper'
     run grep -nF 'DOWNLOAD_AUTH_HEADER=' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'DOWNLOAD_AUTH_HEADER="$auth_header"' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+    run grep -nF 'DOWNLOAD_AUTH_HEADER="$auth_header"' "$PROJECT_DIR/linux/lib/openpath-self-update-metadata.sh"
     [ "$status" -eq 0 ]
 
     run grep -nF 'curl -sS -L --connect-timeout 15 --max-time 120 -H "$DOWNLOAD_AUTH_HEADER" -o "$destination_file" "$source_url"' \
-        "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+        "$PROJECT_DIR/linux/lib/openpath-self-update-package.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -34,10 +34,10 @@ load 'test_helper'
     run grep -nF 'BRIDGE_VERSIONS=()' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'resolve_update_sequence()' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+    run grep -nF 'resolve_update_sequence()' "$PROJECT_DIR/linux/lib/openpath-self-update-metadata.sh"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'bridgeVersions' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+    run grep -nF 'bridgeVersions' "$PROJECT_DIR/linux/lib/openpath-self-update-metadata.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -46,20 +46,20 @@ load 'test_helper'
         "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
     [ "$status" -eq 0 ]
 
-    run grep -nF 'attempt_agent_package_rollback()' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+    run grep -nF 'attempt_agent_package_rollback()' "$PROJECT_DIR/linux/lib/openpath-self-update-package.sh"
     [ "$status" -eq 0 ]
 
-    run grep -nF '/api/agent/linux/packages/' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+    run grep -nF '/api/agent/linux/packages/' "$PROJECT_DIR/linux/lib/openpath-self-update-metadata.sh"
     [ "$status" -eq 0 ]
 }
 
 @test "linux self-update keeps stdout reserved for cache path return values" {
     run grep -nF 'log "Caching OpenPath package v${version}..." >&2' \
-        "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+        "$PROJECT_DIR/linux/lib/openpath-self-update-package.sh"
     [ "$status" -eq 0 ]
 
     run grep -nF 'log_error "Downloaded file is not a valid .deb package" >&2' \
-        "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+        "$PROJECT_DIR/linux/lib/openpath-self-update-package.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -188,7 +188,7 @@ EOF
 }
 
 @test "linux self-update validates dnsmasq health before declaring agent update success" {
-    run grep -nF 'systemctl is-active --quiet dnsmasq' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+    run grep -nF 'systemctl is-active --quiet dnsmasq' "$PROJECT_DIR/linux/lib/openpath-self-update-package.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -274,6 +274,12 @@ EOF
 
     run grep -nF 'source "$_browser_lib_dir/firefox-managed-extension.sh"' "$PROJECT_DIR/linux/lib/browser.sh"
     [ "$status" -eq 0 ]
+
+    run grep -nF 'source "$_browser_lib_dir/browser-firefox.sh"' "$PROJECT_DIR/linux/lib/browser.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'source "$_browser_lib_dir/browser-native-host.sh"' "$PROJECT_DIR/linux/lib/browser.sh"
+    [ "$status" -eq 0 ]
 }
 
 @test "linux integrity baseline tracks dedicated Firefox helper modules" {
@@ -281,6 +287,12 @@ EOF
     [ "$status" -eq 0 ]
 
     run grep -nF '"$INSTALL_DIR/lib/firefox-managed-extension.sh"' "$PROJECT_DIR/linux/lib/common.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '"$INSTALL_DIR/lib/browser-firefox.sh"' "$PROJECT_DIR/linux/lib/common.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '"$INSTALL_DIR/lib/openpath-self-update-package.sh"' "$PROJECT_DIR/linux/lib/common.sh"
     [ "$status" -eq 0 ]
 }
 
