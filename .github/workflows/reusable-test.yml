@@ -135,7 +135,6 @@ jobs:
       - name: Run database migrations
         if: steps.lane.outputs.needs_postgres == 'true'
         run: |
-          npm run drizzle:push --workspace=@openpath/api
           npm run db:migrate --workspace=@openpath/api
         env:
           DB_HOST: localhost

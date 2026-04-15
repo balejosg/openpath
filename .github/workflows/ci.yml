@@ -362,7 +362,6 @@ jobs:
       - name: Run database migrations
         id: run-database-migrations
         run: |
-          npm run drizzle:push --workspace=@openpath/api
           npm run db:migrate --workspace=@openpath/api
         env:
           DB_HOST: localhost

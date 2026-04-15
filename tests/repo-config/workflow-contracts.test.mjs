@@ -117,6 +117,14 @@ test('Codecov coverage uploads stay wired to active workflows and the README bad
     'reusable-test.yml should gate database migrations on the resolved lane configuration'
   );
   assert.ok(
+    reusableTestWorkflow.includes('npm run db:migrate --workspace=@openpath/api'),
+    'reusable-test.yml should migrate PostgreSQL-backed coverage lanes with versioned migrations'
+  );
+  assert.ok(
+    !reusableTestWorkflow.includes('npm run drizzle:push --workspace=@openpath/api'),
+    'reusable-test.yml should not mix db:push with versioned migrations in the same coverage lane'
+  );
+  assert.ok(
     reusableTestWorkflow.includes('build-shared: ${{ steps.lane.outputs.build_shared }}'),
     'reusable-test.yml should derive shared build dependencies from the lane configuration'
   );
@@ -159,6 +167,16 @@ test('Codecov coverage uploads stay wired to active workflows and the README bad
       "if: inputs.test-type == 'api'\n        run: npm run test:coverage --workspace=@openpath/api\n        env:\n          NODE_ENV: test\n          DB_HOST: localhost\n          DB_PORT: 5432\n          DB_NAME: openpath\n          DB_USER: openpath\n          DB_PASSWORD: openpath_dev\n          JWT_SECRET: test-jwt-secret-for-ci-testing"
     ),
     'reusable-test.yml should not override JWT_SECRET in the API coverage lane because auth.test verifies the test-mode fallback secret path'
+  );
+
+  const ciWorkflow = readText('.github/workflows/ci.yml');
+  assert.ok(
+    ciWorkflow.includes('npm run db:migrate --workspace=@openpath/api'),
+    'ci.yml should bootstrap PostgreSQL-backed API checks with versioned migrations'
+  );
+  assert.ok(
+    !ciWorkflow.includes('npm run drizzle:push --workspace=@openpath/api'),
+    'ci.yml should not mix db:push with db:migrate in the same PostgreSQL setup flow'
   );
 });
 
