@@ -25,8 +25,7 @@ function Get-OpenPathInstallerAgentVersion {
 
 function New-OpenPathInstallerConfig {
     param(
-        [Parameter(Mandatory = $true)]
-        [string]$WhitelistUrl,
+        [string]$WhitelistUrl = '',
 
         [Parameter(Mandatory = $true)]
         [string]$AgentVersion,

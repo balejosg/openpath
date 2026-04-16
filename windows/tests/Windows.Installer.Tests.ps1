@@ -211,6 +211,24 @@ Describe "Installer" {
     }
 
     Context "Enrollment before first update" {
+        It "Allows enrollment-mode config to start without a whitelist URL" {
+            $firewallCatalogPath = Join-Path $PSScriptRoot ".." "lib" "internal" "Firewall.Catalog.ps1"
+            $configHelperPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Config.ps1"
+            . $firewallCatalogPath
+            . $configHelperPath
+
+            $config = New-OpenPathInstallerConfig `
+                -WhitelistUrl '' `
+                -AgentVersion 'test-version' `
+                -PrimaryDNS '8.8.8.8' `
+                -ApiBaseUrl 'https://api.example.test' `
+                -ClassroomId 'cls_test'
+
+            $config.whitelistUrl | Should -Be ''
+            $config.apiUrl | Should -Be 'https://api.example.test'
+            $config.classroomId | Should -Be 'cls_test'
+        }
+
         It "Registers Firefox native host after enrollment produces complete request setup" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
             $content = Get-Content $scriptPath -Raw
