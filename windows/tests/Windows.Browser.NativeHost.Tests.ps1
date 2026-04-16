@@ -17,10 +17,10 @@ Describe "Browser Module - Native Host" {
 
             Assert-ContentContainsAll -Content $nativeHostContent -Needles @(
                 'function Test-OpenPathFirefoxNativeHostRequestSetupComplete',
-                "Get-OpenPathConfigTrimmedValue -Config $Config -PropertyName 'apiUrl'",
-                "Get-OpenPathConfigTrimmedValue -Config $Config -PropertyName 'whitelistUrl'",
-                "Get-OpenPathConfigTrimmedValue -Config $Config -PropertyName 'classroom'",
-                "Get-OpenPathConfigTrimmedValue -Config $Config -PropertyName 'classroomId'",
+                'Get-OpenPathConfigTrimmedValue -Config $Config -PropertyName ''apiUrl''',
+                'Get-OpenPathConfigTrimmedValue -Config $Config -PropertyName ''whitelistUrl''',
+                'Get-OpenPathConfigTrimmedValue -Config $Config -PropertyName ''classroom''',
+                'Get-OpenPathConfigTrimmedValue -Config $Config -PropertyName ''classroomId''',
                 "/w/[^/]+/whitelist\.txt($|[?#].*)",
                 'Unregister-OpenPathFirefoxNativeHost | Out-Null',
                 'Test-OpenPathFirefoxNativeHostRequestSetupComplete -Config $Config'
