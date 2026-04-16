@@ -42,6 +42,7 @@ yarn-error.log*
 
 # Custom Excludes
 docs/tres_amigos/
+docs/plans/*
 docs/MARKET_*.md
 docs/MVP_*.md
 auto-reinstall.sh

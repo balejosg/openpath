@@ -273,6 +273,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path ci | Out-Null
           Set-Content -Path ci/windows-tests-passed.txt -Value success
 
+      - name: Report Windows process diagnostics
+        if: always()
+        shell: pwsh
+        run: |
+          & .\tests\e2e\ci\report-windows-processes.ps1 `
+            -Mode report `
+            -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-snapshot.json"
+
       - name: Hold successful Windows lane until timeout cancellation
         if: steps.job-status.outputs.tests_passed == 'true'
         shell: pwsh
@@ -282,14 +290,6 @@ jobs:
           # the job timeout interrupts execution before the runner reaches that
           # stuck teardown phase.
           Start-Sleep -Seconds 3600
-
-      - name: Report Windows process diagnostics
-        if: always()
-        shell: pwsh
-        run: |
-          & .\tests\e2e\ci\report-windows-processes.ps1 `
-            -Mode report `
-            -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-snapshot.json"
 
   # ============================================
   # Job 3: Firefox Delivery Contracts
