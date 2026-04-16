@@ -27,6 +27,7 @@ const REQUIRED_TABLES = [
 
 const CRITICAL_COLUMNS = {
   machines: ['download_token_hash', 'download_token_last_rotated_at'],
+  schedules: ['start_at', 'end_at'],
   users: ['google_id'],
 };
 
@@ -89,6 +90,22 @@ function main(): void {
     hasErrors = true;
   } else {
     console.log('✅ users.password_hash is nullable');
+  }
+
+  const schedulesMatch = /CREATE TABLE IF NOT EXISTS "schedules"[\s\S]*?\);/i.exec(schemaSQL);
+  const schedulesDefinition = schedulesMatch?.[0] ?? '';
+  for (const column of ['day_of_week', 'start_time', 'end_time']) {
+    const columnDefinition = new RegExp(`"${column}"\\s+[^,)]*`, 'i').exec(
+      schedulesDefinition
+    )?.[0];
+    const weeklyColumnNullable =
+      columnDefinition !== undefined && !/\sNOT\s+NULL\b/i.test(columnDefinition);
+    if (!weeklyColumnNullable) {
+      console.error(`❌ schedules.${column} should be nullable for one-off schedules`);
+      hasErrors = true;
+    } else {
+      console.log(`✅ schedules.${column} is nullable`);
+    }
   }
 
   console.log('\n' + '='.repeat(50));

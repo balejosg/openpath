@@ -111,13 +111,17 @@ CREATE TABLE IF NOT EXISTS "schedules" (
 	"classroom_id" varchar(50) NOT NULL,
 	"teacher_id" varchar(50) NOT NULL,
 	"group_id" varchar(50) NOT NULL,
-	"day_of_week" integer NOT NULL,
-	"start_time" time NOT NULL,
-	"end_time" time NOT NULL,
+	"day_of_week" integer,
+	"start_time" time,
+	"end_time" time,
+	"start_at" timestamp with time zone,
+	"end_at" timestamp with time zone,
 	"recurrence" varchar(20) DEFAULT 'weekly',
 	"created_at" timestamp with time zone DEFAULT now(),
 	"updated_at" timestamp with time zone DEFAULT now()
 );
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "schedules_classroom_one_off_start_idx" ON "schedules" ("classroom_id","start_at");
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "machine_exemptions" (
 	"id" varchar(50) PRIMARY KEY NOT NULL,
