@@ -227,6 +227,21 @@ Describe "Installer" {
                 '$ClassroomModeRequested -and $MachineRegistered -ne ''REGISTERED'''
             )
         }
+
+        It "Allows optional summary fields to be empty" {
+            $runtimeHelperPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Runtime.ps1"
+            $runtimeHelper = Get-Content $runtimeHelperPath -Raw
+
+            Assert-ContentContainsAll -Content $runtimeHelper -Needles @(
+                '[string]$Classroom = ''''',
+                '[string]$ClassroomId = ''''',
+                '[string]$WhitelistUrl = '''''
+            )
+
+            $runtimeHelper | Should -Not -Match '\[Parameter\(Mandatory = \$true\)\]\s+\[string\]\$Classroom\s*,'
+            $runtimeHelper | Should -Not -Match '\[Parameter\(Mandatory = \$true\)\]\s+\[string\]\$ClassroomId\s*,'
+            $runtimeHelper | Should -Not -Match '\[Parameter\(Mandatory = \$true\)\]\s+\[string\]\$WhitelistUrl\s*,'
+        }
     }
 
     Context "Operational script installation" {

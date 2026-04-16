@@ -82,17 +82,14 @@ function Write-OpenPathInstallerSummary {
         [Parameter(Mandatory = $true)]
         [bool]$ClassroomModeRequested,
 
-        [Parameter(Mandatory = $true)]
-        [string]$Classroom,
+        [string]$Classroom = '',
 
-        [Parameter(Mandatory = $true)]
-        [string]$ClassroomId,
+        [string]$ClassroomId = '',
 
         [Parameter(Mandatory = $true)]
         [string]$MachineRegistered,
 
-        [Parameter(Mandatory = $true)]
-        [string]$WhitelistUrl,
+        [string]$WhitelistUrl = '',
 
         [Parameter(Mandatory = $true)]
         [string]$AgentVersion,
