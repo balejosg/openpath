@@ -231,6 +231,36 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('windows student policy runner explicitly tears down OpenPath during cleanup', () => {
+    const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
+    const cleanupBlock = windowsRunner.slice(windowsRunner.lastIndexOf('finally {'));
+
+    assert.ok(
+      existsSync(resolve(projectRoot, 'windows/Uninstall-OpenPath.ps1')),
+      'windows/Uninstall-OpenPath.ps1 should exist for the Windows student-policy cleanup path'
+    );
+    assert.match(
+      cleanupBlock,
+      /& powershell\.exe -NoProfile -ExecutionPolicy Bypass -File \(Join-Path \$script:RepoRoot 'windows\\Uninstall-OpenPath\.ps1'\)/,
+      'Windows student-policy runner should invoke windows/Uninstall-OpenPath.ps1 from the cleanup path'
+    );
+    assert.match(
+      cleanupBlock,
+      /if \(\$LASTEXITCODE -ne 0\) \{[\s\S]*?Uninstall-OpenPath\.ps1 failed with exit code \$LASTEXITCODE/s,
+      'Windows student-policy runner should fail cleanup when Uninstall-OpenPath.ps1 exits non-zero'
+    );
+    assert.match(
+      cleanupBlock,
+      /try \{[\s\S]*?& powershell\.exe -NoProfile -ExecutionPolicy Bypass -File \(Join-Path \$script:RepoRoot 'windows\\Uninstall-OpenPath\.ps1'\)[\s\S]*?catch \{\s*\$cleanupError = \$_\s*\}/s,
+      'Windows student-policy runner should isolate uninstall failures so later cleanup still runs'
+    );
+    assert.match(
+      cleanupBlock,
+      /try \{[\s\S]*?windows\\Uninstall-OpenPath\.ps1[\s\S]*?catch \{\s*\$cleanupError = \$_\s*\}[\s\S]*?try \{[\s\S]*?Restore-FirefoxUnsignedAddonSupport[\s\S]*?catch \{[\s\S]*?if \(\$null -eq \$cleanupError\)[\s\S]*?\$cleanupError = \$_[\s\S]*?\}[\s\S]*?try \{[\s\S]*?Stop-BackgroundJobs[\s\S]*?catch \{[\s\S]*?if \(\$null -eq \$cleanupError\)[\s\S]*?\$cleanupError = \$_[\s\S]*?\}[\s\S]*?try \{[\s\S]*?Cleanup-TestPostgres[\s\S]*?catch \{[\s\S]*?if \(\$null -eq \$cleanupError\)[\s\S]*?\$cleanupError = \$_/s,
+      'Windows student-policy runner should isolate uninstall cleanup first, then continue Firefox, background job, and Postgres cleanup in order'
+    );
+  });
+
   test('windows student policy runner only reports success after cleanup completes', () => {
     const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
 

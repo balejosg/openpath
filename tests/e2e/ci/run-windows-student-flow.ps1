@@ -1001,10 +1001,22 @@ finally {
     $cleanupError = $null
 
     try {
-        Restore-FirefoxUnsignedAddonSupport
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $script:RepoRoot 'windows\Uninstall-OpenPath.ps1')
+        if ($LASTEXITCODE -ne 0) {
+            throw "Uninstall-OpenPath.ps1 failed with exit code $LASTEXITCODE"
+        }
     }
     catch {
         $cleanupError = $_
+    }
+
+    try {
+        Restore-FirefoxUnsignedAddonSupport
+    }
+    catch {
+        if ($null -eq $cleanupError) {
+            $cleanupError = $_
+        }
     }
 
     try {
