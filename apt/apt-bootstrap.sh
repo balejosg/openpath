@@ -295,6 +295,14 @@ if [ -n "$ENROLLMENT_TOKEN" ]; then
 fi
 
 if ! run_maybe_verbose "${setup_cmd[@]}"; then
+    if [ -n "$ENROLLMENT_TOKEN" ]; then
+        echo ""
+        echo "ERROR: Enrollment-token classroom setup failed."
+        echo "  Generate a fresh enrollment command and rerun it."
+        echo ""
+        exit 1
+    fi
+
     echo ""
     echo "WARNING: Classroom setup could not be completed right now."
     echo "  OpenPath is installed. Retry when API/token are available:"
