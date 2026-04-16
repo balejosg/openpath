@@ -120,6 +120,7 @@ main() {
     load_common_runtime
     load_browser_runtime
     require_root
+    require_openpath_request_setup_complete "browser request setup"
 
     log "Ensuring Firefox is installed..."
     if ! install_firefox_esr; then

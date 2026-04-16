@@ -53,6 +53,94 @@ is_tokenized_whitelist_url() {
     [[ "$url" =~ /w/[^/]+/whitelist\.txt($|[?#].*) ]]
 }
 
+is_openpath_request_setup_complete() {
+    local api_url=""
+    local whitelist_url=""
+    local classroom=""
+    local classroom_id=""
+
+    api_url=$(read_single_line_file "$ETC_CONFIG_DIR/api-url.conf" || true)
+    whitelist_url=$(read_single_line_file "$WHITELIST_URL_CONF" || true)
+    classroom=$(read_single_line_file "$ETC_CONFIG_DIR/classroom.conf" || true)
+    classroom_id=$(read_single_line_file "$ETC_CONFIG_DIR/classroom-id.conf" || true)
+
+    is_http_url "$api_url" || return 1
+    is_tokenized_whitelist_url "$whitelist_url" || return 1
+    [ -n "$classroom" ] || [ -n "$classroom_id" ] || return 1
+}
+
+describe_openpath_request_setup_missing() {
+    local missing_items=()
+    local api_url=""
+    local whitelist_url=""
+    local classroom=""
+    local classroom_id=""
+
+    api_url=$(read_single_line_file "$ETC_CONFIG_DIR/api-url.conf" || true)
+    whitelist_url=$(read_single_line_file "$WHITELIST_URL_CONF" || true)
+    classroom=$(read_single_line_file "$ETC_CONFIG_DIR/classroom.conf" || true)
+    classroom_id=$(read_single_line_file "$ETC_CONFIG_DIR/classroom-id.conf" || true)
+
+    if [ -z "$api_url" ]; then
+        missing_items+=("api-url.conf")
+    elif ! is_http_url "$api_url"; then
+        missing_items+=("valid api-url.conf")
+    fi
+
+    if [ -z "$whitelist_url" ]; then
+        missing_items+=("whitelist-url.conf")
+    elif ! is_tokenized_whitelist_url "$whitelist_url"; then
+        missing_items+=("tokenized whitelist-url.conf")
+    fi
+
+    [ -n "$classroom" ] || [ -n "$classroom_id" ] || missing_items+=("classroom.conf or classroom-id.conf")
+
+    if [ "${#missing_items[@]}" -eq 0 ]; then
+        printf '%s\n' "none"
+        return 0
+    fi
+
+    local IFS=", "
+    printf '%s\n' "${missing_items[*]}"
+}
+
+require_openpath_request_setup_complete() {
+    local context="${1:-browser request setup}"
+
+    if is_openpath_request_setup_complete; then
+        return 0
+    fi
+
+    log_error "OpenPath request setup is incomplete for ${context}: $(describe_openpath_request_setup_missing)"
+    return 1
+}
+
+has_openpath_managed_browser_integration() {
+    local managed_policies="${FIREFOX_POLICIES:-/usr/lib/firefox-esr/distribution/policies.json}"
+    local native_host=""
+    local native_host_dir=""
+
+    if [ -f "$managed_policies" ] && grep -q "monitor-bloqueos@openpath" "$managed_policies" 2>/dev/null; then
+        return 0
+    fi
+
+    if declare -F get_native_host_install_dir >/dev/null 2>&1; then
+        native_host_dir=$(get_native_host_install_dir 2>/dev/null || true)
+    fi
+    [ -n "$native_host_dir" ] || native_host_dir="/usr/lib/mozilla/native-messaging-hosts"
+    native_host="$native_host_dir/whitelist_native_host.json"
+
+    [ -f "$native_host" ]
+}
+
+should_require_openpath_request_setup() {
+    if is_openpath_request_setup_complete; then
+        return 0
+    fi
+
+    has_openpath_managed_browser_integration
+}
+
 extract_machine_token_from_whitelist_url() {
     local whitelist_url="${1:-}"
     if [ -z "$whitelist_url" ]; then

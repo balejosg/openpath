@@ -74,8 +74,14 @@ UPDATE_SEQUENCE=()
 
 # shellcheck disable=SC2034  # Preserve list is consumed by the package helper module.
 PRESERVE_FILES=(
+    "/etc/openpath/api-url.conf"
     "/etc/openpath/whitelist-url.conf"
     "/etc/openpath/classroom.conf"
+    "/etc/openpath/classroom-id.conf"
+    "/etc/openpath/machine-name.conf"
+    "/etc/openpath/api-secret.conf"
+    "/etc/openpath/health-api-url.conf"
+    "/etc/openpath/health-api-secret.conf"
     "/etc/openpath/overrides.conf"
     "/etc/openpath/config-overrides.conf"
     "/var/lib/openpath/whitelist.txt"

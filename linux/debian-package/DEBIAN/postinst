@@ -102,19 +102,25 @@ EOF
         # Step 6: Give capabilities to dnsmasq
         setcap 'cap_net_bind_service,cap_net_admin=+ep' /usr/sbin/dnsmasq 2>/dev/null || true
         
-        # Step 7: Install Firefox extension
-        echo "  Instalando extensión Firefox..."
-        install_browser_integrations \
-            /usr/share/openpath/firefox-extension \
-            /usr/share/openpath/firefox-release \
-            --native-host \
-            --firefox-best-effort \
-            --chromium-best-effort \
-            --native-host-best-effort
-        
-        # Step 8: Apply browser policies
-        echo "  Aplicando políticas de navegadores..."
-        apply_search_engine_policies
+        # Step 7: Install Firefox extension only after request setup exists.
+        echo "  Validando configuración de solicitudes del navegador..."
+        if is_openpath_request_setup_complete; then
+            echo "  Instalando extensión Firefox..."
+            install_browser_integrations \
+                /usr/share/openpath/firefox-extension \
+                /usr/share/openpath/firefox-release \
+                --native-host \
+                --firefox-best-effort \
+                --chromium-best-effort \
+                --native-host-best-effort
+
+            # Step 8: Apply browser policies
+            echo "  Aplicando políticas de navegadores..."
+            apply_search_engine_policies
+        else
+            echo "  Skipping managed browser request integration until OpenPath setup is complete"
+            echo "  Missing: $(describe_openpath_request_setup_missing)"
+        fi
         
         # Step 9: Create logrotate and tmpfiles config
         create_logrotate_config

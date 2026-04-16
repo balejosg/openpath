@@ -22,6 +22,12 @@ Useful flags supported by the bootstrap include:
 - `--skip-setup`
 - `--package-version <version>`
 
+The bootstrap treats managed browser request setup as strict. If classroom setup
+is attempted and fails, or if setup exits without writing the API URL,
+classroom state, and tokenized whitelist URL, the bootstrap fails and does not
+run the browser setup helper. `--skip-setup` is package-only and intentionally
+skips browser request setup.
+
 ### 2. Source Installer
 
 For local development or direct source installs:
@@ -31,7 +37,7 @@ cd linux
 sudo ./install.sh
 ```
 
-The installer supports explicit setup flags and an unattended mode; verify current options against `linux/install.sh` before documenting new deployment recipes.
+The installer supports explicit setup flags and an unattended mode; verify current options against `linux/install.sh` before documenting new deployment recipes. If `--with-native-host` is used, request setup must complete during the install before browser integrations are installed.
 
 ### 3. API-Served Agent Delivery
 
@@ -62,3 +68,6 @@ sudo openpath health
 sudo openpath test
 systemctl status dnsmasq openpath-dnsmasq.timer openpath-agent-update.timer dnsmasq-watchdog.timer
 ```
+
+For managed browser requests, `sudo openpath status` must show `Enrolled: YES`
+and `Solicitudes: configuradas`.

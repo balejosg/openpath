@@ -374,7 +374,7 @@ configure_client() {
 
     if [[ "$install_client" == "true" ]]; then
         echo "Installing Linux OpenPath client in container..."
-        docker exec "$CONTAINER_NAME" bash -lc 'rm -rf /openpath/linux/firefox-extension && cp -a /openpath/firefox-extension /openpath/linux/firefox-extension && cd /openpath && ./linux/install.sh --unattended --skip-firefox --with-native-host'
+        docker exec "$CONTAINER_NAME" bash -lc 'rm -rf /openpath/linux/firefox-extension && cp -a /openpath/firefox-extension /openpath/linux/firefox-extension && cd /openpath && ./linux/install.sh --unattended --skip-firefox'
     else
         echo "Reconfiguring existing Linux OpenPath client in container..."
     fi
@@ -393,6 +393,7 @@ configure_client() {
     docker exec "$CONTAINER_NAME" bash -lc \
         "/usr/local/bin/openpath setup --api-url 'http://host.docker.internal:$API_PORT' --classroom-id '$classroom_id' --enrollment-token '$enrollment_token' --machine-name '$MACHINE_NAME'"
 
+    docker exec "$CONTAINER_NAME" bash -lc '/usr/local/bin/openpath-browser-setup.sh'
     docker exec "$CONTAINER_NAME" bash -lc '/usr/local/bin/openpath-update.sh'
     docker exec "$CONTAINER_NAME" bash -lc 'mkdir -p /root/.mozilla/native-messaging-hosts && cp /usr/lib/mozilla/native-messaging-hosts/whitelist_native_host.json /root/.mozilla/native-messaging-hosts/whitelist_native_host.json'
 

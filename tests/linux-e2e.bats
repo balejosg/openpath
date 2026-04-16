@@ -192,6 +192,36 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "linux self-update preserves request setup files and validates them after package updates" {
+    run grep -nF '"/etc/openpath/api-url.conf"' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '"/etc/openpath/classroom-id.conf"' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'require_openpath_request_setup_complete "post-update verification"' \
+        "$PROJECT_DIR/linux/lib/openpath-self-update-package.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "linux student-policy e2e installs browser request integration only after setup" {
+    run grep -nF './linux/install.sh --unattended --skip-firefox --with-native-host' \
+        "$PROJECT_DIR/tests/e2e/ci/run-linux-student-flow.sh"
+    [ "$status" -ne 0 ]
+
+    run grep -nF './linux/install.sh --unattended --skip-firefox' \
+        "$PROJECT_DIR/tests/e2e/ci/run-linux-student-flow.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '/usr/local/bin/openpath setup --api-url' \
+        "$PROJECT_DIR/tests/e2e/ci/run-linux-student-flow.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '/usr/local/bin/openpath-browser-setup.sh' \
+        "$PROJECT_DIR/tests/e2e/ci/run-linux-student-flow.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "linux packaged updates keep the installed uninstaller available" {
     run grep -nF 'cp "$LINUX_DIR/uninstall.sh" "$BUILD_DIR/usr/local/lib/openpath/uninstall.sh"' "$PROJECT_DIR/linux/scripts/build/build-deb.sh"
     [ "$status" -eq 0 ]

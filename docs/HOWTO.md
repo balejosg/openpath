@@ -13,13 +13,20 @@ Published APT bootstrap:
 curl -fsSL https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/apt-bootstrap.sh | sudo bash
 ```
 
+Managed browser requests are strict on Linux. The bootstrap only runs the browser
+request setup after `openpath setup` leaves a valid API URL, classroom state, and
+tokenized whitelist URL. Use `--skip-setup` only for package-only installs; it
+does not prepare the browser unblock-request flow.
+
 Source install:
 
 ```bash
 cd linux
-sudo ./install.sh
-sudo openpath setup
+sudo ./install.sh --api-url "https://api.example.com" --classroom "<classroom-name>" --registration-token "<token>" --with-native-host
 ```
+
+For source installs without managed browser requests, omit `--with-native-host`
+and run `sudo openpath setup` later when classroom enrollment is available.
 
 ## Install the Windows Agent
 

@@ -122,6 +122,7 @@ parse_whitelist_sections() { :; }
 check_firewall_status() { echo "inactive"; }
 save_checkpoint() { :; }
 generate_dnsmasq_config() { :; }
+require_openpath_request_setup_complete() { :; }
 generate_firefox_policies() { :; }
 generate_chromium_policies() { :; }
 apply_search_engine_policies() { :; }
@@ -376,6 +377,7 @@ apply_search_engine_policies() { record_call "apply_search_engine_policies"; }
 sync_firefox_managed_extension_policy() {
     record_call "sync_firefox_managed_extension_policy:$1"
 }
+require_openpath_request_setup_complete() { record_call "require_openpath_request_setup_complete:$1"; }
 
 cp "$project_dir/linux/lib/openpath-update-runtime.sh" "$extracted_script"
 source "$extracted_script"
@@ -389,8 +391,58 @@ EOF
     run "$helper_script" "$PROJECT_DIR" "$state_dir"
 
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "generate_firefox_policies" ]
-    [ "${lines[1]}" = "generate_chromium_policies" ]
-    [ "${lines[2]}" = "apply_search_engine_policies" ]
-    [ "${lines[3]}" = "sync_firefox_managed_extension_policy:/usr/share/openpath/firefox-release" ]
+    [ "${lines[0]}" = "require_openpath_request_setup_complete:runtime browser integration" ]
+    [ "${lines[1]}" = "generate_firefox_policies" ]
+    [ "${lines[2]}" = "generate_chromium_policies" ]
+    [ "${lines[3]}" = "apply_search_engine_policies" ]
+    [ "${lines[4]}" = "sync_firefox_managed_extension_policy:/usr/share/openpath/firefox-release" ]
+}
+
+@test "sync_runtime_browser_integrations aborts before policy writes when request setup is incomplete" {
+    local helper_script="$TEST_TMP_DIR/run-sync-runtime-browser-integrations-incomplete.sh"
+    local state_dir="$TEST_TMP_DIR/update-state-incomplete"
+
+    mkdir -p "$state_dir"
+
+    cat > "$helper_script" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+project_dir="$1"
+state_dir="$2"
+extracted_script="$state_dir/sync-runtime-browser-integrations.sh"
+
+CALLS=()
+record_call() {
+    CALLS+=("$1")
+}
+
+generate_firefox_policies() { record_call "generate_firefox_policies"; }
+generate_chromium_policies() { record_call "generate_chromium_policies"; }
+apply_search_engine_policies() { record_call "apply_search_engine_policies"; }
+sync_firefox_managed_extension_policy() { record_call "sync_firefox_managed_extension_policy:$1"; }
+require_openpath_request_setup_complete() {
+    record_call "require_openpath_request_setup_complete:$1"
+    return 1
+}
+
+cp "$project_dir/linux/lib/openpath-update-runtime.sh" "$extracted_script"
+source "$extracted_script"
+
+set +e
+sync_runtime_browser_integrations
+status=$?
+set -e
+
+printf 'status=%s\n' "$status"
+printf '%s\n' "${CALLS[@]}"
+EOF
+    chmod +x "$helper_script"
+
+    run "$helper_script" "$PROJECT_DIR" "$state_dir"
+
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "status=1" ]
+    [ "${lines[1]}" = "require_openpath_request_setup_complete:runtime browser integration" ]
+    [ "${#lines[@]}" -eq 2 ]
 }

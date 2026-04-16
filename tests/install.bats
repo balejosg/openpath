@@ -125,11 +125,14 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
-@test "apt bootstrap script runs the browser setup helper after package install" {
+@test "apt bootstrap script keeps browser setup gated behind request setup validation" {
     run grep -n "OPENPATH_BROWSER_SETUP_SCRIPT" "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
     [ "$status" -eq 0 ]
 
     run grep -n "openpath-browser-setup.sh" "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n "require_bootstrap_request_setup_complete" "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -398,6 +401,14 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 
     run grep -n "db_get openpath-dnsmasq/health-api-secret" "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
+    [ "$status" -eq 0 ]
+}
+
+@test "postinst only installs managed browser requests when request setup is complete" {
+    run grep -n "is_openpath_request_setup_complete" "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
+    [ "$status" -eq 0 ]
+
+    run grep -n "Skipping managed browser request integration until OpenPath setup is complete" "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
     [ "$status" -eq 0 ]
 }
 

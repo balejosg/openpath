@@ -39,6 +39,7 @@ has_config_changed() {
 }
 
 sync_runtime_browser_integrations() {
+    require_openpath_request_setup_complete "runtime browser integration" || return 1
     generate_firefox_policies
     generate_chromium_policies
     apply_search_engine_policies

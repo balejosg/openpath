@@ -28,6 +28,10 @@ Classroom-oriented setup after install:
 sudo openpath setup
 ```
 
+Managed browser requests require completed setup. Browser integration helpers
+will not install or reconcile the unblock-request flow until `api-url.conf`,
+classroom state, and a tokenized `whitelist-url.conf` are present.
+
 ## Runtime Commands
 
 The installed CLI exposes:

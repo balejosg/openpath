@@ -113,7 +113,10 @@ main() {
 
     save_checkpoint "pre-update"
     generate_dnsmasq_config
-    sync_runtime_browser_integrations
+    if ! sync_runtime_browser_integrations; then
+        log_warn "Browser request setup is incomplete; skipping runtime browser integration"
+        return 1
+    fi
 
     local new_policies_hash
     new_policies_hash=$(get_policies_hash)

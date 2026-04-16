@@ -43,6 +43,33 @@ sudo openpath update
 sudo openpath force
 ```
 
+### Browser unblock request says configuration is incomplete
+
+If the blocked page shows `No se pudo enviar la solicitud` and mentions
+incomplete configuration for domain requests, the machine has browser request
+UI without the required API/enrollment state.
+
+```bash
+sudo openpath status
+test -s /etc/openpath/api-url.conf
+test -s /etc/openpath/whitelist-url.conf
+```
+
+`sudo openpath status` must show `Enrolled: YES` and
+`Solicitudes: configuradas`. If it does not, rerun setup with a fresh classroom
+enrollment command, for example:
+
+```bash
+sudo openpath setup --api-url "https://api.example.com" --classroom-id "<classroom-id>" --enrollment-token "<token>"
+```
+
+After setup succeeds, run:
+
+```bash
+sudo openpath self-update --force
+sudo openpath update
+```
+
 ### Watchdog or integrity fallback triggered
 
 ```bash
@@ -61,6 +88,9 @@ dpkg -s openpath-dnsmasq
 ## Useful Files
 
 - `/etc/openpath/whitelist-url.conf`
+- `/etc/openpath/api-url.conf`
+- `/etc/openpath/classroom.conf`
+- `/etc/openpath/classroom-id.conf`
 - `/etc/openpath/overrides.conf`
 - `/var/lib/openpath/health-status`
 - `/var/lib/openpath/watchdog-fails`

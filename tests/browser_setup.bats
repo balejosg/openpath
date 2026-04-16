@@ -34,9 +34,48 @@ VAR_STATE_DIR="${VAR_STATE_DIR:-/var/lib/openpath}"
 LOG_FILE="${LOG_FILE:-/var/log/openpath.log}"
 export FIREFOX_POLICIES="${FIREFOX_POLICIES:-/etc/firefox/policies/policies.json}"
 export FIREFOX_EXTENSIONS_ROOT="${FIREFOX_EXTENSIONS_ROOT:-/usr/share/mozilla/extensions}"
+export WHITELIST_URL_CONF="${WHITELIST_URL_CONF:-$ETC_CONFIG_DIR/whitelist-url.conf}"
 
 log() { echo "$1"; }
 log_error() { echo "$1" >&2; }
+
+read_single_line_file() {
+    local file="$1"
+    [ -r "$file" ] || return 1
+    tr -d '\r\n' < "$file"
+}
+
+is_tokenized_whitelist_url() {
+    local url="$1"
+    [[ "$url" =~ /w/[^/]+/whitelist\.txt($|[?#].*) ]]
+}
+
+is_openpath_request_setup_complete() {
+    local api_url=""
+    local whitelist_url=""
+    local classroom=""
+    local classroom_id=""
+    api_url=$(read_single_line_file "$ETC_CONFIG_DIR/api-url.conf" || true)
+    whitelist_url=$(read_single_line_file "$WHITELIST_URL_CONF" || true)
+    classroom=$(read_single_line_file "$ETC_CONFIG_DIR/classroom.conf" || true)
+    classroom_id=$(read_single_line_file "$ETC_CONFIG_DIR/classroom-id.conf" || true)
+
+    [ -n "$api_url" ] || return 1
+    [ -n "$whitelist_url" ] && is_tokenized_whitelist_url "$whitelist_url" || return 1
+    [ -n "$classroom" ] || [ -n "$classroom_id" ]
+}
+
+describe_openpath_request_setup_missing() {
+    echo "request setup incomplete"
+}
+
+require_openpath_request_setup_complete() {
+    if is_openpath_request_setup_complete; then
+        return 0
+    fi
+    echo "request setup incomplete" >&2
+    return 1
+}
 EOF
 }
 
@@ -106,8 +145,12 @@ EOF
     local policies_file="$TEST_TMP_DIR/etc/firefox/policies/policies.json"
     local calls_file="$TEST_TMP_DIR/browser-setup.calls"
     local bin_dir="$TEST_TMP_DIR/bin"
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
 
-    mkdir -p "$fake_install/lib" "$fake_scripts" "$ext_root" "$bin_dir"
+    mkdir -p "$fake_install/lib" "$fake_scripts" "$ext_root" "$bin_dir" "$etc_dir"
+    printf '%s' 'https://control.example' > "$etc_dir/api-url.conf"
+    printf '%s' 'https://control.example/w/token123/whitelist.txt' > "$etc_dir/whitelist-url.conf"
+    printf '%s' 'cls_123' > "$etc_dir/classroom-id.conf"
     write_mock_id "$bin_dir"
     write_fake_common_sh "$fake_install/lib/common.sh"
     write_fake_browser_sh "$fake_install/lib/browser.sh" "$calls_file" "$firefox_dir" "$ext_root" "$policies_file" "success"
@@ -116,6 +159,7 @@ EOF
         PATH="$bin_dir:$PATH" \
         INSTALL_DIR="$fake_install" \
         SCRIPTS_DIR="$fake_scripts" \
+        ETC_CONFIG_DIR="$etc_dir" \
         FIREFOX_POLICIES="$policies_file" \
         FIREFOX_EXTENSIONS_ROOT="$ext_root" \
         bash "$PROJECT_DIR/linux/scripts/runtime/openpath-browser-setup.sh"
@@ -133,6 +177,38 @@ EOF
     [[ "$output" == *"apply_search_engine_policies"* ]]
 }
 
+@test "openpath-browser-setup fails before installing integrations when request setup is incomplete" {
+    local fake_install="$TEST_TMP_DIR/install"
+    local fake_scripts="$TEST_TMP_DIR/scripts"
+    local firefox_dir="$TEST_TMP_DIR/usr/lib/firefox-esr"
+    local ext_root="$TEST_TMP_DIR/share/mozilla/extensions"
+    local policies_file="$TEST_TMP_DIR/etc/firefox/policies/policies.json"
+    local calls_file="$TEST_TMP_DIR/browser-setup.calls"
+    local bin_dir="$TEST_TMP_DIR/bin"
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
+
+    mkdir -p "$fake_install/lib" "$fake_scripts" "$ext_root" "$bin_dir" "$etc_dir"
+    write_mock_id "$bin_dir"
+    write_fake_common_sh "$fake_install/lib/common.sh"
+    write_fake_browser_sh "$fake_install/lib/browser.sh" "$calls_file" "$firefox_dir" "$ext_root" "$policies_file" "success"
+
+    run env \
+        PATH="$bin_dir:$PATH" \
+        INSTALL_DIR="$fake_install" \
+        SCRIPTS_DIR="$fake_scripts" \
+        ETC_CONFIG_DIR="$etc_dir" \
+        FIREFOX_POLICIES="$policies_file" \
+        FIREFOX_EXTENSIONS_ROOT="$ext_root" \
+        bash "$PROJECT_DIR/linux/scripts/runtime/openpath-browser-setup.sh"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"request setup"* ]]
+    if [ -f "$calls_file" ]; then
+        run grep -n "install_browser_integrations" "$calls_file"
+        [ "$status" -ne 0 ]
+    fi
+}
+
 @test "openpath-browser-setup fails when firefox integration is still missing after reconciliation" {
     local fake_install="$TEST_TMP_DIR/install"
     local fake_scripts="$TEST_TMP_DIR/scripts"
@@ -141,8 +217,12 @@ EOF
     local policies_file="$TEST_TMP_DIR/etc/firefox/policies/policies.json"
     local calls_file="$TEST_TMP_DIR/browser-setup.calls"
     local bin_dir="$TEST_TMP_DIR/bin"
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
 
-    mkdir -p "$fake_install/lib" "$fake_scripts" "$ext_root" "$bin_dir"
+    mkdir -p "$fake_install/lib" "$fake_scripts" "$ext_root" "$bin_dir" "$etc_dir"
+    printf '%s' 'https://control.example' > "$etc_dir/api-url.conf"
+    printf '%s' 'https://control.example/w/token123/whitelist.txt' > "$etc_dir/whitelist-url.conf"
+    printf '%s' 'cls_123' > "$etc_dir/classroom-id.conf"
     write_mock_id "$bin_dir"
     write_fake_common_sh "$fake_install/lib/common.sh"
     write_fake_browser_sh "$fake_install/lib/browser.sh" "$calls_file" "$firefox_dir" "$ext_root" "$policies_file" "missing-firefox"
@@ -151,6 +231,7 @@ EOF
         PATH="$bin_dir:$PATH" \
         INSTALL_DIR="$fake_install" \
         SCRIPTS_DIR="$fake_scripts" \
+        ETC_CONFIG_DIR="$etc_dir" \
         FIREFOX_POLICIES="$policies_file" \
         FIREFOX_EXTENSIONS_ROOT="$ext_root" \
         bash "$PROJECT_DIR/linux/scripts/runtime/openpath-browser-setup.sh"

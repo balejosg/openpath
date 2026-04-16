@@ -38,6 +38,7 @@ TOKEN_STDIN=false
 ENROLLMENT_TOKEN=""
 PACKAGE_VERSION=""
 BROWSER_SETUP_SCRIPT="${OPENPATH_BROWSER_SETUP_SCRIPT:-/usr/local/bin/openpath-browser-setup.sh}"
+OPENPATH_ETC_CONFIG_DIR="${OPENPATH_ETC_CONFIG_DIR:-/etc/openpath}"
 VERBOSE=false
 
 log_verbose() {
@@ -131,6 +132,60 @@ run_browser_setup_helper() {
     fi
 
     log_verbose "  OK Firefox browser setup ready"
+}
+
+bootstrap_is_tokenized_whitelist_url() {
+    local url="$1"
+    [[ "$url" =~ /w/[^/]+/whitelist\.txt($|[?#].*) ]]
+}
+
+read_bootstrap_config_file() {
+    local file="$1"
+    [ -r "$file" ] || return 1
+    tr -d '\r\n' < "$file"
+}
+
+describe_bootstrap_request_setup_missing() {
+    local missing_items=()
+    local api_url=""
+    local whitelist_url=""
+    local classroom=""
+    local classroom_id=""
+
+    api_url=$(read_bootstrap_config_file "$OPENPATH_ETC_CONFIG_DIR/api-url.conf" || true)
+    whitelist_url=$(read_bootstrap_config_file "$OPENPATH_ETC_CONFIG_DIR/whitelist-url.conf" || true)
+    classroom=$(read_bootstrap_config_file "$OPENPATH_ETC_CONFIG_DIR/classroom.conf" || true)
+    classroom_id=$(read_bootstrap_config_file "$OPENPATH_ETC_CONFIG_DIR/classroom-id.conf" || true)
+
+    [ -n "$api_url" ] || missing_items+=("api-url.conf")
+    if [ -z "$whitelist_url" ]; then
+        missing_items+=("whitelist-url.conf")
+    elif ! bootstrap_is_tokenized_whitelist_url "$whitelist_url"; then
+        missing_items+=("tokenized whitelist-url.conf")
+    fi
+    [ -n "$classroom" ] || [ -n "$classroom_id" ] || missing_items+=("classroom.conf or classroom-id.conf")
+
+    if [ "${#missing_items[@]}" -eq 0 ]; then
+        printf '%s\n' "none"
+        return 0
+    fi
+
+    local IFS=", "
+    printf '%s\n' "${missing_items[*]}"
+}
+
+require_bootstrap_request_setup_complete() {
+    local missing_description=""
+
+    missing_description=$(describe_bootstrap_request_setup_missing)
+    if [ "$missing_description" = "none" ]; then
+        return 0
+    fi
+
+    echo "ERROR: Classroom setup incomplete."
+    echo "  Missing: $missing_description"
+    echo "  Rerun a valid sudo openpath setup command before browser request setup."
+    exit 1
 }
 
 while [[ $# -gt 0 ]]; do
@@ -257,7 +312,7 @@ log_verbose "  OK Package installed"
 if [ "$SKIP_SETUP" = true ]; then
     show_progress 4 5 "Classroom setup skipped"
     log_verbose "Classroom setup skipped (--skip-setup)"
-    run_browser_setup_helper
+    show_progress 5 5 "Browser request setup skipped"
     echo "Run manually later: sudo openpath setup"
     exit 0
 fi
@@ -295,27 +350,14 @@ if [ -n "$ENROLLMENT_TOKEN" ]; then
 fi
 
 if ! run_maybe_verbose "${setup_cmd[@]}"; then
-    if [ -n "$ENROLLMENT_TOKEN" ]; then
-        echo ""
-        echo "ERROR: Enrollment-token classroom setup failed."
-        echo "  Generate a fresh enrollment command and rerun it."
-        echo ""
-        exit 1
-    fi
-
     echo ""
-    echo "WARNING: Classroom setup could not be completed right now."
-    echo "  OpenPath is installed. Retry when API/token are available:"
+    echo "ERROR: Classroom setup failed."
+    echo "  Generate a fresh enrollment command or rerun a valid setup command."
     echo ""
-    echo "    sudo openpath setup"
-    echo ""
-    run_browser_setup_helper
-    if [ "$VERBOSE" = true ]; then
-        openpath status || true
-    fi
-    exit 0
+    exit 1
 fi
 
+require_bootstrap_request_setup_complete
 run_browser_setup_helper
 
 echo ""

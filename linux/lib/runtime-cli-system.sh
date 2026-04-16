@@ -65,6 +65,13 @@ cmd_status() {
         echo -e "  Enrolled: ${RED}✗ NO${NC}"
     fi
 
+    if is_openpath_request_setup_complete; then
+        echo -e "  Solicitudes: ${GREEN}✓ configuradas${NC}"
+    else
+        echo -e "  Solicitudes: ${RED}✗ no configuradas${NC}"
+        echo "  Falta: $(describe_openpath_request_setup_missing)"
+    fi
+
     if [ -n "$classroom" ]; then
         echo "  Aula: $classroom"
     elif [ -n "$classroom_id" ]; then
@@ -77,6 +84,13 @@ cmd_status() {
         echo "  API URL: $api_url"
     else
         echo "  API URL: no configurada"
+    fi
+
+    if is_openpath_request_setup_complete; then
+        echo -e "  Solicitudes: ${GREEN}✓ configuradas${NC}"
+    else
+        echo -e "  Solicitudes: ${RED}✗ no configuradas${NC}"
+        echo "  Falta: $(describe_openpath_request_setup_missing)"
     fi
 
     local agent_update_state_file="$VAR_STATE_DIR/agent-update-state.json"

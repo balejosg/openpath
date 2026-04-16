@@ -182,6 +182,10 @@ finalize_updated_package() {
 
     restore_config
 
+    if should_require_openpath_request_setup; then
+        require_openpath_request_setup_complete "post-update verification" || return 1
+    fi
+
     if [ -f "/usr/local/bin/dnsmasq-watchdog.sh" ]; then
         source /usr/local/lib/openpath/lib/common.sh 2>/dev/null || true
         rm -f "/var/lib/openpath/integrity.sha256"
@@ -190,6 +194,9 @@ finalize_updated_package() {
 
     restart_updated_services
     /usr/local/bin/openpath-update.sh 2>/dev/null &
+    if should_require_openpath_request_setup; then
+        require_openpath_request_setup_complete "post-update verification" || return 1
+    fi
     verify_updated_installation "$target_version"
 }
 

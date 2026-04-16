@@ -33,6 +33,17 @@ step_install_extension() {
     echo "[12/13] Instalando extensiones del navegador..."
 
     if [ "$INSTALL_EXTENSION" = true ]; then
+        if [ "$INSTALL_NATIVE_HOST" = true ]; then
+            if ! is_openpath_request_setup_complete; then
+                if ! run_classroom_registration; then
+                    echo "✗ ERROR: no se pudo completar el registro requerido para solicitudes del navegador"
+                    return 1
+                fi
+            fi
+
+            require_openpath_request_setup_complete "source install browser request setup" || return 1
+        fi
+
         local staged_ext_dir="$INSTALL_DIR/firefox-extension"
         local staged_release_dir="$INSTALL_DIR/firefox-release"
         local firefox_release_source=""
@@ -103,6 +114,11 @@ run_smoke_tests() {
 
 run_classroom_registration() {
     MACHINE_REGISTERED=""
+    if is_openpath_request_setup_complete; then
+        MACHINE_REGISTERED="REGISTERED"
+        return 0
+    fi
+
     if [ -n "$CLASSROOM_NAME" ] && [ -n "$API_URL" ]; then
         echo ""
         echo "Registrando máquina en aula..."
@@ -119,13 +135,21 @@ run_classroom_registration() {
             else
                 MACHINE_REGISTERED="FAILED"
                 echo "⚠ Registro exitoso pero no se recibió URL tokenizada"
+                return 1
             fi
         else
             MACHINE_REGISTERED="FAILED"
             echo "⚠ Error al registrar máquina"
             echo "  Respuesta: $REGISTER_RESPONSE"
+            return 1
         fi
+    elif [ "$INSTALL_NATIVE_HOST" = true ]; then
+        MACHINE_REGISTERED="FAILED"
+        echo "⚠ Modo de solicitudes del navegador requiere configuración de aula"
+        return 1
     fi
+
+    return 0
 }
 
 print_summary() {

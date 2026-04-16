@@ -188,6 +188,35 @@ teardown() {
     [[ " ${BLOCKED_PATHS[*]} " == *" example.org/ads "* ]]
 }
 
+@test "request setup validator requires api url tokenized whitelist and classroom state" {
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
+    mkdir -p "$etc_dir"
+
+    export ETC_CONFIG_DIR="$etc_dir"
+    export WHITELIST_URL_CONF="$etc_dir/whitelist-url.conf"
+
+    source "$PROJECT_DIR/linux/lib/common.sh"
+
+    run is_openpath_request_setup_complete
+    [ "$status" -ne 0 ]
+
+    printf '%s' 'https://control.example' > "$etc_dir/api-url.conf"
+    printf '%s' 'https://control.example/export/group.txt' > "$WHITELIST_URL_CONF"
+    printf '%s' 'Room 101' > "$etc_dir/classroom.conf"
+
+    run is_openpath_request_setup_complete
+    [ "$status" -ne 0 ]
+
+    printf '%s' 'https://control.example/w/token123/whitelist.txt' > "$WHITELIST_URL_CONF"
+
+    run is_openpath_request_setup_complete
+    [ "$status" -eq 0 ]
+
+    run describe_openpath_request_setup_missing
+    [ "$status" -eq 0 ]
+    [ "$output" = "none" ]
+}
+
 @test "parse_whitelist_sections preserves protected control-plane domains and strips their block rules" {
     local wl_file="$TEST_TMP_DIR/protected-whitelist.txt"
     cat > "$wl_file" <<'EOF'
