@@ -54,7 +54,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.4",
     "@vitest/coverage-v8": "^4.0.18",
-    "aria-query": "^5.3.0",
+    "aria-query": "^5.3.2",
     "autoprefixer": "^10.4.23",
     "is-potential-custom-element-name": "^1.0.1",
     "jsdom": "^27.4.0",
