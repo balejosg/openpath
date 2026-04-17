@@ -220,6 +220,14 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "prerelease Debian workflow uses monotonic timestamp package versions" {
+    run grep -n 'date -u +%Y%m%d%H%M%S' "$PROJECT_DIR/.github/workflows/prerelease-deb.yml"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'APT will not downgrade' "$PROJECT_DIR/.github/workflows/prerelease-deb.yml"
+    [ "$status" -eq 0 ]
+}
+
 @test "apt bootstrap fails clearly when the selected track does not advertise openpath-dnsmasq" {
     run grep -n 'apt-cache show openpath-dnsmasq' "$PROJECT_DIR/linux/scripts/build/apt-bootstrap.sh"
     [ "$status" -eq 0 ]

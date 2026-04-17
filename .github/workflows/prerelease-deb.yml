@@ -54,8 +54,10 @@ jobs:
       - name: Get version from run number
         id: version
         run: |
-          # Use workflow run number as version
-          VERSION="0.0.${{ github.event.workflow_run.run_number }}"
+          # APT will not downgrade a package that is already published in the
+          # suite, so prerelease versions must be monotonically increasing even
+          # after manual timestamped publishes.
+          VERSION="0.0.$(date -u +%Y%m%d%H%M%S)"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "package_name=openpath-dnsmasq_${VERSION}-1_amd64.deb" >> $GITHUB_OUTPUT
           echo "Building prerelease version: $VERSION"
