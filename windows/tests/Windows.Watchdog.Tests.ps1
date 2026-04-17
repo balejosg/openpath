@@ -23,7 +23,9 @@ Describe "Watchdog Script" {
             $content = Get-Content $helperPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
-                '$localWhitelistSections = Get-OpenPathWhitelistSectionsFromFile -Path "$OpenPathRoot\data\whitelist.txt"',
+                "$localWhitelistPath = Join-Path `$OpenPathRoot 'data\whitelist.txt'",
+                '$localWhitelistSections = Get-OpenPathWhitelistSectionsFromFile -Path $localWhitelistPath',
+                'Watchdog: skipped Firefox policy refresh because local whitelist is disabled',
                 'Set-FirefoxPolicy -BlockedPaths $localWhitelistSections.BlockedPaths',
                 'Watchdog: refreshed Firefox policies from local whitelist state'
             )
