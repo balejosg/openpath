@@ -11,6 +11,9 @@ function Get-OpenPathBrowserDoctorReport {
     $nativeHostManifestPath = Get-OpenPathFirefoxNativeHostManifestPath
     $nativeHostWrapperPath = Get-OpenPathFirefoxNativeHostWrapperPath
     $nativeHostScriptPath = Get-OpenPathFirefoxNativeHostScriptPath
+    $nativeHostStateHelperPath = Join-Path (Get-OpenPathFirefoxNativeHostRoot) 'NativeHost.State.ps1'
+    $nativeHostProtocolHelperPath = Join-Path (Get-OpenPathFirefoxNativeHostRoot) 'NativeHost.Protocol.ps1'
+    $nativeHostActionsHelperPath = Join-Path (Get-OpenPathFirefoxNativeHostRoot) 'NativeHost.Actions.ps1'
     $nativeHostStatePath = Get-OpenPathFirefoxNativeStatePath
     $nativeHostWhitelistPath = Get-OpenPathFirefoxNativeWhitelistMirrorPath
     $nativeHostUpdateTaskName = Get-OpenPathFirefoxNativeHostUpdateTaskName
@@ -22,6 +25,9 @@ function Get-OpenPathBrowserDoctorReport {
     $nativeHostRegistryPath = ($nativeHostRegistryPaths -join '; ')
     $nativeHostWrapperPresent = Test-Path $nativeHostWrapperPath
     $nativeHostScriptPresent = Test-Path $nativeHostScriptPath
+    $nativeHostStateHelperReadable = $false
+    $nativeHostProtocolHelperReadable = $false
+    $nativeHostActionsHelperReadable = $false
     $nativeHostStateReadable = $false
     $nativeHostWhitelistReadable = $false
     $nativeHostUpdateTaskPresent = $false
@@ -107,6 +113,36 @@ function Get-OpenPathBrowserDoctorReport {
         catch {
             $nativeHostManifestParse = "error: $($_.Exception.Message)"
         }
+    }
+
+    try {
+        if (Test-Path $nativeHostStateHelperPath) {
+            $null = Get-Content $nativeHostStateHelperPath -TotalCount 1 -ErrorAction Stop
+            $nativeHostStateHelperReadable = $true
+        }
+    }
+    catch {
+        $nativeHostStateHelperReadable = $false
+    }
+
+    try {
+        if (Test-Path $nativeHostProtocolHelperPath) {
+            $null = Get-Content $nativeHostProtocolHelperPath -TotalCount 1 -ErrorAction Stop
+            $nativeHostProtocolHelperReadable = $true
+        }
+    }
+    catch {
+        $nativeHostProtocolHelperReadable = $false
+    }
+
+    try {
+        if (Test-Path $nativeHostActionsHelperPath) {
+            $null = Get-Content $nativeHostActionsHelperPath -TotalCount 1 -ErrorAction Stop
+            $nativeHostActionsHelperReadable = $true
+        }
+    }
+    catch {
+        $nativeHostActionsHelperReadable = $false
     }
 
     $nativeHostRegistryStates = @()
@@ -228,6 +264,9 @@ function Get-OpenPathBrowserDoctorReport {
         "Native host wrapper present: $nativeHostWrapperPresent"
         "Native host script path: $nativeHostScriptPath"
         "Native host script present: $nativeHostScriptPresent"
+        "Native host state helper readable: $nativeHostStateHelperReadable"
+        "Native host protocol helper readable: $nativeHostProtocolHelperReadable"
+        "Native host actions helper readable: $nativeHostActionsHelperReadable"
         "Native host state path: $nativeHostStatePath"
         "Native host state readable: $nativeHostStateReadable"
         "Native host whitelist readable: $nativeHostWhitelistReadable"

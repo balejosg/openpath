@@ -83,8 +83,20 @@ function Sync-OpenPathFirefoxNativeHostArtifacts {
         New-Item -ItemType Directory -Path $nativeRoot -Force | Out-Null
     }
 
-    $artifactNames = @('OpenPath-NativeHost.ps1', 'OpenPath-NativeHost.cmd')
-    $candidateRoots = @($SourceRoot, $nativeRoot) | Select-Object -Unique
+    $artifactNames = @(
+        'OpenPath-NativeHost.ps1',
+        'OpenPath-NativeHost.cmd',
+        'NativeHost.State.ps1',
+        'NativeHost.Protocol.ps1',
+        'NativeHost.Actions.ps1'
+    )
+    $sourceParent = if ($SourceRoot) { Split-Path $SourceRoot -Parent } else { '' }
+    $candidateRoots = @($SourceRoot)
+    if (-not [string]::IsNullOrWhiteSpace($sourceParent)) {
+        $candidateRoots += (Join-Path $sourceParent 'lib\internal')
+    }
+    $candidateRoots += $nativeRoot
+    $candidateRoots = $candidateRoots | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
     $artifactSources = @{}
     $missingArtifacts = @()
 
@@ -262,6 +274,9 @@ function Unregister-OpenPathFirefoxNativeHost {
         (Get-OpenPathFirefoxNativeHostManifestPath),
         (Get-OpenPathFirefoxNativeHostScriptPath),
         (Get-OpenPathFirefoxNativeHostWrapperPath),
+        (Join-Path (Get-OpenPathFirefoxNativeHostRoot) 'NativeHost.State.ps1'),
+        (Join-Path (Get-OpenPathFirefoxNativeHostRoot) 'NativeHost.Protocol.ps1'),
+        (Join-Path (Get-OpenPathFirefoxNativeHostRoot) 'NativeHost.Actions.ps1'),
         (Get-OpenPathFirefoxNativeStatePath),
         (Get-OpenPathFirefoxNativeWhitelistMirrorPath)
     )

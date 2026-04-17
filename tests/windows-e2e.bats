@@ -83,28 +83,52 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
-@test "windows installer stages native host command wrappers for later re-registration" {
+@test "windows installer stages native host artifacts for later re-registration" {
     run grep -nF 'Get-ChildItem "$ScriptDir\scripts\*.cmd" -ErrorAction SilentlyContinue' "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
     [ "$status" -eq 0 ]
 
     run grep -nF 'Copy-Item -Destination "$OpenPathRoot\scripts\" -Force' "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
     [ "$status" -eq 0 ]
+
+    run grep -nF "'NativeHost.State.ps1'" "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "'NativeHost.Protocol.ps1'" "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "'NativeHost.Actions.ps1'" "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "(Join-Path \$sourceParent 'lib\internal')" "$PROJECT_DIR/windows/lib/Browser.FirefoxNativeHost.psm1"
+    [ "$status" -eq 0 ]
 }
 
-@test "windows native host resolves support libraries from OpenPath root when staged under Firefox" {
+@test "windows native host prefers staged support libraries when running under Firefox" {
     run grep -nF 'function Resolve-OpenPathNativeHostRoot' "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'function Resolve-OpenPathNativeHostSupportPath' "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "\$stagedStateHelperPath = Join-Path \$script:NativeRoot 'NativeHost.State.ps1'" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
     [ "$status" -eq 0 ]
 
     run grep -nF "\$script:OpenPathRoot = Resolve-OpenPathNativeHostRoot" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF "Join-Path \$script:OpenPathRoot 'lib\internal\NativeHost.State.ps1'" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    run grep -nF 'Join-Path $script:NativeRoot $FileName' "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF "Join-Path \$script:OpenPathRoot 'lib\internal\NativeHost.Protocol.ps1'" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    run grep -nF 'Join-Path $script:OpenPathRoot "lib\internal\$FileName"' "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF "Join-Path \$script:OpenPathRoot 'lib\internal\NativeHost.Actions.ps1'" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    run grep -nF ". (Resolve-OpenPathNativeHostSupportPath -FileName 'NativeHost.State.ps1')" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF ". (Resolve-OpenPathNativeHostSupportPath -FileName 'NativeHost.Protocol.ps1')" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF ". (Resolve-OpenPathNativeHostSupportPath -FileName 'NativeHost.Actions.ps1')" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
     [ "$status" -eq 0 ]
 
     run grep -nF "Join-Path \$PSScriptRoot '..\lib\internal\NativeHost.State.ps1'" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"

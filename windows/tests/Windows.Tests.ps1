@@ -18,7 +18,9 @@ $suiteFiles = @(
     "Windows.Watchdog.Tests.ps1",
     "Windows.Installer.Tests.ps1",
     "Windows.Enrollment.Tests.ps1",
-    "Windows.Whitelist.Tests.ps1"
+    "Windows.Whitelist.Tests.ps1",
+    "Windows.Browser.NativeHost.Tests.ps1",
+    "Windows.Browser.Diagnostics.Tests.ps1"
 )
 
 foreach ($suiteFile in $suiteFiles) {

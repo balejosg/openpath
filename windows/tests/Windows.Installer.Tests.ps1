@@ -55,6 +55,10 @@ Describe "Installer" {
                 '$firefoxNativeHostTarget = "$OpenPathRoot\browser-extension\firefox\native"',
                 'OpenPath-NativeHost.ps1',
                 'OpenPath-NativeHost.cmd',
+                'NativeHost.State.ps1',
+                'NativeHost.Protocol.ps1',
+                'NativeHost.Actions.ps1',
+                '$nativeHostHelperRoot = Join-Path $ScriptDir ''lib\internal''',
                 'Firefox native host assets staged in $OpenPathRoot\browser-extension\firefox\native'
             )
         }
@@ -112,7 +116,8 @@ Describe "Installer" {
             $content = Get-Content $nativeHostModulePath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
-                '$candidateRoots = @($SourceRoot, $nativeRoot) | Select-Object -Unique',
+                '$sourceParent = if ($SourceRoot) { Split-Path $SourceRoot -Parent } else { '''' }',
+                '(Join-Path $sourceParent ''lib\internal'')',
                 '$artifactSources[$artifactName] = $artifactSource',
                 '[string]::Equals($sourcePath, $destinationPath, [System.StringComparison]::OrdinalIgnoreCase)'
             )
@@ -434,7 +439,10 @@ Describe "Uninstaller" {
                 'Mozilla\NativeMessagingHosts\whitelist_native_host',
                 'WOW6432Node\Mozilla\NativeMessagingHosts\whitelist_native_host',
                 'OpenPath-NativeHost.ps1',
-                'OpenPath-NativeHost.cmd'
+                'OpenPath-NativeHost.cmd',
+                'NativeHost.State.ps1',
+                'NativeHost.Protocol.ps1',
+                'NativeHost.Actions.ps1'
             )
         }
 

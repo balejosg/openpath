@@ -148,15 +148,35 @@ function Copy-OpenPathInstallerRuntime {
 
     $firefoxNativeHostTarget = "$OpenPathRoot\browser-extension\firefox\native"
     $nativeHostSourceRoot = Join-Path $ScriptDir 'scripts'
-    $nativeHostArtifacts = @('OpenPath-NativeHost.ps1', 'OpenPath-NativeHost.cmd')
-    $missingNativeHostArtifacts = @(
-        $nativeHostArtifacts | Where-Object { -not (Test-Path (Join-Path $nativeHostSourceRoot $_)) }
+    $nativeHostHelperRoot = Join-Path $ScriptDir 'lib\internal'
+    $nativeHostArtifacts = @(
+        'OpenPath-NativeHost.ps1',
+        'OpenPath-NativeHost.cmd',
+        'NativeHost.State.ps1',
+        'NativeHost.Protocol.ps1',
+        'NativeHost.Actions.ps1'
     )
+    $nativeHostSourceRoots = @($nativeHostSourceRoot, $nativeHostHelperRoot)
+    $nativeHostArtifactSources = @{}
+    $missingNativeHostArtifacts = @()
+
+    foreach ($nativeHostArtifact in $nativeHostArtifacts) {
+        $nativeHostArtifactSource = $nativeHostSourceRoots |
+            Where-Object { Test-Path (Join-Path $_ $nativeHostArtifact) } |
+            Select-Object -First 1
+
+        if ($nativeHostArtifactSource) {
+            $nativeHostArtifactSources[$nativeHostArtifact] = $nativeHostArtifactSource
+        }
+        else {
+            $missingNativeHostArtifacts += $nativeHostArtifact
+        }
+    }
 
     if ($missingNativeHostArtifacts.Count -eq 0) {
         New-Item -ItemType Directory -Path $firefoxNativeHostTarget -Force | Out-Null
         foreach ($nativeHostArtifact in $nativeHostArtifacts) {
-            Copy-Item (Join-Path $nativeHostSourceRoot $nativeHostArtifact) `
+            Copy-Item (Join-Path $nativeHostArtifactSources[$nativeHostArtifact] $nativeHostArtifact) `
                 -Destination (Join-Path $firefoxNativeHostTarget $nativeHostArtifact) `
                 -Force
         }

@@ -11,6 +11,93 @@ Describe "Browser Module - Native Host" {
     }
 
     Context "Native host registration" {
+        It "Serves request config from the staged native directory without reading locked agent internals" {
+            $repoWindowsRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+            $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("openpath-native-host-test-" + [Guid]::NewGuid().ToString("N"))
+            $nativeRoot = Join-Path $tempRoot "browser-extension\firefox\native"
+            New-Item -ItemType Directory -Path $nativeRoot -Force | Out-Null
+
+            try {
+                $nativeFiles = @(
+                    "OpenPath-NativeHost.ps1",
+                    "OpenPath-NativeHost.cmd",
+                    "NativeHost.State.ps1",
+                    "NativeHost.Protocol.ps1",
+                    "NativeHost.Actions.ps1"
+                )
+
+                foreach ($nativeFile in $nativeFiles) {
+                    $sourcePath = Join-Path $repoWindowsRoot "scripts\$nativeFile"
+                    if (-not (Test-Path $sourcePath)) {
+                        $sourcePath = Join-Path $repoWindowsRoot "lib\internal\$nativeFile"
+                    }
+
+                    Copy-Item $sourcePath -Destination (Join-Path $nativeRoot $nativeFile) -Force
+                }
+
+                @{
+                    machineName = "lab-pc-01"
+                    apiUrl = "https://school.example"
+                    requestApiUrl = "https://school.example"
+                    whitelistUrl = "https://school.example/w/machine-token-123/whitelist.txt"
+                    version = "test-version"
+                } | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $nativeRoot "native-state.json") -Encoding UTF8
+
+                $nativeScriptPath = Join-Path $nativeRoot "OpenPath-NativeHost.ps1"
+                $processStart = [System.Diagnostics.ProcessStartInfo]::new()
+                $processStart.FileName = (Get-Process -Id $PID).Path
+                $processStart.ArgumentList.Add("-NoProfile")
+                $processStart.ArgumentList.Add("-ExecutionPolicy")
+                $processStart.ArgumentList.Add("Bypass")
+                $processStart.ArgumentList.Add("-File")
+                $processStart.ArgumentList.Add($nativeScriptPath)
+                $processStart.RedirectStandardInput = $true
+                $processStart.RedirectStandardOutput = $true
+                $processStart.RedirectStandardError = $true
+                $processStart.UseShellExecute = $false
+
+                $process = [System.Diagnostics.Process]::Start($processStart)
+                try {
+                    $messageJson = (@{ action = "get-config" } | ConvertTo-Json -Compress)
+                    $messageBytes = [System.Text.Encoding]::UTF8.GetBytes($messageJson)
+                    $lengthBytes = [System.BitConverter]::GetBytes([int]$messageBytes.Length)
+                    $process.StandardInput.BaseStream.Write($lengthBytes, 0, $lengthBytes.Length)
+                    $process.StandardInput.BaseStream.Write($messageBytes, 0, $messageBytes.Length)
+                    $process.StandardInput.BaseStream.Flush()
+                    $process.StandardInput.Close()
+
+                    $responseLengthBytes = New-Object byte[] 4
+                    $read = $process.StandardOutput.BaseStream.Read($responseLengthBytes, 0, 4)
+                    $stderr = $process.StandardError.ReadToEnd()
+                    $read | Should -Be 4 -Because $stderr
+
+                    $responseLength = [System.BitConverter]::ToInt32($responseLengthBytes, 0)
+                    $responseBytes = New-Object byte[] $responseLength
+                    $offset = 0
+                    while ($offset -lt $responseLength) {
+                        $chunkSize = $process.StandardOutput.BaseStream.Read($responseBytes, $offset, $responseLength - $offset)
+                        $chunkSize | Should -BeGreaterThan 0 -Because $stderr
+                        $offset += $chunkSize
+                    }
+
+                    $response = [System.Text.Encoding]::UTF8.GetString($responseBytes) | ConvertFrom-Json
+                    $response.success | Should -BeTrue
+                    $response.requestApiUrl | Should -Be "https://school.example"
+                    $response.hostname | Should -Be "lab-pc-01"
+                    $response.machineToken | Should -Be "machine-token-123"
+                }
+                finally {
+                    if (-not $process.HasExited) {
+                        $process.Kill()
+                    }
+                    $process.Dispose()
+                }
+            }
+            finally {
+                Remove-Item $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+
         It "Requires complete request setup before native host registration or state sync" {
             $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"
             $nativeHostContent = Get-Content $nativeHostModulePath -Raw
@@ -36,7 +123,11 @@ Describe "Browser Module - Native Host" {
             Assert-ContentContainsAll -Content $nativeHostContent -Needles @(
                 'function Sync-OpenPathFirefoxNativeHostArtifacts',
                 "OpenPath-NativeHost.ps1",
-                "OpenPath-NativeHost.cmd"
+                "OpenPath-NativeHost.cmd",
+                "NativeHost.State.ps1",
+                "NativeHost.Protocol.ps1",
+                "NativeHost.Actions.ps1",
+                '(Join-Path $sourceParent ''lib\internal'')'
             )
 
             Assert-ContentContainsAll -Content $browserContent -Needles @(
@@ -45,16 +136,20 @@ Describe "Browser Module - Native Host" {
             )
         }
 
-        It "Native host script resolves support files from OpenPath root after Firefox staging" {
+        It "Native host script prefers staged support files before locked agent internals" {
             $nativeHostScriptPath = Join-Path $PSScriptRoot ".." "scripts" "OpenPath-NativeHost.ps1"
             $nativeHostContent = Get-Content $nativeHostScriptPath -Raw
 
             Assert-ContentContainsAll -Content $nativeHostContent -Needles @(
                 'function Resolve-OpenPathNativeHostRoot',
+                'function Resolve-OpenPathNativeHostSupportPath',
+                '$stagedStateHelperPath = Join-Path $script:NativeRoot ''NativeHost.State.ps1''',
                 '$script:OpenPathRoot = Resolve-OpenPathNativeHostRoot',
-                'Join-Path $script:OpenPathRoot ''lib\internal\NativeHost.State.ps1''',
-                'Join-Path $script:OpenPathRoot ''lib\internal\NativeHost.Protocol.ps1''',
-                'Join-Path $script:OpenPathRoot ''lib\internal\NativeHost.Actions.ps1'''
+                '(Join-Path $script:NativeRoot $FileName)',
+                '(Join-Path $script:OpenPathRoot "lib\internal\$FileName")',
+                '. (Resolve-OpenPathNativeHostSupportPath -FileName ''NativeHost.State.ps1'')',
+                '. (Resolve-OpenPathNativeHostSupportPath -FileName ''NativeHost.Protocol.ps1'')',
+                '. (Resolve-OpenPathNativeHostSupportPath -FileName ''NativeHost.Actions.ps1'')'
             )
 
             $legacyImportPattern = [regex]::Escape("Join-Path `$PSScriptRoot '..\lib\internal\NativeHost.State.ps1'")

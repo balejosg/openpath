@@ -133,6 +133,9 @@ foreach ($registryPath in $firefoxNativeHostRegistryPaths) {
 $firefoxNativeHostArtifacts = @(
     "$OpenPathRoot\browser-extension\firefox\native\OpenPath-NativeHost.ps1",
     "$OpenPathRoot\browser-extension\firefox\native\OpenPath-NativeHost.cmd",
+    "$OpenPathRoot\browser-extension\firefox\native\NativeHost.State.ps1",
+    "$OpenPathRoot\browser-extension\firefox\native\NativeHost.Protocol.ps1",
+    "$OpenPathRoot\browser-extension\firefox\native\NativeHost.Actions.ps1",
     "$OpenPathRoot\browser-extension\firefox\native\whitelist_native_host.json",
     "$OpenPathRoot\browser-extension\firefox\native\native-state.json",
     "$OpenPathRoot\browser-extension\firefox\native\whitelist.txt"
