@@ -209,7 +209,7 @@ test('Codecov coverage uploads stay wired to active workflows and the README bad
   );
 });
 
-test('required Windows CI keeps the direct Pester lane and emits bounded lineage diagnostics for lingering processes', () => {
+test('required Windows CI keeps the direct Pester lane without live WMI diagnostics', () => {
   const ciWorkflow = readText('.github/workflows/ci.yml');
   const linuxJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-linux-dnsmasq');
   const windowsJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-windows');
@@ -303,10 +303,6 @@ test('required Windows CI keeps the direct Pester lane and emits bounded lineage
     'ci.yml should install Pester explicitly in the Windows lane before running the suite'
   );
   assert.ok(
-    windowsJobBlock.includes('name: Capture Windows process snapshot'),
-    'ci.yml should capture a Windows process snapshot before the direct Pester step'
-  );
-  assert.ok(
     windowsJobBlock.includes('Import-Module Pester -MinimumVersion 5.0 -ErrorAction Stop'),
     'ci.yml should import a compatible Pester version explicitly in the Windows lane'
   );
@@ -327,9 +323,9 @@ test('required Windows CI keeps the direct Pester lane and emits bounded lineage
     'ci.yml should stop routing the Windows lane through the old process cleanup helper'
   );
   assert.ok(
-    ciWorkflow.includes('tests/e2e/ci/report-windows-processes.ps1') ||
-      ciWorkflow.includes('tests\\e2e\\ci\\report-windows-processes.ps1'),
-    'ci.yml should route Windows process diagnostics through the shared reporting helper'
+    !ciWorkflow.includes('tests/e2e/ci/report-windows-processes.ps1') &&
+      !ciWorkflow.includes('tests\\e2e\\ci\\report-windows-processes.ps1'),
+    'ci.yml should keep live Windows process diagnostics out of the required Pester lane'
   );
   assert.ok(
     !ciWorkflow.includes('name: Capture Windows job process baseline'),
@@ -344,8 +340,8 @@ test('required Windows CI keeps the direct Pester lane and emits bounded lineage
     'ci.yml should not re-scan the Windows process table once the lane returns to the direct Pester pattern'
   );
   assert.ok(
-    windowsJobBlock.includes('name: Report Windows process diagnostics'),
-    'ci.yml should log bounded Windows process diagnostics before the runner reaches orphan cleanup'
+    !windowsJobBlock.includes('name: Report Windows process diagnostics'),
+    'ci.yml should not re-run WMI process diagnostics immediately before runner orphan cleanup'
   );
   assert.ok(
     ciWorkflow.includes(
@@ -374,8 +370,8 @@ test('required Windows CI keeps the direct Pester lane and emits bounded lineage
     'ci.yml should preserve the legacy non-strict Pester runtime used by the required Windows suite'
   );
   assert.ok(
-    (windowsJobBlock.match(/\$env:RUNNER_TRACKING_ID = ''/g) ?? []).length >= 3,
-    'ci.yml should keep Windows management helper processes out of Actions orphan tracking during capture, Pester, and diagnostics'
+    !windowsJobBlock.includes('report-windows-processes.ps1'),
+    'ci.yml should not run live WMI process diagnostics in the required Windows lane because those diagnostics can keep the hosted runner in orphan cleanup'
   );
   assert.ok(
     windowsJobBlock.includes('$aggregatorSuites = @('),
@@ -513,37 +509,11 @@ test('required Windows CI keeps the direct Pester lane and emits bounded lineage
   );
   assert.ok(
     windowsProcessReporter.includes("ValidateSet('capture', 'report')"),
-    'the Windows process reporter should support snapshot capture and reporting modes'
+    'the Windows process reporter should remain available for manual investigation without being part of the required Windows lane'
   );
   assert.ok(
     windowsProcessReporter.includes('Get-CimInstance Win32_Process'),
-    'the Windows process reporter should inspect the live Win32 process table'
-  );
-  assert.ok(
-    windowsProcessReporter.includes('Windows processes started after the job baseline:'),
-    'the Windows process reporter should log new processes started during the job'
-  );
-  assert.ok(
-    windowsProcessReporter.includes(
-      'Windows shell and git processes still present before job completion:'
-    ),
-    'the Windows process reporter should log lingering shell and git processes before the runner cleanup phase'
-  );
-  assert.ok(
-    windowsProcessReporter.includes('lineage='),
-    'the Windows process reporter should include lineage details for lingering processes'
-  );
-  assert.ok(
-    windowsProcessReporter.includes('Format-ProcessLineage'),
-    'the Windows process reporter should derive process ancestry for lingering processes'
-  );
-  assert.ok(
-    windowsProcessReporter.includes('missing-parent('),
-    'the Windows process reporter should flag missing parent processes in the reported lineage'
-  );
-  assert.ok(
-    !windowsProcessReporter.includes('Stop-Process -Id'),
-    'the Windows process reporter should stay diagnostic-only while the lingering-process ancestry is still being investigated'
+    'the manual Windows process reporter should inspect the live Win32 process table when explicitly invoked'
   );
   for (const relativePath of [
     'windows/tests/Windows.Browser.ChromiumPolicy.Tests.ps1',

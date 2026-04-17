@@ -177,18 +177,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Capture Windows process snapshot
-        shell: pwsh
-        run: |
-          # Windows management APIs can spawn OS-owned service helpers such as
-          # WmiPrvSE.exe. Keep those helpers out of the Actions orphan tracker so
-          # runner cleanup does not hang after the real Pester lane has passed.
-          $env:RUNNER_TRACKING_ID = ''
-
-          & .\tests\e2e\ci\report-windows-processes.ps1 `
-            -Mode capture `
-            -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-snapshot.json"
-
       - name: Install Pester
         shell: pwsh
         run: |
@@ -202,7 +190,6 @@ jobs:
           # Match the locally verified Pester host semantics for the legacy
           # Windows suite while keeping the CI lane free of extra wrappers.
           Set-StrictMode -Off
-          $env:RUNNER_TRACKING_ID = ''
 
           $aggregatorSuites = @(
             'Windows.Tests.ps1',
@@ -260,16 +247,6 @@ jobs:
         shell: pwsh
         run: |
           "tests_passed=$env:TESTS_PASSED" >> $env:GITHUB_OUTPUT
-
-      - name: Report Windows process diagnostics
-        if: always()
-        shell: pwsh
-        run: |
-          $env:RUNNER_TRACKING_ID = ''
-
-          & .\tests\e2e\ci\report-windows-processes.ps1 `
-            -Mode report `
-            -SnapshotPath "$env:RUNNER_TEMP\openpath-windows-process-snapshot.json"
 
   # ============================================
   # Job 3: Firefox Delivery Contracts
