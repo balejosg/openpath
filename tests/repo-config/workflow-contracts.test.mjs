@@ -19,8 +19,34 @@ describe('repository verification contract', () => {
       },
       {
         relativePath: '.github/workflows/security.yml',
-        required: ['actions/setup-node@v6'],
-        forbidden: ['actions/setup-node@v4'],
+        required: [
+          'actions/setup-node@v6',
+          'github/codeql-action/init@v4',
+          'github/codeql-action/analyze@v4',
+          'github/codeql-action/upload-sarif@v4',
+          'FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true',
+        ],
+        forbidden: [
+          'actions/setup-node@v4',
+          'github/codeql-action/init@v3',
+          'github/codeql-action/analyze@v3',
+          'github/codeql-action/upload-sarif@v3',
+        ],
+      },
+      {
+        relativePath: '.github/workflows/release-scripts.yml',
+        required: ['actions/checkout@v6', 'softprops/action-gh-release@v3'],
+        forbidden: ['actions/checkout@v4', 'softprops/action-gh-release@v2'],
+      },
+      {
+        relativePath: '.github/workflows/release-extension.yml',
+        required: ['actions/checkout@v6', 'softprops/action-gh-release@v3'],
+        forbidden: ['actions/checkout@v4', 'softprops/action-gh-release@v2'],
+      },
+      {
+        relativePath: '.github/workflows/build-deb.yml',
+        required: ['actions/checkout@v6', 'softprops/action-gh-release@v3'],
+        forbidden: ['actions/checkout@v4', 'softprops/action-gh-release@v2'],
       },
       {
         relativePath: '.github/actions/setup-node/action.yml',
