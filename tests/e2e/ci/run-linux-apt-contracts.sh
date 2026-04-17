@@ -272,6 +272,13 @@ run_contracts() {
         /openpath/linux/scripts/build/apt-bootstrap.sh --skip-setup --package-version '$version'
         dpkg -s openpath-dnsmasq | grep -q 'Version: ${version}-1'
         test -f /etc/dnsmasq.d/openpath.conf
+        grep -q 'OPENPATH_DNS_SINKHOLE_IPV4:-192.0.2.1' /usr/local/lib/openpath/lib/dns-dnsmasq.sh
+        grep -q 'OPENPATH_DNS_SINKHOLE_IPV6:-100::' /usr/local/lib/openpath/lib/dns-dnsmasq.sh
+        ! grep -RsnE '^address=/#/$|blocked-test\.invalid' \
+            /etc/dnsmasq.d/openpath.conf \
+            /usr/local/lib/openpath \
+            /usr/local/bin/openpath \
+            /usr/local/bin/openpath-update.sh
         command -v openpath >/dev/null
         test ! -f /usr/lib/mozilla/native-messaging-hosts/whitelist_native_host.json
         systemctl is-enabled openpath-dnsmasq.timer >/dev/null

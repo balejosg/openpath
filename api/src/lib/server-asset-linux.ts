@@ -2,8 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 
-import { getErrorMessage } from '@openpath/shared';
-
 import {
   getAgentArtifactRoots,
   readServerVersion,
@@ -11,9 +9,9 @@ import {
 } from './server-asset-roots.js';
 import { logger } from './logger.js';
 
-const STABLE_APT_PACKAGES_RELATIVE_PATH = 'dists/stable/main/binary-amd64/Packages';
 const LINUX_AGENT_APT_METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
 const linuxAgentAptMetadataCache = new Map<string, { fetchedAt: number; content: string }>();
+export type LinuxAgentAptSuite = 'stable' | 'unstable';
 
 export function readLinuxAgentVersion(): string {
   const envVersion = process.env.OPENPATH_LINUX_AGENT_VERSION?.trim();
@@ -24,11 +22,19 @@ export function readLinuxAgentVersion(): string {
   return readServerVersion();
 }
 
-function buildStableAptPackagesUrl(aptRepoUrl: string): string {
-  return `${aptRepoUrl.replace(/\/+$/, '')}/${STABLE_APT_PACKAGES_RELATIVE_PATH}`;
+export function normalizeLinuxAgentAptSuite(value: string | undefined): LinuxAgentAptSuite {
+  const suite = (value ?? '').trim() || 'stable';
+  if (suite === 'stable' || suite === 'unstable') {
+    return suite;
+  }
+  throw new Error(`Unsupported OPENPATH_LINUX_AGENT_APT_SUITE: ${suite}`);
 }
 
-export function stableAptMetadataAdvertisesLinuxAgentVersion(
+function buildAptPackagesUrl(aptRepoUrl: string, suite: LinuxAgentAptSuite): string {
+  return `${aptRepoUrl.replace(/\/+$/, '')}/dists/${suite}/main/binary-amd64/Packages`;
+}
+
+export function aptMetadataAdvertisesLinuxAgentVersion(
   content: string,
   version: string
 ): boolean {
@@ -65,8 +71,18 @@ export function stableAptMetadataAdvertisesLinuxAgentVersion(
   return false;
 }
 
-async function downloadStableAptPackagesManifest(aptRepoUrl: string): Promise<string> {
-  const packagesUrl = buildStableAptPackagesUrl(aptRepoUrl);
+export function stableAptMetadataAdvertisesLinuxAgentVersion(
+  content: string,
+  version: string
+): boolean {
+  return aptMetadataAdvertisesLinuxAgentVersion(content, version);
+}
+
+async function downloadAptPackagesManifest(
+  aptRepoUrl: string,
+  suite: LinuxAgentAptSuite
+): Promise<string> {
+  const packagesUrl = buildAptPackagesUrl(aptRepoUrl, suite);
   const cachedEntry = linuxAgentAptMetadataCache.get(packagesUrl);
   if (cachedEntry && Date.now() - cachedEntry.fetchedAt < LINUX_AGENT_APT_METADATA_CACHE_TTL_MS) {
     return cachedEntry.content;
@@ -75,7 +91,7 @@ async function downloadStableAptPackagesManifest(aptRepoUrl: string): Promise<st
   const response = await fetch(packagesUrl);
   if (!response.ok) {
     throw new Error(
-      `Failed to fetch stable APT metadata (${String(response.status)} ${response.statusText})`
+      `Failed to fetch ${suite} APT metadata (${String(response.status)} ${response.statusText})`
     );
   }
 
@@ -93,32 +109,27 @@ export function clearLinuxAgentAptMetadataCache(): void {
 
 export async function resolveEnrollmentLinuxAgentVersionPin(
   aptRepoUrl: string,
-  configuredVersion: string
+  configuredVersion: string,
+  configuredSuite = 'stable'
 ): Promise<string> {
   const version = configuredVersion.trim();
   if (!version) {
     return '';
   }
 
-  try {
-    const manifest = await downloadStableAptPackagesManifest(aptRepoUrl);
-    if (stableAptMetadataAdvertisesLinuxAgentVersion(manifest, version)) {
-      return version;
-    }
-
-    logger.warn('Skipping stale OPENPATH_LINUX_AGENT_VERSION pin for enrollment script', {
-      version,
-      packagesUrl: buildStableAptPackagesUrl(aptRepoUrl),
-    });
-    return '';
-  } catch (error) {
-    logger.warn('Failed to validate OPENPATH_LINUX_AGENT_VERSION against stable APT metadata', {
-      version,
-      packagesUrl: buildStableAptPackagesUrl(aptRepoUrl),
-      error: getErrorMessage(error),
-    });
+  const suite = normalizeLinuxAgentAptSuite(configuredSuite);
+  const packagesUrl = buildAptPackagesUrl(aptRepoUrl, suite);
+  const manifest = await downloadAptPackagesManifest(aptRepoUrl, suite);
+  if (aptMetadataAdvertisesLinuxAgentVersion(manifest, version)) {
     return version;
   }
+
+  logger.error('Configured OPENPATH_LINUX_AGENT_VERSION is absent from APT metadata', {
+    version,
+    suite,
+    packagesUrl,
+  });
+  throw new Error(`OPENPATH_LINUX_AGENT_VERSION ${version} is not advertised by APT suite ${suite}`);
 }
 
 function getLinuxAgentPackageFileName(version: string): string {

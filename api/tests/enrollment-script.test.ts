@@ -32,8 +32,24 @@ void describe('Linux enrollment bootstrap script generation', () => {
     assert.doesNotMatch(script, /--package-version "\$LINUX_AGENT_VERSION"/);
     assert.match(
       script,
-      /bootstrap_cmd=\(bash "\$tmpfile" --api-url "\$API_URL" --classroom "\$CLASSROOM_NAME"/
+      /bootstrap_cmd\+=\(--api-url "\$API_URL" --classroom "\$CLASSROOM_NAME"/
     );
+  });
+
+  void test('uses the unstable APT track when requested by release metadata', () => {
+    const script = buildLinuxEnrollmentScript({
+      publicUrl: 'https://control.example',
+      classroomId: 'cls_123',
+      classroomName: 'Aula 1',
+      enrollmentToken: 'token-123',
+      aptRepoUrl: 'https://repo.example/apt',
+      linuxAgentVersion: '0.0.1380',
+      linuxAgentAptSuite: 'unstable',
+    });
+
+    assert.match(script, /LINUX_AGENT_APT_SUITE='unstable'/);
+    assert.match(script, /bootstrap_cmd\+=\(--unstable\)/);
+    assert.match(script, /bootstrap_cmd\+=\(--package-version "\$LINUX_AGENT_VERSION"\)/);
   });
 
   void test('requires the final health check to pass before reporting success', () => {

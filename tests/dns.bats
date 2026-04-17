@@ -169,6 +169,12 @@ github.com"
     ! grep -qx "address=/#/" "$config_file"
 }
 
+@test "runtime health probes never use an invalid sentinel domain as the blocked-domain check" {
+    run grep -Rsn "blocked-test.invalid" "$PROJECT_DIR/linux/lib" "$PROJECT_DIR/linux/scripts/runtime"
+
+    [ "$status" -ne 0 ]
+}
+
 @test "generate_dnsmasq_config includes domains from whitelist" {
     export DNSMASQ_CONF="$TEST_TMP_DIR/dnsmasq.d/url-whitelist.conf"
     export PRIMARY_DNS="8.8.8.8"

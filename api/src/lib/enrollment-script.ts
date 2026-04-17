@@ -10,6 +10,7 @@ export interface LinuxEnrollmentScriptParams {
   enrollmentToken: string;
   aptRepoUrl: string;
   linuxAgentVersion: string;
+  linuxAgentAptSuite?: 'stable' | 'unstable' | string;
 }
 
 export function buildLinuxEnrollmentScript({
@@ -19,9 +20,13 @@ export function buildLinuxEnrollmentScript({
   enrollmentToken,
   aptRepoUrl,
   linuxAgentVersion,
+  linuxAgentAptSuite = 'stable',
 }: LinuxEnrollmentScriptParams): string {
+  const aptSuite = linuxAgentAptSuite === 'unstable' ? 'unstable' : 'stable';
+  const bootstrapSuiteOverride =
+    aptSuite === 'unstable' ? 'bootstrap_cmd+=(--unstable)' : '';
   const bootstrapVersionOverride = linuxAgentVersion
-    ? 'bootstrap_cmd=(bash "$tmpfile" --package-version "$LINUX_AGENT_VERSION" --api-url "$API_URL" --classroom "$CLASSROOM_NAME" --classroom-id "$CLASSROOM_ID" --enrollment-token "$ENROLLMENT_TOKEN")'
+    ? 'bootstrap_cmd+=(--package-version "$LINUX_AGENT_VERSION")'
     : '';
 
   return `#!/bin/bash
@@ -32,6 +37,7 @@ CLASSROOM_ID=${bashSingleQuote(classroomId)}
 CLASSROOM_NAME=${bashSingleQuote(classroomName)}
 ENROLLMENT_TOKEN=${bashSingleQuote(enrollmentToken)}
 APT_BOOTSTRAP_URL=${bashSingleQuote(`${aptRepoUrl}/apt-bootstrap.sh`)}
+LINUX_AGENT_APT_SUITE=${bashSingleQuote(aptSuite)}
 ${linuxAgentVersion ? `LINUX_AGENT_VERSION=${bashSingleQuote(linuxAgentVersion)}` : ''}
 
  echo ''
@@ -49,8 +55,10 @@ echo "[1/2] Instalando y registrando en aula..."
 tmpfile="$(mktemp)"
 trap 'rm -f "$tmpfile"' EXIT
 curl -fsSL --proto '=https' --tlsv1.2 "$APT_BOOTSTRAP_URL" -o "$tmpfile"
-bootstrap_cmd=(bash "$tmpfile" --api-url "$API_URL" --classroom "$CLASSROOM_NAME" --classroom-id "$CLASSROOM_ID" --enrollment-token "$ENROLLMENT_TOKEN")
+bootstrap_cmd=(bash "$tmpfile")
+${bootstrapSuiteOverride}
 ${bootstrapVersionOverride}
+bootstrap_cmd+=(--api-url "$API_URL" --classroom "$CLASSROOM_NAME" --classroom-id "$CLASSROOM_ID" --enrollment-token "$ENROLLMENT_TOKEN")
 "\${bootstrap_cmd[@]}"
 
 echo "[2/2] Verificando..."

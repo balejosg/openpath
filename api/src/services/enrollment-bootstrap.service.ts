@@ -1,6 +1,11 @@
+import { getErrorMessage } from '@openpath/shared';
+
 import { config } from '../config.js';
 import { buildLinuxEnrollmentScript } from '../lib/enrollment-script.js';
-import { resolveEnrollmentLinuxAgentVersionPin } from '../lib/server-assets.js';
+import {
+  normalizeLinuxAgentAptSuite,
+  resolveEnrollmentLinuxAgentVersionPin,
+} from '../lib/server-assets.js';
 import type {
   EnrollmentScriptOutput,
   EnrollmentServiceResult,
@@ -30,10 +35,21 @@ export async function buildLinuxEnrollmentBootstrap(input: {
   }
 
   const configuredLinuxAgentVersion = process.env.OPENPATH_LINUX_AGENT_VERSION?.trim() ?? '';
-  const effectiveLinuxAgentVersion = await resolveEnrollmentLinuxAgentVersionPin(
-    aptRepoUrl,
-    configuredLinuxAgentVersion
-  );
+  let linuxAgentAptSuite = 'stable';
+  let effectiveLinuxAgentVersion = '';
+  try {
+    linuxAgentAptSuite = normalizeLinuxAgentAptSuite(process.env.OPENPATH_LINUX_AGENT_APT_SUITE);
+    effectiveLinuxAgentVersion = await resolveEnrollmentLinuxAgentVersionPin(
+      aptRepoUrl,
+      configuredLinuxAgentVersion,
+      linuxAgentAptSuite
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      error: { code: 'MISCONFIGURED', message: getErrorMessage(error) },
+    };
+  }
 
   return {
     ok: true,
@@ -45,6 +61,7 @@ export async function buildLinuxEnrollmentBootstrap(input: {
         enrollmentToken: context.data.enrollmentToken,
         aptRepoUrl,
         linuxAgentVersion: effectiveLinuxAgentVersion,
+        linuxAgentAptSuite,
       }),
     },
   };

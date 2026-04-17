@@ -86,7 +86,7 @@ select_blocked_dns_probe_domain() {
         return 0
     done
 
-    printf '%s\n' "blocked-test.invalid"
+    printf '%s\n' "example.net"
 }
 
 resolve_local_dns_probe() {

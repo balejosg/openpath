@@ -6,6 +6,7 @@ import { createFixtureClassroom } from './fixtures.js';
 import {
   extractMachineToken,
   linuxAgentPackageFileName,
+  mockAptPackagesManifest,
   mockStableAptPackagesManifest,
   startTokenDeliveryHarness,
   tokenDeliveryArtifacts,
@@ -208,13 +209,52 @@ Version: 9.9.9-1
       }
     });
 
-    await test('should omit stale linux package pins from enrollment bootstrap scripts when APT no longer advertises them', async () => {
+    await test('should fail closed when configured linux package pin is absent from the selected APT suite', async () => {
       const originalPinnedVersion = process.env.OPENPATH_LINUX_AGENT_VERSION;
+      const originalAptSuite = process.env.OPENPATH_LINUX_AGENT_APT_SUITE;
       const restoreFetch = mockStableAptPackagesManifest(`
 Package: openpath-dnsmasq
 Version: 4.1.10-1
 `);
       process.env.OPENPATH_LINUX_AGENT_VERSION = '4.1.9';
+      process.env.OPENPATH_LINUX_AGENT_APT_SUITE = 'stable';
+
+      try {
+        const enrollmentToken = await harness.getEnrollmentToken(classroomId);
+        const response = await fetch(`${harness.apiUrl}/api/enroll/${classroomId}`, {
+          headers: { Authorization: `Bearer ${enrollmentToken}` },
+        });
+
+        assert.strictEqual(response.status, 500);
+        const body = await response.text();
+        assert.match(body, /not advertised by APT suite stable/);
+      } finally {
+        restoreFetch();
+        if (originalPinnedVersion === undefined) {
+          delete process.env.OPENPATH_LINUX_AGENT_VERSION;
+        } else {
+          process.env.OPENPATH_LINUX_AGENT_VERSION = originalPinnedVersion;
+        }
+        if (originalAptSuite === undefined) {
+          delete process.env.OPENPATH_LINUX_AGENT_APT_SUITE;
+        } else {
+          process.env.OPENPATH_LINUX_AGENT_APT_SUITE = originalAptSuite;
+        }
+      }
+    });
+
+    await test('should pass the configured unstable APT suite and pinned linux package version to enrollment bootstrap scripts', async () => {
+      const originalPinnedVersion = process.env.OPENPATH_LINUX_AGENT_VERSION;
+      const originalAptSuite = process.env.OPENPATH_LINUX_AGENT_APT_SUITE;
+      const restoreFetch = mockAptPackagesManifest(
+        `
+Package: openpath-dnsmasq
+Version: 0.0.1380-1
+`,
+        'unstable'
+      );
+      process.env.OPENPATH_LINUX_AGENT_VERSION = '0.0.1380';
+      process.env.OPENPATH_LINUX_AGENT_APT_SUITE = 'unstable';
 
       try {
         const enrollmentToken = await harness.getEnrollmentToken(classroomId);
@@ -224,15 +264,21 @@ Version: 4.1.10-1
 
         assert.strictEqual(response.status, 200);
         const body = await response.text();
-        assert.doesNotMatch(body, /LINUX_AGENT_VERSION='4\.1\.9'/);
-        assert.doesNotMatch(body, /--package-version "\$LINUX_AGENT_VERSION"/);
-        assert.match(body, /bootstrap_cmd=\(bash "\$tmpfile" --api-url "\$API_URL"/);
+        assert.match(body, /LINUX_AGENT_VERSION='0\.0\.1380'/);
+        assert.match(body, /LINUX_AGENT_APT_SUITE='unstable'/);
+        assert.match(body, /--unstable/);
+        assert.match(body, /--package-version "\$LINUX_AGENT_VERSION"/);
       } finally {
         restoreFetch();
         if (originalPinnedVersion === undefined) {
           delete process.env.OPENPATH_LINUX_AGENT_VERSION;
         } else {
           process.env.OPENPATH_LINUX_AGENT_VERSION = originalPinnedVersion;
+        }
+        if (originalAptSuite === undefined) {
+          delete process.env.OPENPATH_LINUX_AGENT_APT_SUITE;
+        } else {
+          process.env.OPENPATH_LINUX_AGENT_APT_SUITE = originalAptSuite;
         }
       }
     });

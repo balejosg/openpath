@@ -95,7 +95,7 @@ export function extractMachineToken(whitelistUrl: string): string {
   return token;
 }
 
-export function mockStableAptPackagesManifest(content: string): () => void {
+export function mockAptPackagesManifest(content: string, suite = 'stable'): () => void {
   const originalFetch = globalThis.fetch;
   clearLinuxAgentAptMetadataCache();
 
@@ -105,7 +105,7 @@ export function mockStableAptPackagesManifest(content: string): () => void {
   ): Promise<Response> => {
     const url = input instanceof Request ? input.url : String(input);
 
-    if (url.endsWith('/dists/stable/main/binary-amd64/Packages')) {
+    if (url.endsWith(`/dists/${suite}/main/binary-amd64/Packages`)) {
       return new Response(content, {
         status: 200,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -119,6 +119,10 @@ export function mockStableAptPackagesManifest(content: string): () => void {
     globalThis.fetch = originalFetch;
     clearLinuxAgentAptMetadataCache();
   };
+}
+
+export function mockStableAptPackagesManifest(content: string): () => void {
+  return mockAptPackagesManifest(content, 'stable');
 }
 
 function copyArtifactEntry(sourcePath: string, destinationPath: string): void {
