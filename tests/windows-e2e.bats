@@ -83,6 +83,14 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "windows installer stages native host command wrappers for later re-registration" {
+    run grep -nF 'Get-ChildItem "$ScriptDir\scripts\*.cmd" -ErrorAction SilentlyContinue' "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Copy-Item -Destination "$OpenPathRoot\scripts\" -Force' "$PROJECT_DIR/windows/lib/install/Installer.Staging.ps1"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows cli re-imports Common globally before self-update commands" {
     run grep -nF 'Import-Module "$openPathRoot\lib\Common.psm1" -Force -Global' "$PROJECT_DIR/windows/OpenPath.ps1"
     [ "$status" -eq 0 ]

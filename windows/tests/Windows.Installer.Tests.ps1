@@ -59,6 +59,16 @@ Describe "Installer" {
             )
         }
 
+        It "Copies command wrappers into the installed scripts directory for later re-registration" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Staging.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Get-ChildItem "$ScriptDir\scripts\*.cmd" -ErrorAction SilentlyContinue',
+                'Copy-Item -Destination "$OpenPathRoot\scripts\" -Force'
+            )
+        }
+
         It "Registers Firefox native messaging host in both 64-bit and WOW6432Node registry views" {
             $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"
             $content = Get-Content $nativeHostModulePath -Raw

@@ -97,6 +97,8 @@ function Copy-OpenPathInstallerRuntime {
 
     Get-ChildItem "$ScriptDir\scripts\*.ps1" -ErrorAction SilentlyContinue |
         Copy-Item -Destination "$OpenPathRoot\scripts\" -Force
+    Get-ChildItem "$ScriptDir\scripts\*.cmd" -ErrorAction SilentlyContinue |
+        Copy-Item -Destination "$OpenPathRoot\scripts\" -Force
 
     $rootScripts = @('OpenPath.ps1', 'Rotate-Token.ps1')
     foreach ($rootScript in $rootScripts) {
