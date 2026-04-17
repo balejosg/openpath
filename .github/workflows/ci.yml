@@ -177,67 +177,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Pester
-        shell: pwsh
-        run: |
-          Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
-          Import-Module Pester -MinimumVersion 5.0 -ErrorAction Stop
-
       - name: Run Windows Unit Tests
         id: run-windows-unit-tests
         shell: pwsh
         run: |
-          # Match the locally verified Pester host semantics for the legacy
-          # Windows suite while keeping the CI lane free of extra wrappers.
-          Set-StrictMode -Off
-
-          $aggregatorSuites = @(
-            'Windows.Tests.ps1',
-            'Windows.Common.Tests.ps1',
-            'Windows.DNS.Tests.ps1'
-          )
-          $suitePaths = @(
-            Get-ChildItem -Path 'windows/tests' -Filter '*.Tests.ps1' -File |
-              Where-Object { $_.Name -notin $aggregatorSuites } |
-              Sort-Object FullName |
-              ForEach-Object { $_.FullName }
-          )
-
-          if ($suitePaths.Count -eq 0) {
-            throw 'Windows Pester suite discovery returned no leaf test files.'
-          }
-
-          $config = New-PesterConfiguration
-          $config.Run.Path = $suitePaths
-          $config.Run.PassThru = $true
-          $config.Output.Verbosity = 'Detailed'
-          $config.TestResult.Enabled = $true
-          $config.TestResult.OutputPath = 'windows-test-results.xml'
-          $config.TestResult.OutputFormat = 'NUnitXml'
-
-          try {
-            $result = Invoke-Pester -Configuration $config
-
-            if (-not (Test-Path 'windows-test-results.xml')) {
-              throw 'Windows Pester suite did not produce windows-test-results.xml.'
-            }
-
-            if ($null -eq $result) {
-              throw 'Invoke-Pester returned no result object.'
-            }
-
-            if ($result.FailedCount -gt 0) {
-              throw "Windows Pester suite reported $($result.FailedCount) failure(s)."
-            }
-          }
-          finally {
-            $jobs = @(Get-Job -ErrorAction SilentlyContinue)
-            if ($jobs.Count -gt 0) {
-              Write-Host ("Stopping lingering PowerShell jobs: {0}" -f $jobs.Count)
-              $jobs | Stop-Job -ErrorAction SilentlyContinue
-              $jobs | Remove-Job -Force -ErrorAction SilentlyContinue
-            }
-          }
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/run-windows-pester-isolated.ps1 `
+            -RepoRoot (Get-Location).Path `
+            -ResultsPath windows-test-results.xml `
+            -TimeoutSeconds 840
 
       - name: Record Windows lane outcome
         id: job-status

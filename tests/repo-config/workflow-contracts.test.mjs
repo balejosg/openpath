@@ -209,11 +209,19 @@ test('Codecov coverage uploads stay wired to active workflows and the README bad
   );
 });
 
-test('required Windows CI keeps the direct Pester lane without live WMI diagnostics', () => {
+test('required Windows CI runs Pester in an untracked child host without success shortcuts', () => {
   const ciWorkflow = readText('.github/workflows/ci.yml');
   const linuxJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-linux-dnsmasq');
   const windowsJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-windows');
   const windowsProcessReporter = readText('tests/e2e/ci/report-windows-processes.ps1');
+  const windowsPesterRunnerPath = 'tests/e2e/ci/run-windows-pester-isolated.ps1';
+
+  assert.ok(
+    existsSync(resolve(projectRoot, windowsPesterRunnerPath)),
+    'the required Windows lane should use a committed isolated Pester runner helper'
+  );
+
+  const windowsPesterRunner = readText(windowsPesterRunnerPath);
 
   assert.ok(
     ciWorkflow.includes('linux_bound: ${{ steps.filter.outputs.linux_bound }}'),
@@ -299,12 +307,12 @@ test('required Windows CI keeps the direct Pester lane without live WMI diagnost
     'ci.yml should keep artifact upload out of the required Windows Pester lane'
   );
   assert.ok(
-    windowsJobBlock.includes('name: Install Pester'),
-    'ci.yml should install Pester explicitly in the Windows lane before running the suite'
+    !windowsJobBlock.includes('name: Install Pester'),
+    'ci.yml should not install Pester in the tracked Actions shell because PowerShellGet can leave runner-tracked Windows helpers behind'
   );
   assert.ok(
-    windowsJobBlock.includes('Import-Module Pester -MinimumVersion 5.0 -ErrorAction Stop'),
-    'ci.yml should import a compatible Pester version explicitly in the Windows lane'
+    windowsJobBlock.includes('tests/e2e/ci/run-windows-pester-isolated.ps1'),
+    'ci.yml should run Windows Pester through the isolated helper'
   );
   assert.ok(
     !windowsJobBlock.includes('git init .'),
@@ -363,75 +371,85 @@ test('required Windows CI keeps the direct Pester lane without live WMI diagnost
   );
   assert.ok(
     windowsJobBlock.includes('shell: pwsh'),
-    'ci.yml should run the Windows lane directly in pwsh'
+    'ci.yml should use pwsh only as the short-lived parent for the isolated Pester runner'
   );
   assert.ok(
-    windowsJobBlock.includes('Set-StrictMode -Off'),
-    'ci.yml should preserve the legacy non-strict Pester runtime used by the required Windows suite'
+    windowsPesterRunner.includes('Set-StrictMode -Off'),
+    'the isolated Pester child should preserve the legacy non-strict Pester runtime used by the required Windows suite'
   );
   assert.ok(
     !windowsJobBlock.includes('report-windows-processes.ps1'),
     'ci.yml should not run live WMI process diagnostics in the required Windows lane because those diagnostics can keep the hosted runner in orphan cleanup'
   );
   assert.ok(
-    windowsJobBlock.includes('$aggregatorSuites = @('),
-    'ci.yml should enumerate the Windows suite aggregators that must stay local-only'
+    windowsPesterRunner.includes('$aggregatorSuites = @('),
+    'the isolated Pester runner should enumerate the Windows suite aggregators that must stay local-only'
   );
   assert.ok(
-    windowsJobBlock.includes("Get-ChildItem -Path 'windows/tests' -Filter '*.Tests.ps1' -File"),
-    'ci.yml should discover the real Windows leaf suites from the suite directory'
+    windowsPesterRunner.includes("Get-ChildItem -Path 'windows/tests' -Filter '*.Tests.ps1' -File"),
+    'the isolated Pester runner should discover the real Windows leaf suites from the suite directory'
   );
   assert.ok(
-    windowsJobBlock.includes('Where-Object { $_.Name -notin $aggregatorSuites }'),
-    'ci.yml should exclude local-only Windows aggregator suites from the CI Pester path set'
+    windowsPesterRunner.includes('Where-Object { $_.Name -notin $aggregatorSuites }'),
+    'the isolated Pester runner should exclude local-only Windows aggregator suites from the CI Pester path set'
   );
   assert.ok(
-    windowsJobBlock.includes('$config.Run.Path = $suitePaths'),
-    'ci.yml should point the Windows lane at the discovered leaf suite paths instead of the whole directory'
+    windowsPesterRunner.includes('$config.Run.Path = $suitePaths'),
+    'the isolated Pester runner should point at the discovered leaf suite paths instead of the whole directory'
   );
   assert.ok(
-    windowsJobBlock.includes("throw 'Windows Pester suite discovery returned no leaf test files.'"),
-    'ci.yml should fail fast if Windows Pester suite discovery finds no executable leaf suites'
+    windowsPesterRunner.includes(
+      "throw 'Windows Pester suite discovery returned no leaf test files.'"
+    ),
+    'the isolated Pester runner should fail fast if Windows Pester suite discovery finds no executable leaf suites'
   );
   assert.ok(
-    windowsJobBlock.includes('$config.Run.PassThru = $true'),
-    'ci.yml should request a Pester result object so FailedCount reflects the real suite outcome'
+    windowsPesterRunner.includes('$config.Run.PassThru = $true'),
+    'the isolated Pester runner should request a Pester result object so FailedCount reflects the real suite outcome'
   );
   assert.ok(
-    windowsJobBlock.includes("$config.TestResult.OutputPath = 'windows-test-results.xml'"),
-    'ci.yml should keep the Windows lane writing its NUnit XML result file'
+    windowsPesterRunner.includes('$config.TestResult.OutputPath = $ResultsPath'),
+    'the isolated Pester runner should keep the Windows lane writing its NUnit XML result file'
   );
   assert.ok(
-    windowsJobBlock.includes('Invoke-Pester -Configuration $config'),
-    'ci.yml should continue to execute the real Pester suite'
+    windowsPesterRunner.includes('Invoke-Pester -Configuration $config'),
+    'the isolated Pester runner should continue to execute the real Pester suite'
   );
   assert.ok(
-    windowsJobBlock.includes(
+    windowsPesterRunner.includes(
       "throw 'Windows Pester suite did not produce windows-test-results.xml.'"
     ),
-    'ci.yml should fail fast if the Windows lane does not emit its expected NUnit XML file'
+    'the isolated Pester runner should fail fast if the Windows lane does not emit its expected NUnit XML file'
   );
   assert.ok(
-    windowsJobBlock.includes("throw 'Invoke-Pester returned no result object.'"),
-    'ci.yml should fail fast if Invoke-Pester does not return a result object'
+    windowsPesterRunner.includes("throw 'Invoke-Pester returned no result object.'"),
+    'the isolated Pester runner should fail fast if Invoke-Pester does not return a result object'
   );
   assert.ok(
-    windowsJobBlock.includes(
+    windowsPesterRunner.includes(
       'throw "Windows Pester suite reported $($result.FailedCount) failure(s)."'
     ),
-    'ci.yml should fail the Windows lane when the Pester result reports failures'
+    'the isolated Pester runner should fail the Windows lane when the Pester result reports failures'
   );
   assert.ok(
-    windowsJobBlock.includes('Get-Job -ErrorAction SilentlyContinue'),
-    'ci.yml should inspect lingering PowerShell jobs in the same test shell before exiting the Windows lane'
+    windowsPesterRunner.includes('Get-Job -ErrorAction SilentlyContinue'),
+    'the isolated Pester runner should inspect lingering PowerShell jobs in the same test shell before exiting the Windows lane'
   );
   assert.ok(
-    windowsJobBlock.includes('Stop-Job -ErrorAction SilentlyContinue'),
-    'ci.yml should stop lingering PowerShell jobs before exiting the Windows lane'
+    windowsPesterRunner.includes('Stop-Job -ErrorAction SilentlyContinue'),
+    'the isolated Pester runner should stop lingering PowerShell jobs before exiting the Windows lane'
   );
   assert.ok(
-    windowsJobBlock.includes('Remove-Job -Force -ErrorAction SilentlyContinue'),
-    'ci.yml should remove lingering PowerShell jobs before exiting the Windows lane'
+    windowsPesterRunner.includes('Remove-Job -Force -ErrorAction SilentlyContinue'),
+    'the isolated Pester runner should remove lingering PowerShell jobs before exiting the Windows lane'
+  );
+  assert.ok(
+    windowsPesterRunner.includes("$null = $startInfo.Environment.Remove('RUNNER_TRACKING_ID')"),
+    'the isolated Pester child should remove RUNNER_TRACKING_ID so Windows service helpers do not wedge Actions orphan cleanup'
+  );
+  assert.ok(
+    windowsPesterRunner.includes('OPENPATH_WINDOWS_CI_ISOLATED_PESTER'),
+    'the isolated Pester child should mark its execution mode for future diagnostics'
   );
   assert.ok(
     windowsJobBlock.includes(
