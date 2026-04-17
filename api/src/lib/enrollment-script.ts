@@ -10,7 +10,7 @@ export interface LinuxEnrollmentScriptParams {
   enrollmentToken: string;
   aptRepoUrl: string;
   linuxAgentVersion: string;
-  linuxAgentAptSuite?: 'stable' | 'unstable' | string;
+  linuxAgentAptSuite?: string;
 }
 
 export function buildLinuxEnrollmentScript({

@@ -35,36 +35,36 @@ export async function buildLinuxEnrollmentBootstrap(input: {
   }
 
   const configuredLinuxAgentVersion = process.env.OPENPATH_LINUX_AGENT_VERSION?.trim() ?? '';
-  let linuxAgentAptSuite = 'stable';
-  let effectiveLinuxAgentVersion = '';
   try {
-    linuxAgentAptSuite = normalizeLinuxAgentAptSuite(process.env.OPENPATH_LINUX_AGENT_APT_SUITE);
-    effectiveLinuxAgentVersion = await resolveEnrollmentLinuxAgentVersionPin(
+    const linuxAgentAptSuite = normalizeLinuxAgentAptSuite(
+      process.env.OPENPATH_LINUX_AGENT_APT_SUITE
+    );
+    const effectiveLinuxAgentVersion = await resolveEnrollmentLinuxAgentVersionPin(
       aptRepoUrl,
       configuredLinuxAgentVersion,
       linuxAgentAptSuite
     );
+
+    return {
+      ok: true,
+      data: {
+        script: buildLinuxEnrollmentScript({
+          publicUrl: input.publicUrl,
+          classroomId: context.data.classroom.id,
+          classroomName: context.data.classroom.name,
+          enrollmentToken: context.data.enrollmentToken,
+          aptRepoUrl,
+          linuxAgentVersion: effectiveLinuxAgentVersion,
+          linuxAgentAptSuite,
+        }),
+      },
+    };
   } catch (error) {
     return {
       ok: false,
       error: { code: 'MISCONFIGURED', message: getErrorMessage(error) },
     };
   }
-
-  return {
-    ok: true,
-    data: {
-      script: buildLinuxEnrollmentScript({
-        publicUrl: input.publicUrl,
-        classroomId: context.data.classroom.id,
-        classroomName: context.data.classroom.name,
-        enrollmentToken: context.data.enrollmentToken,
-        aptRepoUrl,
-        linuxAgentVersion: effectiveLinuxAgentVersion,
-        linuxAgentAptSuite,
-      }),
-    },
-  };
 }
 
 export async function buildWindowsEnrollmentBootstrap(input: {
