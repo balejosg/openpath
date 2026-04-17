@@ -476,6 +476,26 @@ function Test-InstalledDnsProxyResolution {
     }
 }
 
+function Restart-AcrylicServiceForE2E {
+    param(
+        [Parameter(Mandatory = $true)][string]$Context,
+        [switch]$Required
+    )
+
+    try {
+        Restart-Service -Name 'AcrylicDNSProxySvc' -ErrorAction Stop
+        return $true
+    }
+    catch {
+        if ($Required) {
+            Fail-Step "Acrylic service restart failed while $Context." $_
+        }
+
+        Write-Host "WARN: Acrylic service restart failed while ${Context}: $($_.Exception.Message)"
+        return $false
+    }
+}
+
 function Test-SinkholeBlocking {
     Write-Step "Testing DNS sinkhole blocking..."
 
@@ -489,7 +509,7 @@ function Test-SinkholeBlocking {
     Copy-Item $hostsFile "$hostsFile.bak" -Force
     try {
         Add-Content -Path $hostsFile -Value '0.0.0.0 blocked-test-domain.example.com'
-        Restart-Service -Name 'AcrylicDNSProxySvc' -ErrorAction Stop
+        Restart-AcrylicServiceForE2E -Context 'applying sinkhole hosts' -Required | Out-Null
         Start-Sleep -Seconds 3
 
         try {
@@ -506,8 +526,10 @@ function Test-SinkholeBlocking {
         }
     }
     finally {
-        Move-Item "$hostsFile.bak" $hostsFile -Force
-        Restart-Service -Name 'AcrylicDNSProxySvc' -ErrorAction Stop
+        if (Test-Path "$hostsFile.bak") {
+            Move-Item "$hostsFile.bak" $hostsFile -Force
+        }
+        Restart-AcrylicServiceForE2E -Context 'restoring sinkhole hosts' | Out-Null
     }
 }
 

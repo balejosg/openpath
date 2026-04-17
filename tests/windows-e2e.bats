@@ -229,6 +229,20 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "windows e2e does not let best-effort Acrylic restore mask sinkhole assertions" {
+    run grep -nF "function Restart-AcrylicServiceForE2E" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Restart-AcrylicServiceForE2E -Context 'applying sinkhole hosts' -Required" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Restart-AcrylicServiceForE2E -Context 'restoring sinkhole hosts' | Out-Null" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Acrylic service restart failed while \${Context}" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows installer keeps Acrylic on the modern portable release track" {
     run grep -nF '$installerVersion = "2.2.1"' "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Install.ps1"
     [ "$status" -eq 0 ]
