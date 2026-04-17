@@ -4,7 +4,25 @@
 
 $ErrorActionPreference = 'Stop'
 
+function Resolve-OpenPathNativeHostRoot {
+    $candidateRoots = @(
+        (Join-Path $PSScriptRoot '..'),
+        (Join-Path $PSScriptRoot '..\..\..')
+    )
+
+    foreach ($candidateRoot in $candidateRoots) {
+        $resolvedRoot = [System.IO.Path]::GetFullPath($candidateRoot)
+        $stateHelperPath = Join-Path $resolvedRoot 'lib\internal\NativeHost.State.ps1'
+        if (Test-Path $stateHelperPath) {
+            return $resolvedRoot
+        }
+    }
+
+    throw "OpenPath native host support libraries not found from $PSScriptRoot"
+}
+
 $script:NativeRoot = Split-Path -Parent $PSCommandPath
+$script:OpenPathRoot = Resolve-OpenPathNativeHostRoot
 $script:StatePath = Join-Path $script:NativeRoot 'native-state.json'
 $script:WhitelistPath = Join-Path $script:NativeRoot 'whitelist.txt'
 $script:LogPath = Join-Path $script:NativeRoot 'native-host.log'
@@ -12,9 +30,9 @@ $script:UpdateTaskName = 'OpenPath-Update'
 $script:MaxDomains = 50
 $script:MaxMessageBytes = 1MB
 
-. (Join-Path $PSScriptRoot '..\lib\internal\NativeHost.State.ps1')
-. (Join-Path $PSScriptRoot '..\lib\internal\NativeHost.Protocol.ps1')
-. (Join-Path $PSScriptRoot '..\lib\internal\NativeHost.Actions.ps1')
+. (Join-Path $script:OpenPathRoot 'lib\internal\NativeHost.State.ps1')
+. (Join-Path $script:OpenPathRoot 'lib\internal\NativeHost.Protocol.ps1')
+. (Join-Path $script:OpenPathRoot 'lib\internal\NativeHost.Actions.ps1')
 
 function Write-NativeHostLog {
     param(

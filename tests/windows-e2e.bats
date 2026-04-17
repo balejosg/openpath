@@ -91,6 +91,26 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "windows native host resolves support libraries from OpenPath root when staged under Firefox" {
+    run grep -nF 'function Resolve-OpenPathNativeHostRoot' "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "\$script:OpenPathRoot = Resolve-OpenPathNativeHostRoot" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Join-Path \$script:OpenPathRoot 'lib\internal\NativeHost.State.ps1'" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Join-Path \$script:OpenPathRoot 'lib\internal\NativeHost.Protocol.ps1'" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Join-Path \$script:OpenPathRoot 'lib\internal\NativeHost.Actions.ps1'" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Join-Path \$PSScriptRoot '..\lib\internal\NativeHost.State.ps1'" "$PROJECT_DIR/windows/scripts/OpenPath-NativeHost.ps1"
+    [ "$status" -ne 0 ]
+}
+
 @test "windows cli re-imports Common globally before self-update commands" {
     run grep -nF 'Import-Module "$openPathRoot\lib\Common.psm1" -Force -Global' "$PROJECT_DIR/windows/OpenPath.ps1"
     [ "$status" -eq 0 ]

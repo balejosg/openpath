@@ -45,6 +45,22 @@ Describe "Browser Module - Native Host" {
             )
         }
 
+        It "Native host script resolves support files from OpenPath root after Firefox staging" {
+            $nativeHostScriptPath = Join-Path $PSScriptRoot ".." "scripts" "OpenPath-NativeHost.ps1"
+            $nativeHostContent = Get-Content $nativeHostScriptPath -Raw
+
+            Assert-ContentContainsAll -Content $nativeHostContent -Needles @(
+                'function Resolve-OpenPathNativeHostRoot',
+                '$script:OpenPathRoot = Resolve-OpenPathNativeHostRoot',
+                'Join-Path $script:OpenPathRoot ''lib\internal\NativeHost.State.ps1''',
+                'Join-Path $script:OpenPathRoot ''lib\internal\NativeHost.Protocol.ps1''',
+                'Join-Path $script:OpenPathRoot ''lib\internal\NativeHost.Actions.ps1'''
+            )
+
+            $legacyImportPattern = [regex]::Escape("Join-Path `$PSScriptRoot '..\lib\internal\NativeHost.State.ps1'")
+            $nativeHostContent | Should -Not -Match $legacyImportPattern
+        }
+
         It "Grants standard users read and execute access to the update task" {
             $servicesModulePath = Join-Path $PSScriptRoot ".." "lib" "Services.psm1"
             $taskHelperPath = Join-Path $PSScriptRoot ".." "lib" "internal" "Services.TaskBuilders.ps1"
