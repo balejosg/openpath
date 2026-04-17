@@ -219,7 +219,9 @@ rm -f /etc/sudoers.d/openpath
 rm -f /etc/NetworkManager/dispatcher.d/99-openpath-captive-check
 
 # Limpiar políticas de navegadores
-echo '{"policies": {}}' > /etc/firefox/policies/policies.json 2>/dev/null || true
+if [ -d /etc/firefox/policies ]; then
+    echo '{"policies": {}}' > /etc/firefox/policies/policies.json 2>/dev/null || true
+fi
 rm -f /etc/chromium/policies/managed/url-whitelist.json 2>/dev/null || true
 rm -f /etc/chromium-browser/policies/managed/url-whitelist.json 2>/dev/null || true
 rm -f /etc/opt/chrome/policies/managed/url-whitelist.json 2>/dev/null || true

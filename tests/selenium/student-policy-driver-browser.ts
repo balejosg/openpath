@@ -48,7 +48,8 @@ export async function openAndExpectBlocked(
       message.includes('about:neterror') ||
       message.includes('dnsNotFound') ||
       message.includes('NS_ERROR_UNKNOWN_HOST') ||
-      message.includes('Reached error page')
+      message.includes('Reached error page') ||
+      message.includes('Navigation timed out')
     ) {
       return;
     }

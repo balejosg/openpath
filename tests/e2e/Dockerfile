@@ -10,7 +10,9 @@ ENV container=docker
 # Install systemd and minimal packages.
 # Note: Avoid pre-installing most OpenPath dependencies so the installer
 # is exercised in E2E runs.
-RUN apt-get update && apt-get install -y \
+COPY linux/lib/apt.sh /tmp/openpath-apt.sh
+RUN . /tmp/openpath-apt.sh \
+    && apt_install_with_retry "systemd E2E base packages" apt-get install -y \
     systemd \
     systemd-sysv \
     iproute2 \

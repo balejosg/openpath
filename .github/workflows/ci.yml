@@ -132,12 +132,11 @@ jobs:
 
       - name: Install dnsmasq
         run: |
-          sudo apt-get update
-          sudo apt-get install -y dnsmasq
+          sudo env DEBIAN_FRONTEND=noninteractive bash -c '. ./linux/lib/apt.sh && apt_install_with_retry "dnsmasq" apt-get install -y dnsmasq'
 
       - name: Install BATS
         run: |
-          sudo apt-get install -y bats
+          sudo env DEBIAN_FRONTEND=noninteractive bash -c '. ./linux/lib/apt.sh && apt_install_with_retry "bats" apt-get install -y bats'
 
       - name: Run BATS unit tests
         id: run-bats-unit

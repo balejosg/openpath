@@ -58,6 +58,11 @@ install_firefox_esr() {
         fi
     fi
 
+    if detect_firefox_dir >/dev/null 2>&1; then
+        log "✓ Firefox already available"
+        return 0
+    fi
+
     log "Installing Firefox..."
 
     local os_id=""
@@ -67,7 +72,8 @@ install_firefox_esr() {
 
     if [ "$os_id" = "ubuntu" ]; then
         if ! command -v add-apt-repository &>/dev/null 2>&1; then
-            DEBIAN_FRONTEND=noninteractive apt-get install -y software-properties-common >/dev/null 2>&1 || true
+            DEBIAN_FRONTEND=noninteractive apt_install_with_retry "software-properties-common" \
+                apt-get install -y software-properties-common >/dev/null 2>&1 || true
         fi
 
         if command -v add-apt-repository &>/dev/null 2>&1; then
@@ -87,10 +93,13 @@ EOF
         fi
     fi
 
-    apt-get update -qq
+    if ! apt_update_with_retry; then
+        log "⚠ APT package indexes could not be refreshed; skipping Firefox installation"
+        return 1
+    fi
 
     if browser_apt_has_candidate firefox-esr; then
-        if DEBIAN_FRONTEND=noninteractive apt-get install -y firefox-esr; then
+        if DEBIAN_FRONTEND=noninteractive apt_install_with_retry "firefox-esr" apt-get install -y firefox-esr; then
             log "✓ Firefox ESR installed"
             return 0
         fi
@@ -105,7 +114,7 @@ EOF
             return 1
         fi
 
-        if DEBIAN_FRONTEND=noninteractive apt-get install -y firefox; then
+        if DEBIAN_FRONTEND=noninteractive apt_install_with_retry "firefox" apt-get install -y firefox; then
             log "✓ Firefox installed"
             return 0
         fi
@@ -167,6 +176,12 @@ lockPref("xpinstall.signatures.required", false);
 lockPref("extensions.langpacks.signatures.required", false);
 // Prevent extension blocklist from blocking our extension
 lockPref("extensions.blocklist.enabled", false);
+// Keep OpenPath DNS policy changes effective in already-open Firefox sessions
+lockPref("network.trr.mode", 5);
+lockPref("network.trr.uri", "");
+lockPref("network.dns.disablePrefetch", true);
+lockPref("network.dnsCacheExpiration", 0);
+lockPref("network.dnsCacheExpirationGracePeriod", 0);
 EOF
 
     log "✓ Firefox autoconfig generated"

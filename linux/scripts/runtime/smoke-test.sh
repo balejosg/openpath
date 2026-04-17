@@ -131,7 +131,7 @@ test_dns_blocks_unknown() {
     for domain in "${blocked_domains[@]}"; do
         local result
         result=$(timeout 3 dig @127.0.0.1 "$domain" +short 2>/dev/null | head -1)
-        if [ -z "$result" ] || [ "$result" == "127.0.0.1" ] || [ "$result" == "0.0.0.0" ]; then
+        if [ -z "$result" ] || [ "$result" == "127.0.0.1" ] || [ "$result" == "0.0.0.0" ] || [ "$result" == "192.0.2.1" ]; then
             test_pass "$domain bloqueado correctamente"
         else
             test_warn "$domain resuelve a $result (debería estar bloqueado)"

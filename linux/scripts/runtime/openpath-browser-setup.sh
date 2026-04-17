@@ -10,8 +10,20 @@ set -euo pipefail
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/lib/openpath}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-FIREFOX_EXTENSION_SOURCE="${OPENPATH_BROWSER_SETUP_EXTENSION_SOURCE:-/usr/share/openpath/firefox-extension}"
-FIREFOX_RELEASE_SOURCE="${OPENPATH_BROWSER_SETUP_RELEASE_SOURCE:-/usr/share/openpath/firefox-release}"
+default_browser_setup_source() {
+    local install_source="$1"
+    local package_source="$2"
+
+    if [ -d "$install_source" ]; then
+        printf '%s\n' "$install_source"
+        return 0
+    fi
+
+    printf '%s\n' "$package_source"
+}
+
+FIREFOX_EXTENSION_SOURCE="${OPENPATH_BROWSER_SETUP_EXTENSION_SOURCE:-$(default_browser_setup_source "$INSTALL_DIR/firefox-extension" "/usr/share/openpath/firefox-extension")}"
+FIREFOX_RELEASE_SOURCE="${OPENPATH_BROWSER_SETUP_RELEASE_SOURCE:-$(default_browser_setup_source "$INSTALL_DIR/firefox-release" "/usr/share/openpath/firefox-release")}"
 FIREFOX_EXTENSION_ID="${OPENPATH_FIREFOX_EXTENSION_ID:-monitor-bloqueos@openpath}"
 FIREFOX_APP_ID="{ec8030f7-c20a-464f-9b0e-13a3a9e97384}"
 
@@ -118,7 +130,9 @@ verify_firefox_setup() {
 
 main() {
     load_common_runtime
-    load_browser_runtime
+    if ! load_libraries; then
+        load_browser_runtime
+    fi
     require_root
     require_openpath_request_setup_complete "browser request setup"
 

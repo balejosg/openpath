@@ -29,15 +29,17 @@ EOF
 
 write_dnsmasq_default_sinkhole_rules() {
     local conf_path="$1"
+    local sinkhole_ipv4="${OPENPATH_DNS_SINKHOLE_IPV4:-192.0.2.1}"
+    local sinkhole_ipv6="${OPENPATH_DNS_SINKHOLE_IPV6:-100::}"
 
     if [ -z "${conf_path:-}" ]; then
         log_warn "write_dnsmasq_default_sinkhole_rules: output path is empty"
         return 1
     fi
 
-    cat >> "$conf_path" <<'EOF'
-address=/#/0.0.0.0
-address=/#/::
+    cat >> "$conf_path" <<EOF
+address=/#/${sinkhole_ipv4}
+address=/#/${sinkhole_ipv6}
 EOF
 }
 
@@ -63,7 +65,7 @@ neg-ttl=60
 
 # =============================================
 # DEFAULT BLOCK (MUST BE FIRST)
-# Everything not explicitly listed returns a local sinkhole address.
+# Everything not explicitly listed returns a non-local sinkhole address.
 # =============================================
 EOF
 

@@ -78,7 +78,7 @@ install_deb_package_file() {
         log "✓ Package installed successfully"
     else
         log_warn "dpkg reported issues, running apt-get -f install..."
-        if ! apt-get -f install -y 2>&1; then
+        if ! apt_install_with_retry "package repair" apt-get -f install -y 2>&1; then
             log_error "Package repair failed after dpkg -i"
             return 1
         fi

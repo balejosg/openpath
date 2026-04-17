@@ -147,7 +147,12 @@ run_whitelist_update_test() {
     docker exec "$CONTAINER_NAME" bash -c '
         set -euo pipefail
 
-        test_file="/tmp/test-whitelist.txt"
+        fixture_dir="/tmp/openpath-whitelist-fixture"
+        token="test-update-token"
+        test_dir="$fixture_dir/w/$token"
+        test_file="$test_dir/whitelist.txt"
+        rm -rf "$fixture_dir"
+        mkdir -p "$test_dir"
         cat > "$test_file" << EOF
 ## WHITELIST
 google.com
@@ -160,13 +165,29 @@ example.net
 ads.example.com
 EOF
 
+        python3 -m http.server 18082 --bind 127.0.0.1 --directory "$fixture_dir" >/tmp/openpath-whitelist-fixture.log 2>&1 &
+        server_pid=$!
+        trap "kill $server_pid >/dev/null 2>&1 || true" EXIT
+
+        for _ in $(seq 1 20); do
+            if curl -fsS "http://127.0.0.1:18082/w/$token/whitelist.txt" >/dev/null 2>&1; then
+                break
+            fi
+            sleep 0.5
+        done
+
+        mkdir -p /etc/openpath
+        printf "http://127.0.0.1:18082\n" > /etc/openpath/api-url.conf
+        printf "linux-e2e-update-room\n" > /etc/openpath/classroom.conf
+        printf "linux-e2e-update-room-id\n" > /etc/openpath/classroom-id.conf
+
         conf="/etc/openpath/whitelist-url.conf"
         backup="${conf}.bak"
         if [ -f "$conf" ]; then
             cp -f "$conf" "$backup"
         fi
 
-        echo "file://$test_file" > "$conf"
+        echo "http://127.0.0.1:18082/w/$token/whitelist.txt" > "$conf"
 
         /usr/local/bin/openpath-update.sh
 
@@ -196,6 +217,19 @@ run_agent_self_update_test() {
         build_log="$workdir/build.log"
         server_log="$workdir/http.log"
         update_log="$workdir/update.log"
+        mkdir -p /etc/openpath
+        if [ ! -s /etc/openpath/api-url.conf ]; then
+            printf "http://127.0.0.1:18080\n" > /etc/openpath/api-url.conf
+        fi
+        if [ ! -s /etc/openpath/whitelist-url.conf ]; then
+            printf "http://127.0.0.1/w/self-update-test-token/whitelist.txt\n" > /etc/openpath/whitelist-url.conf
+        fi
+        if [ ! -s /etc/openpath/classroom.conf ]; then
+            printf "self-update-test-classroom\n" > /etc/openpath/classroom.conf
+        fi
+        if [ ! -s /etc/openpath/classroom-id.conf ]; then
+            printf "self-update-test-classroom-id\n" > /etc/openpath/classroom-id.conf
+        fi
         current_conf="$(cat /etc/openpath/whitelist-url.conf)"
         current_version="$(cat /usr/local/lib/openpath/VERSION 2>/dev/null || cat /openpath/VERSION 2>/dev/null || echo 4.1.0)"
 
@@ -213,22 +247,25 @@ PY
 )"
 
         rm -rf "$workdir"
-        mkdir -p "$release_dir"
+        mkdir -p "$release_dir/api/agent/linux/packages"
 
         cd /openpath
-        ./linux/scripts/build/build-deb.sh "$target_version" 1 >"$build_log" 2>&1
+        ./linux/scripts/build/build-deb.sh "$current_version" 1 >"$build_log" 2>&1
+        ./linux/scripts/build/build-deb.sh "$target_version" 1 >>"$build_log" 2>&1
 
+        current_deb_name="openpath-dnsmasq_${current_version}-1_amd64.deb"
         deb_name="openpath-dnsmasq_${target_version}-1_amd64.deb"
+        cp "build/$current_deb_name" "$release_dir/api/agent/linux/packages/$current_version"
         cp "build/$deb_name" "$release_dir/$deb_name"
 
         cat > "$release_dir/latest.json" <<EOF
 {
-  "tag_name": "v${target_version}",
-  "assets": [
-    {
-      "browser_download_url": "http://127.0.0.1:18080/$deb_name"
-    }
-  ]
+  "success": true,
+  "version": "${target_version}",
+  "downloadPath": "/$deb_name",
+  "minSupportedVersion": "0.0.0",
+  "minDirectUpgradeVersion": "0.0.0",
+  "bridgeVersions": []
 }
 EOF
 

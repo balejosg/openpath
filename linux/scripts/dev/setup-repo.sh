@@ -28,6 +28,10 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../lib/apt.sh
+source "$SCRIPT_DIR/../../lib/apt.sh"
+
 REPO_DIR="${1:-./apt-repo}"
 GPG_KEY_ID="${2:-}"
 
@@ -42,7 +46,7 @@ echo ""
 if ! command -v reprepro &> /dev/null; then
     echo "[1/3] Installing reprepro..."
     if [ "$EUID" -eq 0 ]; then
-        apt-get update -qq && apt-get install -y reprepro
+        apt_install_with_retry "reprepro" apt-get install -y reprepro
     else
         echo "WARNING: reprepro not found. Install with: sudo apt install reprepro"
     fi

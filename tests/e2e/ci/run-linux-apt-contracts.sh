@@ -28,6 +28,8 @@ cleanup() {
     if [ -n "${_gnupg_home:-}" ] && [ -d "$_gnupg_home" ]; then
         rm -rf "$_gnupg_home" || true
     fi
+
+    return 0
 }
 
 debug_container() {
@@ -109,7 +111,9 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV container=docker
 
-RUN apt-get update && apt-get install -y \
+COPY linux/lib/apt.sh /tmp/openpath-apt.sh
+RUN . /tmp/openpath-apt.sh \
+    && apt_install_with_retry "APT contract base packages" apt-get install -y \
     systemd \
     systemd-sysv \
     iproute2 \
@@ -269,11 +273,7 @@ run_contracts() {
         dpkg -s openpath-dnsmasq | grep -q 'Version: ${version}-1'
         test -f /etc/dnsmasq.d/openpath.conf
         command -v openpath >/dev/null
-        (command -v firefox-esr >/dev/null || command -v firefox >/dev/null)
-        test -f /etc/firefox/policies/policies.json
-        grep -q 'ExtensionSettings' /etc/firefox/policies/policies.json
-        grep -q 'monitor-bloqueos@openpath' /etc/firefox/policies/policies.json
-        test -f /usr/lib/mozilla/native-messaging-hosts/whitelist_native_host.json
+        test ! -f /usr/lib/mozilla/native-messaging-hosts/whitelist_native_host.json
         systemctl is-enabled openpath-dnsmasq.timer >/dev/null
     "
 

@@ -33,7 +33,8 @@ validate_whitelist_content() {
 
     first_line=$(grep -v '^[[:space:]]*$' "$file" | head -n 1 2>/dev/null || true)
     if ! echo "$first_line" | grep -iq "^#.*DESACTIVADO"; then
-        valid_lines=$(grep -cP '^[a-zA-Z0-9*].*\.[a-zA-Z]{2,}' "$file" 2>/dev/null || echo 0)
+        valid_lines=$(grep -cP '^[a-zA-Z0-9*].*\.[a-zA-Z]{2,}' "$file" 2>/dev/null || true)
+        valid_lines="${valid_lines:-0}"
         if grep -Eq '^## (WHITELIST|BLOCKED-SUBDOMAINS|BLOCKED-PATHS)$' "$file" 2>/dev/null; then
             has_openpath_sections=true
         fi

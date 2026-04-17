@@ -3,6 +3,10 @@
 # install-helpers.sh - Shared installer helper functions
 ################################################################################
 
+_install_helpers_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=apt.sh
+source "$_install_helpers_dir/apt.sh"
+
 log_verbose() {
     if [ "${VERBOSE:-false}" = true ]; then
         printf '%s\n' "$*"
@@ -53,53 +57,4 @@ run_installer_step() {
     else
         run_quietly "$step_function"
     fi
-}
-
-reset_apt_package_indexes() {
-    apt-get clean >/dev/null 2>&1 || true
-    rm -rf /var/lib/apt/lists/*
-    mkdir -p /var/lib/apt/lists/partial
-}
-
-apt_update_with_retry() {
-    local attempt
-    local max_attempts=3
-
-    for attempt in $(seq 1 "$max_attempts"); do
-        reset_apt_package_indexes
-
-        if apt-get -o Acquire::Retries=3 update -qq; then
-            return 0
-        fi
-
-        if [ "$attempt" -lt "$max_attempts" ]; then
-            echo "  ! apt-get update falló (intento ${attempt}/${max_attempts}); reintentando..."
-            sleep "$attempt"
-        fi
-    done
-
-    echo "  ✗ apt-get update falló tras ${max_attempts} intentos"
-    return 1
-}
-
-apt_install_with_retry() {
-    local package_group="$1"
-    shift
-
-    local attempt
-    local max_attempts=3
-
-    for attempt in $(seq 1 "$max_attempts"); do
-        if "$@" >/dev/null; then
-            return 0
-        fi
-
-        if [ "$attempt" -lt "$max_attempts" ]; then
-            echo "  ! Instalación de ${package_group} falló (intento ${attempt}/${max_attempts}); refrescando índices..."
-            apt_update_with_retry
-        fi
-    done
-
-    echo "  ✗ Instalación de ${package_group} falló tras ${max_attempts} intentos"
-    return 1
 }

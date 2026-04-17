@@ -208,4 +208,146 @@ describe('repository verification contract', () => {
       }
     }
   });
+
+  test('Linux CI and installer APT operations use the resilient OpenPath APT helper', () => {
+    const aptHelpers = readText('linux/lib/apt.sh');
+    const common = readText('linux/lib/common.sh');
+    const installCoreSteps = readText('linux/lib/install-core-steps.sh');
+    const browserFirefox = readText('linux/lib/browser-firefox.sh');
+    const browserSetup = readText('linux/scripts/runtime/openpath-browser-setup.sh');
+    const watchdog = readText('linux/scripts/runtime/dnsmasq-watchdog.sh');
+    const selfUpdatePackage = readText('linux/lib/openpath-self-update-package.sh');
+    const e2eDockerfile = readText('tests/e2e/Dockerfile');
+    const studentDockerfile = readText('tests/e2e/Dockerfile.student');
+    const batsRunnerDockerfile = readText('tests/e2e/Dockerfile.bats-runner');
+    const aptContractsRunner = readText('tests/e2e/ci/run-linux-apt-contracts.sh');
+    const aptSetup = readText('linux/scripts/build/apt-setup.sh');
+    const aptBootstrap = readText('linux/scripts/build/apt-bootstrap.sh');
+    const workflowContents = [
+      ['.github/workflows/ci.yml', readText('.github/workflows/ci.yml')],
+      ['.github/workflows/build-deb.yml', readText('.github/workflows/build-deb.yml')],
+      [
+        '.github/workflows/reusable-deb-publish.yml',
+        readText('.github/workflows/reusable-deb-publish.yml'),
+      ],
+      ['.github/workflows/perf-test.yml', readText('.github/workflows/perf-test.yml')],
+    ];
+
+    for (const fragment of [
+      'OPENPATH_APT_MIRRORS',
+      'Acquire::ForceIPv4',
+      'Acquire::http::Timeout',
+      'rewrite_ubuntu_sources_for_mirror',
+      'timeout "$timeout_seconds"',
+      'openpath_apt_update_output_failed',
+      'Failed to fetch',
+    ]) {
+      assert.ok(
+        aptHelpers.includes(fragment),
+        `linux/lib/apt.sh should configure resilient APT behavior with ${fragment}`
+      );
+    }
+
+    assert.ok(
+      common.includes('"$INSTALL_DIR/lib/apt.sh"'),
+      'linux/lib/common.sh should include apt.sh in integrity checks'
+    );
+    assert.match(
+      common,
+      /for lib in apt\.sh dns\.sh firewall\.sh browser\.sh services\.sh rollback\.sh;/,
+      'linux/lib/common.sh should source apt.sh before runtime libraries that may install packages'
+    );
+    assert.ok(
+      browserSetup.includes('load_libraries'),
+      'linux/scripts/runtime/openpath-browser-setup.sh should load the common runtime library set before installing Firefox'
+    );
+    assert.ok(
+      browserSetup.includes('$INSTALL_DIR/firefox-extension') &&
+        browserSetup.includes('/usr/share/openpath/firefox-extension'),
+      'linux/scripts/runtime/openpath-browser-setup.sh should support both install.sh-staged and deb-packaged Firefox bundles'
+    );
+
+    for (const [name, content] of [
+      ['tests/e2e/Dockerfile', e2eDockerfile],
+      ['tests/e2e/Dockerfile.student', studentDockerfile],
+      ['tests/e2e/Dockerfile.bats-runner', batsRunnerDockerfile],
+      ['tests/e2e/ci/run-linux-apt-contracts.sh', aptContractsRunner],
+    ]) {
+      assert.ok(
+        content.includes('COPY linux/lib/apt.sh /tmp/openpath-apt.sh'),
+        `${name} should copy the shared APT helper before installing packages`
+      );
+      assert.ok(
+        content.includes('. /tmp/openpath-apt.sh'),
+        `${name} should source the shared APT helper during Docker builds`
+      );
+      assert.ok(
+        content.includes('apt_install_with_retry'),
+        `${name} should install Docker image packages through apt_install_with_retry`
+      );
+    }
+
+    assert.ok(
+      !installCoreSteps.includes('apt-get -o Acquire::Retries=3 install'),
+      'linux/lib/install-core-steps.sh should rely on the shared resilient APT configuration instead of per-call retry-only flags'
+    );
+
+    for (const [name, content] of [
+      ['linux/lib/install-core-steps.sh', installCoreSteps],
+      ['linux/lib/browser-firefox.sh', browserFirefox],
+      ['linux/scripts/runtime/dnsmasq-watchdog.sh', watchdog],
+      ['linux/lib/openpath-self-update-package.sh', selfUpdatePackage],
+    ]) {
+      assert.ok(
+        content.includes('apt_install_with_retry'),
+        `${name} should use apt_install_with_retry for package installation`
+      );
+      assert.ok(
+        !content.includes('run_maybe_verbose apt-get update') &&
+          !/^\s*apt-get update\b/m.test(content),
+        `${name} should not run apt-get update directly`
+      );
+    }
+
+    for (const [name, content] of workflowContents) {
+      assert.ok(
+        content.includes('. ./linux/lib/apt.sh && apt_install_with_retry'),
+        `${name} should install Ubuntu packages through the shared APT helper`
+      );
+      assert.ok(
+        !content.includes('sudo apt-get update') && !content.includes('sudo apt-get install'),
+        `${name} should not use raw sudo apt-get in CI`
+      );
+    }
+
+    for (const [name, content] of [
+      ['linux/scripts/build/apt-setup.sh', aptSetup],
+      ['linux/scripts/build/apt-bootstrap.sh', aptBootstrap],
+    ]) {
+      assert.ok(
+        content.includes('OPENPATH_APT_MIRRORS'),
+        `${name} should carry standalone resilient APT mirror configuration`
+      );
+      assert.ok(
+        content.includes('apt_update_with_retry'),
+        `${name} should retry apt-get update with bounded timeouts`
+      );
+      assert.ok(
+        content.includes('openpath_apt_update_output_failed') &&
+          content.includes('Failed to fetch'),
+        `${name} should treat apt-get update fetch warnings as retryable failures`
+      );
+      assert.ok(
+        !content.includes('run_maybe_verbose apt-get update') &&
+          !/^\s*apt-get update\b/m.test(content),
+        `${name} should not run apt-get update directly`
+      );
+    }
+
+    assert.match(
+      aptContractsRunner,
+      /cleanup\(\) \{[\s\S]*return 0[\s\S]*\}/,
+      'tests/e2e/ci/run-linux-apt-contracts.sh cleanup should not turn successful contracts into failed runs'
+    );
+  });
 });

@@ -110,6 +110,10 @@ export class StudentPolicyDriver implements StudentPolicyDriverState {
       options.setBinary(this.firefoxBinaryPath);
     }
     options.setPreference('network.dns.disablePrefetch', true);
+    options.setPreference('network.trr.mode', 5);
+    options.setPreference('network.trr.uri', '');
+    options.setPreference('network.dnsCacheExpiration', 0);
+    options.setPreference('network.dnsCacheExpirationGracePeriod', 0);
     options.setPreference('dom.webnotifications.enabled', true);
     options.setPreference('extensions.experiments.enabled', true);
 
@@ -118,7 +122,9 @@ export class StudentPolicyDriver implements StudentPolicyDriverState {
     }
 
     this.driver = await new Builder().forBrowser('firefox').setFirefoxOptions(options).build();
-    await this.driver.manage().setTimeouts({ implicit: 2_000, pageLoad: 30_000, script: 15_000 });
+    await this.driver
+      .manage()
+      .setTimeouts({ implicit: 2_000, pageLoad: DEFAULT_BLOCKED_TIMEOUT_MS, script: 15_000 });
 
     const capabilities = await this.driver.getCapabilities();
     const profileDir = capabilities.get('moz:profile') as string | undefined;

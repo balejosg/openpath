@@ -73,8 +73,9 @@ EOF
         
         # Clean browser policies
         echo "Limpiando políticas de navegadores..."
-        mkdir -p /etc/firefox/policies
-        echo '{"policies": {}}' > /etc/firefox/policies/policies.json 2>/dev/null || true
+        if [ -d /etc/firefox/policies ]; then
+            echo '{"policies": {}}' > /etc/firefox/policies/policies.json 2>/dev/null || true
+        fi
         rm -f /etc/chromium/policies/managed/openpath.json 2>/dev/null || true
         rm -f /etc/chromium-browser/policies/managed/openpath.json 2>/dev/null || true
         rm -f /etc/opt/chrome/policies/managed/openpath.json 2>/dev/null || true

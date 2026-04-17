@@ -2,7 +2,9 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y \
+COPY linux/lib/apt.sh /tmp/openpath-apt.sh
+RUN . /tmp/openpath-apt.sh \
+    && apt_install_with_retry "BATS runner packages" apt-get install -y \
     bats \
     curl \
     dnsutils \

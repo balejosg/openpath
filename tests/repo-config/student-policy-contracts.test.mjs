@@ -151,6 +151,46 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('student policy selenium driver disables Firefox DoH for DNS policy assertions', () => {
+    const studentPolicyDriver = readText('tests/selenium/student-policy-driver.ts');
+
+    assert.match(
+      studentPolicyDriver,
+      /options\.setPreference\('network\.trr\.mode', 5\)/,
+      'student-policy-driver.ts should force Firefox to use native DNS so Selenium cannot bypass local dnsmasq policy'
+    );
+    assert.match(
+      studentPolicyDriver,
+      /options\.setPreference\('network\.trr\.uri', ''\)/,
+      'student-policy-driver.ts should clear the Firefox TRR URI in Selenium profiles'
+    );
+    assert.match(
+      studentPolicyDriver,
+      /options\.setPreference\('network\.dnsCacheExpiration', 0\)/,
+      'student-policy-driver.ts should disable Firefox DNS cache so policy changes converge in the same browser session'
+    );
+    assert.match(
+      studentPolicyDriver,
+      /options\.setPreference\('network\.dnsCacheExpirationGracePeriod', 0\)/,
+      'student-policy-driver.ts should disable Firefox DNS cache grace period for policy-change tests'
+    );
+    assert.match(
+      studentPolicyDriver,
+      /pageLoad: DEFAULT_BLOCKED_TIMEOUT_MS/,
+      'student-policy-driver.ts should bound page-load waits for sinkhole-blocked navigations'
+    );
+  });
+
+  test('student policy Linux HTTP probes use bounded curl timeouts', () => {
+    const platformDriver = readText('tests/selenium/student-policy-driver-platform.ts');
+
+    assert.match(
+      platformDriver,
+      /curl -fsS --connect-timeout 3 --max-time 5/,
+      'student-policy-driver-platform.ts should bound Linux curl probes so sinkhole routes cannot hang CI'
+    );
+  });
+
   test('windows student policy runner restores Firefox unsigned addon support changes during cleanup', () => {
     const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
 
@@ -317,7 +357,7 @@ describe('repository verification contract', () => {
     );
     assert.match(
       dnsConfigModule,
-      /\"FW \/\^\(\?!.*\$escapedBlockedPattern.*\$escapedDomain\$\"/,
+      /"FW \/\^\(\?!.*\$escapedBlockedPattern.*\$escapedDomain\$"/,
       'Get-AcrylicForwardRules should emit a regex-based FW rule that excludes blocked descendants when needed'
     );
     assert.ok(

@@ -1,33 +1,28 @@
 #!/bin/bash
 ################################################################################
-# apt-setup.sh - Set up OpenPath System APT repository on a client machine
-#
-# Usage (one-liner install):
-#   # Stable (recommended):
-#   curl -fsSL https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/apt-setup.sh | sudo bash
-#
-#   # Unstable (development builds):
-#   curl -fsSL https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt/apt-setup.sh | sudo bash -s -- --unstable
-#
-# After running:
-#   sudo apt install openpath-dnsmasq
+# apt.sh - Resilient APT helpers shared by installer, runtime, and CI
 ################################################################################
 
-set -euo pipefail
+openpath_default_apt_mirrors() {
+    local arch
+    arch="$(dpkg --print-architecture 2>/dev/null || uname -m)"
 
-# Configuration
-REPO_URL="${OPENPATH_APT_REPO_URL:-https://raw.githubusercontent.com/balejosg/openpath/gh-pages/apt}"
-GPG_KEY_URL="$REPO_URL/pubkey.gpg"
-KEYRING_PATH="/usr/share/keyrings/openpath.gpg"
-SOURCES_PATH="/etc/apt/sources.list.d/openpath.list"
-OPENPATH_APT_MIRRORS="${OPENPATH_APT_MIRRORS:-http://azure.archive.ubuntu.com/ubuntu http://archive.ubuntu.com/ubuntu http://mirrors.edge.kernel.org/ubuntu}"
+    case "$arch" in
+        arm64|armhf|riscv64|ppc64el|s390x)
+            printf '%s\n' "http://ports.ubuntu.com/ubuntu-ports"
+            ;;
+        *)
+            printf '%s\n' "http://azure.archive.ubuntu.com/ubuntu http://archive.ubuntu.com/ubuntu http://mirrors.edge.kernel.org/ubuntu"
+            ;;
+    esac
+}
+
+OPENPATH_APT_MIRRORS="${OPENPATH_APT_MIRRORS:-$(openpath_default_apt_mirrors)}"
 OPENPATH_APT_RETRIES="${OPENPATH_APT_RETRIES:-2}"
 OPENPATH_APT_UPDATE_TIMEOUT_SECONDS="${OPENPATH_APT_UPDATE_TIMEOUT_SECONDS:-45}"
+OPENPATH_APT_INSTALL_TIMEOUT_SECONDS="${OPENPATH_APT_INSTALL_TIMEOUT_SECONDS:-180}"
 OPENPATH_APT_CONNECT_TIMEOUT_SECONDS="${OPENPATH_APT_CONNECT_TIMEOUT_SECONDS:-10}"
 OPENPATH_APT_CONF_FILE="${OPENPATH_APT_CONF_FILE:-/etc/apt/apt.conf.d/80openpath-network-retries}"
-
-# Default to stable suite
-SUITE="stable"
 
 openpath_apt_attempts() {
     case "$OPENPATH_APT_RETRIES" in
@@ -38,6 +33,12 @@ openpath_apt_attempts() {
             printf '%s\n' "$OPENPATH_APT_RETRIES"
             ;;
     esac
+}
+
+reset_apt_package_indexes() {
+    apt-get clean >/dev/null 2>&1 || true
+    rm -rf /var/lib/apt/lists/* 2>/dev/null || true
+    mkdir -p /var/lib/apt/lists/partial 2>/dev/null || true
 }
 
 configure_apt_resilience() {
@@ -51,12 +52,6 @@ Acquire::https::Timeout "$OPENPATH_APT_CONNECT_TIMEOUT_SECONDS";
 APT::Get::Assume-Yes "true";
 DPkg::Lock::Timeout "120";
 EOF
-}
-
-reset_apt_package_indexes() {
-    apt-get clean >/dev/null 2>&1 || true
-    rm -rf /var/lib/apt/lists/* 2>/dev/null || true
-    mkdir -p /var/lib/apt/lists/partial 2>/dev/null || true
 }
 
 rewrite_ubuntu_sources_for_mirror() {
@@ -73,6 +68,7 @@ rewrite_ubuntu_sources_for_mirror() {
             -e "s#https?://azure\\.archive\\.ubuntu\\.com/ubuntu/?#${mirror}#g" \
             -e "s#https?://security\\.ubuntu\\.com/ubuntu/?#${mirror}#g" \
             -e "s#https?://mirrors\\.edge\\.kernel\\.org/ubuntu/?#${mirror}#g" \
+            -e "s#https?://ports\\.ubuntu\\.com/ubuntu-ports/?#${mirror}#g" \
             "$source_file"
     done
 }
@@ -132,84 +128,36 @@ apt_update_with_retry() {
         echo "  ! apt-get update could not use ${mirror}; trying next mirror..."
     done
 
-    echo "ERROR: apt-get update failed after all configured mirrors"
+    echo "  x apt-get update failed after all configured mirrors"
     return 1
 }
 
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --unstable)
-            SUITE="unstable"
-            shift
-            ;;
-        --stable)
-            SUITE="stable"
-            shift
-            ;;
-        *)
-            echo "Unknown option: $1"
-            echo "Usage: $0 [--stable|--unstable]"
-            exit 1
-            ;;
-    esac
-done
+apt_install_with_retry() {
+    local package_group="$1"
+    shift
 
-echo "=============================================="
-echo "  OpenPath System APT Repository Setup"
-echo "=============================================="
-echo ""
-echo "  Suite: $SUITE"
-echo ""
+    local attempt
+    local max_attempts
 
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then
-    echo "ERROR: This script must be run as root (use sudo)"
-    exit 1
-fi
+    max_attempts="$(openpath_apt_attempts)"
+    configure_apt_resilience
 
-# Step 1: Download and install GPG key
-echo "[1/3] Downloading GPG key..."
-if command -v curl &> /dev/null; then
-    curl -fsSL "$GPG_KEY_URL" | gpg --batch --yes --dearmor -o "$KEYRING_PATH"
-elif command -v wget &> /dev/null; then
-    wget -qO- "$GPG_KEY_URL" | gpg --batch --yes --dearmor -o "$KEYRING_PATH"
-else
-    echo "ERROR: curl or wget required"
-    exit 1
-fi
-chmod 644 "$KEYRING_PATH"
-echo "  ✓ GPG key installed"
+    if ! apt_update_with_retry; then
+        return 1
+    fi
 
-# Step 2: Add repository to sources.list
-echo "[2/3] Adding repository ($SUITE)..."
-cat > "$SOURCES_PATH" << EOF
-# OpenPath System APT Repository
-# https://github.com/balejosg/openpath
-# Suite: $SUITE
-deb [signed-by=$KEYRING_PATH] $REPO_URL $SUITE main
-EOF
-echo "  ✓ Repository added"
+    for attempt in $(seq 1 "$max_attempts"); do
+        if run_apt_command_with_timeout "$OPENPATH_APT_INSTALL_TIMEOUT_SECONDS" "$@" >/dev/null; then
+            return 0
+        fi
 
-# Step 3: Update package lists
-echo "[3/3] Updating package lists..."
-apt_update_with_retry
+        if [ "$attempt" -lt "$max_attempts" ]; then
+            echo "  ! Installation of ${package_group} failed (attempt ${attempt}/${max_attempts}); refreshing indexes..."
+            apt_update_with_retry || true
+            sleep "$attempt"
+        fi
+    done
 
-echo ""
-echo "=============================================="
-echo "  ✓ Repository configured successfully!"
-echo "=============================================="
-echo ""
-echo "To install the openpath system:"
-echo "  sudo apt install openpath-dnsmasq"
-echo ""
-if [ "$SUITE" = "unstable" ]; then
-    echo "⚠️  You are using the UNSTABLE track."
-    echo "   Development builds may contain bugs."
-    echo "   To switch to stable: re-run with --stable"
-    echo ""
-fi
-echo "To remove:"
-echo "  sudo apt remove openpath-dnsmasq     # Keep configuration"
-echo "  sudo apt purge openpath-dnsmasq      # Remove everything"
-echo ""
+    echo "  x Installation of ${package_group} failed after ${max_attempts} attempts"
+    return 1
+}

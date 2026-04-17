@@ -98,7 +98,7 @@ test_blocked_domains_nxdomain() {
         local result
         result=$(timeout 3 dig @127.0.0.1 "$domain" +short 2>/dev/null | head -1)
         
-        if [ -z "$result" ] || [ "$result" == "0.0.0.0" ] || [ "$result" == "127.0.0.1" ]; then
+        if [ -z "$result" ] || [ "$result" == "0.0.0.0" ] || [ "$result" == "192.0.2.1" ] || [ "$result" == "127.0.0.1" ]; then
             test_pass "$domain blocked (NXDOMAIN/sinkhole)"
         else
             test_fail "$domain resolved to $result (should be blocked)"
@@ -108,19 +108,29 @@ test_blocked_domains_nxdomain() {
 
 test_config_files_exist() {
     test_section "5/7" "Configuration files"
-    
-    local required_files=(
-        "/etc/dnsmasq.d/openpath.conf"
-        "/etc/openpath/whitelist-url.conf"
-    )
-    
-    for file in "${required_files[@]}"; do
-        if [ -f "$file" ]; then
-            test_pass "$file exists"
+
+    if [ -f "/etc/dnsmasq.d/openpath.conf" ]; then
+        test_pass "/etc/dnsmasq.d/openpath.conf exists"
+    else
+        test_fail "/etc/dnsmasq.d/openpath.conf missing"
+    fi
+
+    if [ -f "/etc/openpath/whitelist-url.conf" ]; then
+        test_pass "/etc/openpath/whitelist-url.conf exists"
+    else
+        local request_setup_markers=0
+        for file in /etc/openpath/api-url.conf /etc/openpath/classroom.conf /etc/openpath/classroom-id.conf; do
+            if [ -f "$file" ]; then
+                request_setup_markers=$((request_setup_markers + 1))
+            fi
+        done
+
+        if [ "$request_setup_markers" -gt 0 ]; then
+            test_fail "whitelist-url.conf missing while request setup markers exist"
         else
-            test_fail "$file missing"
+            test_pass "Request setup not configured (installer mode)"
         fi
-    done
+    fi
     
     # Check whitelist was downloaded
     if [ -f "/var/lib/openpath/whitelist.txt" ]; then

@@ -30,6 +30,7 @@ export async function assertDnsBlocked(hostname: string): Promise<void> {
   assert.ok(
     normalized === '' ||
       normalized === '0.0.0.0' ||
+      normalized === '192.0.2.1' ||
       (fixtureIp !== null && normalized !== fixtureIp),
     `Expected DNS for ${hostname} to be blocked, received: ${normalized}`
   );
@@ -46,6 +47,7 @@ export async function assertDnsAllowed(hostname: string): Promise<void> {
   assert.ok(
     normalized !== '' &&
       normalized !== '0.0.0.0' &&
+      normalized !== '192.0.2.1' &&
       (fixtureIp === null || normalized === fixtureIp),
     `Expected DNS for ${hostname} to be allowed, received: ${normalized}`
   );
@@ -99,7 +101,7 @@ export async function waitForConvergence(
 export async function assertHttpReachable(url: string): Promise<void> {
   const command = isWindows()
     ? buildWindowsHttpProbeCommand(url)
-    : `curl -fsS ${shellEscape(url)} >/dev/null`;
+    : `curl -fsS --connect-timeout 3 --max-time 5 ${shellEscape(url)} >/dev/null`;
 
   await runPlatformCommand(command);
 }
@@ -107,7 +109,7 @@ export async function assertHttpReachable(url: string): Promise<void> {
 export async function assertHttpBlocked(url: string): Promise<void> {
   const command = isWindows()
     ? buildWindowsHttpProbeCommand(url)
-    : `curl -fsS ${shellEscape(url)} >/dev/null`;
+    : `curl -fsS --connect-timeout 3 --max-time 5 ${shellEscape(url)} >/dev/null`;
 
   try {
     await runPlatformCommand(command);

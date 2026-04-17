@@ -102,6 +102,7 @@ dns_probe_result_is_public() {
     printf '%s\n' "$result" | awk '
         /^[[:space:]]*$/ { next }
         $0 == "0.0.0.0" || $0 == "::" { next }
+        $0 == "192.0.2.1" || $0 == "100::" { next }
         { found = 1; exit }
         END { exit found ? 0 : 1 }
     '

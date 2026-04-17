@@ -6,7 +6,6 @@ import {
   type HarnessGroup,
   type HarnessSchedule,
   type HarnessSession,
-  type JsonRequestOptions,
   type PublicRequestSubmission,
   type RequestMutationResult,
   type RequestStatusResult,
@@ -14,7 +13,6 @@ import {
   type TrpcEnvelope,
   normalizeApiUrl,
   optionalProp,
-  readResponseBody,
   requestJson,
 } from './backend-harness-shared.js';
 

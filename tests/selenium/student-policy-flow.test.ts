@@ -10,6 +10,7 @@ import {
   StudentPolicyDriver,
   type StudentScenario,
 } from './student-policy-flow.e2e';
+import { openAndExpectBlocked } from './student-policy-driver-browser';
 
 function createScenario(): StudentScenario {
   return {
@@ -146,4 +147,25 @@ test('buildWindowsHttpProbeCommand avoids exposing raw URLs to cmd quoting and e
   );
   assert.match(decodedCommand, /-UseBasicParsing/);
   assert.match(decodedCommand, /\| Out-Null/);
+});
+
+test('openAndExpectBlocked treats navigation timeout as blocked navigation', async () => {
+  const timeoutError = new Error('Navigation timed out after 30000 ms');
+  timeoutError.name = 'TimeoutError';
+
+  const state = {
+    getDriver() {
+      return {
+        async get() {
+          throw timeoutError;
+        },
+      };
+    },
+  };
+
+  await assert.doesNotReject(() =>
+    openAndExpectBlocked(state as never, {
+      url: 'http://blocked.example.test/',
+    })
+  );
 });

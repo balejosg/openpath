@@ -15,7 +15,9 @@ ENV GECKODRIVER_VERSION=0.36.0
 
 COPY --from=node-runtime /usr/local /usr/local
 
-RUN apt-get update && apt-get install -y \
+COPY linux/lib/apt.sh /tmp/openpath-apt.sh
+RUN . /tmp/openpath-apt.sh \
+    && apt_install_with_retry "student policy base packages" apt-get install -y \
     bzip2 \
     ca-certificates \
     curl \

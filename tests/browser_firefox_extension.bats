@@ -29,6 +29,12 @@
     [ "$status" -eq 1 ]
 }
 
+@test "install_firefox_esr accepts existing non-dpkg Firefox installation" {
+    run grep -nF 'if detect_firefox_dir >/dev/null 2>&1; then' \
+        "$PROJECT_DIR/linux/lib/browser-firefox.sh"
+    [ "$status" -eq 0 ]
+}
+
 @test "generate_firefox_autoconfig creates autoconfig files" {
     mkdir -p "$TEST_TMP_DIR/usr/lib/firefox-esr"
     touch "$TEST_TMP_DIR/usr/lib/firefox-esr/firefox"
@@ -59,6 +65,24 @@
 
     grep -q "xpinstall.signatures.required" "$TEST_TMP_DIR/usr/lib/firefox-esr/mozilla.cfg"
     grep -q "false" "$TEST_TMP_DIR/usr/lib/firefox-esr/mozilla.cfg"
+}
+
+@test "generate_firefox_autoconfig disables DoH and DNS cache" {
+    mkdir -p "$TEST_TMP_DIR/usr/lib/firefox-esr"
+    touch "$TEST_TMP_DIR/usr/lib/firefox-esr/firefox"
+
+    source "$PROJECT_DIR/linux/lib/browser.sh"
+
+    detect_firefox_dir() { echo "$TEST_TMP_DIR/usr/lib/firefox-esr"; }
+    export -f detect_firefox_dir
+
+    run generate_firefox_autoconfig
+    [ "$status" -eq 0 ]
+
+    grep -q 'lockPref("network.trr.mode", 5)' "$TEST_TMP_DIR/usr/lib/firefox-esr/mozilla.cfg"
+    grep -q 'lockPref("network.trr.uri", "")' "$TEST_TMP_DIR/usr/lib/firefox-esr/mozilla.cfg"
+    grep -q 'lockPref("network.dnsCacheExpiration", 0)' "$TEST_TMP_DIR/usr/lib/firefox-esr/mozilla.cfg"
+    grep -q 'lockPref("network.dnsCacheExpirationGracePeriod", 0)' "$TEST_TMP_DIR/usr/lib/firefox-esr/mozilla.cfg"
 }
 
 @test "generate_firefox_autoconfig handles absence of Firefox" {

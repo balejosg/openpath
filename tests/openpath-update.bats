@@ -76,6 +76,40 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "validate_whitelist_content rejects zero-domain content without integer expression errors" {
+    local whitelist_file="$TEST_TMP_DIR/empty-whitelist.txt"
+    local helper_script="$TEST_TMP_DIR/run-validate-empty-whitelist.sh"
+    cat > "$whitelist_file" <<'EOF'
+not a domain
+EOF
+
+    cat > "$helper_script" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+project_dir="$1"
+whitelist_file="$2"
+extracted_script="${TMPDIR:-/tmp}/openpath-update-validate.$$.$RANDOM.sh"
+
+log_warn() { printf '%s\n' "$*"; }
+
+cp "$project_dir/linux/lib/openpath-update-whitelist.sh" "$extracted_script"
+source "$extracted_script"
+
+MIN_VALID_DOMAINS=5
+MAX_DOMAINS=500
+
+validate_whitelist_content "$whitelist_file"
+EOF
+    chmod +x "$helper_script"
+
+    run "$helper_script" "$PROJECT_DIR" "$whitelist_file"
+
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"Downloaded whitelist does not look valid"* ]]
+    [[ "$output" != *"integer expression expected"* ]]
+}
+
 @test "main falls back to permissive mode when firewall activation fails after DNS recovery" {
     local helper_script="$TEST_TMP_DIR/run-main-firewall-fallback.sh"
     local state_dir="$TEST_TMP_DIR/update-state"

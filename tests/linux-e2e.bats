@@ -252,14 +252,13 @@ EOF
     [ "$status" -eq 0 ]
 }
 
-@test "linux apt contracts verify firefox extension delivery after bootstrap" {
-    run grep -n 'command -v firefox-esr' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
+@test "linux apt contracts defer managed browser integration when setup is skipped" {
+    run grep -nF 'test ! -f /usr/lib/mozilla/native-messaging-hosts/whitelist_native_host.json' \
+        "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n 'monitor-bloqueos@openpath' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
-    [ "$status" -eq 0 ]
-
-    run grep -n 'ExtensionSettings' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
+    run grep -nF '/openpath/linux/scripts/build/apt-bootstrap.sh --skip-setup' \
+        "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -295,6 +294,14 @@ EOF
 
 @test "linux e2e can require firefox extension presence explicitly" {
     run grep -n 'OPENPATH_EXPECT_FIREFOX_EXTENSION' "$PROJECT_DIR/tests/e2e/linux-e2e-tests.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "linux e2e allows installer-mode runs without request setup files" {
+    run grep -nF "Request setup not configured (installer mode)" "$PROJECT_DIR/tests/e2e/linux-e2e-tests.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "whitelist-url.conf missing while request setup markers exist" "$PROJECT_DIR/tests/e2e/linux-e2e-tests.sh"
     [ "$status" -eq 0 ]
 }
 
@@ -354,8 +361,28 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "linux uninstall only resets Firefox policies when the policy directory exists" {
+    run grep -nF 'if [ -d /etc/firefox/policies ]; then' "$PROJECT_DIR/linux/uninstall.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'if [ -d /etc/firefox/policies ]; then' "$PROJECT_DIR/linux/debian-package/DEBIAN/postrm"
+    [ "$status" -eq 0 ]
+}
+
 @test "linux lifecycle e2e covers agent self-update and uninstall verification" {
     run grep -nF "Testing agent self-update mechanism (openpath-self-update.sh)..." "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "test-update-token" "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "self-update-test-token" "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '"downloadPath": "/$deb_name"' "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'api/agent/linux/packages/$current_version' "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"
     [ "$status" -eq 0 ]
 
     run grep -nF "Testing agent bridge upgrade and rollback mechanism..." "$PROJECT_DIR/tests/e2e/ci/run-linux-e2e.sh"

@@ -58,6 +58,10 @@ export default tseslint.config(
       'no-console': ['error', { allow: ['error'] }],
     },
   },
+  {
+    files: ['tests/**/*.mjs'],
+    ...tseslint.configs.disableTypeChecked,
+  },
   // Test anti-pattern rules for all test files
   {
     files: ['**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'],

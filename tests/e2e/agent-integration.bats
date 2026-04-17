@@ -60,14 +60,14 @@ EOF
     local dnsmasq_conf="$TEST_TMP_DIR/dnsmasq.conf"
     cat > "$dnsmasq_conf" << 'EOF'
 # OpenPath DNS Whitelist
-address=/#/0.0.0.0
-address=/#/::
+address=/#/192.0.2.1
+address=/#/100::
 server=/google.com/8.8.8.8
 server=/github.com/8.8.8.8
 EOF
     
-    local address_line=$(grep -n "address=/#/0.0.0.0" "$dnsmasq_conf" | head -1 | cut -d: -f1)
-    local ipv6_line=$(grep -n "address=/#/::" "$dnsmasq_conf" | head -1 | cut -d: -f1)
+    local address_line=$(grep -n "address=/#/192.0.2.1" "$dnsmasq_conf" | head -1 | cut -d: -f1)
+    local ipv6_line=$(grep -n "address=/#/100::" "$dnsmasq_conf" | head -1 | cut -d: -f1)
     local first_server_line=$(grep -n "server=/" "$dnsmasq_conf" | head -1 | cut -d: -f1)
     
     [ "$address_line" -lt "$first_server_line" ]

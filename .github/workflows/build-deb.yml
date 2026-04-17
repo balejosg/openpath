@@ -96,7 +96,7 @@ jobs:
 
       - name: Verify package with lintian
         run: |
-          sudo apt-get update && sudo apt-get install -y lintian
+          sudo env DEBIAN_FRONTEND=noninteractive bash -c '. ./linux/lib/apt.sh && apt_install_with_retry "lintian" apt-get install -y lintian'
           echo "Running lintian checks..."
           lintian --no-tag-display-limit build/*.deb || true
           echo ""

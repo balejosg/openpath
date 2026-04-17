@@ -82,8 +82,7 @@ jobs:
 
       - name: Install reprepro and GPG
         run: |
-          sudo apt-get update
-          sudo apt-get install -y reprepro gnupg
+          sudo env DEBIAN_FRONTEND=noninteractive bash -c '. ./linux/lib/apt.sh && apt_install_with_retry "reprepro and gnupg" apt-get install -y reprepro gnupg'
 
       - name: Require persistent APT signing key
         run: |

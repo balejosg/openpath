@@ -44,8 +44,8 @@ Runtime entrypoints live under `scripts/runtime/`:
 Order in generated `dnsmasq` config is critical:
 
 ```text
-address=/#/0.0.0.0         # sinkhole IPv4 for non-allowed domains
-address=/#/::              # sinkhole IPv6 for non-allowed domains
+address=/#/192.0.2.1       # sinkhole IPv4 for non-allowed domains
+address=/#/100::           # sinkhole IPv6 for non-allowed domains
 server=/allowed.com/8.8.8.8
 ```
 

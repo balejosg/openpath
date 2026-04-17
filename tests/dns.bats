@@ -34,16 +34,16 @@ github.com"
     # Simulate config generation
     {
         echo "# Generated config"
-        echo "address=/#/0.0.0.0"
-        echo "address=/#/::"
+        echo "address=/#/192.0.2.1"
+        echo "address=/#/100::"
         for domain in $domains; do
             echo "server=/$domain/$dns_server"
         done
     } > "$config_file"
     
     [ -f "$config_file" ]
-    grep -q "address=/#/0.0.0.0" "$config_file"
-    grep -q "address=/#/::" "$config_file"
+    grep -q "address=/#/192.0.2.1" "$config_file"
+    grep -q "address=/#/100::" "$config_file"
     grep -q "server=/google.com/8.8.8.8" "$config_file"
     grep -q "server=/github.com/8.8.8.8" "$config_file"
 }
@@ -52,14 +52,14 @@ github.com"
     local config_file="$TEST_TMP_DIR/dnsmasq.conf"
     
     {
-        echo "address=/#/0.0.0.0"
-        echo "address=/#/::"
+        echo "address=/#/192.0.2.1"
+        echo "address=/#/100::"
         echo "server=/google.com/8.8.8.8"
     } > "$config_file"
     
     # Verify order: sinkhole addresses must be before server allow rules
-    local address_line=$(grep -n "address=/#/0.0.0.0" "$config_file" | cut -d: -f1)
-    local ipv6_line=$(grep -n "address=/#/::" "$config_file" | cut -d: -f1)
+    local address_line=$(grep -n "address=/#/192.0.2.1" "$config_file" | cut -d: -f1)
+    local ipv6_line=$(grep -n "address=/#/100::" "$config_file" | cut -d: -f1)
     local server_line=$(grep -n "server=/google.com" "$config_file" | cut -d: -f1)
     
     [ "$address_line" -lt "$server_line" ]
@@ -117,7 +117,7 @@ github.com"
     [ -f "$DNSMASQ_CONF" ]
 }
 
-@test "generate_dnsmasq_config includes explicit sinkhole addresses first" {
+@test "generate_dnsmasq_config includes non-local sinkhole addresses first" {
     export DNSMASQ_CONF="$TEST_TMP_DIR/dnsmasq.d/url-whitelist.conf"
     export PRIMARY_DNS="8.8.8.8"
     export VERSION="3.5"
@@ -137,21 +137,21 @@ github.com"
     
     generate_dnsmasq_config
     
-    grep -q "address=/#/0.0.0.0" "$DNSMASQ_CONF"
-    grep -q "address=/#/::" "$DNSMASQ_CONF"
+    grep -q "address=/#/192.0.2.1" "$DNSMASQ_CONF"
+    grep -q "address=/#/100::" "$DNSMASQ_CONF"
 
     local address_line
     local ipv6_line
     local server_line
-    address_line=$(grep -n "address=/#/0.0.0.0" "$DNSMASQ_CONF" | cut -d: -f1)
-    ipv6_line=$(grep -n "address=/#/::" "$DNSMASQ_CONF" | cut -d: -f1)
+    address_line=$(grep -n "address=/#/192.0.2.1" "$DNSMASQ_CONF" | cut -d: -f1)
+    ipv6_line=$(grep -n "address=/#/100::" "$DNSMASQ_CONF" | cut -d: -f1)
     server_line=$(grep -n "server=/google.com" "$DNSMASQ_CONF" | cut -d: -f1)
 
     [ "$address_line" -lt "$server_line" ]
     [ "$ipv6_line" -lt "$server_line" ]
 }
 
-@test "write_dnsmasq_default_sinkhole_rules emits explicit IPv4 and IPv6 sinkholes only" {
+@test "write_dnsmasq_default_sinkhole_rules emits explicit non-local IPv4 and IPv6 sinkholes only" {
     local config_file="$TEST_TMP_DIR/dnsmasq.conf"
 
     log_warn() { echo "$1"; }
@@ -162,8 +162,10 @@ github.com"
     run write_dnsmasq_default_sinkhole_rules "$config_file"
 
     [ "$status" -eq 0 ]
-    grep -qx "address=/#/0.0.0.0" "$config_file"
-    grep -qx "address=/#/::" "$config_file"
+    grep -qx "address=/#/192.0.2.1" "$config_file"
+    grep -qx "address=/#/100::" "$config_file"
+    ! grep -qx "address=/#/0.0.0.0" "$config_file"
+    ! grep -qx "address=/#/::" "$config_file"
     ! grep -qx "address=/#/" "$config_file"
 }
 

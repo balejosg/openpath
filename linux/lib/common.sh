@@ -283,6 +283,7 @@ check_root() {
 # shellcheck disable=SC2034  # Used by scripts that source common.sh
 CRITICAL_FILES=(
     "$INSTALL_DIR/lib/common.sh"
+    "$INSTALL_DIR/lib/apt.sh"
     "$INSTALL_DIR/lib/dns.sh"
     "$INSTALL_DIR/lib/dns-validation.sh"
     "$INSTALL_DIR/lib/dns-runtime.sh"
@@ -352,7 +353,7 @@ load_libraries() {
         fi
     done
 
-    for lib in dns.sh firewall.sh browser.sh services.sh rollback.sh; do
+    for lib in apt.sh dns.sh firewall.sh browser.sh services.sh rollback.sh; do
         if [ ! -f "$lib_dir/$lib" ]; then
             log_error "Required library not found: $lib_dir/$lib"
             return 1

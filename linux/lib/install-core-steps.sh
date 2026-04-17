@@ -109,12 +109,12 @@ step_install_dependencies() {
 
     apt_update_with_retry
     DEBIAN_FRONTEND=noninteractive apt_install_with_retry "dependencias base" \
-        apt-get -o Acquire::Retries=3 install -y \
+        apt-get install -y \
         iptables ipset curl iproute2 \
         libcap2-bin dnsutils conntrack python3
 
     RUNLEVEL=1 apt_install_with_retry "dnsmasq" \
-        apt-get -o Acquire::Retries=3 install -y dnsmasq
+        apt-get install -y dnsmasq
 
     if [ -d /etc/default ]; then
         grep -q "IGNORE_RESOLVCONF" /etc/default/dnsmasq 2>/dev/null || \

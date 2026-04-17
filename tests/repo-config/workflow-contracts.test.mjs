@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, test } from 'node:test';
-import { compareSemver, extractWorkflowJobBlock, projectRoot, readText } from './support.mjs';
+import { extractWorkflowJobBlock, projectRoot, readText } from './support.mjs';
 
 describe('repository verification contract', () => {
   test('workflow helpers pin Node 24 compatible GitHub Action majors', () => {

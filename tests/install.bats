@@ -574,16 +574,22 @@ EOF
 }
 
 @test "install.sh hardens apt operations against stale package indexes" {
-    run grep -n "apt_update_with_retry()" "$PROJECT_DIR/linux/lib/install-helpers.sh"
+    run grep -n "apt_update_with_retry()" "$PROJECT_DIR/linux/lib/apt.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n "rm -rf /var/lib/apt/lists/\\*" "$PROJECT_DIR/linux/lib/install-helpers.sh"
+    run grep -n "rm -rf /var/lib/apt/lists/\\*" "$PROJECT_DIR/linux/lib/apt.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n -- "-o Acquire::Retries=3 update -qq" "$PROJECT_DIR/linux/lib/install-helpers.sh"
+    run grep -n 'Acquire::ForceIPv4 "true"' "$PROJECT_DIR/linux/lib/apt.sh"
     [ "$status" -eq 0 ]
 
-    run grep -n "apt_install_with_retry()" "$PROJECT_DIR/linux/lib/install-helpers.sh"
+    run grep -n "rewrite_ubuntu_sources_for_mirror" "$PROJECT_DIR/linux/lib/apt.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n 'timeout "\$timeout_seconds"' "$PROJECT_DIR/linux/lib/apt.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -n "apt_install_with_retry()" "$PROJECT_DIR/linux/lib/apt.sh"
     [ "$status" -eq 0 ]
 }
 

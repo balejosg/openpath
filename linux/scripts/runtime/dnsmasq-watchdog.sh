@@ -156,7 +156,8 @@ recover_integrity() {
 
     # Try to reinstall package if it is installed
     if dpkg -s openpath-dnsmasq >/dev/null 2>&1; then
-        if DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y openpath-dnsmasq >/dev/null 2>&1; then
+        if DEBIAN_FRONTEND=noninteractive apt_install_with_retry "openpath-dnsmasq reinstall" \
+            apt-get install --reinstall -y openpath-dnsmasq >/dev/null 2>&1; then
             log "[INTEGRITY] Recovered from deb package"
             generate_integrity_hashes
             return 0
