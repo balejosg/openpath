@@ -130,6 +130,11 @@ describe('repository verification contract', () => {
     );
     assert.match(
       windowsRunner,
+      /Trying Firefox Developer Edition because Nightly is unavailable\./,
+      'Windows student-policy runner should verify the Nightly binary exists instead of trusting the Chocolatey exit code'
+    );
+    assert.match(
+      windowsRunner,
       /Only Firefox Release was found/,
       'Windows student-policy runner should reject Release-only runners because unsigned Selenium XPIs will not load'
     );

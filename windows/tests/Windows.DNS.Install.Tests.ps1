@@ -31,7 +31,9 @@ Describe "DNS Module - Install Contracts" {
             Assert-ContentContainsAll -Content $content -Needles @(
                 '$installerVersion = "2.2.1"',
                 'https://downloads.sourceforge.net/project/acrylic/Acrylic/$installerVersion/Acrylic-Portable.zip',
-                'https://sourceforge.net/projects/acrylic/files/Acrylic/$installerVersion/Acrylic-Portable.zip/download'
+                'https://sourceforge.net/projects/acrylic/files/Acrylic/$installerVersion/Acrylic-Portable.zip/download',
+                'https://master.dl.sourceforge.net/project/acrylic/Acrylic/$installerVersion/Acrylic-Portable.zip?viasf=1',
+                'https://sourceforge.net/projects/acrylic/files/Acrylic/$installerVersion/Acrylic.exe/download'
             )
         }
 
@@ -46,6 +48,8 @@ Describe "DNS Module - Install Contracts" {
                 'ProgramData\chocolatey\lib\acrylic-dns-proxy',
                 'Get-ChildItem -Path $searchRoot -Filter ''AcrylicService.exe'' -Recurse',
                 'Register-AcrylicServiceFromPath -AcrylicPath $acrylicPath',
+                'Acrylic DNS Proxy installed successfully via executable installer',
+                'Chocolatey fallback completed with exit code $chocoExitCode but AcrylicService.exe was not found',
                 'Acrylic DNS Proxy installed successfully via Chocolatey'
             )
         }

@@ -736,11 +736,21 @@ function Ensure-FirefoxAndGeckodriver {
     if (-not (Get-FirefoxBinaryPath)) {
         choco install firefox-nightly --pre --no-progress -y | Out-Host
         if ($LASTEXITCODE -ne 0) {
-            Write-DiagnosticNote "Firefox Nightly install failed with exit $LASTEXITCODE; trying Firefox Developer Edition."
-            choco install firefox-dev --pre --no-progress -y | Out-Host
-            if ($LASTEXITCODE -ne 0) {
-                Write-DiagnosticNote "Firefox Developer Edition install failed with exit $LASTEXITCODE."
-            }
+            Write-DiagnosticNote "Firefox Nightly install failed with exit $LASTEXITCODE."
+        }
+        elseif (-not (Get-FirefoxBinaryPath)) {
+            Write-DiagnosticNote 'Firefox Nightly install completed without a usable Nightly binary.'
+        }
+    }
+
+    if (-not (Get-FirefoxBinaryPath)) {
+        Write-DiagnosticNote 'Trying Firefox Developer Edition because Nightly is unavailable.'
+        choco install firefox-dev --pre --no-progress -y | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            Write-DiagnosticNote "Firefox Developer Edition install failed with exit $LASTEXITCODE."
+        }
+        elseif (-not (Get-FirefoxBinaryPath)) {
+            Write-DiagnosticNote 'Firefox Developer Edition install completed without a usable Developer Edition binary.'
         }
     }
 

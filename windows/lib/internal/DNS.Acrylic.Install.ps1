@@ -114,6 +114,12 @@ function Install-AcrylicDNS {
     $installerVersion = "2.2.1"
     $installerUrl = "https://downloads.sourceforge.net/project/acrylic/Acrylic/$installerVersion/Acrylic-Portable.zip"
     $installerFallbackUrl = "https://sourceforge.net/projects/acrylic/files/Acrylic/$installerVersion/Acrylic-Portable.zip/download"
+    $installerMirrorUrl = "https://master.dl.sourceforge.net/project/acrylic/Acrylic/$installerVersion/Acrylic-Portable.zip?viasf=1"
+    $executableInstallerUrls = @(
+        "https://downloads.sourceforge.net/project/acrylic/Acrylic/$installerVersion/Acrylic.exe",
+        "https://sourceforge.net/projects/acrylic/files/Acrylic/$installerVersion/Acrylic.exe/download",
+        "https://master.dl.sourceforge.net/project/acrylic/Acrylic/$installerVersion/Acrylic.exe?viasf=1"
+    )
     $tempDir = "$env:TEMP\acrylic-install"
     $installDir = "${env:ProgramFiles(x86)}\Acrylic DNS Proxy"
 
@@ -127,7 +133,7 @@ function Install-AcrylicDNS {
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
         $downloadError = $null
-        foreach ($candidateUrl in @($installerUrl, $installerFallbackUrl)) {
+        foreach ($candidateUrl in @($installerUrl, $installerFallbackUrl, $installerMirrorUrl)) {
             try {
                 if (Test-Path $zipPath) {
                     Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
@@ -142,7 +148,36 @@ function Install-AcrylicDNS {
             }
         }
 
-        if ($downloadError) { throw $downloadError }
+        if ($downloadError) {
+            $executableInstallError = $null
+            $exePath = "$tempDir\Acrylic.exe"
+            foreach ($candidateUrl in $executableInstallerUrls) {
+                try {
+                    if (Test-Path $exePath) {
+                        Remove-Item $exePath -Force -ErrorAction SilentlyContinue
+                    }
+                    Invoke-AcrylicPortableDownload -Url $candidateUrl -DestinationPath $exePath
+                    & $exePath /S
+                    $exeExitCode = $LASTEXITCODE
+                    if ($exeExitCode -ne 0) {
+                        throw "Acrylic executable installer exited with code $exeExitCode"
+                    }
+                    Start-Sleep -Seconds 2
+                    $acrylicPath = Get-AcrylicPath
+                    if ($acrylicPath -and (Register-AcrylicServiceFromPath -AcrylicPath $acrylicPath) -and (Test-AcrylicInstalled)) {
+                        Write-OpenPathLog "Acrylic DNS Proxy installed successfully via executable installer"
+                        return $true
+                    }
+                    throw "Acrylic direct executable install did not produce AcrylicService.exe"
+                }
+                catch {
+                    $executableInstallError = $_
+                    Write-OpenPathLog "Acrylic executable install failed from ${candidateUrl}: $executableInstallError" -Level WARN
+                }
+            }
+            if ($executableInstallError) { throw $executableInstallError }
+            throw $downloadError
+        }
 
         Write-OpenPathLog "Extracting..."
         Expand-Archive -Path $zipPath -DestinationPath $tempDir -Force
@@ -179,6 +214,7 @@ function Install-AcrylicDNS {
                     Write-OpenPathLog "Acrylic DNS Proxy installed successfully via Chocolatey"
                     return $true
                 }
+                Write-OpenPathLog "Chocolatey fallback completed with exit code $chocoExitCode but AcrylicService.exe was not found" -Level WARN
             }
             Write-OpenPathLog "Chocolatey fallback failed with exit code $chocoExitCode" -Level ERROR
         }
