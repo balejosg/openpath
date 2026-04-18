@@ -74,4 +74,34 @@ await describe('request api helpers', async () => {
       id: 'req-1',
     });
   });
+
+  await test('submitBlockedDomainRequest reports missing native request configuration clearly', async () => {
+    const result = await submitBlockedDomainRequest(
+      {
+        domain: 'example.com',
+        reason: 'needed for class',
+      },
+      {
+        buildBlockedDomainSubmitBody: (input) => input,
+        getClientVersion: () => '1.2.3',
+        getRequestApiEndpoints: () => [],
+        loadRequestConfig: () =>
+          Promise.resolve({
+            fallbackApiUrls: [],
+            enableRequests: true,
+            requestApiUrl: '',
+            requestTimeout: 1000,
+          }),
+        sendNativeMessage: () => {
+          throw new Error('Native host should not be called without request endpoints');
+        },
+      }
+    );
+
+    assert.deepEqual(result, {
+      success: false,
+      error:
+        'Configuracion incompleta: Firefox no recibio la URL de API del host nativo de OpenPath',
+    });
+  });
 });

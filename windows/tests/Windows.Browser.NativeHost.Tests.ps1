@@ -169,6 +169,18 @@ Describe "Browser Module - Native Host" {
             )
         }
 
+        It "Stores classroom identity in native host state for request diagnostics" {
+            $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"
+            $nativeHostContent = Get-Content $nativeHostModulePath -Raw
+
+            Assert-ContentContainsAll -Content $nativeHostContent -Needles @(
+                '$classroom = if (',
+                '$classroomId = if (',
+                'classroom = $classroom',
+                'classroomId = $classroomId'
+            )
+        }
+
         It "Accepts only complete classroom request setup for native host registration" {
             $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"
             Import-Module $nativeHostModulePath -Force -Global -ErrorAction Stop

@@ -203,12 +203,36 @@ function Sync-OpenPathFirefoxNativeHostState {
         ''
     }
 
+    $classroom = if (
+        $Config -and
+        $Config.PSObject.Properties['classroom'] -and
+        $Config.classroom
+    ) {
+        [string]$Config.classroom
+    }
+    else {
+        ''
+    }
+
+    $classroomId = if (
+        $Config -and
+        $Config.PSObject.Properties['classroomId'] -and
+        $Config.classroomId
+    ) {
+        [string]$Config.classroomId
+    }
+    else {
+        ''
+    }
+
     $statePath = Get-OpenPathFirefoxNativeStatePath
     $stateJson = [ordered]@{
         machineName = $machineName
         whitelistUrl = $whitelistUrl
         apiUrl = $apiUrl
         requestApiUrl = $apiUrl
+        classroom = $classroom
+        classroomId = $classroomId
         version = $version
         syncedAt = (Get-Date -Format 'o')
     } | ConvertTo-Json -Depth 8

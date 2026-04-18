@@ -32,6 +32,9 @@ function sanitizeStoredRequestConfig(
   }
 
   const sanitized: Partial<RequestConfig> = { ...incoming };
+  const hasNativeEndpoint =
+    (typeof nativeFallback.requestApiUrl === 'string' && nativeFallback.requestApiUrl.length > 0) ||
+    (nativeFallback.fallbackApiUrls?.length ?? 0) > 0;
   if (typeof incoming.requestApiUrl === 'string') {
     const normalizedRequestApiUrl = normalizeApiUrl(incoming.requestApiUrl);
     if (normalizedRequestApiUrl.length > 0) {
@@ -52,6 +55,10 @@ function sanitizeStoredRequestConfig(
     } else {
       sanitized.fallbackApiUrls = [];
     }
+  }
+
+  if (hasNativeEndpoint && incoming.enableRequests === false) {
+    delete sanitized.enableRequests;
   }
 
   return sanitized;

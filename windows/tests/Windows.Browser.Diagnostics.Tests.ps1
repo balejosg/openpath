@@ -52,6 +52,9 @@ Describe "Browser Module - Diagnostics" {
                 'Native host actions helper readable:',
                 'Native host whitelist readable:',
                 'Native host state readable:',
+                'Native host request API configured:',
+                'Native host whitelist token configured:',
+                'Native host request setup complete:',
                 'Native host update task present:',
                 'Native host update task user access:'
             )

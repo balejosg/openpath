@@ -92,7 +92,8 @@ export async function submitBlockedDomainRequest(
   if (!requestConfig.enableRequests || endpoints.length === 0) {
     return {
       success: false,
-      error: 'Configuracion incompleta para solicitar dominios',
+      error:
+        'Configuracion incompleta: Firefox no recibio la URL de API del host nativo de OpenPath',
     };
   }
 
