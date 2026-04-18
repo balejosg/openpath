@@ -96,6 +96,43 @@ verify_firefox_policy_contract() {
     return 0
 }
 
+read_browser_setup_api_base_url() {
+    local api_url_conf="${OPENPATH_API_URL_CONF:-$ETC_CONFIG_DIR/api-url.conf}"
+    local api_url=""
+
+    api_url="$(read_single_line_file "$api_url_conf" 2>/dev/null || true)"
+    api_url="${api_url%/}"
+    if [ -z "$api_url" ]; then
+        return 1
+    fi
+
+    printf '%s\n' "$api_url"
+}
+
+read_firefox_policy_install_url() {
+    if declare -F read_firefox_managed_extension_install_url >/dev/null 2>&1; then
+        read_firefox_managed_extension_install_url "$FIREFOX_POLICIES" "$FIREFOX_EXTENSION_ID"
+        return $?
+    fi
+
+    run_browser_json_helper \
+        read-firefox-managed-install-url \
+        --policies-file "$FIREFOX_POLICIES" \
+        --extension-id "$FIREFOX_EXTENSION_ID"
+}
+
+verify_firefox_managed_api_payload() {
+    local api_base_url=""
+    local install_url=""
+    local expected_install_url=""
+
+    api_base_url="$(read_browser_setup_api_base_url)" || return 1
+    install_url="$(read_firefox_policy_install_url 2>/dev/null || true)"
+    expected_install_url="${api_base_url}/api/extensions/firefox/openpath.xpi"
+
+    [ "$install_url" = "$expected_install_url" ]
+}
+
 verify_firefox_extension_payload() {
     local extensions_root=""
     local unpacked_extension_dir=""
@@ -108,6 +145,10 @@ verify_firefox_extension_payload() {
     fi
 
     if [ -f "$FIREFOX_RELEASE_SOURCE/metadata.json" ]; then
+        return 0
+    fi
+
+    if verify_firefox_managed_api_payload; then
         return 0
     fi
 

@@ -25,6 +25,16 @@ run_browser_json_helper() {
     python3 "$helper_path" "$@"
 }
 
+read_firefox_managed_extension_install_url() {
+    local policies_file="$1"
+    local ext_id="$2"
+
+    run_browser_json_helper \
+        read-firefox-managed-install-url \
+        --policies-file "$policies_file" \
+        --extension-id "$ext_id"
+}
+
 ensure_firefox_policies_dir() {
     mkdir -p "$(dirname "$FIREFOX_POLICIES")"
 }

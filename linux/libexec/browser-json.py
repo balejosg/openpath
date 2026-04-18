@@ -110,6 +110,37 @@ def cmd_read_json_field(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_read_firefox_managed_install_url(args: argparse.Namespace) -> int:
+    policies_path = Path(args.policies_file)
+    extension_id = str(args.extension_id or "").strip()
+    if not extension_id:
+        return 2
+
+    try:
+        policies = json.loads(policies_path.read_text(encoding="utf-8"))
+    except Exception:
+        return 1
+
+    policy_root = policies.get("policies")
+    if not isinstance(policy_root, dict):
+        return 2
+
+    extension_settings = policy_root.get("ExtensionSettings")
+    if not isinstance(extension_settings, dict):
+        return 2
+
+    managed_entry = extension_settings.get(extension_id)
+    if not isinstance(managed_entry, dict):
+        return 2
+
+    install_url = str(managed_entry.get("install_url", "")).strip()
+    if not install_url:
+        return 2
+
+    print(install_url)
+    return 0
+
+
 def cmd_resolve_firefox_release_policy(args: argparse.Namespace) -> int:
     release_dir = Path(args.release_dir)
     metadata_path = release_dir / "metadata.json"
@@ -309,6 +340,11 @@ def build_parser() -> argparse.ArgumentParser:
     read_field.add_argument("--json-file", required=True)
     read_field.add_argument("--field", required=True)
     read_field.set_defaults(func=cmd_read_json_field)
+
+    managed_install_url = subparsers.add_parser("read-firefox-managed-install-url")
+    managed_install_url.add_argument("--policies-file", required=True)
+    managed_install_url.add_argument("--extension-id", required=True)
+    managed_install_url.set_defaults(func=cmd_read_firefox_managed_install_url)
 
     release_policy = subparsers.add_parser("resolve-firefox-release-policy")
     release_policy.add_argument("--release-dir", required=True)
