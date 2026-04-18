@@ -263,6 +263,12 @@ load 'test_helper'
     run grep -nF "Restart-AcrylicServiceForE2E -Context 'restoring sinkhole hosts' | Out-Null" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
     [ "$status" -eq 0 ]
 
+    run grep -nF "Stop-Service -Name 'AcrylicDNSProxySvc' -Force -ErrorAction Stop" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "WaitForStatus('Running', [TimeSpan]::FromSeconds(20))" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
+
     run grep -nF "Acrylic service restart failed while \${Context}" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
     [ "$status" -eq 0 ]
 }

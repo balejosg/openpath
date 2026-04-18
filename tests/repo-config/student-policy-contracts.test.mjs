@@ -110,7 +110,7 @@ describe('repository verification contract', () => {
     );
   });
 
-  test('windows student policy runner resolves installed Firefox before provisioning fallbacks', () => {
+  test('windows student policy runner requires unsigned-addons-capable Firefox before Selenium', () => {
     const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
 
     assert.match(
@@ -125,13 +125,17 @@ describe('repository verification contract', () => {
     );
     assert.match(
       windowsRunner,
-      /choco install firefox --no-progress -y/,
-      'Windows student-policy runner should fall back to Firefox Release when Nightly provisioning is unavailable'
+      /choco install firefox-dev --pre --no-progress -y/,
+      'Windows student-policy runner should try Firefox Developer Edition when Nightly provisioning is unavailable'
     );
     assert.match(
       windowsRunner,
-      /Mozilla Firefox\\firefox\.exe/,
-      'Windows student-policy runner should accept preinstalled Firefox Release on GitHub runners'
+      /Only Firefox Release was found/,
+      'Windows student-policy runner should reject Release-only runners because unsigned Selenium XPIs will not load'
+    );
+    assert.ok(
+      !windowsRunner.includes('choco install firefox --no-progress -y'),
+      'Windows student-policy runner should not fall back to Firefox Release for unsigned extension tests'
     );
     assert.match(
       windowsRunner,

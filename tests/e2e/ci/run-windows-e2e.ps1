@@ -482,18 +482,36 @@ function Restart-AcrylicServiceForE2E {
         [switch]$Required
     )
 
-    try {
-        Restart-Service -Name 'AcrylicDNSProxySvc' -ErrorAction Stop
-        return $true
-    }
-    catch {
-        if ($Required) {
-            Fail-Step "Acrylic service restart failed while $Context." $_
-        }
+    $lastError = $null
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        try {
+            $service = Get-Service -Name 'AcrylicDNSProxySvc' -ErrorAction Stop
+            if ($service.Status -ne 'Stopped') {
+                Stop-Service -Name 'AcrylicDNSProxySvc' -Force -ErrorAction Stop
+                $service.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(20))
+            }
 
-        Write-Host "WARN: Acrylic service restart failed while ${Context}: $($_.Exception.Message)"
-        return $false
+            Start-Service -Name 'AcrylicDNSProxySvc' -ErrorAction Stop
+            $service = Get-Service -Name 'AcrylicDNSProxySvc' -ErrorAction Stop
+            $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(20))
+            return $true
+        }
+        catch {
+            $lastError = $_
+            if ($attempt -lt 3) {
+                Write-Host "WARN: Acrylic service restart failed while ${Context} on attempt ${attempt}: $($_.Exception.Message)"
+                Start-Sleep -Seconds (2 * $attempt)
+                continue
+            }
+        }
     }
+
+    if ($Required) {
+        Fail-Step "Acrylic service restart failed while $Context." $lastError
+    }
+
+    Write-Host "WARN: Acrylic service restart failed while ${Context}: $($lastError.Exception.Message)"
+    return $false
 }
 
 function Test-SinkholeBlocking {

@@ -25,6 +25,44 @@ void describe('Request API tests - basic HTTP behavior', async () => {
       const corsHeader = response.headers.get('access-control-allow-origin');
       assert.ok(corsHeader !== null && corsHeader !== '');
     });
+
+    await test('allows browser extension origins to submit public domain requests', async () => {
+      const origin = 'moz-extension://f8b7c6d5-1111-4222-8333-444455556666';
+      const response = await fetch(`${getApiUrl()}/api/requests/submit`, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: origin,
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'content-type',
+        },
+      });
+
+      assert.strictEqual(response.status, 204);
+      assert.strictEqual(response.headers.get('access-control-allow-origin'), origin);
+    });
+
+    await test('allows Chromium extension origins to submit public domain requests', async () => {
+      const origin = 'chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+      const response = await fetch(`${getApiUrl()}/api/requests/auto`, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: origin,
+          'Access-Control-Request-Method': 'POST',
+          'Access-Control-Request-Headers': 'content-type',
+        },
+      });
+
+      assert.strictEqual(response.status, 204);
+      assert.strictEqual(response.headers.get('access-control-allow-origin'), origin);
+    });
+
+    await test('does not allow browser extension origins on unrelated routes', async () => {
+      const response = await fetch(`${getApiUrl()}/health`, {
+        headers: { Origin: 'moz-extension://f8b7c6d5-1111-4222-8333-444455556666' },
+      });
+
+      assert.strictEqual(response.headers.get('access-control-allow-origin'), null);
+    });
   });
 
   await describe('Error Handling', async () => {

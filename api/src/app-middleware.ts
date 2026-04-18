@@ -28,6 +28,7 @@ export function registerAppMiddleware(
   }
 
   registerSecurityHeaders(app, runtimeConfig);
+  registerExtensionRequestCors(app, runtimeConfig);
   registerCors(app, runtimeConfig);
   registerRateLimits(app, runtimeConfig);
 
@@ -107,6 +108,39 @@ function registerCors(app: express.Express, runtimeConfig: Config): void {
       credentials: true,
     })
   );
+}
+
+function registerExtensionRequestCors(app: express.Express, runtimeConfig: Config): void {
+  const corsOrigins = runtimeConfig.corsAllowedOrigins;
+
+  app.use(
+    ['/api/requests/submit', '/api/requests/auto'],
+    cors({
+      origin(origin, callback) {
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+
+        callback(null, corsOrigins.includes(origin) || isTrustedExtensionOrigin(origin));
+      },
+      methods: ['POST', 'OPTIONS'],
+      allowedHeaders: ['Content-Type'],
+      credentials: false,
+    })
+  );
+}
+
+function isTrustedExtensionOrigin(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    return (
+      (parsed.protocol === 'moz-extension:' || parsed.protocol === 'chrome-extension:') &&
+      parsed.hostname.length > 0
+    );
+  } catch {
+    return false;
+  }
 }
 
 function registerRateLimits(app: express.Express, runtimeConfig: Config): void {

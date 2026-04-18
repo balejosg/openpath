@@ -143,7 +143,19 @@ function Quote-Argument {
     '"' + $Value.Replace('"', '""') + '"'
 }
 
+function Get-FirefoxCandidateRoots {
+    @(
+        $env:ProgramFiles,
+        ${env:ProgramFiles(x86)},
+        $env:LOCALAPPDATA
+    ) | Where-Object { $_ }
+}
+
 function Get-FirefoxBinaryPath {
+    param(
+        [switch]$AllowRelease
+    )
+
     if ($script:FirefoxBinaryPath) {
         return $script:FirefoxBinaryPath
     }
@@ -158,26 +170,29 @@ function Get-FirefoxBinaryPath {
         throw "OPENPATH_FIREFOX_BINARY must point to firefox.exe: $overridePath"
     }
 
-    $candidateRoots = @(
-        $env:ProgramFiles,
-        ${env:ProgramFiles(x86)},
-        $env:LOCALAPPDATA
-    ) | Where-Object { $_ }
+    $candidateRoots = Get-FirefoxCandidateRoots
 
     $candidateRelativePaths = @(
         'Firefox Nightly\firefox.exe',
         'Firefox Developer Edition\firefox.exe',
-        'Mozilla Firefox\firefox.exe',
         'Programs\Firefox Nightly\firefox.exe',
-        'Programs\Firefox Developer Edition\firefox.exe',
-        'Programs\Mozilla Firefox\firefox.exe'
+        'Programs\Firefox Developer Edition\firefox.exe'
     )
+
+    if ($AllowRelease) {
+        $candidateRelativePaths += @(
+            'Mozilla Firefox\firefox.exe',
+            'Programs\Mozilla Firefox\firefox.exe'
+        )
+    }
 
     foreach ($root in $candidateRoots) {
         foreach ($relativePath in $candidateRelativePaths) {
             $candidate = Join-Path $root $relativePath
             if (Test-Path $candidate) {
-                $script:FirefoxBinaryPath = $candidate
+                if (-not $AllowRelease) {
+                    $script:FirefoxBinaryPath = $candidate
+                }
                 return $candidate
             }
         }
@@ -721,17 +736,23 @@ function Ensure-FirefoxAndGeckodriver {
     if (-not (Get-FirefoxBinaryPath)) {
         choco install firefox-nightly --pre --no-progress -y | Out-Host
         if ($LASTEXITCODE -ne 0) {
-            Write-DiagnosticNote "Firefox Nightly install failed with exit $LASTEXITCODE; trying Firefox Release."
+            Write-DiagnosticNote "Firefox Nightly install failed with exit $LASTEXITCODE; trying Firefox Developer Edition."
+            choco install firefox-dev --pre --no-progress -y | Out-Host
+            if ($LASTEXITCODE -ne 0) {
+                Write-DiagnosticNote "Firefox Developer Edition install failed with exit $LASTEXITCODE."
+            }
         }
     }
 
     if (-not (Get-FirefoxBinaryPath)) {
-        choco install firefox --no-progress -y | Out-Host
-        Assert-LastExitCode 'choco install firefox'
+        $releasePath = Get-FirefoxBinaryPath -AllowRelease
+        if ($releasePath) {
+            throw "Only Firefox Release was found at $releasePath; the student-policy Selenium suite requires Nightly or Developer Edition so unsigned test extensions can load."
+        }
     }
 
     if (-not (Get-FirefoxBinaryPath)) {
-        throw 'Firefox executable not found after Chocolatey provisioning.'
+        throw 'Firefox Nightly or Developer Edition executable not found after Chocolatey provisioning.'
     }
 
     if (-not (Get-Command geckodriver.exe -ErrorAction SilentlyContinue)) {
