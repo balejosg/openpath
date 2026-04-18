@@ -101,7 +101,7 @@ jobs:
             linux_bound=true
           fi
 
-          if echo "$changed_files" | grep -Eq '^(windows/|tests/e2e/Windows-E2E\.Tests\.ps1|\.github/workflows/ci\.yml$)'; then
+          if echo "$changed_files" | grep -Eq '^(windows/|tests/e2e/Windows-E2E\.Tests\.ps1|tests/e2e/ci/run-windows-[^/]+\.ps1|\.github/workflows/ci\.yml$)'; then
             windows_bound=true
           fi
 

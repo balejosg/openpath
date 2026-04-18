@@ -279,9 +279,9 @@ test('required Windows CI runs Pester in an untracked child host without success
   );
   assert.ok(
     ciWorkflow.includes(
-      "grep -Eq '^(windows/|tests/e2e/Windows-E2E\\.Tests\\.ps1|\\.github/workflows/ci\\.yml$)'"
+      "grep -Eq '^(windows/|tests/e2e/Windows-E2E\\.Tests\\.ps1|tests/e2e/ci/run-windows-[^/]+\\.ps1|\\.github/workflows/ci\\.yml$)'"
     ),
-    'ci.yml should only route Windows-specific paths to the Windows lane'
+    'ci.yml should route Windows code and Windows CI helpers to the Windows lane'
   );
 
   assert.ok(
