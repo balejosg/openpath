@@ -143,6 +143,52 @@ function Invoke-IsolatedPesterHost {
     }
 }
 
+function Stop-DescendantProcesses {
+    param(
+        [int]$RootProcessId = $PID
+    )
+
+    $allProcesses = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+    if ($allProcesses.Count -eq 0) {
+        return
+    }
+
+    $childrenByParent = @{}
+    foreach ($proc in $allProcesses) {
+        $parentProcessId = [int]$proc.ParentProcessId
+        if (-not $childrenByParent.ContainsKey($parentProcessId)) {
+            $childrenByParent[$parentProcessId] = [System.Collections.Generic.List[object]]::new()
+        }
+
+        $childrenByParent[$parentProcessId].Add($proc)
+    }
+
+    $pending = [System.Collections.Generic.Queue[int]]::new()
+    $pending.Enqueue($RootProcessId)
+    $descendants = [System.Collections.Generic.List[object]]::new()
+
+    while ($pending.Count -gt 0) {
+        $parentProcessId = $pending.Dequeue()
+        if (-not $childrenByParent.ContainsKey($parentProcessId)) {
+            continue
+        }
+
+        foreach ($child in $childrenByParent[$parentProcessId]) {
+            $descendants.Add($child)
+            $pending.Enqueue([int]$child.ProcessId)
+        }
+    }
+
+    if ($descendants.Count -eq 0) {
+        return
+    }
+
+    Write-Host ("Stopping lingering descendant processes: {0}" -f $descendants.Count)
+    foreach ($proc in @($descendants | Sort-Object CreationDate -Descending)) {
+        Stop-Process -Id ([int]$proc.ProcessId) -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-WindowsPesterSuite {
     param(
         [Parameter(Mandatory = $true)]
@@ -216,6 +262,8 @@ function Invoke-WindowsPesterSuite {
             $jobs | Stop-Job -ErrorAction SilentlyContinue
             $jobs | Remove-Job -Force -ErrorAction SilentlyContinue
         }
+
+        Stop-DescendantProcesses -RootProcessId $PID
     }
 }
 
