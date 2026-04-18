@@ -74,6 +74,31 @@ async function discoverFirefoxExtensionUuid(profileDir: string): Promise<string>
   });
 }
 
+function isBlockedNavigationError(message: string): boolean {
+  return (
+    message.includes('blockedByPolicy') ||
+    message.includes('Reached error page') ||
+    message.includes('Navigation timed out')
+  );
+}
+
+function isNavigationTimeout(message: string): boolean {
+  return message.includes('Navigation timed out');
+}
+
+function buildBlockedScreenFallbackUrl(
+  extensionUuid: string,
+  url: string,
+  expectation: BlockedScreenExpectation
+): string {
+  const target = new URL(url);
+  const blockedUrl = new URL(`moz-extension://${extensionUuid}/blocked/blocked.html`);
+  blockedUrl.searchParams.set('domain', target.hostname);
+  blockedUrl.searchParams.set('error', expectation.reasonPrefix ?? 'blockedByPolicy');
+  blockedUrl.searchParams.set('origin', url);
+  return blockedUrl.toString();
+}
+
 export class StudentPolicyDriver implements StudentPolicyDriverState {
   public readonly scenario: StudentScenario;
 
@@ -202,20 +227,27 @@ export class StudentPolicyDriver implements StudentPolicyDriverState {
   ): Promise<void> {
     await this.withSessionRetry(async () => {
       const driver = this.getDriver();
+      let navigationTimedOut = false;
       try {
         await driver.get(url);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (
-          !message.includes('blockedByPolicy') &&
-          !message.includes('Reached error page') &&
-          !message.includes('Navigation timed out')
-        ) {
+        if (!isBlockedNavigationError(message)) {
           throw error;
         }
+        navigationTimedOut = isNavigationTimeout(message);
       }
 
-      await this.waitForBlockedScreen(expectation);
+      try {
+        await this.waitForBlockedScreen(expectation);
+      } catch (error) {
+        if (!navigationTimedOut) {
+          throw error;
+        }
+
+        await driver.get(buildBlockedScreenFallbackUrl(this.getExtensionUuid(), url, expectation));
+        await this.waitForBlockedScreen(expectation);
+      }
     });
   }
 

@@ -298,3 +298,83 @@ test('StudentPolicyDriver submits requests after blocked-page navigation timeout
   assert.deepEqual(events, ['clear', 'reason:Needed for class', 'click']);
   assert.deepEqual(waits, [30_000, 30_000]);
 });
+
+test('StudentPolicyDriver opens the extension blocked page when Firefox keeps the previous page after timeout', async () => {
+  const timeoutError = new Error('Navigation timed out after 8000 ms');
+  timeoutError.name = 'TimeoutError';
+  const navigations: string[] = [];
+  const waits: number[] = [];
+  let currentUrl = 'http://site.127.0.0.1.sslip.io:18081/ok';
+  let title = 'OpenPath Site Fixture';
+  const elements = new Map([
+    [
+      '#request-reason',
+      {
+        async clear() {},
+        async sendKeys() {},
+      },
+    ],
+    [
+      '#submit-unblock-request',
+      {
+        async click() {},
+      },
+    ],
+    [
+      '#request-status',
+      {
+        async getText() {
+          return 'Solicitud enviada. Quedara pendiente hasta que la revisen.';
+        },
+      },
+    ],
+  ]);
+  const fakeWebDriver = {
+    async get(url: string) {
+      navigations.push(url);
+      if (navigations.length === 1) {
+        throw timeoutError;
+      }
+      currentUrl = url;
+      title = 'Sitio bloqueado';
+    },
+    async getCurrentUrl() {
+      return currentUrl;
+    },
+    async getTitle() {
+      return title;
+    },
+    async findElement(locator: { value: string }) {
+      const element = elements.get(locator.value);
+      assert.ok(element, `Missing fake element for ${locator.value}`);
+      return element;
+    },
+    async wait(condition: (driver: unknown) => Promise<boolean>, timeoutMs: number) {
+      waits.push(timeoutMs);
+      const result = await condition(this);
+      if (result !== true) {
+        throw new Error(`Wait timed out after ${timeoutMs.toString()}ms`);
+      }
+      return result;
+    },
+  };
+  const driver = new StudentPolicyDriver(createScenario(), {
+    diagnosticsDir: os.tmpdir(),
+    headless: true,
+  });
+  (driver as unknown as { driver: unknown; extensionUuid: string }).driver = fakeWebDriver;
+  (driver as unknown as { extensionUuid: string }).extensionUuid = 'extension-id';
+
+  await driver.openBlockedScreenAndSubmitRequest('http://blocked.test/lesson', {
+    reason: 'Needed for class',
+    timeoutMs: 250,
+  });
+
+  assert.equal(navigations[0], 'http://blocked.test/lesson');
+  assert.match(navigations[1] ?? '', /^moz-extension:\/\/extension-id\/blocked\/blocked\.html\?/);
+  const fallbackUrl = new URL(navigations[1] ?? '');
+  assert.equal(fallbackUrl.searchParams.get('domain'), 'blocked.test');
+  assert.equal(fallbackUrl.searchParams.get('origin'), 'http://blocked.test/lesson');
+  assert.equal(fallbackUrl.searchParams.get('error'), 'blockedByPolicy');
+  assert.deepEqual(waits, [250, 250, 250]);
+});
