@@ -246,6 +246,102 @@ SHA256: ${'a'.repeat(64)}
       }
     });
 
+    await test('should find linux APT packages in the alternate suite when the configured suite is stale', async () => {
+      const pinnedVersion = '0.0.20260418214748';
+      const packagePayload = 'fake-linux-agent-package-from-unstable';
+      const packageSize = packagePayload.length;
+      const packagePath = `pool/main/o/openpath-dnsmasq/openpath-dnsmasq_${pinnedVersion}-1_all.deb`;
+      const originalFetch = globalThis.fetch;
+      const originalPinnedVersion = process.env.OPENPATH_LINUX_AGENT_VERSION;
+      const originalAptSuite = process.env.OPENPATH_LINUX_AGENT_APT_SUITE;
+
+      process.env.OPENPATH_LINUX_AGENT_VERSION = pinnedVersion;
+      process.env.OPENPATH_LINUX_AGENT_APT_SUITE = 'stable';
+      clearLinuxAgentAptMetadataCache();
+
+      globalThis.fetch = (async (
+        input: string | URL | Request,
+        init?: RequestInit
+      ): Promise<Response> => {
+        const url = input instanceof Request ? input.url : String(input);
+
+        if (url.endsWith('/dists/stable/main/binary-amd64/Packages')) {
+          return new Response(
+            `
+Package: openpath-dnsmasq
+Version: 4.1.25-1
+Filename: pool/main/o/openpath-dnsmasq/openpath-dnsmasq_4.1.25-1_all.deb
+Size: 588544
+SHA256: ${'b'.repeat(64)}
+`,
+            { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+          );
+        }
+
+        if (url.endsWith('/dists/unstable/main/binary-amd64/Packages')) {
+          return new Response(
+            `
+Package: openpath-dnsmasq
+Version: ${pinnedVersion}-1
+Filename: ${packagePath}
+Size: ${String(packageSize)}
+SHA256: ${'c'.repeat(64)}
+`,
+            { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
+          );
+        }
+
+        if (url.endsWith(`/${packagePath}`)) {
+          return new Response(packagePayload, {
+            status: 200,
+            headers: { 'Content-Type': 'application/vnd.debian.binary-package' },
+          });
+        }
+
+        return originalFetch(input, init);
+      }) as typeof fetch;
+
+      try {
+        const manifestResponse = await fetch(`${harness.apiUrl}/api/agent/linux/manifest`, {
+          headers: { Authorization: `Bearer ${machineToken}` },
+        });
+
+        assert.strictEqual(manifestResponse.status, 200);
+        const manifest = (await manifestResponse.json()) as {
+          downloadPath: string;
+          packageFileName: string;
+          sha256: string;
+          size: number;
+          version: string;
+        };
+
+        assert.strictEqual(manifest.version, pinnedVersion);
+        assert.strictEqual(manifest.packageFileName, `openpath-dnsmasq_${pinnedVersion}-1_all.deb`);
+        assert.strictEqual(manifest.sha256, 'c'.repeat(64));
+        assert.strictEqual(manifest.size, packageSize);
+
+        const packageResponse = await fetch(`${harness.apiUrl}${manifest.downloadPath}`, {
+          headers: { Authorization: `Bearer ${machineToken}` },
+        });
+
+        assert.strictEqual(packageResponse.status, 200);
+        assert.strictEqual(await packageResponse.text(), packagePayload);
+      } finally {
+        globalThis.fetch = originalFetch;
+        clearLinuxAgentAptMetadataCache();
+        if (originalPinnedVersion === undefined) {
+          delete process.env.OPENPATH_LINUX_AGENT_VERSION;
+        } else {
+          process.env.OPENPATH_LINUX_AGENT_VERSION = originalPinnedVersion;
+        }
+        if (originalAptSuite === undefined) {
+          delete process.env.OPENPATH_LINUX_AGENT_APT_SUITE;
+        } else {
+          process.env.OPENPATH_LINUX_AGENT_APT_SUITE = originalAptSuite;
+        }
+      }
+    });
+
     await test('should download a specific bridge package version when it is available', async () => {
       const bridgeVersion = '3.9.0';
       const { packageFilePath } = writeLinuxAgentPackage(

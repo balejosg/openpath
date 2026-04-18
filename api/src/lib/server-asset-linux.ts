@@ -38,6 +38,11 @@ export function normalizeLinuxAgentAptSuite(value: string | undefined): LinuxAge
   throw new Error(`Unsupported OPENPATH_LINUX_AGENT_APT_SUITE: ${suite}`);
 }
 
+function getLinuxAgentAptSuiteCandidates(value: string | undefined): LinuxAgentAptSuite[] {
+  const suite = normalizeLinuxAgentAptSuite(value);
+  return suite === 'stable' ? ['stable', 'unstable'] : ['unstable', 'stable'];
+}
+
 function buildAptPackagesUrl(aptRepoUrl: string, suite: LinuxAgentAptSuite): string {
   return `${aptRepoUrl.replace(/\/+$/, '')}/dists/${suite}/main/binary-amd64/Packages`;
 }
@@ -272,11 +277,32 @@ export async function buildLinuxAgentPackageManifestFromApt(
   configuredSuite = process.env.OPENPATH_LINUX_AGENT_APT_SUITE
 ): Promise<LinuxAgentPackageEntry | null> {
   const version = readLinuxAgentVersion();
-  const suite = normalizeLinuxAgentAptSuite(configuredSuite);
-  const manifest = await downloadAptPackagesManifest(aptRepoUrl, suite);
-  const packageEntry = findLinuxAgentAptPackage(manifest, version);
-  if (!packageEntry) {
+  let packageEntry: LinuxAgentAptPackageMetadata | null = null;
+  let matchedSuite: LinuxAgentAptSuite | null = null;
+
+  for (const suite of getLinuxAgentAptSuiteCandidates(configuredSuite)) {
+    const manifest = await downloadAptPackagesManifest(aptRepoUrl, suite);
+    packageEntry = findLinuxAgentAptPackage(manifest, version);
+    if (packageEntry) {
+      matchedSuite = suite;
+      break;
+    }
+  }
+
+  if (!packageEntry || !matchedSuite) {
+    logger.warn('Configured Linux agent version is absent from APT delivery suites', {
+      version,
+      configuredSuite: normalizeLinuxAgentAptSuite(configuredSuite),
+    });
     return null;
+  }
+
+  if (matchedSuite !== normalizeLinuxAgentAptSuite(configuredSuite)) {
+    logger.warn('Resolved Linux agent package from alternate APT suite', {
+      version,
+      configuredSuite: normalizeLinuxAgentAptSuite(configuredSuite),
+      matchedSuite,
+    });
   }
 
   const minSupportedVersion = process.env.OPENPATH_LINUX_AGENT_MIN_SUPPORTED_VERSION?.trim();
@@ -305,9 +331,16 @@ export async function downloadLinuxAgentPackageFromApt(
   version: string,
   configuredSuite = process.env.OPENPATH_LINUX_AGENT_APT_SUITE
 ): Promise<{ body: Buffer; fileName: string } | null> {
-  const suite = normalizeLinuxAgentAptSuite(configuredSuite);
-  const manifest = await downloadAptPackagesManifest(aptRepoUrl, suite);
-  const packageEntry = findLinuxAgentAptPackage(manifest, version);
+  let packageEntry: LinuxAgentAptPackageMetadata | null = null;
+
+  for (const suite of getLinuxAgentAptSuiteCandidates(configuredSuite)) {
+    const manifest = await downloadAptPackagesManifest(aptRepoUrl, suite);
+    packageEntry = findLinuxAgentAptPackage(manifest, version);
+    if (packageEntry) {
+      break;
+    }
+  }
+
   if (!packageEntry) {
     return null;
   }
