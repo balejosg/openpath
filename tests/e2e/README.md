@@ -35,3 +35,7 @@ npm run test:installer:apt
 npm run test:student-policy:linux
 npm run test:student-policy:windows
 ```
+
+## Windows CI Timeout Note
+
+If the Windows Pester lane times out after `Run Windows Unit Tests` and `Complete job` have both succeeded, treat it as the documented hosted-runner teardown defect rather than a client regression. Use the successful Pester step plus the separate Windows E2E and Windows Student Policy workflows as release evidence until the platform behavior changes.
