@@ -43,6 +43,9 @@ Describe "DNS Module - Install Contracts" {
                 'Direct Acrylic install failed',
                 'Get-Command choco',
                 'upgrade acrylic-dns-proxy -y --no-progress',
+                'ProgramData\chocolatey\lib\acrylic-dns-proxy',
+                'Get-ChildItem -Path $searchRoot -Filter ''AcrylicService.exe'' -Recurse',
+                'Register-AcrylicServiceFromPath -AcrylicPath $acrylicPath',
                 'Acrylic DNS Proxy installed successfully via Chocolatey'
             )
         }

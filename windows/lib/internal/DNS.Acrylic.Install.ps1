@@ -2,19 +2,44 @@ function Get-AcrylicPath {
     $defaultPath = "${env:ProgramFiles(x86)}\Acrylic DNS Proxy"
     try {
         $config = Get-OpenPathConfig
-        if ($config.acrylicPath -and (Test-Path $config.acrylicPath)) {
+        if ($config.acrylicPath -and (Test-Path (Join-Path $config.acrylicPath 'AcrylicService.exe'))) {
             return $config.acrylicPath
         }
     }
     catch {
         Write-Debug "Config not available: $_"
     }
-    if (Test-Path $defaultPath) {
-        return $defaultPath
+
+    $candidatePaths = @(
+        $defaultPath,
+        "$env:ProgramFiles\Acrylic DNS Proxy",
+        "$env:ProgramData\chocolatey\lib\acrylic-dns-proxy\tools",
+        "$env:ProgramData\chocolatey\lib\acrylic-dns-proxy"
+    )
+
+    if ($env:ChocolateyInstall) {
+        $candidatePaths += @(
+            (Join-Path $env:ChocolateyInstall 'lib\acrylic-dns-proxy\tools'),
+            (Join-Path $env:ChocolateyInstall 'lib\acrylic-dns-proxy')
+        )
     }
-    $altPath = "$env:ProgramFiles\Acrylic DNS Proxy"
-    if (Test-Path $altPath) {
-        return $altPath
+
+    foreach ($candidatePath in @($candidatePaths | Where-Object { $_ } | Select-Object -Unique)) {
+        if (Test-Path (Join-Path $candidatePath 'AcrylicService.exe')) {
+            return $candidatePath
+        }
+    }
+
+    $searchRoots = @(
+        "$env:ProgramData\chocolatey\lib\acrylic-dns-proxy",
+        $(if ($env:ChocolateyInstall) { Join-Path $env:ChocolateyInstall 'lib\acrylic-dns-proxy' })
+    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+
+    foreach ($searchRoot in $searchRoots) {
+        $serviceExecutable = Get-ChildItem -Path $searchRoot -Filter 'AcrylicService.exe' -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($serviceExecutable) {
+            return $serviceExecutable.DirectoryName
+        }
     }
     return $null
 }
@@ -22,6 +47,24 @@ function Get-AcrylicPath {
 function Test-AcrylicInstalled {
     $path = Get-AcrylicPath
     return ($null -ne $path -and (Test-Path "$path\AcrylicService.exe"))
+}
+
+function Register-AcrylicServiceFromPath {
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][string]$AcrylicPath)
+
+    $servicePath = Join-Path $AcrylicPath 'AcrylicService.exe'
+    if (-not (Test-Path $servicePath)) { return $false }
+
+    $service = Get-Service -Name 'AcrylicDNSProxySvc' -ErrorAction SilentlyContinue
+    if (-not $service) {
+        $service = Get-Service -DisplayName '*Acrylic*' -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+    if ($service) { return $true }
+
+    & $servicePath /INSTALL 2>$null
+    Start-Sleep -Seconds 2
+    return $true
 }
 
 function Install-AcrylicDNS {
@@ -94,10 +137,8 @@ function Install-AcrylicDNS {
             Copy-Item "$tempDir\*" $installDir -Recurse -Force -Exclude "*.zip"
         }
         Write-OpenPathLog "Installing Acrylic service..."
-        $servicePath = "$installDir\AcrylicService.exe"
-        if (Test-Path $servicePath) {
-            & $servicePath /INSTALL 2>$null
-            Start-Sleep -Seconds 2
+        if (Test-Path (Join-Path $installDir 'AcrylicService.exe')) {
+            Register-AcrylicServiceFromPath -AcrylicPath $installDir | Out-Null
         }
         Write-OpenPathLog "Acrylic DNS Proxy installed successfully"
         return $true
@@ -113,7 +154,8 @@ function Install-AcrylicDNS {
             $validExitCodes = @(0, 1605, 1614, 1641, 3010)
             if ($validExitCodes -contains $chocoExitCode) {
                 Start-Sleep -Seconds 2
-                if (Test-AcrylicInstalled) {
+                $acrylicPath = Get-AcrylicPath
+                if ($acrylicPath -and (Register-AcrylicServiceFromPath -AcrylicPath $acrylicPath)) {
                     Write-OpenPathLog "Acrylic DNS Proxy installed successfully via Chocolatey"
                     return $true
                 }
