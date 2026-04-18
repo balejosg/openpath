@@ -54,7 +54,34 @@ function Write-OpenPathLog {
             Remove-Item -Force -ErrorAction SilentlyContinue
     }
 
-    Add-Content -Path $script:LogPath -Value $logEntry -Encoding UTF8
+    $logBytes = [System.Text.Encoding]::UTF8.GetBytes("$logEntry$([Environment]::NewLine)")
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        $stream = $null
+        try {
+            $stream = [System.IO.File]::Open(
+                $script:LogPath,
+                [System.IO.FileMode]::OpenOrCreate,
+                [System.IO.FileAccess]::Write,
+                [System.IO.FileShare]::ReadWrite
+            )
+            $stream.Seek(0, [System.IO.SeekOrigin]::End) | Out-Null
+            $stream.Write($logBytes, 0, $logBytes.Length)
+            break
+        }
+        catch {
+            if ($attempt -eq 5) {
+                Write-Warning "OpenPath log write failed after $attempt attempts: $_"
+            }
+            else {
+                Start-Sleep -Milliseconds (50 * $attempt)
+            }
+        }
+        finally {
+            if ($null -ne $stream) {
+                $stream.Dispose()
+            }
+        }
+    }
 
     switch ($Level) {
         "ERROR" { Write-Error $logEntry -ErrorAction Continue }

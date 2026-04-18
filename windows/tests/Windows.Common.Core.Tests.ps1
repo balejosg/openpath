@@ -54,6 +54,14 @@ Describe "Common Module" {
                 $lastLine | Should -Match "\[PID:\d+\]"
             }
         }
+
+        It "Appends with shared file access and retry tolerance" {
+            $systemModulePath = Join-Path $PSScriptRoot ".." "lib" "internal" "Common.System.ps1"
+            $content = Get-Content $systemModulePath -Raw
+            $content | Should -Match '\[System\.IO\.FileShare\]::ReadWrite'
+            $content | Should -Match 'for \(\$attempt = 1; \$attempt -le 5; \$attempt\+\+\)'
+            $content | Should -Not -Match 'Add-Content -Path \$script:LogPath'
+        }
     }
 
     Context "Get-PrimaryDNS" {
