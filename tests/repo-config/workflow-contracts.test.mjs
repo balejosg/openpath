@@ -446,6 +446,18 @@ test('required Windows CI runs Pester in an untracked child host without success
     'the isolated Pester runner should continue to execute the real Pester suite'
   );
   assert.ok(
+    windowsPesterRunner.includes('function Receive-CompletedStream'),
+    'the isolated Pester runner should use a bounded stream drain helper on timeout'
+  );
+  assert.ok(
+    windowsPesterRunner.includes('$Task.Wait($TimeoutMilliseconds)'),
+    'the isolated Pester runner should not block indefinitely waiting for stdout or stderr after timeout'
+  );
+  assert.ok(
+    windowsPesterRunner.includes('KillIssued=$killedProcess'),
+    'the isolated Pester runner should report whether the child process kill was issued on timeout'
+  );
+  assert.ok(
     windowsPesterRunner.includes(
       "throw 'Windows Pester suite did not produce windows-test-results.xml.'"
     ),

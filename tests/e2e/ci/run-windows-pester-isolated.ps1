@@ -37,6 +37,29 @@ function Invoke-IsolatedPesterHost {
         [int]$TimeoutSeconds
     )
 
+    function Receive-CompletedStream {
+        param(
+            [Parameter(Mandatory = $true)]
+            $Task,
+
+            [Parameter(Mandatory = $true)]
+            [string]$StreamName,
+
+            [int]$TimeoutMilliseconds = 5000
+        )
+
+        try {
+            if ($Task.Wait($TimeoutMilliseconds)) {
+                return $Task.GetAwaiter().GetResult()
+            }
+        }
+        catch {
+            return "<failed to read $StreamName stream: $($_.Exception.Message)>"
+        }
+
+        return "<$StreamName stream did not close within $TimeoutMilliseconds ms after process timeout>"
+    }
+
     $pwshPath = (Get-Command pwsh -ErrorAction Stop).Source
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $pwshPath
@@ -77,16 +100,27 @@ function Invoke-IsolatedPesterHost {
         $stderrTask = $process.StandardError.ReadToEndAsync()
 
         if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+            $killedProcess = $false
             try {
                 $process.Kill($true)
+                $killedProcess = $true
             }
             catch {
                 # Best effort; the Actions job timeout remains the outer guard.
             }
 
-            $stdout = $stdoutTask.GetAwaiter().GetResult()
-            $stderr = $stderrTask.GetAwaiter().GetResult()
-            throw "Isolated Windows Pester host timed out after $TimeoutSeconds seconds.`nSTDOUT:`n$stdout`nSTDERR:`n$stderr"
+            if ($killedProcess) {
+                try {
+                    [void]$process.WaitForExit(5000)
+                }
+                catch {
+                    # The timeout path must never hang while collecting diagnostics.
+                }
+            }
+
+            $stdout = Receive-CompletedStream -Task $stdoutTask -StreamName 'STDOUT'
+            $stderr = Receive-CompletedStream -Task $stderrTask -StreamName 'STDERR'
+            throw "Isolated Windows Pester host timed out after $TimeoutSeconds seconds. KillIssued=$killedProcess.`nSTDOUT:`n$stdout`nSTDERR:`n$stderr"
         }
 
         $stdout = $stdoutTask.GetAwaiter().GetResult()
