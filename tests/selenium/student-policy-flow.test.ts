@@ -11,6 +11,7 @@ import {
   type StudentScenario,
 } from './student-policy-flow.e2e';
 import { openAndExpectBlocked, submitBlockedScreenRequest } from './student-policy-driver-browser';
+import { buildBaselineWhitelistHosts } from './student-policy-scenarios';
 
 function createScenario(): StudentScenario {
   return {
@@ -147,6 +148,40 @@ test('buildWindowsHttpProbeCommand avoids exposing raw URLs to cmd quoting and e
   );
   assert.match(decodedCommand, /-UseBasicParsing/);
   assert.match(decodedCommand, /\| Out-Null/);
+});
+
+test('student policy baseline whitelists the native API hostname when it is policy-routable', () => {
+  const scenario = createScenario();
+  scenario.apiUrl = 'http://host.docker.internal:3101';
+
+  const targets = {
+    hosts: {
+      baseOnly: 'base-only.127.0.0.1.sslip.io',
+      alternateOnly: 'alternate-only.127.0.0.1.sslip.io',
+    },
+  };
+
+  const baseline = buildBaselineWhitelistHosts(scenario, targets as never);
+
+  assert.ok(baseline.restricted.includes('host.docker.internal'));
+  assert.ok(baseline.alternate.includes('host.docker.internal'));
+});
+
+test('student policy baseline ignores literal API addresses that cannot be DNS whitelist rules', () => {
+  const scenario = createScenario();
+  scenario.apiUrl = 'http://127.0.0.1:3201';
+
+  const targets = {
+    hosts: {
+      baseOnly: 'base-only.127.0.0.1.sslip.io',
+      alternateOnly: 'alternate-only.127.0.0.1.sslip.io',
+    },
+  };
+
+  const baseline = buildBaselineWhitelistHosts(scenario, targets as never);
+
+  assert.ok(!baseline.restricted.includes('127.0.0.1'));
+  assert.ok(!baseline.alternate.includes('127.0.0.1'));
 });
 
 test('openAndExpectBlocked treats navigation timeout as blocked navigation', async () => {

@@ -67,6 +67,34 @@ function Register-AcrylicServiceFromPath {
     return $true
 }
 
+function Invoke-AcrylicPortableDownload {
+    param(
+        [Parameter(Mandatory = $true)][string]$Url,
+        [Parameter(Mandatory = $true)][string]$DestinationPath
+    )
+
+    $userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) OpenPathInstaller'
+    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curl) {
+        & $curl.Source -fL --retry 3 --retry-delay 2 -A $userAgent -o $DestinationPath $Url
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $DestinationPath)) {
+            return
+        }
+    }
+
+    $webClient = $null
+    try {
+        $webClient = New-Object System.Net.WebClient
+        $webClient.Headers.Add('user-agent', $userAgent)
+        $webClient.DownloadFile($Url, $DestinationPath)
+    }
+    finally {
+        if ($null -ne $webClient) {
+            $webClient.Dispose()
+        }
+    }
+}
+
 function Install-AcrylicDNS {
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -100,25 +128,17 @@ function Install-AcrylicDNS {
 
         $downloadError = $null
         foreach ($candidateUrl in @($installerUrl, $installerFallbackUrl)) {
-            $webClient = $null
             try {
                 if (Test-Path $zipPath) {
                     Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
                 }
-                $webClient = New-Object System.Net.WebClient
-                $webClient.Headers.Add('user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) OpenPathInstaller')
-                $webClient.DownloadFile($candidateUrl, $zipPath)
+                Invoke-AcrylicPortableDownload -Url $candidateUrl -DestinationPath $zipPath
                 $downloadError = $null
                 break
             }
             catch {
                 $downloadError = $_
                 Write-OpenPathLog "Acrylic download failed from ${candidateUrl}: $downloadError" -Level WARN
-            }
-            finally {
-                if ($null -ne $webClient) {
-                    $webClient.Dispose()
-                }
             }
         }
 
@@ -149,7 +169,7 @@ function Install-AcrylicDNS {
         $choco = Get-Command choco -ErrorAction SilentlyContinue
         if ($choco) {
             Write-OpenPathLog "Falling back to Chocolatey package acrylic-dns-proxy..."
-            & $choco.Source upgrade acrylic-dns-proxy -y --no-progress
+            & $choco.Source install acrylic-dns-proxy -y --no-progress
             $chocoExitCode = $LASTEXITCODE
             $validExitCodes = @(0, 1605, 1614, 1641, 3010)
             if ($validExitCodes -contains $chocoExitCode) {

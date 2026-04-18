@@ -143,7 +143,7 @@ function Quote-Argument {
     '"' + $Value.Replace('"', '""') + '"'
 }
 
-function Get-FirefoxNightlyBinaryPath {
+function Get-FirefoxBinaryPath {
     if ($script:FirefoxBinaryPath) {
         return $script:FirefoxBinaryPath
     }
@@ -166,7 +166,11 @@ function Get-FirefoxNightlyBinaryPath {
 
     $candidateRelativePaths = @(
         'Firefox Nightly\firefox.exe',
-        'Programs\Firefox Nightly\firefox.exe'
+        'Firefox Developer Edition\firefox.exe',
+        'Mozilla Firefox\firefox.exe',
+        'Programs\Firefox Nightly\firefox.exe',
+        'Programs\Firefox Developer Edition\firefox.exe',
+        'Programs\Mozilla Firefox\firefox.exe'
     )
 
     foreach ($root in $candidateRoots) {
@@ -648,9 +652,9 @@ function New-FirefoxExtensionArchive {
 function Enable-FirefoxUnsignedAddonSupport {
     Write-Step 'Configuring Firefox for unsigned Selenium addons...'
 
-    $firefoxBinaryPath = Get-FirefoxNightlyBinaryPath
+    $firefoxBinaryPath = Get-FirefoxBinaryPath
     if (-not $firefoxBinaryPath) {
-        throw 'Firefox Nightly executable not found in the expected install locations.'
+        throw 'Firefox executable not found in the expected install locations.'
     }
     $firefoxDir = Split-Path -Parent $firefoxBinaryPath
 
@@ -714,9 +718,20 @@ function Ensure-FirefoxAndGeckodriver {
         throw 'Chocolatey is required to install Firefox and geckodriver on the Windows runner.'
     }
 
-    if (-not (Get-FirefoxNightlyBinaryPath)) {
+    if (-not (Get-FirefoxBinaryPath)) {
         choco install firefox-nightly --pre --no-progress -y | Out-Host
-        Assert-LastExitCode 'choco install firefox-nightly'
+        if ($LASTEXITCODE -ne 0) {
+            Write-DiagnosticNote "Firefox Nightly install failed with exit $LASTEXITCODE; trying Firefox Release."
+        }
+    }
+
+    if (-not (Get-FirefoxBinaryPath)) {
+        choco install firefox --no-progress -y | Out-Host
+        Assert-LastExitCode 'choco install firefox'
+    }
+
+    if (-not (Get-FirefoxBinaryPath)) {
+        throw 'Firefox executable not found after Chocolatey provisioning.'
     }
 
     if (-not (Get-Command geckodriver.exe -ErrorAction SilentlyContinue)) {
@@ -827,9 +842,9 @@ function Invoke-SeleniumStudentSuite {
         $env:OPENPATH_ENABLE_SSE_COMMAND = 'powershell -NoLogo -Command "Enable-ScheduledTask -TaskName ''OpenPath-SSE'' -ErrorAction SilentlyContinue; Start-ScheduledTask -TaskName ''OpenPath-SSE'' -ErrorAction SilentlyContinue"'
         $env:CI = 'true'
         $env:OPENPATH_STUDENT_MODE = $Mode
-        $env:OPENPATH_FIREFOX_BINARY = Get-FirefoxNightlyBinaryPath
+        $env:OPENPATH_FIREFOX_BINARY = Get-FirefoxBinaryPath
         if (-not $env:OPENPATH_FIREFOX_BINARY) {
-            throw 'Firefox Nightly executable not found before Selenium startup.'
+            throw 'Firefox executable not found before Selenium startup.'
         }
 
         Write-DiagnosticNote "Starting Selenium student-policy suite mode=$Mode scenarioPath=$ScenarioPath extensionPath=$ExtensionArchivePath"

@@ -42,7 +42,7 @@ Describe "DNS Module - Install Contracts" {
             Assert-ContentContainsAll -Content $content -Needles @(
                 'Direct Acrylic install failed',
                 'Get-Command choco',
-                'upgrade acrylic-dns-proxy -y --no-progress',
+                'install acrylic-dns-proxy -y --no-progress',
                 'ProgramData\chocolatey\lib\acrylic-dns-proxy',
                 'Get-ChildItem -Path $searchRoot -Filter ''AcrylicService.exe'' -Recurse',
                 'Register-AcrylicServiceFromPath -AcrylicPath $acrylicPath',

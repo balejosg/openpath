@@ -87,32 +87,38 @@ describe('repository verification contract', () => {
     );
   });
 
-  test('windows student policy runner installs Firefox Nightly for unsigned Selenium addons', () => {
+  test('windows student policy runner resolves installed Firefox before provisioning fallbacks', () => {
     const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
 
     assert.match(
       windowsRunner,
-      /choco install firefox-nightly/,
-      'Windows student-policy runner should provision Firefox Nightly instead of Firefox Release'
+      /function Get-FirefoxBinaryPath/,
+      'Windows student-policy runner should resolve a usable Firefox binary through one helper'
     );
     assert.match(
       windowsRunner,
       /choco install firefox-nightly --pre --no-progress -y/,
-      'Windows student-policy runner should install Firefox Nightly as a prerelease Chocolatey package'
+      'Windows student-policy runner should still prefer Firefox Nightly when no Firefox binary exists'
     );
-    assert.ok(
-      !windowsRunner.includes('choco install firefox --no-progress -y'),
-      'Windows student-policy runner should not provision Firefox Release for the unsigned Selenium addon flow'
+    assert.match(
+      windowsRunner,
+      /choco install firefox --no-progress -y/,
+      'Windows student-policy runner should fall back to Firefox Release when Nightly provisioning is unavailable'
+    );
+    assert.match(
+      windowsRunner,
+      /Mozilla Firefox\\firefox\.exe/,
+      'Windows student-policy runner should accept preinstalled Firefox Release on GitHub runners'
     );
     assert.match(
       windowsRunner,
       /ProgramFiles\(x86\)/,
-      'Windows student-policy runner should resolve Firefox Nightly across both 64-bit and 32-bit install roots'
+      'Windows student-policy runner should resolve Firefox across both 64-bit and 32-bit install roots'
     );
     assert.match(
       windowsRunner,
       /LOCALAPPDATA/,
-      'Windows student-policy runner should also resolve Firefox Nightly from per-user install roots'
+      'Windows student-policy runner should also resolve Firefox from per-user install roots'
     );
     assert.match(
       windowsRunner,

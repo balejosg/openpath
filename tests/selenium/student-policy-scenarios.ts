@@ -64,6 +64,37 @@ function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
   };
 }
 
+function isWhitelistableHost(hostname: string): boolean {
+  const labels = hostname.split('.');
+  const tld = labels.at(-1) ?? '';
+  return labels.length >= 2 && /^[a-z]{2,63}$/i.test(tld);
+}
+
+export function buildBaselineWhitelistHosts(
+  scenario: StudentScenario,
+  targets: StudentPolicyTargets
+): {
+  restricted: string[];
+  alternate: string[];
+} {
+  const hosts = [
+    scenario.fixtures.portal,
+    scenario.fixtures.cdnPortal,
+    scenario.fixtures.site,
+    scenario.fixtures.apiSite,
+  ];
+
+  const apiHostname = new URL(scenario.apiUrl).hostname;
+  if (isWhitelistableHost(apiHostname)) {
+    hosts.push(apiHostname);
+  }
+
+  return {
+    restricted: [...new Set([...hosts, targets.hosts.baseOnly])],
+    alternate: [...new Set([...hosts, targets.hosts.alternateOnly])],
+  };
+}
+
 async function settlePolicyChange(
   driver: StudentPolicyDriver,
   mode: PolicyMode,
@@ -114,58 +145,15 @@ async function seedBaselineWhitelist(
 ): Promise<void> {
   const restrictedGroupId = driver.scenario.groups.restricted.id;
   const alternateGroupId = driver.scenario.groups.alternate.id;
+  const baselineHosts = buildBaselineWhitelistHosts(driver.scenario, targets);
 
-  await client.ensureWhitelistRule(
-    restrictedGroupId,
-    driver.scenario.fixtures.portal,
-    'Student policy portal baseline'
-  );
-  await client.ensureWhitelistRule(
-    restrictedGroupId,
-    driver.scenario.fixtures.cdnPortal,
-    'Student policy CDN baseline'
-  );
-  await client.ensureWhitelistRule(
-    restrictedGroupId,
-    driver.scenario.fixtures.site,
-    'Student policy site baseline'
-  );
-  await client.ensureWhitelistRule(
-    restrictedGroupId,
-    driver.scenario.fixtures.apiSite,
-    'Student policy API site baseline'
-  );
-  await client.ensureWhitelistRule(
-    restrictedGroupId,
-    targets.hosts.baseOnly,
-    'Restricted-only host baseline'
-  );
+  for (const host of baselineHosts.restricted) {
+    await client.ensureWhitelistRule(restrictedGroupId, host, 'Student policy restricted baseline');
+  }
 
-  await client.ensureWhitelistRule(
-    alternateGroupId,
-    driver.scenario.fixtures.portal,
-    'Student policy portal baseline (alternate)'
-  );
-  await client.ensureWhitelistRule(
-    alternateGroupId,
-    driver.scenario.fixtures.cdnPortal,
-    'Student policy CDN baseline (alternate)'
-  );
-  await client.ensureWhitelistRule(
-    alternateGroupId,
-    driver.scenario.fixtures.site,
-    'Student policy site baseline (alternate)'
-  );
-  await client.ensureWhitelistRule(
-    alternateGroupId,
-    driver.scenario.fixtures.apiSite,
-    'Student policy API site baseline (alternate)'
-  );
-  await client.ensureWhitelistRule(
-    alternateGroupId,
-    targets.hosts.alternateOnly,
-    'Alternate-only host baseline'
-  );
+  for (const host of baselineHosts.alternate) {
+    await client.ensureWhitelistRule(alternateGroupId, host, 'Student policy alternate baseline');
+  }
 
   await driver.forceLocalUpdate();
 
