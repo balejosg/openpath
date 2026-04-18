@@ -88,6 +88,7 @@ Describe "Browser Module - Native Host" {
                 }
 
                 $process = [System.Diagnostics.Process]::Start($processStart)
+                $stderrTask = $process.StandardError.ReadToEndAsync()
                 try {
                     $messageJson = (@{ action = "get-config" } | ConvertTo-Json -Compress)
                     $messageBytes = [System.Text.Encoding]::UTF8.GetBytes($messageJson)
@@ -117,10 +118,34 @@ Describe "Browser Module - Native Host" {
                     $response.machineToken | Should -Be "machine-token-123"
                 }
                 finally {
-                    if (-not $process.WaitForExit(1000)) {
-                        $process.Kill()
+                    if ($null -ne $process) {
+                        $nativeHostExited = $process.WaitForExit(5000)
+                        if (-not $nativeHostExited) {
+                            try {
+                                $process.Kill($true)
+                            }
+                            catch {
+                                try {
+                                    $process.Kill()
+                                }
+                                catch {
+                                    # The process may have exited between WaitForExit and Kill.
+                                }
+                            }
+
+                            $null = $process.WaitForExit(5000)
+                        }
+
+                        if ($null -ne $stderrTask -and $stderrTask.Wait(5000) -and $stderrTask.Result) {
+                            Write-Host ("Native host stderr: {0}" -f $stderrTask.Result)
+                        }
+
+                        $process.Dispose()
+
+                        if (-not $nativeHostExited) {
+                            throw "Native host process did not exit after stdin closed"
+                        }
                     }
-                    $process.Dispose()
                 }
             }
             finally {
