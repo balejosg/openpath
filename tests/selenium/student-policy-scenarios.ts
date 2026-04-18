@@ -66,7 +66,7 @@ function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
 
 function isWhitelistableHost(hostname: string): boolean {
   const labels = hostname.split('.');
-  const tld = labels.at(-1) ?? '';
+  const tld = labels[labels.length - 1] ?? '';
   return labels.length >= 2 && /^[a-z]{2,63}$/i.test(tld);
 }
 

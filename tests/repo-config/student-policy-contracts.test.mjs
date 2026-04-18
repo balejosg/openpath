@@ -53,6 +53,29 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('student policy selenium sources stay compatible with their ts-node target', () => {
+    const seleniumSources = [
+      'tests/selenium/student-policy-client.ts',
+      'tests/selenium/student-policy-driver-browser.ts',
+      'tests/selenium/student-policy-driver-platform.ts',
+      'tests/selenium/student-policy-driver-runtime.ts',
+      'tests/selenium/student-policy-driver-state.ts',
+      'tests/selenium/student-policy-driver.ts',
+      'tests/selenium/student-policy-env.ts',
+      'tests/selenium/student-policy-flow.e2e.ts',
+      'tests/selenium/student-policy-harness.ts',
+      'tests/selenium/student-policy-scenarios.ts',
+      'tests/selenium/student-policy-types.ts',
+    ];
+
+    for (const sourcePath of seleniumSources) {
+      assert.ok(
+        !readText(sourcePath).includes('.at('),
+        `${sourcePath} should not use Array.prototype.at because the CI ts-node package target does not expose it`
+      );
+    }
+  });
+
   test('windows student policy runner packages the Firefox XPI with the canonical build script', () => {
     const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
 
