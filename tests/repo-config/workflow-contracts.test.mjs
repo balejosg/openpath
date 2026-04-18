@@ -289,8 +289,8 @@ test('required Windows CI runs Pester in an untracked child host without success
     'ci.yml should pin the required Windows Pester lane to windows-2025'
   );
   assert.ok(
-    windowsJobBlock.includes('timeout-minutes: 15'),
-    'ci.yml should cap the required Windows Pester lane so a genuine stuck runner does not block the workflow for hours'
+    windowsJobBlock.includes('timeout-minutes: 25'),
+    'ci.yml should cap the required Windows Pester lane while leaving enough teardown margin after the isolated Pester timeout'
   );
   assert.ok(
     !ciWorkflow.includes('runs-on: windows-2022'),

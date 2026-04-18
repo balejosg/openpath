@@ -165,7 +165,7 @@ jobs:
   test-windows:
     name: Windows Agent Tests (Pester)
     runs-on: windows-2025
-    timeout-minutes: 15
+    timeout-minutes: 25
     needs: detect-relevant-changes
     if: needs.detect-relevant-changes.outputs.windows_bound == 'true'
     outputs:
