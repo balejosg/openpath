@@ -56,6 +56,37 @@ Describe "Browser Module - Native Host" {
                 $processStart.RedirectStandardError = $true
                 $processStart.UseShellExecute = $false
 
+                function Read-NativeHostProcessBytes {
+                    param(
+                        [Parameter(Mandatory = $true)]
+                        [System.IO.Stream]$Stream,
+
+                        [Parameter(Mandatory = $true)]
+                        [int]$Count,
+
+                        [Parameter(Mandatory = $true)]
+                        [string]$Description
+                    )
+
+                    $buffer = New-Object byte[] $Count
+                    $offset = 0
+                    while ($offset -lt $Count) {
+                        $readTask = $Stream.ReadAsync($buffer, $offset, $Count - $offset)
+                        if (-not $readTask.Wait([TimeSpan]::FromSeconds(5))) {
+                            throw "Timed out reading $Description from native host"
+                        }
+
+                        $chunkSize = $readTask.Result
+                        if ($chunkSize -le 0) {
+                            throw "Native host stdout closed while reading $Description"
+                        }
+
+                        $offset += $chunkSize
+                    }
+
+                    return $buffer
+                }
+
                 $process = [System.Diagnostics.Process]::Start($processStart)
                 try {
                     $messageJson = (@{ action = "get-config" } | ConvertTo-Json -Compress)
@@ -66,20 +97,19 @@ Describe "Browser Module - Native Host" {
                     $process.StandardInput.BaseStream.Flush()
                     $process.StandardInput.Close()
 
-                    $responseLengthBytes = New-Object byte[] 4
-                    $read = $process.StandardOutput.BaseStream.Read($responseLengthBytes, 0, 4)
-                    $stderr = $process.StandardError.ReadToEnd()
-                    $read | Should -Be 4 -Because $stderr
-
+                    $responseLengthBytes = Read-NativeHostProcessBytes `
+                        -Stream $process.StandardOutput.BaseStream `
+                        -Count 4 `
+                        -Description "response length"
                     $responseLength = [System.BitConverter]::ToInt32($responseLengthBytes, 0)
-                    $responseBytes = New-Object byte[] $responseLength
-                    $offset = 0
-                    while ($offset -lt $responseLength) {
-                        $chunkSize = $process.StandardOutput.BaseStream.Read($responseBytes, $offset, $responseLength - $offset)
-                        $chunkSize | Should -BeGreaterThan 0 -Because $stderr
-                        $offset += $chunkSize
+                    if ($responseLength -le 0 -or $responseLength -gt 1MB) {
+                        throw "Native host returned invalid response length: $responseLength"
                     }
 
+                    $responseBytes = Read-NativeHostProcessBytes `
+                        -Stream $process.StandardOutput.BaseStream `
+                        -Count $responseLength `
+                        -Description "response body"
                     $response = [System.Text.Encoding]::UTF8.GetString($responseBytes) | ConvertFrom-Json
                     $response.success | Should -BeTrue
                     $response.requestApiUrl | Should -Be "https://school.example"
@@ -87,7 +117,7 @@ Describe "Browser Module - Native Host" {
                     $response.machineToken | Should -Be "machine-token-123"
                 }
                 finally {
-                    if (-not $process.HasExited) {
+                    if (-not $process.WaitForExit(1000)) {
                         $process.Kill()
                     }
                     $process.Dispose()
