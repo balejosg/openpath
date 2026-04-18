@@ -250,8 +250,21 @@ Describe "Installer" {
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 '$nativeHostConfig = Get-OpenPathConfig',
-                'Register-OpenPathFirefoxNativeHost -Config $nativeHostConfig -ClearWhitelist | Out-Null',
+                '$nativeHostRegistered = Register-OpenPathFirefoxNativeHost -Config $nativeHostConfig -ClearWhitelist',
                 'No se pudo registrar el host nativo de Firefox tras enrollment'
+            )
+        }
+
+        It "Fails unattended classroom installs when enrollment or native host registration is incomplete" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'if ($classroomModeRequested -and $Unattended -and $machineRegistered -ne ''REGISTERED'')',
+                'ERROR: Classroom enrollment did not complete; domain requests will not be configured.',
+                'if ($classroomModeRequested -and $Unattended -and -not $nativeHostRegistered)',
+                'ERROR: Firefox native host registration incomplete; domain requests will not be configured.',
+                'exit 1'
             )
         }
 
@@ -285,6 +298,17 @@ Describe "Installer" {
             $runtimeHelper | Should -Not -Match '\[Parameter\(Mandatory = \$true\)\]\s+\[string\]\$Classroom\s*,'
             $runtimeHelper | Should -Not -Match '\[Parameter\(Mandatory = \$true\)\]\s+\[string\]\$ClassroomId\s*,'
             $runtimeHelper | Should -Not -Match '\[Parameter\(Mandatory = \$true\)\]\s+\[string\]\$WhitelistUrl\s*,'
+        }
+
+        It "Warns when classroom installs finish without enrollment" {
+            $runtimeHelperPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Runtime.ps1"
+            $runtimeHelper = Get-Content $runtimeHelperPath -Raw
+
+            Assert-ContentContainsAll -Content $runtimeHelper -Needles @(
+                '$ClassroomModeRequested -and $MachineRegistered -ne ''REGISTERED''',
+                'Solicitudes de dominio: NO CONFIGURADAS',
+                'ejecuta .\OpenPath.ps1 enroll'
+            )
         }
     }
 

@@ -116,6 +116,7 @@ function Invoke-OpenPathInstallerEnrollment {
     $result = [ordered]@{
         MachineRegistered = 'NOT_REQUESTED'
         WhitelistUrl = ''
+        EnrollmentError = ''
     }
 
     Write-InstallerVerbose "Registering machine in classroom..."
@@ -123,6 +124,7 @@ function Invoke-OpenPathInstallerEnrollment {
     $enrollScript = "$OpenPathRoot\scripts\Enroll-Machine.ps1"
     if (-not (Test-Path $enrollScript)) {
         $result.MachineRegistered = 'FAILED'
+        $result.EnrollmentError = "Enrollment script not found: $enrollScript"
         Write-Host "  Enrollment script not found: $enrollScript" -ForegroundColor Yellow
         return [PSCustomObject]$result
     }
@@ -163,11 +165,13 @@ function Invoke-OpenPathInstallerEnrollment {
         }
         else {
             $result.MachineRegistered = 'FAILED'
+            $result.EnrollmentError = 'Machine registration returned an incomplete result'
             Write-Host "  Failed to register machine" -ForegroundColor Yellow
         }
     }
     catch {
         $result.MachineRegistered = 'FAILED'
+        $result.EnrollmentError = [string]$_
         Write-Host "  Error registering machine: $_" -ForegroundColor Yellow
     }
 

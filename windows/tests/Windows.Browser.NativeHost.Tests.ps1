@@ -169,6 +169,35 @@ Describe "Browser Module - Native Host" {
             )
         }
 
+        It "Accepts only complete classroom request setup for native host registration" {
+            $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"
+            Import-Module $nativeHostModulePath -Force -Global -ErrorAction Stop
+
+            $completeConfig = [PSCustomObject]@{
+                apiUrl = "https://school.example"
+                whitelistUrl = "https://school.example/w/machine-token-123/whitelist.txt"
+                classroomId = "classroom-123"
+            }
+            $missingWhitelist = [PSCustomObject]@{
+                apiUrl = "https://school.example"
+                classroomId = "classroom-123"
+            }
+            $missingClassroom = [PSCustomObject]@{
+                apiUrl = "https://school.example"
+                whitelistUrl = "https://school.example/w/machine-token-123/whitelist.txt"
+            }
+            $invalidApi = [PSCustomObject]@{
+                apiUrl = "school.example"
+                whitelistUrl = "https://school.example/w/machine-token-123/whitelist.txt"
+                classroomId = "classroom-123"
+            }
+
+            Test-OpenPathFirefoxNativeHostRequestSetupComplete -Config $completeConfig | Should -BeTrue
+            Test-OpenPathFirefoxNativeHostRequestSetupComplete -Config $missingWhitelist | Should -BeFalse
+            Test-OpenPathFirefoxNativeHostRequestSetupComplete -Config $missingClassroom | Should -BeFalse
+            Test-OpenPathFirefoxNativeHostRequestSetupComplete -Config $invalidApi | Should -BeFalse
+        }
+
         It "Re-stages native host artifacts before writing the Firefox manifest" {
             $browserModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.psm1"
             $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"

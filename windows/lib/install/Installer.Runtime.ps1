@@ -124,6 +124,10 @@ function Write-OpenPathInstallerSummary {
         if ($Classroom) { Write-Host "  - Classroom: $Classroom" }
         if ($ClassroomId) { Write-Host "  - Classroom ID: $ClassroomId" }
         Write-Host "  - Enrollment: $MachineRegistered"
+        if ($ClassroomModeRequested -and $MachineRegistered -ne 'REGISTERED') {
+            Write-Host '  - Solicitudes de dominio: NO CONFIGURADAS' -ForegroundColor Red
+            Write-Host '    Para repararlo, ejecuta .\OpenPath.ps1 enroll con los parametros del aula.' -ForegroundColor Yellow
+        }
     }
     Write-Host "  - Whitelist: $WhitelistUrl"
     Write-Host "  - Agent version: $AgentVersion"

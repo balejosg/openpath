@@ -35,6 +35,18 @@ Describe "Enrollment script" {
                 'Resolve-OpenPathMachineRegistration'
             )
         }
+
+        It "Preserves enrollment errors for the installer to surface" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Enrollment.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                "EnrollmentError = ''",
+                '$result.EnrollmentError = "Enrollment script not found: $enrollScript"',
+                '$result.EnrollmentError = ''Machine registration returned an incomplete result''',
+                '$result.EnrollmentError = [string]$_'
+            )
+        }
     }
 
     Context "Firefox native host sync" {
