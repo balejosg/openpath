@@ -30,10 +30,7 @@ void describe('Linux enrollment bootstrap script generation', () => {
 
     assert.doesNotMatch(script, /LINUX_AGENT_VERSION=/);
     assert.doesNotMatch(script, /--package-version "\$LINUX_AGENT_VERSION"/);
-    assert.match(
-      script,
-      /bootstrap_cmd\+=\(--api-url "\$API_URL" --classroom "\$CLASSROOM_NAME"/
-    );
+    assert.match(script, /bootstrap_cmd\+=\(--api-url "\$API_URL" --classroom "\$CLASSROOM_NAME"/);
   });
 
   void test('uses the unstable APT track when requested by release metadata', () => {

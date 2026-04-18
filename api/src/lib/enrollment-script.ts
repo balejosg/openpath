@@ -23,8 +23,7 @@ export function buildLinuxEnrollmentScript({
   linuxAgentAptSuite = 'stable',
 }: LinuxEnrollmentScriptParams): string {
   const aptSuite = linuxAgentAptSuite === 'unstable' ? 'unstable' : 'stable';
-  const bootstrapSuiteOverride =
-    aptSuite === 'unstable' ? 'bootstrap_cmd+=(--unstable)' : '';
+  const bootstrapSuiteOverride = aptSuite === 'unstable' ? 'bootstrap_cmd+=(--unstable)' : '';
   const bootstrapVersionOverride = linuxAgentVersion
     ? 'bootstrap_cmd+=(--package-version "$LINUX_AGENT_VERSION")'
     : '';

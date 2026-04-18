@@ -34,10 +34,7 @@ function buildAptPackagesUrl(aptRepoUrl: string, suite: LinuxAgentAptSuite): str
   return `${aptRepoUrl.replace(/\/+$/, '')}/dists/${suite}/main/binary-amd64/Packages`;
 }
 
-export function aptMetadataAdvertisesLinuxAgentVersion(
-  content: string,
-  version: string
-): boolean {
+export function aptMetadataAdvertisesLinuxAgentVersion(content: string, version: string): boolean {
   const targetVersion = version.trim();
   if (!targetVersion) {
     return false;
@@ -129,7 +126,9 @@ export async function resolveEnrollmentLinuxAgentVersionPin(
     suite,
     packagesUrl,
   });
-  throw new Error(`OPENPATH_LINUX_AGENT_VERSION ${version} is not advertised by APT suite ${suite}`);
+  throw new Error(
+    `OPENPATH_LINUX_AGENT_VERSION ${version} is not advertised by APT suite ${suite}`
+  );
 }
 
 function getLinuxAgentPackageFileName(version: string): string {
