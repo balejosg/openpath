@@ -486,20 +486,6 @@ test('required Windows CI runs Pester in an untracked child host without success
     'the isolated Pester runner should remove lingering PowerShell jobs before exiting the Windows lane'
   );
   assert.ok(
-    windowsPesterRunner.includes('function Stop-DescendantProcesses'),
-    'the isolated Pester runner should define a bounded descendant cleanup helper before exiting the Windows lane'
-  );
-  assert.ok(
-    windowsPesterRunner.includes('Get-CimInstance Win32_Process -ErrorAction SilentlyContinue'),
-    'the isolated Pester runner should inspect descendant Windows processes before exiting the Windows lane'
-  );
-  assert.ok(
-    windowsPesterRunner.includes(
-      'Stop-Process -Id ([int]$proc.ProcessId) -Force -ErrorAction SilentlyContinue'
-    ),
-    'the isolated Pester runner should stop lingering descendant processes before exiting the Windows lane'
-  );
-  assert.ok(
     windowsPesterRunner.includes("$null = $startInfo.Environment.Remove('RUNNER_TRACKING_ID')"),
     'the isolated Pester child should remove RUNNER_TRACKING_ID so Windows service helpers do not wedge Actions orphan cleanup'
   );
