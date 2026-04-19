@@ -653,3 +653,69 @@ test('Linux E2E lanes restore the shared Playwright browser cache', () => {
     'Linux E2E jobs should opt into the shared Playwright browser cache'
   );
 });
+
+test('E2E workflow gates expensive platform lanes on targeted changed paths', () => {
+  const e2eWorkflow = readText('.github/workflows/e2e-tests.yml');
+  const linuxE2eBlock = extractWorkflowJobBlock(e2eWorkflow, 'linux-e2e');
+  const windowsE2eBlock = extractWorkflowJobBlock(e2eWorkflow, 'windows-e2e');
+  const linuxStudentPolicyBlock = extractWorkflowJobBlock(e2eWorkflow, 'linux-student-policy');
+  const windowsStudentPolicyBlock = extractWorkflowJobBlock(e2eWorkflow, 'windows-student-policy');
+
+  for (const outputName of [
+    'linux_e2e',
+    'windows_e2e',
+    'linux_student_policy',
+    'windows_student_policy',
+  ]) {
+    const outputExpression = `${outputName}: \${{ steps.filter.outputs.${outputName} }}`;
+    assert.ok(
+      e2eWorkflow.includes(outputExpression),
+      `e2e-tests.yml should expose ${outputName} from Detect Relevant Changes`
+    );
+    assert.ok(
+      e2eWorkflow.includes(`echo "${outputName}=true" >> "$GITHUB_OUTPUT"`),
+      `e2e-tests.yml should enable ${outputName} during workflow_dispatch runs`
+    );
+  }
+
+  assert.ok(
+    linuxE2eBlock.includes("needs.detect-relevant-changes.outputs.linux_e2e == 'true'"),
+    'linux-e2e should run only for Linux E2E relevant changes'
+  );
+  assert.ok(
+    windowsE2eBlock.includes("needs.detect-relevant-changes.outputs.windows_e2e == 'true'"),
+    'windows-e2e should run only for Windows E2E relevant changes'
+  );
+  assert.ok(
+    linuxStudentPolicyBlock.includes(
+      "needs.detect-relevant-changes.outputs.linux_student_policy == 'true'"
+    ),
+    'linux-student-policy should run only for Linux student-policy relevant changes'
+  );
+  assert.ok(
+    windowsStudentPolicyBlock.includes(
+      "needs.detect-relevant-changes.outputs.windows_student_policy == 'true'"
+    ),
+    'windows-student-policy should run only for Windows student-policy relevant changes'
+  );
+  assert.ok(
+    e2eWorkflow.includes('ci/run-windows-student-flow\\.ps1'),
+    'windows-student-policy should be triggered by its own runner script'
+  );
+  assert.ok(
+    e2eWorkflow.includes('tests/selenium/|'),
+    'student-policy lanes should be triggered by shared Selenium student-policy helpers'
+  );
+  assert.ok(
+    e2eWorkflow.includes('ci/run-linux-student-flow\\.sh'),
+    'linux-student-policy should be triggered by its own runner script'
+  );
+  assert.ok(
+    e2eWorkflow.includes('SKIPPED'),
+    'E2E summary should report skipped lanes explicitly instead of printing them as failures'
+  );
+  assert.ok(
+    e2eWorkflow.includes('needs.detect-relevant-changes.result'),
+    'E2E summary should fail if changed-path detection fails before lane gating'
+  );
+});
