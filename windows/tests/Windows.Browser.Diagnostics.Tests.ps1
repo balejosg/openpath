@@ -59,5 +59,15 @@ Describe "Browser Module - Diagnostics" {
                 'Native host update task user access:'
             )
         }
+
+        It "Exports Firefox native host helpers used by browser diagnostics" {
+            $nativeHostModulePath = Join-Path $PSScriptRoot ".." "lib" "Browser.FirefoxNativeHost.psm1"
+            $content = Get-Content $nativeHostModulePath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'function Get-OpenPathFirefoxNativeHostRoot',
+                "'Get-OpenPathFirefoxNativeHostRoot'"
+            )
+        }
     }
 }

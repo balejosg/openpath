@@ -313,6 +313,7 @@ function Unregister-OpenPathFirefoxNativeHost {
 }
 
 Export-ModuleMember -Function @(
+    'Get-OpenPathFirefoxNativeHostRoot',
     'Get-OpenPathFirefoxNativeHostManifestPath',
     'Get-OpenPathFirefoxNativeHostScriptPath',
     'Get-OpenPathFirefoxNativeHostWrapperPath',
