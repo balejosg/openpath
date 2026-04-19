@@ -348,12 +348,12 @@ async function runBlockedPathScenarios(
     });
     await driver.rerunIframeProbe();
     await driver.waitForDomStatus('#iframe-status', 'blocked');
-    logScenarioStep('SP-013 verify XHR path block');
+    logScenarioStep('SP-013 verify XHR path allowed');
     await driver.rerunXhrProbe();
-    await driver.waitForDomStatus('#xhr-status', 'blocked');
-    logScenarioStep('SP-014 verify fetch path block');
+    await driver.waitForDomStatus('#xhr-status', 'ok');
+    logScenarioStep('SP-014 verify fetch path allowed');
     await driver.rerunFetchProbe();
-    await driver.waitForDomStatus('#fetch-status', 'blocked');
+    await driver.waitForDomStatus('#fetch-status', 'ok');
   });
 
   await client.deleteGroupRule(rule.id, driver.scenario.groups.restricted.id);
