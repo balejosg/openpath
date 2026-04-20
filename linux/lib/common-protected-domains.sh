@@ -52,6 +52,12 @@ refresh_openpath_protected_domains() {
     fi
     append_unique_openpath_domain "$(get_url_host "$whitelist_url")"
 
+    local api_url=""
+    if [ -f "$ETC_CONFIG_DIR/api-url.conf" ]; then
+        api_url=$(tr -d '\r\n' < "$ETC_CONFIG_DIR/api-url.conf" 2>/dev/null || true)
+    fi
+    append_unique_openpath_domain "$(get_url_host "$api_url")"
+
     local health_api_url=""
     if [ -f "$HEALTH_API_URL_CONF" ]; then
         health_api_url=$(tr -d '\r\n' < "$HEALTH_API_URL_CONF" 2>/dev/null || true)

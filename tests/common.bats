@@ -442,6 +442,22 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "protected domains include persisted API URL before machine registration" {
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
+    mkdir -p "$etc_dir"
+
+    ETC_CONFIG_DIR="$etc_dir"
+    WHITELIST_URL_CONF="$etc_dir/whitelist-url.conf"
+    HEALTH_API_URL_CONF="$etc_dir/health-api-url.conf"
+    OPENPATH_PROTECTED_DOMAINS_READY=0
+
+    echo "https://classroompath.eu" > "$etc_dir/api-url.conf"
+
+    run get_openpath_protected_domains
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"classroompath.eu"* ]]
+}
+
 @test "send_health_report_to_api prefers machine token auth derived from whitelist URL" {
     local etc_dir="$TEST_TMP_DIR/etc/openpath"
     local bin_dir="$TEST_TMP_DIR/bin"

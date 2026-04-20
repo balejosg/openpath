@@ -4,6 +4,33 @@
 # runtime-cli-commands.sh - Runtime command implementations
 ################################################################################
 
+prepare_registration_connectivity() {
+    local api_url="$1"
+    local classroom_name="${2:-}"
+    local classroom_id="${3:-}"
+
+    if ! persist_openpath_classroom_runtime_config "$api_url" "$classroom_name" "$classroom_id"; then
+        return 1
+    fi
+
+    # shellcheck disable=SC2034 # Shared state consumed by sourced DNS helpers.
+    OPENPATH_PROTECTED_DOMAINS_READY=0
+
+    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet dnsmasq 2>/dev/null; then
+        # shellcheck disable=SC2034 # Shared state consumed by sourced DNS helpers.
+        WHITELIST_DOMAINS=()
+        # shellcheck disable=SC2034 # Shared state consumed by sourced DNS helpers.
+        BLOCKED_SUBDOMAINS=()
+        # shellcheck disable=SC2034 # Shared state consumed by sourced DNS helpers.
+        BLOCKED_PATHS=()
+        if ! generate_dnsmasq_config || ! restart_dnsmasq; then
+            return 1
+        fi
+    fi
+
+    return 0
+}
+
 cmd_enroll() {
     local classroom="" classroom_id="" api_url="" token="" enrollment_token="" machine_name=""
     local token_file=""
@@ -66,6 +93,11 @@ cmd_enroll() {
         fi
 
         [[ -z "$token" ]] && { echo -e "${RED}Error: token vacio${NC}"; exit 1; }
+    fi
+
+    if ! prepare_registration_connectivity "$api_url" "$classroom" "$classroom_id"; then
+        echo -e "${RED}Error: no se pudo preparar la conectividad con la API${NC}"
+        exit 1
     fi
 
     echo -e "${BLUE}Registrando en aula...${NC}"
