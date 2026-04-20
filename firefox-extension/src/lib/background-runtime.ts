@@ -114,7 +114,8 @@ export function createBackgroundRuntime(
     }
 
     const result = response.results.find((item) => item.domain === context.hostname);
-    return result?.inWhitelist === false;
+    const resolves = result?.resolves ?? result?.resolvedIp !== undefined;
+    return result?.inWhitelist === false && !resolves;
   }
 
   async function isNativeHostAvailable(): Promise<boolean> {

@@ -12,6 +12,7 @@ export interface NativeResponse {
 export interface NativeCheckResult {
   domain: string;
   in_whitelist: boolean;
+  resolves?: boolean;
   resolved_ip?: string;
   error?: string;
 }
@@ -25,6 +26,7 @@ export interface NativeCheckResponse {
 export interface VerifyResult {
   domain: string;
   inWhitelist: boolean;
+  resolves?: boolean;
   resolvedIp?: string;
   error?: string;
 }
@@ -113,6 +115,9 @@ export function createNativeMessagingClient(options: {
           inWhitelist: result.in_whitelist,
         };
 
+        if (result.resolves !== undefined) {
+          mapped.resolves = result.resolves;
+        }
         if (result.resolved_ip !== undefined) {
           mapped.resolvedIp = result.resolved_ip;
         }

@@ -17,6 +17,11 @@ interface ConfirmBlockedScreenContext extends BlockedScreenContext {
 
 type WebRequestErrorListener = (details: WebRequest.OnErrorOccurredDetailsType) => void;
 type WebRequestBeforeListener = (details: WebRequest.OnBeforeRequestDetailsType) => unknown;
+type WebNavigationBeforeListener = (details: {
+  frameId: number;
+  tabId: number;
+  url: string;
+}) => void;
 type WebNavigationErrorListener = (details: {
   error: string;
   frameId: number;
@@ -48,6 +53,7 @@ function createListenerHarness(
   confirmCalls: ConfirmBlockedScreenContext[];
   redirects: BlockedScreenContext[];
   webRequestBefore: WebRequestBeforeListener | null;
+  webNavigationBefore: WebNavigationBeforeListener | null;
   webNavigationError: WebNavigationErrorListener | null;
   webRequestError: WebRequestErrorListener | null;
 } {
@@ -58,6 +64,7 @@ function createListenerHarness(
   const redirects: BlockedScreenContext[] = [];
   let webRequestBefore: WebRequestBeforeListener | null = null;
   let webRequestError: WebRequestErrorListener | null = null;
+  let webNavigationBefore: WebNavigationBeforeListener | null = null;
   let webNavigationError: WebNavigationErrorListener | null = null;
 
   const browser = {
@@ -76,7 +83,9 @@ function createListenerHarness(
     },
     webNavigation: {
       onBeforeNavigate: {
-        addListener: () => undefined,
+        addListener: (listener: WebNavigationBeforeListener) => {
+          webNavigationBefore = listener;
+        },
       },
       onErrorOccurred: {
         addListener: (listener: WebNavigationErrorListener) => {
@@ -144,6 +153,9 @@ function createListenerHarness(
     redirects,
     get webRequestBefore(): WebRequestBeforeListener | null {
       return webRequestBefore;
+    },
+    get webNavigationBefore(): WebNavigationBeforeListener | null {
+      return webNavigationBefore;
     },
     get webNavigationError(): WebNavigationErrorListener | null {
       return webNavigationError;
@@ -269,6 +281,68 @@ void describe('background listeners blocked-screen routing', () => {
         origin: null,
       },
     ]);
+  });
+
+  void test('preflights top-frame navigations through native policy before Firefox reports status 0', async () => {
+    const harness = createListenerHarness({
+      confirmBlockedScreenNavigation: () => Promise.resolve(true),
+    });
+    assert.ok(harness.webNavigationBefore);
+
+    harness.webNavigationBefore({
+      frameId: 0,
+      tabId: 14,
+      url: 'https://preflight-blocked.example/lesson',
+    });
+
+    await waitForAsyncListeners();
+
+    assert.deepEqual(harness.confirmCalls, [
+      {
+        tabId: 14,
+        hostname: 'preflight-blocked.example',
+        error: 'OPENPATH_NATIVE_POLICY_BLOCKED',
+        origin: null,
+        url: 'https://preflight-blocked.example/lesson',
+      },
+    ]);
+    assert.deepEqual(harness.redirects, [
+      {
+        tabId: 14,
+        hostname: 'preflight-blocked.example',
+        error: 'OPENPATH_NATIVE_POLICY_BLOCKED',
+        origin: null,
+      },
+    ]);
+  });
+
+  void test('ignores stale native preflight confirmations after a newer top-frame navigation starts', async () => {
+    let resolveFirstConfirmation: (confirmed: boolean) => void = () => undefined;
+    const firstConfirmation = new Promise<boolean>((resolve) => {
+      resolveFirstConfirmation = resolve;
+    });
+    const harness = createListenerHarness({
+      confirmBlockedScreenNavigation: (context) =>
+        context.hostname === 'slow-blocked.example' ? firstConfirmation : Promise.resolve(false),
+    });
+    assert.ok(harness.webNavigationBefore);
+
+    harness.webNavigationBefore({
+      frameId: 0,
+      tabId: 15,
+      url: 'https://slow-blocked.example/lesson',
+    });
+    harness.webNavigationBefore({
+      frameId: 0,
+      tabId: 15,
+      url: 'https://allowed-after.example/lesson',
+    });
+
+    await waitForAsyncListeners();
+    resolveFirstConfirmation(true);
+    await waitForAsyncListeners();
+
+    assert.deepEqual(harness.redirects, []);
   });
 
   void test('deduplicates webRequest and webNavigation redirects for the same blocked navigation', async () => {

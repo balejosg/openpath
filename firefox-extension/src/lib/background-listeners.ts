@@ -25,6 +25,7 @@ const NATIVE_CONFIRMED_BLOCKED_SCREEN_ERRORS = new Set([
   'NS_ERROR_CONNECTION_REFUSED',
   'NS_ERROR_NET_TIMEOUT',
 ]);
+const NATIVE_POLICY_BLOCKED_ERROR = 'OPENPATH_NATIVE_POLICY_BLOCKED';
 
 interface BlockedScreenContext {
   tabId: number;
@@ -122,10 +123,15 @@ function buildRedirectKey(context: ConfirmBlockedScreenContext): string {
 
 export function registerBackgroundListeners(options: BackgroundListenersOptions): void {
   const pendingBlockedScreenRedirects = new Set<string>();
+  const latestNativePolicyPreflightByTab = new Map<number, string>();
 
   async function redirectToBlockedScreenOnce(
     context: ConfirmBlockedScreenContext,
-    optionsForRedirect: { requireNativeConfirmation: boolean }
+    optionsForRedirect: {
+      isCurrentNavigation?: () => boolean;
+      recordBlockedDomain?: boolean;
+      requireNativeConfirmation: boolean;
+    }
   ): Promise<void> {
     const redirectKey = buildRedirectKey(context);
     if (pendingBlockedScreenRedirects.has(redirectKey)) {
@@ -139,6 +145,17 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
         if (confirmed !== true) {
           return;
         }
+      }
+
+      if (optionsForRedirect.isCurrentNavigation?.() === false) {
+        return;
+      }
+
+      if (optionsForRedirect.recordBlockedDomain) {
+        logger.info(`[Monitor] Bloqueado por política nativa: ${context.hostname}`, {
+          error: context.error,
+        });
+        options.addBlockedDomain(context.tabId, context.hostname, context.error, context.origin);
       }
 
       await options.redirectToBlockedScreen({
@@ -156,6 +173,33 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
     } finally {
       pendingBlockedScreenRedirects.delete(redirectKey);
     }
+  }
+
+  function handleNativePolicyNavigationPreflight(details: {
+    frameId: number;
+    tabId: number;
+    url: string;
+  }): void {
+    if (details.frameId !== 0 || isExtensionUrl(details.url)) {
+      return;
+    }
+
+    const context = buildBlockedScreenContext({
+      error: NATIVE_POLICY_BLOCKED_ERROR,
+      tabId: details.tabId,
+      url: details.url,
+    });
+    if (!context) {
+      return;
+    }
+
+    latestNativePolicyPreflightByTab.set(context.tabId, context.url);
+    void redirectToBlockedScreenOnce(context, {
+      isCurrentNavigation: () =>
+        latestNativePolicyPreflightByTab.get(context.tabId) === context.url,
+      recordBlockedDomain: true,
+      requireNativeConfirmation: true,
+    });
   }
 
   function handleBlockedScreenNavigationError(
@@ -254,6 +298,12 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
 
   options.browser.webNavigation.onBeforeNavigate.addListener(
     (details: WebNavigation.OnBeforeNavigateDetailsType) => {
+      handleNativePolicyNavigationPreflight({
+        frameId: details.frameId,
+        tabId: details.tabId,
+        url: details.url,
+      });
+
       if (
         shouldClearBlockedMonitorStateOnNavigate(
           { frameId: details.frameId, url: details.url },
@@ -288,6 +338,7 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
   );
 
   options.browser.tabs.onRemoved.addListener((tabId: number) => {
+    latestNativePolicyPreflightByTab.delete(tabId);
     options.disposeTab(tabId);
     logger.debug(`[Monitor] Tab ${tabId.toString()} cerrada, datos eliminados`);
   });
