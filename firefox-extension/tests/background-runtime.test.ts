@@ -13,10 +13,26 @@ void test('native policy confirmation ignores fail-open or inactive policy resul
     }),
     false
   );
+});
+
+void test('native policy confirmation treats missing policy state as unknown, not inactive', () => {
   assert.equal(
     isNativePolicyBlockedResult({
       domain: 'legacy-native-host.example',
       inWhitelist: false,
+      resolves: false,
+    }),
+    true
+  );
+});
+
+void test('native policy confirmation ignores errored native check results', () => {
+  assert.equal(
+    isNativePolicyBlockedResult({
+      domain: 'broken-native-host.example',
+      error: 'OpenPath whitelist command not found',
+      inWhitelist: false,
+      policyActive: true,
       resolves: false,
     }),
     false

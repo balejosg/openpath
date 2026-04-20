@@ -16,3 +16,16 @@ void test('native host probes the installed OpenPath CLI before legacy whitelist
   assert.ok(openpathIndex < legacyIndex);
   assert.doesNotMatch(source, /^WHITELIST_CMD = "\/usr\/local\/bin\/whitelist"$/m);
 });
+
+void test('native host reports DNS policy state independently from CLI discovery', () => {
+  const source = readFileSync(
+    new URL('../native/openpath-native-host.py', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(source, /"policy_active": is_dns_policy_active\(\),/);
+  assert.doesNotMatch(
+    source,
+    /"policy_active": is_dns_policy_active\(\) and whitelist_cmd is not None,/
+  );
+});

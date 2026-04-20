@@ -224,7 +224,7 @@ def check_domain(domain):
     result = {
         "domain": domain,
         "in_whitelist": False,
-        "policy_active": is_dns_policy_active() and whitelist_cmd is not None,
+        "policy_active": is_dns_policy_active(),
         "resolves": False,
         "resolved_ip": None,
     }
