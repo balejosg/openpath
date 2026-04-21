@@ -323,6 +323,17 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "windows fail-open restores an explicit usable DNS resolver" {
+    run grep -nF "\$primaryDns = Get-PrimaryDNS" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Service.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Set-DnsClientServerAddress -InterfaceIndex \$adapter.ifIndex -ServerAddresses \$primaryDns" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Service.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Reset DNS for adapter: $($adapter.Name) to $primaryDns' "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Service.ps1"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows firewall does not install a global DNS port 53 block that overrides Acrylic" {
     run grep -nF 'OpenPath-DNS-Block-DNS-UDP' "$PROJECT_DIR/windows/lib/internal/Firewall.Policy.ps1"
     [ "$status" -ne 0 ]

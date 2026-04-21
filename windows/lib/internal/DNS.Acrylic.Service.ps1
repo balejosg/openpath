@@ -35,13 +35,14 @@ function Set-LocalDNS {
 
 function Restore-OriginalDNS {
     [CmdletBinding(SupportsShouldProcess)] param()
-    if (-not $PSCmdlet.ShouldProcess("Network adapters", "Reset DNS to automatic")) { return }
+    if (-not $PSCmdlet.ShouldProcess("Network adapters", "Restore DNS to an upstream resolver")) { return }
     Write-OpenPathLog "Restoring original DNS settings..."
+    $primaryDns = Get-PrimaryDNS
     $adapters = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' }
     foreach ($adapter in $adapters) {
         try {
-            Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ResetServerAddresses
-            Write-OpenPathLog "Reset DNS for adapter: $($adapter.Name)"
+            Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses $primaryDns
+            Write-OpenPathLog "Reset DNS for adapter: $($adapter.Name) to $primaryDns"
         }
         catch {
             Write-OpenPathLog "Failed to reset DNS for $($adapter.Name): $_" -Level WARN
