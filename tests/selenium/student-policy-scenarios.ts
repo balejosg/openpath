@@ -330,31 +330,36 @@ async function runBlockedPathScenarios(
     )}`
   );
 
-  await settlePolicyChange(driver, mode, async () => {
-    logScenarioStep('SP-011 verify main-frame path block');
-    await driver.openAndExpectLoaded({
-      url: targets.siteOkUrl,
-      title: 'OpenPath Site Fixture',
-      selector: '#page-status',
-    });
-    await driver.openAndExpectBlockedScreen(targets.sitePrivateUrl, {
-      reasonPrefix: 'BLOCKED_PATH_POLICY:',
-    });
-    logScenarioStep('SP-012 verify iframe path block');
-    await driver.openAndExpectLoaded({
-      url: targets.siteOkUrl,
-      title: 'OpenPath Site Fixture',
-      selector: '#page-status',
-    });
-    await driver.rerunIframeProbe();
-    await driver.waitForDomStatus('#iframe-status', 'blocked');
-    logScenarioStep('SP-013 verify XHR path allowed');
-    await driver.rerunXhrProbe();
-    await driver.waitForDomStatus('#xhr-status', 'ok');
-    logScenarioStep('SP-014 verify fetch path allowed');
-    await driver.rerunFetchProbe();
-    await driver.waitForDomStatus('#fetch-status', 'ok');
-  });
+  await settlePolicyChange(
+    driver,
+    mode,
+    async () => {
+      logScenarioStep('SP-011 verify main-frame path block');
+      await driver.openAndExpectLoaded({
+        url: targets.siteOkUrl,
+        title: 'OpenPath Site Fixture',
+        selector: '#page-status',
+      });
+      await driver.openAndExpectBlockedScreen(targets.sitePrivateUrl, {
+        reasonPrefix: 'BLOCKED_PATH_POLICY:',
+      });
+      logScenarioStep('SP-012 verify iframe path block');
+      await driver.openAndExpectLoaded({
+        url: targets.siteOkUrl,
+        title: 'OpenPath Site Fixture',
+        selector: '#page-status',
+      });
+      await driver.rerunIframeProbe();
+      await driver.waitForDomStatus('#iframe-status', 'blocked');
+      logScenarioStep('SP-013 verify XHR path allowed');
+      await driver.rerunXhrProbe();
+      await driver.waitForDomStatus('#xhr-status', 'ok');
+      logScenarioStep('SP-014 verify fetch path allowed');
+      await driver.rerunFetchProbe();
+      await driver.waitForDomStatus('#fetch-status', 'ok');
+    },
+    { refreshBlockedPaths: true }
+  );
 
   await client.deleteGroupRule(rule.id, driver.scenario.groups.restricted.id);
   await driver.forceLocalUpdate();

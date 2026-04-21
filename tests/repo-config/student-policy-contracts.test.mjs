@@ -76,6 +76,16 @@ describe('repository verification contract', () => {
     }
   });
 
+  test('student policy blocked-path scenarios refresh extension rules after forced updates', () => {
+    const scenarios = readText('tests/selenium/student-policy-scenarios.ts');
+
+    assert.match(
+      scenarios,
+      /SP-011 verify main-frame path block[\s\S]*refreshBlockedPaths: true/,
+      'blocked-path convergence should refresh extension rules after a forced local update'
+    );
+  });
+
   test('windows student policy runner packages the Firefox XPI with the canonical build script', () => {
     const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
 
