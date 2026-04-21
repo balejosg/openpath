@@ -454,6 +454,21 @@ Describe "Installer" {
 }
 
 Describe "Uninstaller" {
+    Context "Running task cleanup" {
+        It "Stops scheduled tasks and OpenPath-rooted processes before removing installed files" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "Uninstall-OpenPath.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'Stop-ScheduledTask -TaskName $task.TaskName',
+                'Stop-OpenPathRootedProcess',
+                '$_.Path.StartsWith($OpenPathRoot, [System.StringComparison]::OrdinalIgnoreCase)',
+                '$_.CommandLine -like "*$OpenPathRoot*"',
+                'Remove-OpenPathInstallRoot'
+            )
+        }
+    }
+
     Context "Firefox native host cleanup" {
         It "Removes Firefox native messaging registry entries and staged host artifacts" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Uninstall-OpenPath.ps1"

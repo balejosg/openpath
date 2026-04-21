@@ -66,6 +66,85 @@ function Remove-RegistryKeyIfPresent {
     }
 }
 
+function Stop-OpenPathScheduledTask {
+    $tasks = Get-ScheduledTask -TaskName "OpenPath-*" -ErrorAction SilentlyContinue
+
+    foreach ($task in $tasks) {
+        Stop-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue
+        Unregister-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$false -ErrorAction SilentlyContinue
+    }
+}
+
+function Stop-OpenPathRootedProcess {
+    $processIds = @()
+
+    $processIds += Get-Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.Id -ne $PID -and
+            $_.Path -and
+            $_.Path.StartsWith($OpenPathRoot, [System.StringComparison]::OrdinalIgnoreCase)
+        } |
+        Select-Object -ExpandProperty Id
+
+    $processIds += Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.ProcessId -ne $PID -and
+            $_.CommandLine -like "*$OpenPathRoot*"
+        } |
+        Select-Object -ExpandProperty ProcessId
+
+    $processIds |
+        Where-Object { $_ } |
+        Select-Object -Unique |
+        ForEach-Object {
+            Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue
+        }
+}
+
+function Remove-OpenPathInstallRoot {
+    param(
+        [switch]$KeepLogs
+    )
+
+    if (-not (Test-Path $OpenPathRoot)) {
+        return
+    }
+
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        try {
+            if ($KeepLogs) {
+                Get-ChildItem $OpenPathRoot -Exclude "data" -ErrorAction SilentlyContinue |
+                    Remove-Item -Recurse -Force -ErrorAction Stop
+
+                $dataPath = Join-Path $OpenPathRoot "data"
+                if (Test-Path $dataPath) {
+                    Get-ChildItem $dataPath -Exclude "logs" -ErrorAction SilentlyContinue |
+                        Remove-Item -Recurse -Force -ErrorAction Stop
+                }
+
+                return
+            }
+
+            Remove-Item $OpenPathRoot -Recurse -Force -ErrorAction Stop
+            if (-not (Test-Path $OpenPathRoot)) {
+                return
+            }
+        }
+        catch {
+            if ($attempt -eq 5) {
+                throw
+            }
+        }
+
+        Stop-OpenPathRootedProcess
+        Start-Sleep -Milliseconds (300 * $attempt)
+    }
+
+    if (Test-Path $OpenPathRoot) {
+        throw "OpenPath install root still exists after cleanup: $OpenPathRoot"
+    }
+}
+
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "  OpenPath DNS para Windows - Desinstalador" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
@@ -90,8 +169,7 @@ if (Test-Path "$OpenPathRoot\lib\Services.psm1") {
 
 # Step 1: Remove scheduled tasks
 Write-Host "[1/6] Eliminando tareas programadas..." -ForegroundColor Yellow
-Get-ScheduledTask -TaskName "OpenPath-*" -ErrorAction SilentlyContinue | 
-    Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue
+Stop-OpenPathScheduledTask
 Write-Host "  Tareas eliminadas" -ForegroundColor Green
 
 # Step 2: Remove firewall rules
@@ -183,14 +261,14 @@ else {
 # Step 6: Remove whitelist files
 Write-Host "[6/6] Eliminando archivos..." -ForegroundColor Yellow
 if (Test-Path $OpenPathRoot) {
+    Stop-OpenPathRootedProcess
+
     if ($KeepLogs) {
-        # Keep logs directory
-        Get-ChildItem $OpenPathRoot -Exclude "data" | Remove-Item -Recurse -Force
-        Get-ChildItem "$OpenPathRoot\data" -Exclude "logs" | Remove-Item -Recurse -Force
+        Remove-OpenPathInstallRoot -KeepLogs
         Write-Host "  Archivos eliminados (logs conservados)" -ForegroundColor Green
     }
     else {
-        Remove-Item $OpenPathRoot -Recurse -Force
+        Remove-OpenPathInstallRoot
         Write-Host "  Archivos eliminados" -ForegroundColor Green
     }
 }

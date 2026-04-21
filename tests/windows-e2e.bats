@@ -433,6 +433,23 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "windows uninstaller stops live OpenPath tasks before removing install root" {
+    run grep -nF 'Stop-ScheduledTask -TaskName $task.TaskName' "$PROJECT_DIR/windows/Uninstall-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Stop-OpenPathRootedProcess' "$PROJECT_DIR/windows/Uninstall-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '$_.Path.StartsWith($OpenPathRoot, [System.StringComparison]::OrdinalIgnoreCase)' "$PROJECT_DIR/windows/Uninstall-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '$_.CommandLine -like "*$OpenPathRoot*"' "$PROJECT_DIR/windows/Uninstall-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Remove-OpenPathInstallRoot' "$PROJECT_DIR/windows/Uninstall-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows lifecycle e2e covers agent self-update and uninstall verification" {
     run grep -nF "Testing installed agent self-update against the local server..." "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
     [ "$status" -eq 0 ]
