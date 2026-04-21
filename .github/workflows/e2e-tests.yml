@@ -156,10 +156,21 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Prepare self-hosted Windows runner state
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/reset-self-hosted-windows-runner.ps1
+
       - name: Run Windows E2E
         shell: pwsh
         run: |
           pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/run-windows-e2e.ps1
+
+      - name: Restore self-hosted Windows runner state
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/reset-self-hosted-windows-runner.ps1
 
   # ============================================
   # Linux Student Policy Tests
@@ -211,6 +222,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Prepare self-hosted Windows runner state
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/reset-self-hosted-windows-runner.ps1
+
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
 
@@ -228,6 +244,12 @@ jobs:
           path: tests/e2e/artifacts/windows-student-policy
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Restore self-hosted Windows runner state
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/reset-self-hosted-windows-runner.ps1
 
   # ============================================
   # Summary Job

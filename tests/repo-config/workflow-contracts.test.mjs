@@ -297,13 +297,19 @@ test('required Windows CI runs Pester in an untracked child host without success
   const windowsJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-windows');
   const windowsProcessReporter = readText('tests/e2e/ci/report-windows-processes.ps1');
   const windowsPesterRunnerPath = 'tests/e2e/ci/run-windows-pester-isolated.ps1';
+  const windowsRunnerResetPath = 'tests/e2e/ci/reset-self-hosted-windows-runner.ps1';
 
   assert.ok(
     existsSync(resolve(projectRoot, windowsPesterRunnerPath)),
     'the required Windows lane should use a committed isolated Pester runner helper'
   );
+  assert.ok(
+    existsSync(resolve(projectRoot, windowsRunnerResetPath)),
+    'the required Windows lane should use a committed self-hosted runner reset helper'
+  );
 
   const windowsPesterRunner = readText(windowsPesterRunnerPath);
+  const windowsRunnerReset = readText(windowsRunnerResetPath);
 
   assert.ok(
     ciWorkflow.includes('linux_bound: ${{ steps.filter.outputs.linux_bound }}'),
@@ -401,6 +407,28 @@ test('required Windows CI runs Pester in an untracked child host without success
   assert.ok(
     windowsJobBlock.includes('tests/e2e/ci/run-windows-pester-isolated.ps1'),
     'ci.yml should run Windows Pester through the isolated helper'
+  );
+  assert.ok(
+    windowsJobBlock.includes('name: Prepare self-hosted Windows runner state') &&
+      windowsJobBlock.includes('name: Restore self-hosted Windows runner state') &&
+      windowsJobBlock.includes('tests/e2e/ci/reset-self-hosted-windows-runner.ps1'),
+    'ci.yml should reset persistent self-hosted Windows state before and after the Pester lane'
+  );
+  assert.ok(
+    windowsRunnerReset.includes("Set-DnsClientServerAddress -InterfaceAlias 'Ethernet'") &&
+      windowsRunnerReset.includes("@('1.1.1.1', '8.8.8.8')"),
+    'the self-hosted Windows reset helper should restore external DNS so the runner can reconnect after client tests'
+  );
+  assert.ok(
+    windowsRunnerReset.includes('Unregister-ScheduledTask') &&
+      windowsRunnerReset.includes("'OpenPath-AgentUpdate'") &&
+      windowsRunnerReset.includes("'OpenPath-Watchdog'"),
+    'the self-hosted Windows reset helper should remove persistent OpenPath scheduled tasks between jobs'
+  );
+  assert.ok(
+    windowsRunnerReset.includes('AcrylicDNSProxySvc') &&
+      windowsRunnerReset.includes('Mozilla Firefox\\distribution'),
+    'the self-hosted Windows reset helper should normalize Acrylic and Firefox policy state between jobs'
   );
   assert.ok(
     !windowsJobBlock.includes('git init .'),
@@ -762,6 +790,12 @@ test('E2E workflow gates expensive platform lanes on targeted changed paths', ()
     'windows-e2e should not keep a hosted-runner matrix after moving to the pinned self-hosted Windows runner'
   );
   assert.ok(
+    windowsE2eBlock.includes('name: Prepare self-hosted Windows runner state') &&
+      windowsE2eBlock.includes('name: Restore self-hosted Windows runner state') &&
+      windowsE2eBlock.includes('tests/e2e/ci/reset-self-hosted-windows-runner.ps1'),
+    'windows-e2e should reset persistent self-hosted Windows state before and after the installer flow'
+  );
+  assert.ok(
     linuxStudentPolicyBlock.includes(
       "needs.detect-relevant-changes.outputs.linux_student_policy == 'true'"
     ),
@@ -776,6 +810,12 @@ test('E2E workflow gates expensive platform lanes on targeted changed paths', ()
   assert.ok(
     windowsStudentPolicyBlock.includes('runs-on: [self-hosted, Windows, X64, proxmox, openpath]'),
     'windows-student-policy should run on the pinned OpenPath self-hosted Windows runner'
+  );
+  assert.ok(
+    windowsStudentPolicyBlock.includes('name: Prepare self-hosted Windows runner state') &&
+      windowsStudentPolicyBlock.includes('name: Restore self-hosted Windows runner state') &&
+      windowsStudentPolicyBlock.includes('tests/e2e/ci/reset-self-hosted-windows-runner.ps1'),
+    'windows-student-policy should reset persistent self-hosted Windows state before and after the Selenium flow'
   );
   assert.ok(
     !e2eWorkflow.includes('runs-on: windows-2022'),

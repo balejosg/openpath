@@ -177,6 +177,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Prepare self-hosted Windows runner state
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/reset-self-hosted-windows-runner.ps1
+
       - name: Run Windows Unit Tests
         id: run-windows-unit-tests
         shell: pwsh
@@ -194,6 +199,12 @@ jobs:
         shell: pwsh
         run: |
           "tests_passed=$env:TESTS_PASSED" >> $env:GITHUB_OUTPUT
+
+      - name: Restore self-hosted Windows runner state
+        if: always()
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/reset-self-hosted-windows-runner.ps1
 
   # ============================================
   # Job 3: Firefox Delivery Contracts
