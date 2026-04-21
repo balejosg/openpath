@@ -262,6 +262,71 @@ test('submitBlockedScreenRequest fills the blocked page request form and waits f
   assert.match(statusText, /Solicitud enviada/);
 });
 
+test('submitBlockedScreenRequest includes blocked page status when success wait times out', async () => {
+  const elements = new Map([
+    [
+      '#request-reason',
+      {
+        async clear() {},
+        async sendKeys() {},
+      },
+    ],
+    [
+      '#submit-unblock-request',
+      {
+        async click() {},
+      },
+    ],
+    [
+      '#request-status',
+      {
+        async getText() {
+          return 'No se pudo enviar la solicitud. runtime disconnected';
+        },
+      },
+    ],
+  ]);
+
+  const state = {
+    getDriver() {
+      return {
+        async findElement(locator: { value: string }) {
+          const element = elements.get(locator.value);
+          assert.ok(element, `Missing fake element for ${locator.value}`);
+          return element;
+        },
+        async getCurrentUrl() {
+          return 'moz-extension://extension-id/blocked/blocked.html?domain=blocked.test';
+        },
+        async getTitle() {
+          return 'Sitio bloqueado';
+        },
+        async wait(condition: (driver: unknown) => Promise<boolean>, timeoutMs: number) {
+          const result = await condition(this);
+          assert.equal(result, false);
+          throw new Error(`Wait timed out after ${timeoutMs.toString()}ms`);
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      submitBlockedScreenRequest(state as never, {
+        reason: 'Necesario para una actividad de clase',
+        timeoutMs: 123,
+      }),
+    (error) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /Wait timed out after 123ms/);
+      assert.match(error.message, /latest #request-status: No se pudo enviar la solicitud/);
+      assert.match(error.message, /currentUrl: moz-extension:\/\/extension-id\/blocked/);
+      assert.match(error.message, /title: Sitio bloqueado/);
+      return true;
+    }
+  );
+});
+
 test('StudentPolicyDriver submits requests after blocked-page navigation timeout with the requested timeout', async () => {
   const timeoutError = new Error('Navigation timed out after 8000 ms');
   timeoutError.name = 'TimeoutError';

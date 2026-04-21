@@ -126,11 +126,25 @@ export async function submitBlockedScreenRequest(
   await submitButton.click();
 
   let latestStatus = '';
-  await driver.wait(async () => {
-    const statusElement = await driver.findElement(By.css('#request-status'));
-    latestStatus = (await statusElement.getText()).trim();
-    return /Solicitud enviada|Request submitted/i.test(latestStatus);
-  }, timeoutMs);
+  try {
+    await driver.wait(async () => {
+      const statusElement = await driver.findElement(By.css('#request-status'));
+      latestStatus = (await statusElement.getText()).trim();
+      return /Solicitud enviada|Request submitted/i.test(latestStatus);
+    }, timeoutMs);
+  } catch (error) {
+    const currentUrl = await driver.getCurrentUrl().catch(() => '<unavailable>');
+    const title = await driver.getTitle().catch(() => '<unavailable>');
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      [
+        message,
+        `latest #request-status: ${latestStatus || '<empty>'}`,
+        `currentUrl: ${currentUrl}`,
+        `title: ${title}`,
+      ].join('; ')
+    );
+  }
 
   return latestStatus;
 }
