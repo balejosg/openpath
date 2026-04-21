@@ -932,6 +932,7 @@ free_port_53() { return 0; }
 configure_upstream_dns() { return 0; }
 configure_resolv_conf() { generate_dnsmasq_config; return 0; }
 create_dns_init_script() { return 0; }
+restart_dnsmasq() { return 0; }
 systemctl() { return 0; }
 
 awk '/^activate_enrolled_connectivity\(\) \{/,/^}/' \
@@ -948,6 +949,73 @@ EOF
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"primary=9.9.9.9"* ]]
+}
+
+@test "activate_enrolled_connectivity restarts dnsmasq after freeing port 53" {
+    local helper_script="$TEST_TMP_DIR/activate-enrolled-dnsmasq.sh"
+    local state_dir="$TEST_TMP_DIR/activate-enrolled-dnsmasq-state"
+
+    mkdir -p "$state_dir"
+
+    cat > "$helper_script" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+project_dir="$1"
+state_dir="$2"
+extracted_script="$state_dir/activate-enrolled-connectivity.sh"
+
+export CALLS_FILE="$state_dir/calls"
+export PRIMARY_DNS="9.9.9.9"
+
+source "$project_dir/linux/lib/common.sh"
+
+record_call() {
+    printf '%s\n' "$1" >> "$CALLS_FILE"
+}
+
+detect_primary_dns() { record_call "detect_primary_dns"; printf '9.9.9.9\n'; }
+free_port_53() { record_call "free_port_53"; return 0; }
+configure_upstream_dns() { record_call "configure_upstream_dns"; return 0; }
+configure_resolv_conf() { record_call "configure_resolv_conf"; return 0; }
+create_dns_init_script() { record_call "create_dns_init_script"; return 0; }
+generate_dnsmasq_config() { record_call "generate_dnsmasq_config"; return 0; }
+restart_dnsmasq() { record_call "restart_dnsmasq"; return 0; }
+systemctl() {
+    if [ "${1:-}" = "is-active" ] && [ "${2:-}" = "--quiet" ] && [ "${3:-}" = "dnsmasq" ]; then
+        return 0
+    fi
+    if [ "${1:-}" = "stop" ] && [ "${2:-}" = "dnsmasq" ]; then
+        record_call "stop_dnsmasq"
+        return 0
+    fi
+    if [ "${1:-}" = "daemon-reload" ]; then
+        record_call "daemon_reload"
+        return 0
+    fi
+    return 0
+}
+
+awk '/^activate_enrolled_connectivity\(\) \{/,/^}/' \
+    "$project_dir/linux/lib/runtime-cli-commands.sh" > "$extracted_script"
+
+source "$extracted_script"
+activate_enrolled_connectivity
+
+cat "$CALLS_FILE"
+EOF
+    chmod +x "$helper_script"
+
+    run "$helper_script" "$PROJECT_DIR" "$state_dir"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"stop_dnsmasq"* ]]
+    [[ "$output" == *"free_port_53"* ]]
+    [[ "$output" == *"configure_upstream_dns"* ]]
+    [[ "$output" == *"configure_resolv_conf"* ]]
+    [[ "$output" == *"create_dns_init_script"* ]]
+    [[ "$output" == *"generate_dnsmasq_config"* ]]
+    [[ "$output" == *"restart_dnsmasq"* ]]
 }
 
 @test "prepare_registration_connectivity restores the system resolver before registration when dnsmasq is active" {

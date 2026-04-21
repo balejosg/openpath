@@ -31,7 +31,15 @@ activate_enrolled_connectivity() {
             export PRIMARY_DNS
         fi
 
+        if systemctl is-active --quiet dnsmasq 2>/dev/null; then
+            systemctl stop dnsmasq 2>/dev/null || true
+        fi
+
         if ! free_port_53 || ! configure_upstream_dns || ! configure_resolv_conf || ! create_dns_init_script; then
+            return 1
+        fi
+
+        if ! generate_dnsmasq_config || ! restart_dnsmasq; then
             return 1
         fi
 
