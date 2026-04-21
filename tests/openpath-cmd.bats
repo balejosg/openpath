@@ -1079,6 +1079,72 @@ EOF
     [[ "$output" != *"restart_dnsmasq"* ]]
 }
 
+@test "prepare_registration_connectivity restores DNS before registration when resolv.conf points to local dnsmasq" {
+    local helper_script="$TEST_TMP_DIR/prepare-registration-local-resolver.sh"
+    local state_dir="$TEST_TMP_DIR/registration-local-resolver-state"
+
+    mkdir -p "$state_dir"
+
+    cat > "$helper_script" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+project_dir="$1"
+state_dir="$2"
+extracted_script="$state_dir/prepare-registration-connectivity.sh"
+
+export ETC_CONFIG_DIR="$state_dir/etc"
+export VAR_STATE_DIR="$state_dir/var"
+export WHITELIST_URL_CONF="$ETC_CONFIG_DIR/whitelist-url.conf"
+export WHITELIST_FILE="$state_dir/whitelist.txt"
+export DNSMASQ_CONF="$state_dir/openpath.conf"
+export OPENPATH_RESOLV_CONF="$state_dir/resolv.conf"
+export CALLS_FILE="$state_dir/calls"
+
+mkdir -p "$ETC_CONFIG_DIR" "$VAR_STATE_DIR"
+printf 'nameserver 127.0.0.1\n' > "$OPENPATH_RESOLV_CONF"
+
+source "$project_dir/linux/lib/common.sh"
+
+record_call() {
+    printf '%s\n' "$1" >> "$CALLS_FILE"
+}
+
+persist_openpath_classroom_runtime_config() {
+    record_call "persist:$1:$2:$3"
+    return 0
+}
+deactivate_firewall() { record_call "deactivate_firewall"; return 0; }
+restore_dns() { record_call "restore_dns"; return 0; }
+generate_dnsmasq_config() { record_call "generate_dnsmasq_config"; return 0; }
+restart_dnsmasq() { record_call "restart_dnsmasq"; return 0; }
+systemctl() {
+    if [ "${1:-}" = "is-active" ] && [ "${2:-}" = "--quiet" ] && [ "${3:-}" = "dnsmasq" ]; then
+        return 3
+    fi
+    return 0
+}
+
+awk '/^prepare_registration_connectivity\(\) \{/,/^}/' \
+    "$project_dir/linux/lib/runtime-cli-commands.sh" > "$extracted_script"
+
+source "$extracted_script"
+prepare_registration_connectivity "https://control.example" "Room 101" "cls_123"
+
+cat "$CALLS_FILE"
+EOF
+    chmod +x "$helper_script"
+
+    run "$helper_script" "$PROJECT_DIR" "$state_dir"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"persist:https://control.example:Room 101:cls_123"* ]]
+    [[ "$output" == *"deactivate_firewall"* ]]
+    [[ "$output" == *"restore_dns"* ]]
+    [[ "$output" != *"generate_dnsmasq_config"* ]]
+    [[ "$output" != *"restart_dnsmasq"* ]]
+}
+
 @test "cmd_enroll persists api, classroom, and tokenized whitelist together after successful registration" {
     local helper_script="$TEST_TMP_DIR/run-cmd-enroll-success.sh"
     local state_dir="$TEST_TMP_DIR/enroll-success-state"

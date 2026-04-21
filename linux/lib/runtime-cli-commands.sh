@@ -16,9 +16,17 @@ prepare_registration_connectivity() {
     # shellcheck disable=SC2034 # Shared state consumed by sourced DNS helpers.
     OPENPATH_PROTECTED_DOMAINS_READY=0
 
-    if command -v systemctl >/dev/null 2>&1 && systemctl is-active --quiet dnsmasq 2>/dev/null; then
-        deactivate_firewall || true
-        restore_dns || return 1
+    if command -v systemctl >/dev/null 2>&1; then
+        local resolv_conf="${OPENPATH_RESOLV_CONF:-/etc/resolv.conf}"
+        local local_resolver_configured=false
+        if [ -f "$resolv_conf" ] && awk '$1 == "nameserver" && $2 == "127.0.0.1" { found = 1 } END { exit found ? 0 : 1 }' "$resolv_conf" 2>/dev/null; then
+            local_resolver_configured=true
+        fi
+
+        if systemctl is-active --quiet dnsmasq 2>/dev/null || [ "$local_resolver_configured" = true ]; then
+            deactivate_firewall || true
+            restore_dns || return 1
+        fi
     fi
 
     return 0
