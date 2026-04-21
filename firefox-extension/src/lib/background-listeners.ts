@@ -26,6 +26,7 @@ const NATIVE_CONFIRMED_BLOCKED_SCREEN_ERRORS = new Set([
   'NS_ERROR_NET_TIMEOUT',
 ]);
 const NATIVE_POLICY_BLOCKED_ERROR = 'OPENPATH_NATIVE_POLICY_BLOCKED';
+const DUPLICATE_BLOCKED_SCREEN_REDIRECT_WINDOW_MS = 60_000;
 
 interface BlockedScreenContext {
   tabId: number;
@@ -142,8 +143,13 @@ function buildRedirectKey(context: ConfirmBlockedScreenContext): string {
   return [context.tabId.toString(), context.hostname, context.error, context.url].join(':');
 }
 
+function buildDisplayedRedirectKey(context: ConfirmBlockedScreenContext): string {
+  return [context.tabId.toString(), context.hostname, context.url].join(':');
+}
+
 export function registerBackgroundListeners(options: BackgroundListenersOptions): void {
   const pendingBlockedScreenRedirects = new Set<string>();
+  const displayedBlockedScreenRedirects = new Map<number, { key: string; redirectedAt: number }>();
   const latestNativePolicyPreflightByTab = new Map<number, string>();
 
   async function redirectToBlockedScreenOnce(
@@ -155,6 +161,15 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
     }
   ): Promise<void> {
     const redirectKey = buildRedirectKey(context);
+    const displayedRedirectKey = buildDisplayedRedirectKey(context);
+    const displayedRedirect = displayedBlockedScreenRedirects.get(context.tabId);
+    if (
+      displayedRedirect?.key === displayedRedirectKey &&
+      Date.now() - displayedRedirect.redirectedAt < DUPLICATE_BLOCKED_SCREEN_REDIRECT_WINDOW_MS
+    ) {
+      return;
+    }
+
     if (pendingBlockedScreenRedirects.has(redirectKey)) {
       return;
     }
@@ -184,6 +199,10 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
         hostname: context.hostname,
         error: context.error,
         origin: context.origin,
+      });
+      displayedBlockedScreenRedirects.set(context.tabId, {
+        key: displayedRedirectKey,
+        redirectedAt: Date.now(),
       });
     } catch (error) {
       logger.warn('[Monitor] No se pudo confirmar pantalla de bloqueo', {
@@ -360,6 +379,7 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
 
   options.browser.tabs.onRemoved.addListener((tabId: number) => {
     latestNativePolicyPreflightByTab.delete(tabId);
+    displayedBlockedScreenRedirects.delete(tabId);
     options.disposeTab(tabId);
     logger.debug(`[Monitor] Tab ${tabId.toString()} cerrada, datos eliminados`);
   });

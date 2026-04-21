@@ -427,6 +427,48 @@ void describe('background listeners blocked-screen routing', () => {
     ]);
   });
 
+  void test('does not reload the blocked screen for late duplicate errors after redirecting', async () => {
+    const harness = createListenerHarness({
+      confirmBlockedScreenNavigation: () => Promise.resolve(true),
+    });
+    assert.ok(harness.webNavigationBefore);
+    assert.ok(harness.webRequestError);
+
+    const blockedUrl = 'https://late-duplicate.example/lesson';
+    harness.webNavigationBefore({
+      frameId: 0,
+      tabId: 16,
+      url: blockedUrl,
+    });
+
+    await waitForAsyncListeners();
+    assert.deepEqual(harness.redirects, [
+      {
+        tabId: 16,
+        hostname: 'late-duplicate.example',
+        error: 'OPENPATH_NATIVE_POLICY_BLOCKED',
+        origin: null,
+      },
+    ]);
+
+    harness.webRequestError({
+      error: 'NS_ERROR_NET_TIMEOUT',
+      tabId: 16,
+      type: 'main_frame',
+      url: blockedUrl,
+    } as WebRequest.OnErrorOccurredDetailsType);
+
+    await waitForAsyncListeners();
+    assert.deepEqual(harness.redirects, [
+      {
+        tabId: 16,
+        hostname: 'late-duplicate.example',
+        error: 'OPENPATH_NATIVE_POLICY_BLOCKED',
+        origin: null,
+      },
+    ]);
+  });
+
   void test('does not redirect subresource blocking errors to the blocked screen', async () => {
     const harness = createListenerHarness({
       confirmBlockedScreenNavigation: () => Promise.resolve(true),
