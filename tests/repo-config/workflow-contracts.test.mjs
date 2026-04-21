@@ -138,6 +138,32 @@ test('self-hosted Linux runner smoke workflow is manual and pinned to the OpenPa
   );
 });
 
+test('self-hosted Windows runner smoke workflow is manual and pinned to the OpenPath runner', () => {
+  const smokeWorkflow = readText('.github/workflows/self-hosted-windows-runner-smoke.yml');
+
+  assert.ok(
+    smokeWorkflow.includes('workflow_dispatch:'),
+    'self-hosted Windows runner smoke must only be manually dispatched'
+  );
+  assert.ok(
+    !smokeWorkflow.includes('pull_request:') && !smokeWorkflow.includes('push:'),
+    'self-hosted Windows runner smoke must not run on untrusted or automatic repository events'
+  );
+  assert.ok(
+    smokeWorkflow.includes('runs-on: [self-hosted, Windows, X64, proxmox, openpath]'),
+    'self-hosted Windows runner smoke should target only the OpenPath Windows runner labels'
+  );
+  assert.ok(
+    smokeWorkflow.includes('openpath-windows-103'),
+    'self-hosted Windows runner smoke should verify the expected OpenPath runner name'
+  );
+  assert.ok(
+    smokeWorkflow.includes('actions/checkout@v6') &&
+      smokeWorkflow.includes('persist-credentials: false'),
+    'self-hosted Windows runner smoke should use checkout without persisted credentials'
+  );
+});
+
 test('Codecov coverage uploads stay wired to active workflows and the README badge targets the app UI', () => {
   const readme = readText('README.md');
   const reusableTestWorkflow = readText('.github/workflows/reusable-test.yml');

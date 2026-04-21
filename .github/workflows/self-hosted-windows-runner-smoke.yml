@@ -1,0 +1,46 @@
+name: Self-Hosted Windows Runner Smoke
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: self-hosted-windows-runner-smoke-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Windows runner smoke
+    runs-on: [self-hosted, Windows, X64, proxmox, openpath]
+    timeout-minutes: 10
+    steps:
+      - name: Verify runner identity
+        shell: pwsh
+        run: |
+          if ($env:RUNNER_NAME -ne 'openpath-windows-103') {
+            throw "Unexpected runner name: $env:RUNNER_NAME"
+          }
+          if ($env:RUNNER_OS -ne 'Windows') {
+            throw "Unexpected runner OS: $env:RUNNER_OS"
+          }
+          if ($env:RUNNER_ARCH -ne 'X64') {
+            throw "Unexpected runner arch: $env:RUNNER_ARCH"
+          }
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Repository smoke
+        shell: pwsh
+        run: |
+          if (-not (Test-Path package.json -PathType Leaf)) {
+            throw 'package.json was not checked out'
+          }
+          if (-not (Test-Path .github/workflows -PathType Container)) {
+            throw 'workflow directory was not checked out'
+          }
+          git status --short
