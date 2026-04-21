@@ -12,6 +12,10 @@ interface CallbackRuntime {
   sendMessage(message: unknown, callback: (response: unknown) => void): void;
 }
 
+type RequestStatusType = 'success' | 'error' | 'pending';
+
+const RECENT_REQUEST_STATUS_TTL_MS = 120_000;
+
 function getElement(id: string): HTMLElement | null {
   return document.getElementById(id);
 }
@@ -26,13 +30,78 @@ function setFeedback(text: string): void {
   setText('copy-feedback', text);
 }
 
-function setRequestStatus(text: string, type?: 'success' | 'error' | 'pending'): void {
+function setRequestStatus(text: string, type?: RequestStatusType): void {
   const el = getElement('request-status');
   if (!el) return;
   el.textContent = text;
   el.classList.remove('success', 'error', 'pending');
   if (type) {
     el.classList.add(type);
+  }
+}
+
+function buildRecentRequestStatusKey(domain: string): string {
+  return `openpath:blocked-request-status:${encodeURIComponent(domain)}`;
+}
+
+function getSessionStorage(): Storage | null {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function clearRecentRequestStatus(domain: string): void {
+  try {
+    getSessionStorage()?.removeItem(buildRecentRequestStatusKey(domain));
+  } catch {
+    // Best effort only; the visible page state is still updated directly.
+  }
+}
+
+function saveRecentRequestStatus(domain: string, text: string, type: RequestStatusType): void {
+  try {
+    getSessionStorage()?.setItem(
+      buildRecentRequestStatusKey(domain),
+      JSON.stringify({
+        storedAt: Date.now(),
+        text,
+        type,
+      })
+    );
+  } catch {
+    // Best effort only; the visible page state is still updated directly.
+  }
+}
+
+function restoreRecentRequestStatus(domain: string): void {
+  const storage = getSessionStorage();
+  if (!storage) return;
+
+  const key = buildRecentRequestStatusKey(domain);
+  try {
+    const rawStatus = storage.getItem(key);
+    if (!rawStatus) return;
+
+    const status = JSON.parse(rawStatus) as {
+      storedAt?: unknown;
+      text?: unknown;
+      type?: unknown;
+    };
+    if (
+      typeof status.storedAt !== 'number' ||
+      Date.now() - status.storedAt > RECENT_REQUEST_STATUS_TTL_MS ||
+      typeof status.text !== 'string' ||
+      !['success', 'error', 'pending'].includes(String(status.type))
+    ) {
+      storage.removeItem(key);
+      return;
+    }
+
+    setRequestStatus(status.text, status.type as RequestStatusType);
+  } catch {
+    storage.removeItem(key);
   }
 }
 
@@ -136,6 +205,8 @@ export function main(): void {
     return;
   }
 
+  restoreRecentRequestStatus(context.blockedDomain);
+
   submitBtn.addEventListener('click', () => {
     void (async (): Promise<void> => {
       const reason = reasonInput.value.trim();
@@ -145,6 +216,7 @@ export function main(): void {
       }
 
       submitBtn.disabled = true;
+      clearRecentRequestStatus(context.blockedDomain);
       setRequestStatus('Enviando solicitud...', 'pending');
 
       try {
@@ -155,13 +227,17 @@ export function main(): void {
           error: context.error,
         })) as { success?: boolean; error?: unknown } | null;
         if (response?.success === true) {
-          setRequestStatus('Solicitud enviada. Quedara pendiente hasta que la revisen.', 'success');
+          const successText = 'Solicitud enviada. Quedara pendiente hasta que la revisen.';
+          setRequestStatus(successText, 'success');
+          saveRecentRequestStatus(context.blockedDomain, successText, 'success');
           reasonInput.value = '';
           return;
         }
 
+        clearRecentRequestStatus(context.blockedDomain);
         setRequestStatus(buildFallbackMessage(response?.error), 'error');
       } catch (requestError) {
+        clearRecentRequestStatus(context.blockedDomain);
         setRequestStatus(buildFallbackMessage(requestError), 'error');
       } finally {
         submitBtn.disabled = false;

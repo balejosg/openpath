@@ -55,7 +55,8 @@ function normalizeMessages(messages: unknown[]): Record<string, unknown>[] {
 function runBlockedScript(
   response: unknown,
   search = '?domain=learning.example&error=NS_ERROR_UNKNOWN_HOST&origin=portal.example',
-  runtimeApi: 'browser-promise' | 'chrome-callback' = 'browser-promise'
+  runtimeApi: 'browser-promise' | 'chrome-callback' = 'browser-promise',
+  sessionStorageStore = new Map<string, string>()
 ): {
   elements: Map<string, MockElement>;
   messages: unknown[];
@@ -133,6 +134,15 @@ function runBlockedScript(
           replace: (): void => undefined,
           search,
         },
+        sessionStorage: {
+          getItem: (key: string): string | null => sessionStorageStore.get(key) ?? null,
+          removeItem: (key: string): void => {
+            sessionStorageStore.delete(key);
+          },
+          setItem: (key: string, value: string): void => {
+            sessionStorageStore.set(key, value);
+          },
+        },
       },
     },
   });
@@ -196,6 +206,42 @@ void describe('blocked screen', () => {
       },
     ]);
     assert.match(elements.get('request-status')?.textContent ?? '', /Solicitud enviada/);
+  });
+
+  void test('restores a recent submitted status after the blocked page reloads', async () => {
+    const sessionStorageStore = new Map<string, string>();
+    const search = '?domain=learning.example&error=NS_ERROR_UNKNOWN_HOST&origin=portal.example';
+    const firstLoad = runBlockedScript(
+      {
+        success: true,
+        id: 'req_126',
+        status: 'pending',
+      },
+      search,
+      'browser-promise',
+      sessionStorageStore
+    );
+
+    const reason = firstLoad.elements.get('request-reason');
+    assert.ok(reason);
+    reason.value = 'Lo necesito para una actividad de clase';
+
+    await firstLoad.elements.get('submit-unblock-request')?.trigger('click');
+    await flushBlockedScreenAsyncHandlers();
+    assert.match(firstLoad.elements.get('request-status')?.textContent ?? '', /Solicitud enviada/);
+
+    const secondLoad = runBlockedScript(
+      {
+        success: false,
+        error: 'should not submit again',
+      },
+      search,
+      'browser-promise',
+      sessionStorageStore
+    );
+
+    assert.deepStrictEqual(secondLoad.messages, []);
+    assert.match(secondLoad.elements.get('request-status')?.textContent ?? '', /Solicitud enviada/);
   });
 
   void test('uses callback runtime messaging when the blocked page runs on the chrome namespace', async () => {
