@@ -45,6 +45,7 @@ function waitForAsyncListeners(): Promise<void> {
 function createListenerHarness(
   options: {
     confirmBlockedScreenNavigation?: (context: ConfirmBlockedScreenContext) => Promise<boolean>;
+    currentTabUrl?: string | null;
     handleRuntimeMessage?: (message: unknown, sender: unknown) => unknown;
   } = {}
 ): {
@@ -113,6 +114,11 @@ function createListenerHarness(
       },
     },
     tabs: {
+      get: () =>
+        Promise.resolve({
+          id: 1,
+          url: options.currentTabUrl ?? undefined,
+        }),
       onRemoved: {
         addListener: () => undefined,
       },
@@ -467,6 +473,26 @@ void describe('background listeners blocked-screen routing', () => {
         origin: null,
       },
     ]);
+  });
+
+  void test('does not redirect when the tab already shows the blocked screen for the same hostname', async () => {
+    const harness = createListenerHarness({
+      confirmBlockedScreenNavigation: () => Promise.resolve(true),
+      currentTabUrl:
+        'moz-extension://unit-test/blocked/blocked.html?domain=late-duplicate.example&error=OPENPATH_NATIVE_POLICY_BLOCKED',
+    });
+    assert.ok(harness.webRequestError);
+
+    harness.webRequestError({
+      error: 'NS_ERROR_NET_TIMEOUT',
+      tabId: 17,
+      type: 'main_frame',
+      url: 'https://late-duplicate.example/favicon.ico',
+    } as WebRequest.OnErrorOccurredDetailsType);
+
+    await waitForAsyncListeners();
+
+    assert.deepEqual(harness.redirects, []);
   });
 
   void test('does not redirect subresource blocking errors to the blocked screen', async () => {

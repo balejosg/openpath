@@ -147,10 +147,45 @@ function buildDisplayedRedirectKey(context: ConfirmBlockedScreenContext): string
   return [context.tabId.toString(), context.hostname, context.url].join(':');
 }
 
+function isSameBlockedScreenUrl(
+  currentUrl: string,
+  blockedScreenUrl: string,
+  hostname: string
+): boolean {
+  try {
+    const current = new URL(currentUrl);
+    const blockedScreen = new URL(blockedScreenUrl);
+    return (
+      current.origin === blockedScreen.origin &&
+      current.pathname === blockedScreen.pathname &&
+      current.searchParams.get('domain') === hostname
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function registerBackgroundListeners(options: BackgroundListenersOptions): void {
   const pendingBlockedScreenRedirects = new Set<string>();
   const displayedBlockedScreenRedirects = new Map<number, { key: string; redirectedAt: number }>();
   const latestNativePolicyPreflightByTab = new Map<number, string>();
+
+  async function tabAlreadyShowsBlockedScreen(
+    context: ConfirmBlockedScreenContext
+  ): Promise<boolean> {
+    try {
+      const tab = await options.browser.tabs.get(context.tabId);
+      return typeof tab.url === 'string'
+        ? isSameBlockedScreenUrl(
+            tab.url,
+            options.browser.runtime.getURL(BLOCKED_SCREEN_PATH),
+            context.hostname
+          )
+        : false;
+    } catch {
+      return false;
+    }
+  }
 
   async function redirectToBlockedScreenOnce(
     context: ConfirmBlockedScreenContext,
@@ -176,6 +211,10 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
 
     pendingBlockedScreenRedirects.add(redirectKey);
     try {
+      if (await tabAlreadyShowsBlockedScreen(context)) {
+        return;
+      }
+
       if (optionsForRedirect.requireNativeConfirmation) {
         const confirmed = await options.confirmBlockedScreenNavigation?.(context);
         if (confirmed !== true) {
