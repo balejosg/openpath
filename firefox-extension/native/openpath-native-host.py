@@ -31,6 +31,7 @@ WHITELIST_CMD_CANDIDATES = ["/usr/local/bin/openpath", "/usr/local/bin/whitelist
 MAX_DOMAINS = 50
 MAX_PATH_RULES = 500
 MAX_LOG_SIZE_MB = 5
+BLOCKED_DNS_SENTINELS = {"0.0.0.0", "::", "192.0.2.1", "100::"}
 
 
 def get_log_path():
@@ -208,6 +209,43 @@ def is_dns_policy_active():
     return not whitelist_marks_system_disabled(whitelist_file)
 
 
+def whitelist_file_contains_domain(whitelist_file, domain):
+    try:
+        expected = domain.lower()
+        with open(whitelist_file, "r", encoding="utf-8", errors="ignore") as f:
+            for raw_line in f:
+                line = raw_line.strip().lower()
+                if not line or line.startswith("#"):
+                    continue
+                if line == expected:
+                    return True
+    except Exception as e:
+        log_debug(f"Error reading whitelist file for {domain}: {e}")
+
+    return False
+
+
+def resolve_domain_with_system_dns(domain):
+    try:
+        addresses = socket.getaddrinfo(domain, None)
+    except socket.gaierror:
+        return False, None
+    except Exception as e:
+        log_debug(f"Error resolving domain {domain}: {e}")
+        return False, None
+
+    first_blocked_sentinel = None
+    for address in addresses:
+        ip = address[4][0]
+        if ip in BLOCKED_DNS_SENTINELS:
+            if first_blocked_sentinel is None:
+                first_blocked_sentinel = ip
+            continue
+        return True, ip
+
+    return False, first_blocked_sentinel
+
+
 def check_domain(domain):
     """
     Verifica si un dominio está en la whitelist y si resuelve.
@@ -229,8 +267,14 @@ def check_domain(domain):
         "resolved_ip": None,
     }
 
+    whitelist_file = get_whitelist_file_path()
+    if whitelist_file is not None:
+        result["in_whitelist"] = whitelist_file_contains_domain(whitelist_file, domain)
+
     if whitelist_cmd is None:
-        result["error"] = "OpenPath whitelist command not found"
+        resolves, resolved_ip = resolve_domain_with_system_dns(domain)
+        result["resolves"] = resolves
+        result["resolved_ip"] = resolved_ip
         return result
 
     try:
