@@ -50,19 +50,73 @@ function Restore-OriginalDNS {
     Clear-DnsClientCache
 }
 
+function Get-AcrylicService {
+    $service = Get-Service -Name 'AcrylicDNSProxySvc' -ErrorAction SilentlyContinue
+    if ($service) { return $service }
+
+    return Get-Service -DisplayName '*Acrylic*' -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+
+function Ensure-AcrylicService {
+    [CmdletBinding()]
+    param(
+        [switch]$Start
+    )
+
+    try {
+        $acrylicPath = Get-AcrylicPath
+        if (-not $acrylicPath) { return $false }
+
+        $service = Get-AcrylicService
+        if (-not $service -and (Test-Path (Join-Path $acrylicPath 'AcrylicService.exe'))) {
+            Register-AcrylicServiceFromPath -AcrylicPath $acrylicPath | Out-Null
+            Start-Sleep -Seconds 2
+            $service = Get-AcrylicService
+        }
+
+        if (-not $service) {
+            Write-OpenPathLog 'Acrylic service is not registered' -Level WARN
+            return $false
+        }
+
+        if ($Start -and $service.Status -ne 'Running') {
+            Start-Service -Name $service.Name -ErrorAction Stop
+            $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(20))
+            $service = Get-AcrylicService
+        }
+
+        if ($Start) {
+            return ($service.Status -eq 'Running')
+        }
+
+        return $true
+    }
+    catch {
+        Write-OpenPathLog "Failed to ensure Acrylic service: $_" -Level WARN
+        return $false
+    }
+}
+
 function Restart-AcrylicService {
     [CmdletBinding(SupportsShouldProcess)] param()
     if (-not $PSCmdlet.ShouldProcess("Acrylic DNS Proxy service", "Restart")) { return $false }
     Write-OpenPathLog "Restarting Acrylic service..."
-    $serviceName = "AcrylicDNSProxySvc"
     try {
         Clear-AcrylicCache | Out-Null
-        $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-        if (-not $service) { $service = Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1 }
+        $service = Get-AcrylicService
+        if (-not $service) {
+            Ensure-AcrylicService -Start | Out-Null
+            $service = Get-AcrylicService
+        }
         if ($service) {
-            Restart-Service -Name $service.Name -Force
-            Start-Sleep -Seconds 2
-            $service = Get-Service -Name $service.Name
+            if ($service.Status -eq 'Running') {
+                Restart-Service -Name $service.Name -Force
+            }
+            else {
+                Start-Service -Name $service.Name -ErrorAction Stop
+            }
+            $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(20))
+            $service = Get-AcrylicService
             if ($service.Status -eq 'Running') {
                 Write-OpenPathLog "Acrylic service restarted successfully"
                 return $true
@@ -72,8 +126,10 @@ function Restart-AcrylicService {
         if ($acrylicPath -and (Test-Path "$acrylicPath\RestartAcrylicService.bat")) {
             & cmd /c "$acrylicPath\RestartAcrylicService.bat" 2>$null
             Start-Sleep -Seconds 2
-            Write-OpenPathLog "Acrylic service restarted via batch file"
-            return $true
+            if (Ensure-AcrylicService -Start) {
+                Write-OpenPathLog "Acrylic service restarted via batch file"
+                return $true
+            }
         }
         Write-OpenPathLog "Could not restart Acrylic service" -Level ERROR
         return $false
@@ -90,18 +146,13 @@ function Start-AcrylicService {
     $acrylicPath = Get-AcrylicPath
     if (-not $acrylicPath) { return $false }
     try {
-        $service = Get-Service -DisplayName "*Acrylic*" -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($service) {
-            if ($service.Status -ne 'Running') {
-                Start-Service -Name $service.Name
-                Start-Sleep -Seconds 2
-            }
+        if (Ensure-AcrylicService -Start) {
             return $true
         }
         if (Test-Path "$acrylicPath\StartAcrylicService.bat") {
             & cmd /c "$acrylicPath\StartAcrylicService.bat" 2>$null
             Start-Sleep -Seconds 2
-            return $true
+            return (Ensure-AcrylicService -Start)
         }
         return $false
     }

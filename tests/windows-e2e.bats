@@ -281,6 +281,20 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "windows installer re-registers provisioned Acrylic service before validation" {
+    run grep -nF "function Ensure-AcrylicService" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Service.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Register-AcrylicServiceFromPath -AcrylicPath \$acrylicPath" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Service.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Ensure-AcrylicService -Start" "$PROJECT_DIR/windows/Install-OpenPath.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "'Ensure-AcrylicService'" "$PROJECT_DIR/windows/lib/DNS.psm1"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows firewall does not install a global DNS port 53 block that overrides Acrylic" {
     run grep -nF 'OpenPath-DNS-Block-DNS-UDP' "$PROJECT_DIR/windows/lib/internal/Firewall.Policy.ps1"
     [ "$status" -ne 0 ]

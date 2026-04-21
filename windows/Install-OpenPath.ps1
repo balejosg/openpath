@@ -220,6 +220,12 @@ Show-InstallerProgress -Step 4 -Total 7 -Status 'Instalando Acrylic DNS Proxy'
 if (-not $SkipAcrylic) {
     if (Test-AcrylicInstalled) {
         Write-InstallerVerbose '  Acrylic ya instalado'
+        if (Ensure-AcrylicService -Start) {
+            Write-InstallerVerbose '  Servicio Acrylic listo'
+        }
+        else {
+            Write-Host '  ADVERTENCIA: No se pudo registrar o iniciar el servicio Acrylic automaticamente' -ForegroundColor Yellow
+        }
     }
     else {
         $installed = Install-AcrylicDNS

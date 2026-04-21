@@ -13,6 +13,7 @@ Export-ModuleMember -Function @(
     'Get-AcrylicPath',
     'Test-AcrylicInstalled',
     'Install-AcrylicDNS',
+    'Ensure-AcrylicService',
     'Update-AcrylicHost',
     'Set-AcrylicConfiguration',
     'Set-LocalDNS',
