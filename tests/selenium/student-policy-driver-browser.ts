@@ -69,6 +69,160 @@ async function readBlockedPageDomDiagnostics(state: StudentPolicyDriverState): P
   }
 }
 
+async function installBlockedPageSubmitDiagnostics(
+  state: StudentPolicyDriverState
+): Promise<string> {
+  const driver = state.getDriver();
+  try {
+    const snapshot = await driver.executeScript<Record<string, unknown>>(`
+      const root = window;
+      const now = () => new Date().toISOString();
+      const readRequestState = () => {
+        const requestStatus = document.querySelector('#request-status');
+        const reasonInput = document.querySelector('#request-reason');
+        const submitButton = document.querySelector('#submit-unblock-request');
+        return {
+          readyState: document.readyState,
+          locationHref: window.location.href,
+          reasonValueLength: typeof reasonInput?.value === 'string' ? reasonInput.value.length : null,
+          requestStatusTextContent: requestStatus?.textContent ?? null,
+          requestStatusClass: requestStatus?.className ?? null,
+          submitDisabled: typeof submitButton?.disabled === 'boolean' ? submitButton.disabled : null
+        };
+      };
+      const probeKey = '__openpathBlockedPageSubmitProbe';
+      const counterKey = '__openpathBlockedPageSubmitProbeCounter';
+      if (!root[probeKey]) {
+        root[counterKey] = (Number(root[counterKey]) || 0) + 1;
+        const probe = {
+          documentId: 'blocked-page-doc-' + String(root[counterKey]),
+          installedAt: now(),
+          events: [],
+          browserRuntimeAvailable: typeof globalThis.browser?.runtime?.sendMessage === 'function',
+          chromeRuntimeAvailable: typeof globalThis.chrome?.runtime?.sendMessage === 'function'
+        };
+        const push = (event) => {
+          probe.events.push({ at: now(), ...event, state: readRequestState() });
+          if (probe.events.length > 30) {
+            probe.events.shift();
+          }
+        };
+        const wrapRuntime = (namespaceName) => {
+          const runtime = globalThis[namespaceName]?.runtime;
+          if (typeof runtime?.sendMessage !== 'function' || runtime.sendMessage.__openpathSubmitProbeWrapped) {
+            return;
+          }
+          const originalSendMessage = runtime.sendMessage.bind(runtime);
+          const wrappedSendMessage = (...args) => {
+            const message = args[0];
+            push({
+              type: namespaceName + '.runtime.sendMessage:start',
+              action: message && typeof message === 'object' ? message.action ?? null : null,
+              domain: message && typeof message === 'object' ? message.domain ?? null : null
+            });
+            const lastArg = args[args.length - 1];
+            if (typeof lastArg === 'function') {
+              const callback = lastArg;
+              args[args.length - 1] = (response) => {
+                push({
+                  type: namespaceName + '.runtime.sendMessage:callback',
+                  success: response && typeof response === 'object' ? response.success ?? null : null,
+                  error: response && typeof response === 'object' ? response.error ?? null : null
+                });
+                callback(response);
+              };
+            }
+            try {
+              const result = originalSendMessage(...args);
+              if (result && typeof result.then === 'function') {
+                return result.then(
+                  (response) => {
+                    push({
+                      type: namespaceName + '.runtime.sendMessage:resolve',
+                      success: response && typeof response === 'object' ? response.success ?? null : null,
+                      error: response && typeof response === 'object' ? response.error ?? null : null
+                    });
+                    return response;
+                  },
+                  (error) => {
+                    push({
+                      type: namespaceName + '.runtime.sendMessage:reject',
+                      error: error instanceof Error ? error.message : String(error)
+                    });
+                    throw error;
+                  }
+                );
+              }
+              push({ type: namespaceName + '.runtime.sendMessage:return-sync' });
+              return result;
+            } catch (error) {
+              push({
+                type: namespaceName + '.runtime.sendMessage:throw',
+                error: error instanceof Error ? error.message : String(error)
+              });
+              throw error;
+            }
+          };
+          Object.defineProperty(wrappedSendMessage, '__openpathSubmitProbeWrapped', {
+            value: true
+          });
+          runtime.sendMessage = wrappedSendMessage;
+        };
+        ['pagehide', 'pageshow', 'beforeunload'].forEach((type) => {
+          window.addEventListener(type, (event) => {
+            push({
+              type,
+              persisted: typeof event.persisted === 'boolean' ? event.persisted : null
+            });
+          });
+        });
+        wrapRuntime('browser');
+        wrapRuntime('chrome');
+        root[probeKey] = probe;
+        push({ type: 'probe-installed' });
+      }
+      root[probeKey].lastReadAt = now();
+      root[probeKey].lastState = readRequestState();
+      return root[probeKey];
+    `);
+
+    return JSON.stringify(snapshot);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return `<unavailable: ${message}>`;
+  }
+}
+
+async function readBlockedPageSubmitDiagnostics(state: StudentPolicyDriverState): Promise<string> {
+  const driver = state.getDriver();
+  try {
+    const snapshot = await driver.executeScript<Record<string, unknown>>(`
+      const probe = window.__openpathBlockedPageSubmitProbe ?? null;
+      const requestStatus = document.querySelector('#request-status');
+      const reasonInput = document.querySelector('#request-reason');
+      const submitButton = document.querySelector('#submit-unblock-request');
+      return {
+        ...(probe ?? { installed: false }),
+        currentState: {
+          readyState: document.readyState,
+          locationHref: window.location.href,
+          reasonValueLength: typeof reasonInput?.value === 'string' ? reasonInput.value.length : null,
+          requestStatusTextContent: requestStatus?.textContent ?? null,
+          requestStatusClass: requestStatus?.className ?? null,
+          submitDisabled: typeof submitButton?.disabled === 'boolean' ? submitButton.disabled : null,
+          browserRuntimeAvailable: typeof globalThis.browser?.runtime?.sendMessage === 'function',
+          chromeRuntimeAvailable: typeof globalThis.chrome?.runtime?.sendMessage === 'function'
+        }
+      };
+    `);
+
+    return JSON.stringify(snapshot);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return `<unavailable: ${message}>`;
+  }
+}
+
 export async function openAndExpectLoaded(
   state: StudentPolicyDriverState,
   options: OpenAndExpectLoadedOptions
@@ -174,6 +328,7 @@ export async function submitBlockedScreenRequest(
 
   await reasonInput.clear();
   await reasonInput.sendKeys(options.reason);
+  let submitDiagnostics = await installBlockedPageSubmitDiagnostics(state);
   await submitButton.click();
 
   let latestStatus = '';
@@ -187,6 +342,7 @@ export async function submitBlockedScreenRequest(
     const currentUrl = await driver.getCurrentUrl().catch(() => '<unavailable>');
     const title = await driver.getTitle().catch(() => '<unavailable>');
     const domDiagnostics = await readBlockedPageDomDiagnostics(state);
+    submitDiagnostics = await readBlockedPageSubmitDiagnostics(state);
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(
       [
@@ -195,6 +351,7 @@ export async function submitBlockedScreenRequest(
         `currentUrl: ${currentUrl}`,
         `title: ${title}`,
         `blocked page DOM: ${domDiagnostics}`,
+        `blocked page submit diagnostics: ${submitDiagnostics}`,
       ].join('; ')
     );
   }

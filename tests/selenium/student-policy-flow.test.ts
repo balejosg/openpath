@@ -302,6 +302,29 @@ test('submitBlockedScreenRequest includes blocked page status when success wait 
           return 'Sitio bloqueado';
         },
         async executeScript(script: string) {
+          if (script.includes('__openpathBlockedPageSubmitProbe')) {
+            return {
+              documentId: 'blocked-page-doc-1',
+              browserRuntimeAvailable: true,
+              chromeRuntimeAvailable: true,
+              events: [
+                {
+                  type: 'probe-installed',
+                  state: {
+                    reasonValueLength: 38,
+                    requestStatusTextContent: '',
+                    submitDisabled: false,
+                  },
+                },
+              ],
+              currentState: {
+                reasonValueLength: 0,
+                requestStatusTextContent: '',
+                submitDisabled: false,
+              },
+            };
+          }
+
           if (script.includes('document.readyState')) {
             return {
               bodyText: 'Este sitio esta bloqueado por ahora Solicitar desbloqueo',
@@ -337,9 +360,13 @@ test('submitBlockedScreenRequest includes blocked page status when success wait 
       assert.match(error.message, /currentUrl: moz-extension:\/\/extension-id\/blocked/);
       assert.match(error.message, /title: Sitio bloqueado/);
       assert.match(error.message, /blocked page DOM:/);
+      assert.match(error.message, /blocked page submit diagnostics:/);
       assert.match(error.message, /"readyState":"complete"/);
       assert.match(error.message, /"requestStatusTextContent":""/);
       assert.match(error.message, /"submitDisabled":false/);
+      assert.match(error.message, /"documentId":"blocked-page-doc-1"/);
+      assert.match(error.message, /"browserRuntimeAvailable":true/);
+      assert.match(error.message, /"events":\[/);
       return true;
     }
   );
@@ -386,6 +413,15 @@ test('submitBlockedScreenRequest reads request status textContent when WebDriver
           return element;
         },
         async executeScript(script: string, element: unknown) {
+          if (script.includes('__openpathBlockedPageSubmitProbe')) {
+            return {
+              documentId: 'blocked-page-doc-1',
+              browserRuntimeAvailable: true,
+              chromeRuntimeAvailable: true,
+              events: [{ type: 'probe-installed' }],
+            };
+          }
+
           assert.match(script, /textContent/);
           assert.equal(element, elements.get('#request-status'));
           return 'Solicitud enviada. Quedara pendiente hasta que la revisen.';
