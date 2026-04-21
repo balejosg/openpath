@@ -295,6 +295,34 @@ load 'test_helper'
     [ "$status" -eq 0 ]
 }
 
+@test "windows acrylic service waits tolerate mocked service objects" {
+    run grep -nF "function Wait-AcrylicServiceStatus" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Service.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Wait-AcrylicServiceStatus -Name \$service.Name -Status 'Running'" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Service.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "\$service.PSObject.Methods.Name -contains 'WaitForStatus'" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Service.ps1"
+    [ "$status" -eq 0 ]
+}
+
+@test "windows acrylic service registration is bounded and verifies service registration" {
+    run grep -nF "Start-Process -FilePath \$servicePath -ArgumentList '/INSTALL'" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Install.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "\$installProcess.WaitForExit(" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Install.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "Stop-Process -Id \$installProcess.Id -Force" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Install.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "New-Service -Name 'AcrylicDNSProxySvc'" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Install.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "return (\$null -ne \$service)" "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Install.ps1"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows firewall does not install a global DNS port 53 block that overrides Acrylic" {
     run grep -nF 'OpenPath-DNS-Block-DNS-UDP' "$PROJECT_DIR/windows/lib/internal/Firewall.Policy.ps1"
     [ "$status" -ne 0 ]

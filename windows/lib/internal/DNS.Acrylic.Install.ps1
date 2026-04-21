@@ -49,6 +49,13 @@ function Test-AcrylicInstalled {
     return ($null -ne $path -and (Test-Path "$path\AcrylicService.exe"))
 }
 
+function Get-AcrylicRegisteredService {
+    $service = Get-Service -Name 'AcrylicDNSProxySvc' -ErrorAction SilentlyContinue
+    if ($service) { return $service }
+
+    return Get-Service -DisplayName '*Acrylic*' -ErrorAction SilentlyContinue | Select-Object -First 1
+}
+
 function Register-AcrylicServiceFromPath {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$AcrylicPath)
@@ -56,15 +63,39 @@ function Register-AcrylicServiceFromPath {
     $servicePath = Join-Path $AcrylicPath 'AcrylicService.exe'
     if (-not (Test-Path $servicePath)) { return $false }
 
-    $service = Get-Service -Name 'AcrylicDNSProxySvc' -ErrorAction SilentlyContinue
-    if (-not $service) {
-        $service = Get-Service -DisplayName '*Acrylic*' -ErrorAction SilentlyContinue | Select-Object -First 1
-    }
+    $service = Get-AcrylicRegisteredService
     if ($service) { return $true }
 
-    & $servicePath /INSTALL 2>$null
+    $installProcess = $null
+    try {
+        $installProcess = Start-Process -FilePath $servicePath -ArgumentList '/INSTALL' -PassThru -WindowStyle Hidden -ErrorAction Stop
+        if (-not $installProcess.WaitForExit(15000)) {
+            Stop-Process -Id $installProcess.Id -Force -ErrorAction SilentlyContinue
+            Write-OpenPathLog 'Acrylic service registration process timed out; falling back to direct service registration' -Level WARN
+        }
+    }
+    catch {
+        Write-OpenPathLog "Acrylic service registration executable failed: $_" -Level WARN
+    }
+
     Start-Sleep -Seconds 2
-    return $true
+    $service = Get-AcrylicRegisteredService
+    if (-not $service) {
+        try {
+            New-Service -Name 'AcrylicDNSProxySvc' `
+                -BinaryPathName ('"{0}"' -f $servicePath) `
+                -DisplayName 'Acrylic DNS Proxy Service' `
+                -StartupType Automatic `
+                -ErrorAction Stop | Out-Null
+            Start-Sleep -Seconds 1
+            $service = Get-AcrylicRegisteredService
+        }
+        catch {
+            Write-OpenPathLog "Direct Acrylic service registration failed: $_" -Level WARN
+        }
+    }
+
+    return ($null -ne $service)
 }
 
 function Invoke-AcrylicPortableDownload {

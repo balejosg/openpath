@@ -57,6 +57,39 @@ function Get-AcrylicService {
     return Get-Service -DisplayName '*Acrylic*' -ErrorAction SilentlyContinue | Select-Object -First 1
 }
 
+function Wait-AcrylicServiceStatus {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][string]$Status,
+        [int]$TimeoutSeconds = 20
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $service = Get-Service -Name $Name -ErrorAction SilentlyContinue
+    if (-not $service) { return $null }
+
+    if ($service.PSObject.Methods.Name -contains 'WaitForStatus') {
+        try {
+            $remainingSeconds = [Math]::Max(1, [int][Math]::Ceiling(($deadline - (Get-Date)).TotalSeconds))
+            $service.WaitForStatus($Status, [TimeSpan]::FromSeconds($remainingSeconds))
+        }
+        catch {
+            Write-OpenPathLog "Acrylic service wait via ServiceController failed: $_" -Level WARN
+        }
+    }
+
+    do {
+        $service = Get-Service -Name $Name -ErrorAction SilentlyContinue
+        if ($service -and ([string]$service.Status) -eq $Status) {
+            return $service
+        }
+        Start-Sleep -Milliseconds 500
+    } while ((Get-Date) -lt $deadline)
+
+    return (Get-Service -Name $Name -ErrorAction SilentlyContinue)
+}
+
 function Ensure-AcrylicService {
     [CmdletBinding()]
     param(
@@ -81,8 +114,7 @@ function Ensure-AcrylicService {
 
         if ($Start -and $service.Status -ne 'Running') {
             Start-Service -Name $service.Name -ErrorAction Stop
-            $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(20))
-            $service = Get-AcrylicService
+            $service = Wait-AcrylicServiceStatus -Name $service.Name -Status 'Running' -TimeoutSeconds 20
         }
 
         if ($Start) {
@@ -115,8 +147,7 @@ function Restart-AcrylicService {
             else {
                 Start-Service -Name $service.Name -ErrorAction Stop
             }
-            $service.WaitForStatus('Running', [TimeSpan]::FromSeconds(20))
-            $service = Get-AcrylicService
+            $service = Wait-AcrylicServiceStatus -Name $service.Name -Status 'Running' -TimeoutSeconds 20
             if ($service.Status -eq 'Running') {
                 Write-OpenPathLog "Acrylic service restarted successfully"
                 return $true
