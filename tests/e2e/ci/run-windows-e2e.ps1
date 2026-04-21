@@ -21,6 +21,19 @@ function Fail-Step {
     throw $Message
 }
 
+function Get-OpenPathUninstallArgs {
+    param(
+        [Parameter(Mandatory = $true)][string]$UninstallPath
+    )
+
+    $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $UninstallPath)
+    if ($env:RUNNER_ENVIRONMENT -eq 'self-hosted') {
+        $arguments += '-KeepAcrylic'
+    }
+
+    return $arguments
+}
+
 function Ensure-Pester {
     Write-Step "Installing/Importing Pester..."
     try {
@@ -717,7 +730,8 @@ function Verify-WindowsUninstall {
         Fail-Step "Uninstall-OpenPath.ps1 is missing at $uninstallPath."
     }
 
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $uninstallPath
+    $uninstallArgs = Get-OpenPathUninstallArgs -UninstallPath $uninstallPath
+    & powershell.exe @uninstallArgs
     if ($LASTEXITCODE -ne 0) {
         Fail-Step "Uninstall-OpenPath.ps1 exited with code $LASTEXITCODE."
     }
@@ -795,7 +809,8 @@ function Cleanup-WindowsE2E {
         if (Test-Path 'C:\OpenPath') {
             $uninstallPath = Join-Path $RepoRoot 'windows\Uninstall-OpenPath.ps1'
             if (Test-Path $uninstallPath) {
-                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $uninstallPath
+                $uninstallArgs = Get-OpenPathUninstallArgs -UninstallPath $uninstallPath
+                & powershell.exe @uninstallArgs
                 if ($LASTEXITCODE -ne 0) {
                     Write-Host "WARN: Uninstall-OpenPath.ps1 exited with code $LASTEXITCODE"
                 }

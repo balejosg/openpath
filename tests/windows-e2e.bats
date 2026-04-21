@@ -352,6 +352,34 @@ load 'test_helper'
     [ "$status" -ne 0 ]
 }
 
+@test "windows pester e2e creates scheduled task with a service principal" {
+    run grep -nF "New-ScheduledTaskPrincipal -UserId 'SYSTEM'" "$PROJECT_DIR/tests/e2e/Windows-E2E.Tests.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF -- "-LogonType ServiceAccount" "$PROJECT_DIR/tests/e2e/Windows-E2E.Tests.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF -- "-Principal \$principal" "$PROJECT_DIR/tests/e2e/Windows-E2E.Tests.ps1"
+    [ "$status" -eq 0 ]
+}
+
+@test "windows e2e cleanup preserves self-hosted runner Acrylic provisioning" {
+    run grep -nF "function Get-OpenPathUninstallArgs" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "\$env:RUNNER_ENVIRONMENT -eq 'self-hosted'" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "'-KeepAcrylic'" "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "function Get-OpenPathUninstallArgs" "$PROJECT_DIR/tests/e2e/ci/run-windows-student-flow.ps1"
+    [ "$status" -eq 0 ]
+
+    run grep -nF "'-KeepAcrylic'" "$PROJECT_DIR/tests/e2e/ci/run-windows-student-flow.ps1"
+    [ "$status" -eq 0 ]
+}
+
 @test "windows lifecycle e2e covers agent self-update and uninstall verification" {
     run grep -nF "Testing installed agent self-update against the local server..." "$PROJECT_DIR/tests/e2e/ci/run-windows-e2e.ps1"
     [ "$status" -eq 0 ]

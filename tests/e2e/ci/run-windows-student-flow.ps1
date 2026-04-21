@@ -44,6 +44,16 @@ function Write-DiagnosticNote {
     Add-Content -Path $diagnosticTracePath -Value "$timestamp $Message"
 }
 
+function Get-OpenPathUninstallArgs {
+    $uninstallPath = Join-Path $script:RepoRoot 'windows\Uninstall-OpenPath.ps1'
+    $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $uninstallPath)
+    if ($env:RUNNER_ENVIRONMENT -eq 'self-hosted') {
+        $arguments += '-KeepAcrylic'
+    }
+
+    return $arguments
+}
+
 function Publish-GitHubStepSummary {
     param(
         [Parameter(Mandatory = $true)][ValidateSet('failure', 'success')][string]$Mode
@@ -1047,7 +1057,8 @@ finally {
     $cleanupError = $null
 
     try {
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $script:RepoRoot 'windows\Uninstall-OpenPath.ps1')
+        $uninstallArgs = Get-OpenPathUninstallArgs
+        & powershell.exe @uninstallArgs
         if ($LASTEXITCODE -ne 0) {
             throw "Uninstall-OpenPath.ps1 failed with exit code $LASTEXITCODE"
         }

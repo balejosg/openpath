@@ -318,9 +318,14 @@ describe('repository verification contract', () => {
       'windows/Uninstall-OpenPath.ps1 should exist for the Windows student-policy cleanup path'
     );
     assert.match(
+      windowsRunner,
+      /function Get-OpenPathUninstallArgs \{[\s\S]*?Join-Path \$script:RepoRoot 'windows\\Uninstall-OpenPath\.ps1'[\s\S]*?\$env:RUNNER_ENVIRONMENT -eq 'self-hosted'[\s\S]*?'-KeepAcrylic'[\s\S]*?\}/,
+      'Windows student-policy runner should build cleanup arguments for windows/Uninstall-OpenPath.ps1 and keep Acrylic on self-hosted runners'
+    );
+    assert.match(
       cleanupBlock,
-      /& powershell\.exe -NoProfile -ExecutionPolicy Bypass -File \(Join-Path \$script:RepoRoot 'windows\\Uninstall-OpenPath\.ps1'\)/,
-      'Windows student-policy runner should invoke windows/Uninstall-OpenPath.ps1 from the cleanup path'
+      /\$uninstallArgs = Get-OpenPathUninstallArgs[\s\S]*?& powershell\.exe @uninstallArgs/,
+      'Windows student-policy runner should invoke windows/Uninstall-OpenPath.ps1 through the cleanup argument helper'
     );
     assert.match(
       cleanupBlock,
@@ -329,12 +334,12 @@ describe('repository verification contract', () => {
     );
     assert.match(
       cleanupBlock,
-      /try \{[\s\S]*?& powershell\.exe -NoProfile -ExecutionPolicy Bypass -File \(Join-Path \$script:RepoRoot 'windows\\Uninstall-OpenPath\.ps1'\)[\s\S]*?catch \{\s*\$cleanupError = \$_\s*\}/s,
+      /try \{[\s\S]*?\$uninstallArgs = Get-OpenPathUninstallArgs[\s\S]*?& powershell\.exe @uninstallArgs[\s\S]*?catch \{\s*\$cleanupError = \$_\s*\}/s,
       'Windows student-policy runner should isolate uninstall failures so later cleanup still runs'
     );
     assert.match(
       cleanupBlock,
-      /try \{[\s\S]*?windows\\Uninstall-OpenPath\.ps1[\s\S]*?catch \{\s*\$cleanupError = \$_\s*\}[\s\S]*?try \{[\s\S]*?Restore-FirefoxUnsignedAddonSupport[\s\S]*?catch \{[\s\S]*?if \(\$null -eq \$cleanupError\)[\s\S]*?\$cleanupError = \$_[\s\S]*?\}[\s\S]*?try \{[\s\S]*?Stop-BackgroundJobs[\s\S]*?catch \{[\s\S]*?if \(\$null -eq \$cleanupError\)[\s\S]*?\$cleanupError = \$_[\s\S]*?\}[\s\S]*?try \{[\s\S]*?Cleanup-TestPostgres[\s\S]*?catch \{[\s\S]*?if \(\$null -eq \$cleanupError\)[\s\S]*?\$cleanupError = \$_/s,
+      /try \{[\s\S]*?Get-OpenPathUninstallArgs[\s\S]*?catch \{\s*\$cleanupError = \$_\s*\}[\s\S]*?try \{[\s\S]*?Restore-FirefoxUnsignedAddonSupport[\s\S]*?catch \{[\s\S]*?if \(\$null -eq \$cleanupError\)[\s\S]*?\$cleanupError = \$_[\s\S]*?\}[\s\S]*?try \{[\s\S]*?Stop-BackgroundJobs[\s\S]*?catch \{[\s\S]*?if \(\$null -eq \$cleanupError\)[\s\S]*?\$cleanupError = \$_[\s\S]*?\}[\s\S]*?try \{[\s\S]*?Cleanup-TestPostgres[\s\S]*?catch \{[\s\S]*?if \(\$null -eq \$cleanupError\)[\s\S]*?\$cleanupError = \$_/s,
       'Windows student-policy runner should isolate uninstall cleanup first, then continue Firefox, background job, and Postgres cleanup in order'
     );
   });

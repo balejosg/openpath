@@ -196,8 +196,9 @@ Describe "OpenPath E2E Tests" {
             try {
                 $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-Command 'echo test'"
                 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddDays(1)
+                $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
                 
-                Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Force | Out-Null
+                Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
                 
                 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
                 $task | Should -Not -BeNullOrEmpty
