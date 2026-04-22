@@ -1,3 +1,15 @@
+function Assert-IsAsciiEncoding {
+    param([object]$Encoding)
+
+    $Encoding | Should -Not -BeNullOrEmpty
+    if ($Encoding -is [System.Text.Encoding]) {
+        $Encoding.WebName | Should -Be 'us-ascii'
+        return
+    }
+
+    ([string]$Encoding) | Should -Match 'ASCII'
+}
+
 Describe "DNS Module" {
     BeforeAll {
         $modulePath = Join-Path $PSScriptRoot ".." "lib"
@@ -68,6 +80,10 @@ Describe "DNS Module" {
     }
 
     Context "Update-AcrylicHost" {
+        BeforeEach {
+            Mock Get-OpenPathProtectedDomains { @('raw.githubusercontent.com') } -ModuleName DNS
+        }
+
         It "Generates valid hosts content" -Skip:(-not ((Test-FunctionExists 'Test-AcrylicInstalled') -and (Test-FunctionExists 'Update-AcrylicHost') -and (Test-AcrylicInstalled))) {
             $result = Update-AcrylicHost -WhitelistedDomains @("example.com", "test.com") -BlockedSubdomains @()
             $result | Should -BeTrue
@@ -111,7 +127,7 @@ Describe "DNS Module" {
                 $content | Should -Not -Match 'NX >\*'
 
                 $whitelistSectionIndex = $content.IndexOf('# WHITELISTED DOMAINS')
-                $defaultBlockRuleIndex = $content.IndexOf('0.0.0.0 /^.*$')
+                $defaultBlockRuleIndex = $content.IndexOf('NX *')
                 $whitelistSectionIndex | Should -BeGreaterThan -1
                 $defaultBlockRuleIndex | Should -BeGreaterThan $whitelistSectionIndex
 
@@ -187,7 +203,7 @@ Describe "DNS Module" {
 
             Assert-ContentContainsAll -Content $configContent -Needles @(
                 'function Get-OpenPathDnsSettings',
-                '0.0.0.0 /^.*$',
+                "'NX *'",
                 'function Get-AcrylicForwardRules',
                 'function New-AcrylicHostsDefinition',
                 'function ConvertTo-AcrylicHostsContent',
@@ -276,7 +292,7 @@ Describe "DNS Module" {
                 'IgnoreNegativeResponsesFromSecondaryServer=No',
                 'AddressCacheDisabled=No'
             )
-            $script:capturedAcrylicConfigEncoding | Should -Be 'ASCII'
+            Assert-IsAsciiEncoding $script:capturedAcrylicConfigEncoding
             $script:capturedAcrylicConfig | Should -Not -Match 'PrimaryServerDomainNameAffinityMask=.*blocked\.127\.0\.0\.1\.sslip\.io'
             $script:capturedAcrylicConfig | Should -Not -Match 'SecondaryServerDomainNameAffinityMask=.*blocked\.127\.0\.0\.1\.sslip\.io'
         }
@@ -365,7 +381,7 @@ Describe "DNS Module" {
             $script:capturedHostsContent | Should -Match '# WHITELISTED DOMAINS \(0\)'
             $script:capturedHostsContent | Should -Match 'NX \*'
             $script:capturedHostsContent | Should -Not -Match 'FW example\.com'
-            $script:capturedHostsEncoding | Should -Be 'ASCII'
+            Assert-IsAsciiEncoding $script:capturedHostsEncoding
             $script:capturedAcrylicConfig | Should -Not -BeNullOrEmpty
             Assert-ContentContainsAll -Content $script:capturedAcrylicConfig -Needles @(
                 'PrimaryServerDomainNameAffinityMask=raw.githubusercontent.com;*.raw.githubusercontent.com',

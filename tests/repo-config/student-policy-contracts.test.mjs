@@ -553,6 +553,27 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('windows Pester DNS contracts track the Acrylic default-deny and ASCII encoding behavior', () => {
+    const pesterDnsTests = readText('windows/tests/Windows.DNS.Core.Tests.ps1');
+
+    assert.ok(
+      pesterDnsTests.includes("'NX *'"),
+      'Windows DNS Pester tests should assert the documented NX default deny, not the old sinkhole rule'
+    );
+    assert.ok(
+      !pesterDnsTests.includes("'0.0.0.0 /^.*$'"),
+      'Windows DNS Pester tests should not expect the old regex sinkhole default-deny rule'
+    );
+    assert.ok(
+      pesterDnsTests.includes('function Assert-IsAsciiEncoding'),
+      'Windows DNS Pester tests should normalize mocked Set-Content encoding values before asserting ASCII'
+    );
+    assert.ok(
+      !pesterDnsTests.includes("| Should -Be 'ASCII'"),
+      'Windows DNS Pester tests should not compare mocked Encoding values with a raw string'
+    );
+  });
+
   test('windows Acrylic configuration keeps required global section for fresh portable installs', () => {
     const dnsConfigModule = readText('windows/lib/internal/DNS.Acrylic.Config.ps1');
 
