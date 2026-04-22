@@ -24,6 +24,7 @@ $script:FirefoxBinaryPath = $null
 $script:FirefoxUnsignedAddonSupportState = $null
 $script:PrimaryFailure = $null
 $script:RunSucceeded = $false
+$script:Timings = @()
 
 function Write-Step {
     param(
@@ -44,6 +45,70 @@ function Write-DiagnosticNote {
     Add-Content -Path $diagnosticTracePath -Value "$timestamp $Message"
 }
 
+function Write-TimingEvidence {
+    if (-not (Test-Path $script:ArtifactsRoot)) {
+        New-Item -ItemType Directory -Path $script:ArtifactsRoot -Force | Out-Null
+    }
+
+    $timingsPath = Join-Path $script:ArtifactsRoot 'windows-student-policy-timings.json'
+    ConvertTo-Json -InputObject @($script:Timings) -Depth 4 | Set-Content -Path $timingsPath -Encoding UTF8
+}
+
+function Invoke-TimedStep {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][scriptblock]$ScriptBlock
+    )
+
+    $startedAt = Get-Date
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    $status = 'success'
+    $errorMessage = $null
+
+    try {
+        & $ScriptBlock
+    }
+    catch {
+        $status = 'failure'
+        $errorMessage = $_.Exception.Message
+        throw
+    }
+    finally {
+        $timer.Stop()
+        $endedAt = Get-Date
+        $script:Timings += [pscustomobject]@{
+            name            = $Name
+            status          = $status
+            startedAt       = $startedAt.ToString('o')
+            endedAt         = $endedAt.ToString('o')
+            durationMs      = [math]::Round($timer.Elapsed.TotalMilliseconds, 0)
+            durationSeconds = [math]::Round($timer.Elapsed.TotalSeconds, 3)
+            error           = $errorMessage
+        }
+        Write-TimingEvidence
+    }
+}
+
+function Publish-GitHubTimingSummary {
+    if (-not $env:GITHUB_STEP_SUMMARY -or $script:Timings.Count -eq 0) {
+        return
+    }
+
+    $lines = @(
+        ''
+        '## Windows Student Policy Timing'
+        ''
+        '| Phase | Status | Seconds |'
+        '| --- | --- | ---: |'
+    )
+
+    foreach ($timing in $script:Timings) {
+        $lines += "| $($timing.name) | $($timing.status) | $($timing.durationSeconds) |"
+    }
+
+    Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ($lines -join [Environment]::NewLine)
+}
+
 function Get-OpenPathUninstallArgs {
     $uninstallPath = Join-Path $script:RepoRoot 'windows\Uninstall-OpenPath.ps1'
     $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $uninstallPath)
@@ -60,26 +125,26 @@ function Publish-GitHubStepSummary {
     )
 
     try {
-        if (-not $env:GITHUB_STEP_SUMMARY) {
-            return
+        if ($env:GITHUB_STEP_SUMMARY) {
+            $nodeCommand = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
+            if (-not $nodeCommand) {
+                Write-DiagnosticNote 'Skipping diagnostic GITHUB_STEP_SUMMARY publish because node.exe was not found on PATH.'
+            }
+            else {
+                $summary = & $nodeCommand --import tsx tests/e2e/student-flow/windows-student-summary.ts `
+                    --artifacts-dir $script:ArtifactsRoot `
+                    --mode $Mode
+
+                if ($LASTEXITCODE -ne 0) {
+                    Write-DiagnosticNote "Failed to build GitHub step summary (exit $LASTEXITCODE)."
+                }
+                else {
+                    Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
+                }
+            }
         }
 
-        $nodeCommand = (Get-Command node.exe -ErrorAction SilentlyContinue).Source
-        if (-not $nodeCommand) {
-            Write-DiagnosticNote 'Skipping GITHUB_STEP_SUMMARY publish because node.exe was not found on PATH.'
-            return
-        }
-
-        $summary = & $nodeCommand --import tsx tests/e2e/student-flow/windows-student-summary.ts `
-            --artifacts-dir $script:ArtifactsRoot `
-            --mode $Mode
-
-        if ($LASTEXITCODE -ne 0) {
-            Write-DiagnosticNote "Failed to build GitHub step summary (exit $LASTEXITCODE)."
-            return
-        }
-
-        Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
+        Publish-GitHubTimingSummary
     }
     catch {
         Write-DiagnosticNote "Skipping GITHUB_STEP_SUMMARY publish: $_"
@@ -350,8 +415,8 @@ function Ensure-SeleniumDependencies {
     Write-Step 'Ensuring Selenium package dependencies...'
     Push-Location (Join-Path $script:RepoRoot 'tests\selenium')
     try {
-        npm install | Out-Host
-        Assert-LastExitCode 'npm install (tests/selenium)'
+        npm ci --prefer-offline --no-audit --fund=false | Out-Host
+        Assert-LastExitCode 'npm ci (tests/selenium)'
     }
     finally {
         Pop-Location
@@ -1026,23 +1091,23 @@ function Invoke-DebugDump {
 
 try {
     Ensure-ArtifactsDirectory
-    Build-RequiredWorkspaces
-    Ensure-SeleniumDependencies
-    Ensure-TestPostgres
-    Initialize-TestDatabase
-    Start-ApiServer
-    Start-FixtureServer
-    $scenario = Invoke-BackendHarnessBootstrap -ScenarioName 'Windows Student Policy SSE'
+    Invoke-TimedStep -Name 'Build workspaces' -ScriptBlock { Build-RequiredWorkspaces }
+    Invoke-TimedStep -Name 'Install Selenium dependencies' -ScriptBlock { Ensure-SeleniumDependencies }
+    Invoke-TimedStep -Name 'Ensure test PostgreSQL' -ScriptBlock { Ensure-TestPostgres }
+    Invoke-TimedStep -Name 'Initialize test database' -ScriptBlock { Initialize-TestDatabase }
+    Invoke-TimedStep -Name 'Start API server' -ScriptBlock { Start-ApiServer }
+    Invoke-TimedStep -Name 'Start fixture server' -ScriptBlock { Start-FixtureServer }
+    $scenario = Invoke-TimedStep -Name 'Bootstrap scenario (sse)' -ScriptBlock { Invoke-BackendHarnessBootstrap -ScenarioName 'Windows Student Policy SSE' }
     $scenarioPath = Join-Path $script:ArtifactsRoot 'student-scenario.json'
-    $extensionArchivePath = New-FirefoxExtensionArchive
-    Ensure-FirefoxAndGeckodriver
-    Enable-FirefoxUnsignedAddonSupport
-    Install-AndEnrollClient -Scenario $scenario -InstallClient $true
-    Invoke-SeleniumStudentSuite -ScenarioPath $scenarioPath -ExtensionArchivePath $extensionArchivePath -Mode 'sse'
-    $scenario = Invoke-BackendHarnessBootstrap -ScenarioName 'Windows Student Policy Fallback'
-    Install-AndEnrollClient -Scenario $scenario -InstallClient $false
-    Invoke-SeleniumStudentSuite -ScenarioPath $scenarioPath -ExtensionArchivePath $extensionArchivePath -Mode 'fallback'
-    Write-WindowsDiagnostics
+    $extensionArchivePath = Invoke-TimedStep -Name 'Package Firefox extension' -ScriptBlock { New-FirefoxExtensionArchive }
+    Invoke-TimedStep -Name 'Ensure Firefox and geckodriver' -ScriptBlock { Ensure-FirefoxAndGeckodriver }
+    Invoke-TimedStep -Name 'Enable Firefox unsigned addon support' -ScriptBlock { Enable-FirefoxUnsignedAddonSupport }
+    Invoke-TimedStep -Name 'Install and enroll client (sse)' -ScriptBlock { Install-AndEnrollClient -Scenario $scenario -InstallClient $true }
+    Invoke-TimedStep -Name 'Run Selenium student suite (sse)' -ScriptBlock { Invoke-SeleniumStudentSuite -ScenarioPath $scenarioPath -ExtensionArchivePath $extensionArchivePath -Mode 'sse' }
+    $scenario = Invoke-TimedStep -Name 'Bootstrap scenario (fallback)' -ScriptBlock { Invoke-BackendHarnessBootstrap -ScenarioName 'Windows Student Policy Fallback' }
+    Invoke-TimedStep -Name 'Install and enroll client (fallback)' -ScriptBlock { Install-AndEnrollClient -Scenario $scenario -InstallClient $false }
+    Invoke-TimedStep -Name 'Run Selenium student suite (fallback)' -ScriptBlock { Invoke-SeleniumStudentSuite -ScenarioPath $scenarioPath -ExtensionArchivePath $extensionArchivePath -Mode 'fallback' }
+    Invoke-TimedStep -Name 'Collect Windows diagnostics' -ScriptBlock { Write-WindowsDiagnostics }
     $script:RunSucceeded = $true
 }
 catch {
@@ -1057,10 +1122,12 @@ finally {
     $cleanupError = $null
 
     try {
-        $uninstallArgs = Get-OpenPathUninstallArgs
-        & powershell.exe @uninstallArgs
-        if ($LASTEXITCODE -ne 0) {
-            throw "Uninstall-OpenPath.ps1 failed with exit code $LASTEXITCODE"
+        Invoke-TimedStep -Name 'Uninstall OpenPath client' -ScriptBlock {
+            $uninstallArgs = Get-OpenPathUninstallArgs
+            & powershell.exe @uninstallArgs
+            if ($LASTEXITCODE -ne 0) {
+                throw "Uninstall-OpenPath.ps1 failed with exit code $LASTEXITCODE"
+            }
         }
     }
     catch {
@@ -1068,7 +1135,7 @@ finally {
     }
 
     try {
-        Restore-FirefoxUnsignedAddonSupport
+        Invoke-TimedStep -Name 'Restore Firefox unsigned addon support' -ScriptBlock { Restore-FirefoxUnsignedAddonSupport }
     }
     catch {
         if ($null -eq $cleanupError) {
@@ -1077,7 +1144,7 @@ finally {
     }
 
     try {
-        Stop-BackgroundJobs
+        Invoke-TimedStep -Name 'Stop background jobs' -ScriptBlock { Stop-BackgroundJobs }
     }
     catch {
         if ($null -eq $cleanupError) {
@@ -1086,7 +1153,7 @@ finally {
     }
 
     try {
-        Cleanup-TestPostgres
+        Invoke-TimedStep -Name 'Cleanup test PostgreSQL' -ScriptBlock { Cleanup-TestPostgres }
     }
     catch {
         if ($null -eq $cleanupError) {

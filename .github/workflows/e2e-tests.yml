@@ -229,6 +229,10 @@ jobs:
 
       - name: Setup Node.js
         uses: ./.github/actions/setup-node
+        with:
+          cache-dependency-path: |
+            package-lock.json
+            tests/selenium/package-lock.json
 
       - name: Run Windows student-policy flow
         shell: pwsh

@@ -43,8 +43,12 @@ describe('repository verification contract', () => {
 
     assert.match(
       windowsRunner,
-      /Push-Location \(Join-Path \$script:RepoRoot 'tests\\selenium'\)[\s\S]*npm install \| Out-Host/,
-      'Windows student-policy runner should install tests/selenium dependencies before running the suite'
+      /Push-Location \(Join-Path \$script:RepoRoot 'tests\\selenium'\)[\s\S]*npm ci --prefer-offline --no-audit --fund=false \| Out-Host/,
+      'Windows student-policy runner should install tests/selenium dependencies from its lockfile before running the suite'
+    );
+    assert.ok(
+      existsSync(resolve(projectRoot, 'tests/selenium/package-lock.json')),
+      'tests/selenium/package-lock.json should exist so the Windows runner can use npm ci'
     );
     assert.match(
       linuxStudentDockerfile,
@@ -367,6 +371,43 @@ describe('repository verification contract', () => {
       /finally\s*\{[\s\S]*?if \(\(\$script:RunSucceeded\) -and \(\$null -eq \$cleanupError\) -and \(\$null -eq \$script:PrimaryFailure\)\) \{[\s\S]*?Publish-GitHubStepSummary -Mode 'success'[\s\S]*?Windows student-policy runner completed successfully/s,
       'Windows student-policy runner should publish success only after cleanup succeeds'
     );
+  });
+
+  test('windows student policy runner emits per-phase timing evidence', () => {
+    const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
+
+    assert.match(
+      windowsRunner,
+      /function Invoke-TimedStep/,
+      'Windows student-policy runner should centralize per-phase timing'
+    );
+    assert.match(
+      windowsRunner,
+      /windows-student-policy-timings\.json/,
+      'Windows student-policy runner should write timing evidence into diagnostics artifacts'
+    );
+    assert.match(
+      windowsRunner,
+      /Windows Student Policy Timing/,
+      'Windows student-policy runner should publish timing evidence in the GitHub step summary'
+    );
+    for (const phase of [
+      'Build workspaces',
+      'Install Selenium dependencies',
+      'Ensure test PostgreSQL',
+      'Initialize test database',
+      'Start API server',
+      'Start fixture server',
+      'Package Firefox extension',
+      'Ensure Firefox and geckodriver',
+      'Run Selenium student suite (sse)',
+      'Run Selenium student suite (fallback)',
+    ]) {
+      assert.ok(
+        windowsRunner.includes(`Invoke-TimedStep -Name '${phase}'`),
+        `Windows student-policy runner should time phase: ${phase}`
+      );
+    }
   });
 
   test('windows DNS renderer avoids wildcard FW rules that override blocked descendants', () => {

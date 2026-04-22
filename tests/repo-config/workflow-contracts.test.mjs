@@ -756,6 +756,28 @@ test('Linux E2E lanes restore the shared Playwright browser cache', () => {
   );
 });
 
+test('setup-node supports extra lockfiles for npm cache keys', () => {
+  const setupNodeAction = readText('.github/actions/setup-node/action.yml');
+  const e2eWorkflow = readText('.github/workflows/e2e-tests.yml');
+  const windowsStudentPolicyBlock = extractWorkflowJobBlock(e2eWorkflow, 'windows-student-policy');
+
+  assert.match(
+    setupNodeAction,
+    /cache-dependency-path:[\s\S]*default: '\.\/package-lock\.json'/,
+    'setup-node should expose a defaulted cache-dependency-path input'
+  );
+  assert.match(
+    setupNodeAction,
+    /cache-dependency-path: \$\{\{ inputs\.cache-dependency-path \}\}/,
+    'setup-node should forward the cache-dependency-path input to actions/setup-node'
+  );
+  assert.match(
+    windowsStudentPolicyBlock,
+    /cache-dependency-path: \|[\s\S]*package-lock\.json[\s\S]*tests\/selenium\/package-lock\.json/,
+    'Windows student-policy should include both root and Selenium lockfiles in the npm cache key'
+  );
+});
+
 test('E2E workflow gates expensive platform lanes on targeted changed paths', () => {
   const e2eWorkflow = readText('.github/workflows/e2e-tests.yml');
   const linuxE2eBlock = extractWorkflowJobBlock(e2eWorkflow, 'linux-e2e');
