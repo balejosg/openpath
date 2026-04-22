@@ -930,6 +930,38 @@ function Assert-InstalledAcrylicRuntime {
     Write-DiagnosticNote "AcrylicConfiguration.ini hash sha256=$configHash path=$configPath"
 }
 
+function Assert-WindowsDnsPolicyReady {
+    Write-Step 'Verifying Windows DNS policy readiness...'
+
+    $udpListeners = @(Get-NetUDPEndpoint -LocalPort 53 -ErrorAction SilentlyContinue)
+    $tcpListeners = @(Get-NetTCPConnection -LocalPort 53 -ErrorAction SilentlyContinue)
+    if ($udpListeners.Count -eq 0 -and $tcpListeners.Count -eq 0) {
+        throw 'Acrylic DNS service is not listening on local port 53 after install/enroll/update.'
+    }
+
+    $dnsErrors = @()
+    foreach ($probeHost in @(
+            'portal.127.0.0.1.sslip.io',
+            'api.site.127.0.0.1.sslip.io'
+        )) {
+        try {
+            $result = Resolve-DnsName -Name $probeHost -Server 127.0.0.1 -DnsOnly -ErrorAction Stop
+            if (-not $result) {
+                $dnsErrors += "$probeHost returned no records"
+            }
+        }
+        catch {
+            $dnsErrors += "$probeHost failed: $($_.Exception.Message)"
+        }
+    }
+
+    if ($dnsErrors.Count -gt 0) {
+        throw "Acrylic DNS policy readiness failed before Selenium: $($dnsErrors -join '; ')"
+    }
+
+    Write-DiagnosticNote 'Windows DNS policy readiness verified through local Acrylic.'
+}
+
 function Install-AndEnrollClient {
     param(
         [Parameter(Mandatory = $true)][pscustomobject]$Scenario,
@@ -972,6 +1004,7 @@ function Install-AndEnrollClient {
     }
 
     Assert-InstalledAcrylicRuntime
+    Assert-WindowsDnsPolicyReady
 
     $scenarioPath = Join-Path $script:ArtifactsRoot 'student-scenario.json'
     if (-not (Test-Path $scenarioPath)) {
@@ -1159,6 +1192,41 @@ function Write-WindowsDiagnostics {
         }
     }
 
+    $acrylicServiceProcessOutput = try {
+        $serviceProcess = Get-CimInstance -ClassName Win32_Service -Filter "Name='AcrylicDNSProxySvc'" -ErrorAction Stop
+        @(
+            ($serviceProcess | Select-Object Name, State, Status, ProcessId, PathName, StartName, ExitCode | Format-List | Out-String)
+            $(if ($serviceProcess.ProcessId -and $serviceProcess.ProcessId -gt 0) {
+                    Get-Process -Id $serviceProcess.ProcessId -ErrorAction SilentlyContinue | Format-List Id, ProcessName, Path, StartTime, Responding | Out-String
+                }
+                else {
+                    'Acrylic service has no active process id.'
+                })
+        )
+    }
+    catch {
+        "ERROR: $($_.Exception.Message)"
+    }
+
+    $acrylicEventLogOutput = try {
+        $since = (Get-Date).AddHours(-2)
+        @(
+            '--- Application events mentioning Acrylic ---'
+            (Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $since } -ErrorAction Stop |
+                Where-Object { $_.ProviderName -like '*Acrylic*' -or $_.Message -like '*Acrylic*' } |
+                Select-Object -First 30 TimeCreated, ProviderName, Id, LevelDisplayName, Message |
+                Format-List | Out-String)
+            '--- Service Control Manager events mentioning Acrylic ---'
+            (Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'Service Control Manager'; StartTime = $since } -ErrorAction Stop |
+                Where-Object { $_.Message -like '*Acrylic*' } |
+                Select-Object -First 30 TimeCreated, ProviderName, Id, LevelDisplayName, Message |
+                Format-List | Out-String)
+        )
+    }
+    catch {
+        "ERROR: $($_.Exception.Message)"
+    }
+
     $dnsProbeOutput = foreach ($probeHost in @(
             'google.com',
             'portal.127.0.0.1.sslip.io',
@@ -1192,6 +1260,10 @@ function Write-WindowsDiagnostics {
         ($runtimeEvidenceOutput | Out-String)
         '=== Acrylic File Evidence ==='
         ($acrylicFileEvidenceOutput | Out-String)
+        '=== Acrylic Service Process Evidence ==='
+        ($acrylicServiceProcessOutput | Out-String)
+        '=== Acrylic Event Log Evidence ==='
+        ($acrylicEventLogOutput | Out-String)
         '=== DNS Probes ==='
         ($dnsProbeOutput | Out-String)
         '=== Whitelist ==='

@@ -585,6 +585,35 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('Windows student-policy runner gates Selenium on local Acrylic DNS health', () => {
+    const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
+
+    assert.match(
+      windowsRunner,
+      /function Assert-WindowsDnsPolicyReady/,
+      'Windows student-policy runner should assert local DNS policy readiness before Selenium'
+    );
+    assert.match(
+      windowsRunner,
+      /Assert-InstalledAcrylicRuntime[\s\S]*Assert-WindowsDnsPolicyReady/,
+      'Windows student-policy runner should check DNS readiness immediately after Acrylic runtime/config validation'
+    );
+    assert.ok(
+      windowsRunner.includes('Get-NetUDPEndpoint -LocalPort 53') &&
+        windowsRunner.includes('Get-NetTCPConnection -LocalPort 53'),
+      'Windows student-policy runner should fail early when Acrylic is not listening on port 53'
+    );
+    assert.ok(
+      windowsRunner.includes('Resolve-DnsName -Name $probeHost -Server 127.0.0.1 -DnsOnly'),
+      'Windows student-policy runner should verify fixture host resolution through local Acrylic before Selenium'
+    );
+    assert.ok(
+      windowsRunner.includes('Get-CimInstance -ClassName Win32_Service') &&
+        windowsRunner.includes('Get-WinEvent'),
+      'Windows student-policy diagnostics should capture Acrylic service process and event log evidence'
+    );
+  });
+
   test('root tooling can resolve drizzle-orm for hoisted drizzle-kit commands', () => {
     const packageJson = readPackageJson();
     const packageLock = readJson('package-lock.json');
