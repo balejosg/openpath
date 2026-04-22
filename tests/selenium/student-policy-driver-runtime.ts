@@ -146,9 +146,12 @@ export async function runCrossOriginFetchProbe(
   const driver = state.getDriver();
   const result: 'ok' | 'blocked' = await driver.executeAsyncScript(
     `const [url, done] = [arguments[0], arguments[arguments.length - 1]];
-     fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store' })
+     const controller = new AbortController();
+     const timeoutId = setTimeout(() => controller.abort(), 3000);
+     fetch(url, { method: 'GET', mode: 'cors', cache: 'no-store', signal: controller.signal })
        .then((response) => done(response.ok ? 'ok' : 'blocked'))
-       .catch(() => done('blocked'));`,
+       .catch(() => done('blocked'))
+       .finally(() => clearTimeout(timeoutId));`,
     targetUrl
   );
   return result;

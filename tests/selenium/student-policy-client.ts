@@ -93,13 +93,18 @@ export class StudentPolicyServerClient {
     });
   }
 
-  public async submitAutoRequest(domain: string, reason: string): Promise<RequestSubmissionResult> {
+  public async submitAutoRequest(
+    domain: string,
+    reason: string,
+    options: { originPage?: string; targetUrl?: string } = {}
+  ): Promise<RequestSubmissionResult> {
     return this.postJsonAllowingError<RequestSubmissionResult>('/api/requests/auto', {
       domain,
       hostname: this.scenario.machine.reportedHostname,
       token: this.scenario.machine.machineToken,
       reason,
-      origin_page: buildFixtureUrl(this.scenario.fixtures.site, '/ok'),
+      origin_page: options.originPage ?? buildFixtureUrl(this.scenario.fixtures.site, '/ok'),
+      ...(options.targetUrl === undefined ? {} : { target_url: options.targetUrl }),
     });
   }
 

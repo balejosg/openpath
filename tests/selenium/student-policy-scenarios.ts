@@ -279,6 +279,17 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
   const firstFetch = await driver.runCrossOriginFetchProbe(targets.ajaxDependencyFetchUrl);
   assert.strictEqual(firstFetch, 'blocked');
 
+  const ajaxAutoRequest = await client.submitAutoRequest(
+    targets.hosts.ajaxDependency,
+    'Whitelisted origin AJAX dependency should be auto-approved',
+    {
+      originPage: targets.siteOkUrl,
+      targetUrl: targets.ajaxDependencyFetchUrl,
+    }
+  );
+  assert.strictEqual(ajaxAutoRequest.success, true);
+  assert.strictEqual(ajaxAutoRequest.autoApproved, true);
+
   await settlePolicyChange(
     driver,
     mode,
@@ -289,6 +300,7 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
     { timeoutMs: 45_000 }
   );
 
+  await driver.restart();
   await driver.openAndExpectLoaded({
     url: targets.siteOkUrl,
     title: 'OpenPath Site Fixture',
@@ -306,6 +318,7 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
   );
 
   try {
+    await driver.forceLocalUpdate();
     await driver.openAndExpectLoaded({
       url: targets.siteOkUrl,
       title: 'OpenPath Site Fixture',
@@ -315,9 +328,18 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
       targets.ajaxBlockedSubdomainFetchUrl
     );
     assert.strictEqual(blockedSubdomainFetch, 'blocked');
+    const blockedSubdomainRequest = await client.submitAutoRequest(
+      targets.hosts.ajaxBlockedSubdomain,
+      'Blocked subdomain must prevent AJAX dependency auto-allow',
+      {
+        originPage: targets.siteOkUrl,
+        targetUrl: targets.ajaxBlockedSubdomainFetchUrl,
+      }
+    );
+    assert.strictEqual(blockedSubdomainRequest.success, false);
+    assert.match(blockedSubdomainRequest.error ?? '', /blocked subdomain/i);
     await driver.waitForConvergence(
       async () => {
-        await driver.assertWhitelistMissing(targets.hosts.ajaxBlockedSubdomain);
         await driver.assertDnsBlocked(targets.hosts.ajaxBlockedSubdomain);
       },
       { timeoutMs: 20_000, pollMs: 1_000 }
@@ -359,7 +381,16 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
     });
     const blockedPathFetch = await driver.runCrossOriginFetchProbe(targets.ajaxBlockedPathFetchUrl);
     assert.strictEqual(blockedPathFetch, 'blocked');
-    await delay(1_000);
+    const blockedPathRequest = await client.submitAutoRequest(
+      targets.hosts.ajaxBlockedPath,
+      'Blocked path must prevent AJAX dependency auto-allow',
+      {
+        originPage: targets.siteOkUrl,
+        targetUrl: targets.ajaxBlockedPathFetchUrl,
+      }
+    );
+    assert.strictEqual(blockedPathRequest.success, false);
+    assert.match(blockedPathRequest.error ?? '', /blocked path/i);
     await driver.assertWhitelistMissing(targets.hosts.ajaxBlockedPath);
     await driver.assertDnsBlocked(targets.hosts.ajaxBlockedPath);
   } finally {
@@ -615,7 +646,10 @@ async function runAutoApproveProbe(
   await client.setAutoApprove(false);
   const pendingAutoRequest = await client.submitAutoRequest(
     targets.hosts.auto,
-    'Auto-approve disabled should keep request pending'
+    'Auto-approve disabled should keep request pending',
+    {
+      originPage: targets.rejectedDomainUrl,
+    }
   );
   assert.strictEqual(pendingAutoRequest.success, true);
   assert.strictEqual(pendingAutoRequest.autoApproved, false);
