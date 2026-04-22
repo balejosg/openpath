@@ -49,6 +49,21 @@ void describe('Linux enrollment bootstrap script generation', () => {
     assert.match(script, /bootstrap_cmd\+=\(--package-version "\$LINUX_AGENT_VERSION"\)/);
   });
 
+  void test('exports the selected APT repo URL for the downloaded bootstrap script', () => {
+    const script = buildLinuxEnrollmentScript({
+      publicUrl: 'https://control.example',
+      classroomId: 'cls_123',
+      classroomName: 'Aula 1',
+      enrollmentToken: 'token-123',
+      aptRepoUrl: 'https://repo.example/apt',
+      linuxAgentVersion: '0.0.1380',
+      linuxAgentAptSuite: 'unstable',
+    });
+
+    assert.match(script, /OPENPATH_APT_REPO_URL='https:\/\/repo\.example\/apt'/);
+    assert.match(script, /curl -fsSL --proto '=https' --tlsv1\.2 "\$APT_BOOTSTRAP_URL"/);
+  });
+
   void test('requires the final health check to pass before reporting success', () => {
     const script = buildLinuxEnrollmentScript({
       publicUrl: 'https://control.example',

@@ -36,6 +36,8 @@ CLASSROOM_ID=${bashSingleQuote(classroomId)}
 CLASSROOM_NAME=${bashSingleQuote(classroomName)}
 ENROLLMENT_TOKEN=${bashSingleQuote(enrollmentToken)}
 APT_BOOTSTRAP_URL=${bashSingleQuote(`${aptRepoUrl}/apt-bootstrap.sh`)}
+OPENPATH_APT_REPO_URL=${bashSingleQuote(aptRepoUrl)}
+export OPENPATH_APT_REPO_URL
 LINUX_AGENT_APT_SUITE=${bashSingleQuote(aptSuite)}
 ${linuxAgentVersion ? `LINUX_AGENT_VERSION=${bashSingleQuote(linuxAgentVersion)}` : ''}
 
