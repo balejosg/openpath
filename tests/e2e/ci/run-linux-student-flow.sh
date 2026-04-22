@@ -351,6 +351,59 @@ with open(final_path, 'w', encoding='utf-8') as fh:
 PY
 }
 
+seed_initial_baseline_policy() {
+    echo "Seeding initial Linux student-policy baseline..."
+    local scenario_path="$ARTIFACTS_DIR/student-scenario.json"
+    local api_url="http://127.0.0.1:$API_PORT"
+    local teacher_token
+    local restricted_group_id
+    local alternate_group_id
+    teacher_token="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["auth"]["teacher"]["accessToken"])' "$scenario_path")"
+    restricted_group_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["groups"]["restricted"]["id"])' "$scenario_path")"
+    alternate_group_id="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["groups"]["alternate"]["id"])' "$scenario_path")"
+
+    local baseline_hosts=()
+    mapfile -t baseline_hosts < <(python3 - "$scenario_path" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as fh:
+    scenario = json.load(fh)
+
+hosts = [
+    scenario['fixtures']['portal'],
+    scenario['fixtures']['cdnPortal'],
+    scenario['fixtures']['site'],
+    scenario['fixtures']['apiSite'],
+    'host.docker.internal',
+]
+
+seen = set()
+for host in hosts:
+    if host and host not in seen:
+        seen.add(host)
+        print(host)
+PY
+)
+
+    local group_id
+    local host
+    for group_id in "$restricted_group_id" "$alternate_group_id"; do
+        for host in "${baseline_hosts[@]}"; do
+            (
+                cd "$PROJECT_ROOT"
+                node --import tsx tests/e2e/student-flow/backend-harness.ts create-rule \
+                    --api-url "$api_url" \
+                    --access-token "$teacher_token" \
+                    --group-id "$group_id" \
+                    --type whitelist \
+                    --value "$host" \
+                    --comment "Initial Linux student-policy readiness baseline" >/dev/null
+            )
+        done
+    done
+}
+
 build_image() {
     echo "Building Linux student-policy image..."
     _context_dir="$(create_context)"
@@ -555,6 +608,7 @@ main() {
     initialize_test_database
     start_api_server
     bootstrap_scenario "Linux Student Policy SSE"
+    seed_initial_baseline_policy
     build_image
     start_container
     start_container_fixture_server
@@ -563,6 +617,7 @@ main() {
     assert_linux_firefox_extension_ready
     run_student_suite sse
     bootstrap_scenario "Linux Student Policy Fallback"
+    seed_initial_baseline_policy
     configure_client false
     assert_linux_dns_policy_ready
     assert_linux_firefox_extension_ready

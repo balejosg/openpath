@@ -831,6 +831,26 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('Linux student-policy runner seeds baseline policy before enrollment readiness', () => {
+    const linuxRunner = readText('tests/e2e/ci/run-linux-student-flow.sh');
+
+    assert.match(
+      linuxRunner,
+      /seed_initial_baseline_policy\(\) \{[\s\S]*?create-rule[\s\S]*?portal[\s\S]*?host\.docker\.internal/,
+      'Linux student-policy runner should create enough initial whitelist rules for first client update'
+    );
+    assert.match(
+      linuxRunner,
+      /bootstrap_scenario "Linux Student Policy SSE"[\s\S]*?seed_initial_baseline_policy[\s\S]*?configure_client true/,
+      'Linux student-policy runner should seed baseline policy before the SSE install/enroll/update phase'
+    );
+    assert.match(
+      linuxRunner,
+      /bootstrap_scenario "Linux Student Policy Fallback"[\s\S]*?seed_initial_baseline_policy[\s\S]*?configure_client false/,
+      'Linux student-policy runner should seed baseline policy before the fallback reconfiguration/update phase'
+    );
+  });
+
   test('root tooling can resolve drizzle-orm for hoisted drizzle-kit commands', () => {
     const packageJson = readPackageJson();
     const packageLock = readJson('package-lock.json');
