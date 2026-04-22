@@ -957,6 +957,22 @@ function Assert-WindowsDnsPolicyReady {
         }
     }
 
+    $blockedProbeHost = 'blocked.127.0.0.1.sslip.io'
+    $blockedFixtureIp = '127.0.0.1'
+    try {
+        $blockedAddresses = @(
+            Resolve-DnsName -Name $blockedProbeHost -Server 127.0.0.1 -DnsOnly -ErrorAction Stop |
+                Where-Object { $_.IPAddress } |
+                ForEach-Object { [string]$_.IPAddress }
+        )
+        if ($blockedAddresses -contains $blockedFixtureIp) {
+            $dnsErrors += "$blockedProbeHost resolved to $blockedFixtureIp through Acrylic, expected default deny"
+        }
+    }
+    catch {
+        Write-DiagnosticNote "$blockedProbeHost returned DNS error through Acrylic, treating as blocked: $($_.Exception.Message)"
+    }
+
     if ($dnsErrors.Count -gt 0) {
         throw "Acrylic DNS policy readiness failed before Selenium: $($dnsErrors -join '; ')"
     }

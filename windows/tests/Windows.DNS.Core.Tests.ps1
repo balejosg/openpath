@@ -73,7 +73,7 @@ Describe "DNS Module" {
             $result | Should -BeTrue
         }
 
-        It "Builds Acrylic hosts content from a generated definition in official FW/NX order" {
+        It "Builds Acrylic hosts content from a generated definition in official FW/sinkhole order" {
             InModuleScope DNS {
                 $definition = New-AcrylicHostsDefinition `
                     -WhitelistedDomains @('example.com', 'test.com') `
@@ -97,10 +97,10 @@ Describe "DNS Module" {
                     'FW >example.com',
                     'FW test.com',
                     'FW >test.com',
-                    '# DEFAULT BLOCK (NXDOMAIN for everything else)',
+                    '# DEFAULT BLOCK (sinkhole for everything else)',
                     '# This MUST come last after FW rules.',
                     '# Upstream DNS: 1.1.1.1',
-                    'NX *'
+                    '0.0.0.0 *'
                 )
 
                 foreach ($needle in $expectedNeedles) {
@@ -111,9 +111,9 @@ Describe "DNS Module" {
                 $content | Should -Not -Match 'NX >\*'
 
                 $whitelistSectionIndex = $content.IndexOf('# WHITELISTED DOMAINS')
-                $nxRuleIndex = $content.IndexOf('NX *')
+                $defaultBlockRuleIndex = $content.IndexOf('0.0.0.0 *')
                 $whitelistSectionIndex | Should -BeGreaterThan -1
-                $nxRuleIndex | Should -BeGreaterThan $whitelistSectionIndex
+                $defaultBlockRuleIndex | Should -BeGreaterThan $whitelistSectionIndex
 
                 @($definition.EffectiveWhitelistedDomains).Count | Should -Be 2
                 $definition.WasTruncated | Should -BeFalse
@@ -187,7 +187,7 @@ Describe "DNS Module" {
 
             Assert-ContentContainsAll -Content $configContent -Needles @(
                 'function Get-OpenPathDnsSettings',
-                'NX *',
+                '0.0.0.0 *',
                 'function Get-AcrylicForwardRules',
                 'function New-AcrylicHostsDefinition',
                 'function ConvertTo-AcrylicHostsContent',

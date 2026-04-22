@@ -483,6 +483,22 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('windows DNS renderer uses a default sinkhole that blocks sslip wildcard fixture misses', () => {
+    const dnsConfigModule = readText('windows/lib/internal/DNS.Acrylic.Config.ps1');
+
+    assert.match(
+      dnsConfigModule,
+      /New-AcrylicHostsSection -Title 'DEFAULT BLOCK \(sinkhole for everything else\)'[\s\S]*-Lines @\('0\.0\.0\.0 \*'\)/,
+      'Acrylic default deny should sinkhole unmatched domains so wildcard DNS providers like sslip.io cannot bypass fixture misses'
+    );
+    assert.ok(
+      !dnsConfigModule.includes(
+        "New-AcrylicHostsSection -Title 'DEFAULT BLOCK (NXDOMAIN for everything else)'"
+      ),
+      'Acrylic default deny should not rely on NX * for sslip fixture hosts because CI observed those hosts forwarding upstream'
+    );
+  });
+
   test('windows Acrylic configuration keeps required global section for fresh portable installs', () => {
     const dnsConfigModule = readText('windows/lib/internal/DNS.Acrylic.Config.ps1');
 
@@ -569,6 +585,31 @@ describe('repository verification contract', () => {
       windowsRunner,
       /catch \{[\s\S]*"ERROR: \$\(\$_\.Exception\.Message\)"/,
       'Windows student-policy diagnostics should include Resolve-DnsName exception messages instead of blank probe sections'
+    );
+  });
+
+  test('Windows student-policy readiness fails before Selenium when blocked fixture DNS resolves upstream', () => {
+    const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
+
+    assert.match(
+      windowsRunner,
+      /blocked\.127\.0\.0\.1\.sslip\.io/,
+      'Windows student-policy runner should probe an unwhitelisted sslip fixture host before Selenium'
+    );
+    assert.match(
+      windowsRunner,
+      /\$blockedFixtureIp = '127\.0\.0\.1'/,
+      'Windows student-policy runner should know the sslip fixture IP that indicates a missed DNS block'
+    );
+    assert.match(
+      windowsRunner,
+      /\$blockedAddresses = @\([\s\S]*?Resolve-DnsName -Name \$blockedProbeHost[\s\S]*?Where-Object \{ \$_.IPAddress \}[\s\S]*?ForEach-Object \{ \[string\]\$_.IPAddress \}[\s\S]*?\)/,
+      'Windows student-policy runner should collect blocked-probe IP addresses through local Acrylic'
+    );
+    assert.match(
+      windowsRunner,
+      /\$blockedAddresses -contains \$blockedFixtureIp/,
+      'Windows student-policy runner should reject blocked sslip fixture probes that still resolve to 127.0.0.1'
     );
   });
 
