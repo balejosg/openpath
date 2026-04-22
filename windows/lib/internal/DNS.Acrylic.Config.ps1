@@ -254,6 +254,33 @@ function Set-AcrylicGlobalSetting {
     return ($Content.TrimEnd() + "`n$replacement`n")
 }
 
+function Set-AcrylicAllowedAddress {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Content,
+        [Parameter(Mandatory = $true)][string]$Key,
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+
+    if ($Content -notmatch '(?m)^\[AllowedAddressesSection\]\s*$') {
+        $Content = $Content.TrimEnd() + "`n`n[AllowedAddressesSection]`n"
+    }
+
+    $escapedKey = [regex]::Escape($Key)
+    $pattern = "(?m)^$escapedKey=.*$"
+    $replacement = "$Key=$Value"
+    if ($Content -match $pattern) {
+        return ($Content -replace $pattern, $replacement)
+    }
+
+    $allowedSection = [regex]::Match($Content, '(?m)^\[AllowedAddressesSection\]\s*$')
+    if ($allowedSection.Success) {
+        return $Content.Insert($allowedSection.Index + $allowedSection.Length, "`n$replacement")
+    }
+
+    return ($Content.TrimEnd() + "`n`n[AllowedAddressesSection]`n$replacement`n")
+}
+
 function Set-AcrylicConfiguration {
     [CmdletBinding(SupportsShouldProcess)]
     param([AllowEmptyCollection()][string[]]$WhitelistedDomains = @())
@@ -317,6 +344,8 @@ function Set-AcrylicConfiguration {
     if ($iniContent -notmatch '(?m)^\[AllowedAddressesSection\]\s*$') {
         $iniContent = $iniContent.TrimEnd() + "`n`n[AllowedAddressesSection]`n"
     }
+    $iniContent = Set-AcrylicAllowedAddress -Content $iniContent -Key 'IP1' -Value '127.0.0.1'
+    $iniContent = Set-AcrylicAllowedAddress -Content $iniContent -Key 'IP2' -Value '::1'
 
     $iniContent | Set-Content $configPath -Encoding UTF8 -Force
     Write-OpenPathLog "Acrylic configuration updated"

@@ -517,6 +517,11 @@ describe('repository verification contract', () => {
       dnsConfigModule.includes("$iniContent -notmatch '(?m)^\\[AllowedAddressesSection\\]\\s*$'"),
       'Set-AcrylicConfiguration should preserve or create [AllowedAddressesSection] after the global settings block'
     );
+    assert.ok(
+      dnsConfigModule.includes("-Key 'IP1' -Value '127.0.0.1'") &&
+        dnsConfigModule.includes("-Key 'IP2' -Value '::1'"),
+      'Set-AcrylicConfiguration should explicitly allow local loopback requests in [AllowedAddressesSection]'
+    );
   });
 
   test('Windows student-policy diagnostics capture Acrylic DNS state and sslip probes', () => {

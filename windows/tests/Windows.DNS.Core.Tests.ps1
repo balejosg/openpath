@@ -264,6 +264,8 @@ Describe "DNS Module" {
                 'SecondaryServerProtocol=UDP',
                 'LocalIPv6BindingAddress=',
                 '[AllowedAddressesSection]',
+                'IP1=127.0.0.1',
+                'IP2=::1',
                 'IgnoreNegativeResponsesFromPrimaryServer=No',
                 'IgnoreNegativeResponsesFromSecondaryServer=No',
                 'AddressCacheDisabled=Yes'
@@ -307,6 +309,8 @@ Describe "DNS Module" {
                 'PrimaryServerPort=53',
                 'PrimaryServerProtocol=UDP',
                 '[AllowedAddressesSection]',
+                'IP1=127.0.0.1',
+                'IP2=::1',
                 'IgnoreNegativeResponsesFromPrimaryServer=No',
                 'AddressCacheDisabled=Yes'
             )
