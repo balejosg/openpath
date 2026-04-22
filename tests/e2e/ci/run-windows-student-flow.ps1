@@ -1054,12 +1054,24 @@ function Write-WindowsDiagnostics {
             'blocked.127.0.0.1.sslip.io'
         )) {
         "=== Resolve-DnsName $probeHost via 127.0.0.1 ==="
-        Resolve-DnsName -Name $probeHost -Server 127.0.0.1 -DnsOnly -ErrorAction SilentlyContinue | Out-String
+        try {
+            Resolve-DnsName -Name $probeHost -Server 127.0.0.1 -DnsOnly -ErrorAction Stop | Out-String
+        }
+        catch {
+            "ERROR: $($_.Exception.Message)"
+        }
     }
 
     @(
         '=== Scheduled Tasks ==='
         (Get-ScheduledTask -TaskName 'OpenPath-*' -ErrorAction SilentlyContinue | Format-List | Out-String)
+        '=== Acrylic Service ==='
+        (Get-Service -Name 'AcrylicDNSProxySvc' -ErrorAction SilentlyContinue | Format-List | Out-String)
+        '=== DNS Port 53 Listeners ==='
+        (Get-NetUDPEndpoint -LocalPort 53 -ErrorAction SilentlyContinue | Format-Table -AutoSize | Out-String)
+        (Get-NetTCPConnection -LocalPort 53 -ErrorAction SilentlyContinue | Format-Table -AutoSize | Out-String)
+        '=== OpenPath Firewall DNS Rules ==='
+        (Get-NetFirewallRule -DisplayName 'OpenPath-DNS-*' -ErrorAction SilentlyContinue | Format-Table DisplayName, Enabled, Direction, Action -AutoSize | Out-String)
         '=== OpenPath Config ==='
         $(if (Test-Path 'C:\OpenPath\data\config.json') { Get-Content 'C:\OpenPath\data\config.json' -Raw } else { 'Config file missing' })
         '=== Student Scenario ==='

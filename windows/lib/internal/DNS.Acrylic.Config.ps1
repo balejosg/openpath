@@ -231,6 +231,29 @@ function Update-AcrylicHost {
     return $true
 }
 
+function Set-AcrylicGlobalSetting {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Content,
+        [Parameter(Mandatory = $true)][string]$Key,
+        [AllowEmptyString()][string]$Value
+    )
+
+    $escapedKey = [regex]::Escape($Key)
+    $pattern = "(?m)^$escapedKey=.*$"
+    $replacement = "$Key=$Value"
+    if ($Content -match $pattern) {
+        return ($Content -replace $pattern, $replacement)
+    }
+
+    $nextSection = [regex]::Match($Content, '(?m)^\[(?!GlobalSection\])[^]]+\]\s*$')
+    if ($nextSection.Success) {
+        return $Content.Insert($nextSection.Index, "$replacement`n")
+    }
+
+    return ($Content.TrimEnd() + "`n$replacement`n")
+}
+
 function Set-AcrylicConfiguration {
     [CmdletBinding(SupportsShouldProcess)]
     param([AllowEmptyCollection()][string[]]$WhitelistedDomains = @())
@@ -247,26 +270,52 @@ function Set-AcrylicConfiguration {
     if ($iniContent -notmatch '(?m)^\[GlobalSection\]\s*$') {
         $iniContent = "[GlobalSection]`n$iniContent"
     }
-    $settings = @{
+    $settings = [ordered]@{
         "PrimaryServerAddress" = $dnsSettings.PrimaryDNS
+        "PrimaryServerPort" = "53"
+        "PrimaryServerProtocol" = "UDP"
+        "PrimaryServerQueryTypeAffinityMask" = ""
         "SecondaryServerAddress" = $dnsSettings.SecondaryDNS
+        "SecondaryServerPort" = "53"
+        "SecondaryServerProtocol" = "UDP"
+        "SecondaryServerQueryTypeAffinityMask" = ""
         "LocalIPv4BindingAddress" = "127.0.0.1"
         "LocalIPv4BindingPort" = "53"
+        "LocalIPv6BindingAddress" = ""
+        "LocalIPv6BindingPort" = "53"
+        "LocalIPv6BindingEnabledOnWindowsVersionsPriorToWindowsVistaOrWindowsServer2008" = "No"
+        "GeneratedResponseTimeToLive" = "300"
         "PrimaryServerDomainNameAffinityMask" = ""
         "SecondaryServerDomainNameAffinityMask" = ""
+        "IgnoreFailureResponsesFromPrimaryServer" = "No"
         "IgnoreNegativeResponsesFromPrimaryServer" = "No"
+        "IgnoreFailureResponsesFromSecondaryServer" = "No"
         "IgnoreNegativeResponsesFromSecondaryServer" = "No"
+        "SinkholeIPv6Lookups" = "No"
+        "ForwardPrivateReverseLookups" = "No"
+        "AddressCacheFailureTime" = "0"
         "AddressCacheDisabled" = "Yes"
+        "AddressCacheInMemoryOnly" = "No"
         "AddressCacheNegativeTime" = "0"
+        "AddressCacheScavengingTime" = "5760"
+        "AddressCacheSilentUpdateTime" = "1440"
+        "AddressCachePeriodicPruningTime" = "360"
+        "AddressCacheDomainNameAffinityMask" = "^dns.msftncsi.com;^ipv6.msftncsi.com;^www.msftncsi.com;*"
+        "AddressCacheQueryTypeAffinityMask" = "A;AAAA;CNAME;MX;NS;PTR;SOA;SRV;TXT"
         "CacheSize" = "65536"
         "HitLogFileName" = ""
+        "HitLogFileWhat" = "XHCF"
+        "HitLogFullDump" = "No"
+        "HitLogMaxPendingHits" = "512"
         "ErrorLogFileName" = ""
     }
 
     foreach ($key in $settings.Keys) {
-        $pattern = "(?m)^$key=.*$"
-        $replacement = "$key=$($settings[$key])"
-        if ($iniContent -match $pattern) { $iniContent = $iniContent -replace $pattern, $replacement } else { $iniContent += "`n$replacement" }
+        $iniContent = Set-AcrylicGlobalSetting -Content $iniContent -Key $key -Value $settings[$key]
+    }
+
+    if ($iniContent -notmatch '(?m)^\[AllowedAddressesSection\]\s*$') {
+        $iniContent = $iniContent.TrimEnd() + "`n`n[AllowedAddressesSection]`n"
     }
 
     $iniContent | Set-Content $configPath -Encoding UTF8 -Force

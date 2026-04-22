@@ -258,6 +258,12 @@ Describe "DNS Module" {
                 '[GlobalSection]',
                 'PrimaryServerDomainNameAffinityMask=',
                 'SecondaryServerDomainNameAffinityMask=',
+                'PrimaryServerPort=53',
+                'PrimaryServerProtocol=UDP',
+                'SecondaryServerPort=53',
+                'SecondaryServerProtocol=UDP',
+                'LocalIPv6BindingAddress=',
+                '[AllowedAddressesSection]',
                 'IgnoreNegativeResponsesFromPrimaryServer=No',
                 'IgnoreNegativeResponsesFromSecondaryServer=No',
                 'AddressCacheDisabled=Yes'
@@ -298,6 +304,9 @@ Describe "DNS Module" {
             Assert-ContentContainsAll -Content $script:capturedAcrylicConfig -Needles @(
                 '[GlobalSection]',
                 'PrimaryServerDomainNameAffinityMask=',
+                'PrimaryServerPort=53',
+                'PrimaryServerProtocol=UDP',
+                '[AllowedAddressesSection]',
                 'IgnoreNegativeResponsesFromPrimaryServer=No',
                 'AddressCacheDisabled=Yes'
             )

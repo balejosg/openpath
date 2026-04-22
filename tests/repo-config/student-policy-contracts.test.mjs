@@ -493,6 +493,32 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('windows Acrylic configuration seeds required resolver defaults for sparse portable installs', () => {
+    const dnsConfigModule = readText('windows/lib/internal/DNS.Acrylic.Config.ps1');
+
+    for (const requiredSetting of [
+      '"PrimaryServerPort" = "53"',
+      '"PrimaryServerProtocol" = "UDP"',
+      '"SecondaryServerPort" = "53"',
+      '"SecondaryServerProtocol" = "UDP"',
+      '"LocalIPv6BindingAddress" = ""',
+      '"LocalIPv6BindingPort" = "53"',
+      '"GeneratedResponseTimeToLive" = "300"',
+      '"HitLogFileWhat" = "XHCF"',
+      '"HitLogMaxPendingHits" = "512"',
+    ]) {
+      assert.ok(
+        dnsConfigModule.includes(requiredSetting),
+        `Set-AcrylicConfiguration should seed ${requiredSetting} so a sparse AcrylicConfiguration.ini remains service-usable`
+      );
+    }
+
+    assert.ok(
+      dnsConfigModule.includes("$iniContent -notmatch '(?m)^\\[AllowedAddressesSection\\]\\s*$'"),
+      'Set-AcrylicConfiguration should preserve or create [AllowedAddressesSection] after the global settings block'
+    );
+  });
+
   test('Windows student-policy diagnostics capture Acrylic DNS state and sslip probes', () => {
     const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
 
@@ -517,6 +543,16 @@ describe('repository verification contract', () => {
     assert.ok(
       windowsRunner.includes('Resolve-DnsName -Name $probeHost -Server 127.0.0.1 -DnsOnly'),
       'Windows student-policy diagnostics should resolve fixture hostnames through the local Acrylic resolver'
+    );
+    assert.match(
+      windowsRunner,
+      /Get-NetUDPEndpoint[\s\S]*-LocalPort 53/,
+      'Windows student-policy diagnostics should capture UDP/53 listeners so Acrylic binding failures are visible'
+    );
+    assert.match(
+      windowsRunner,
+      /catch \{[\s\S]*"ERROR: \$\(\$_\.Exception\.Message\)"/,
+      'Windows student-policy diagnostics should include Resolve-DnsName exception messages instead of blank probe sections'
     );
   });
 
