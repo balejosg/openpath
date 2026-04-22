@@ -767,6 +767,70 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('Linux student-policy readiness fails before Selenium when blocked fixture DNS resolves upstream', () => {
+    const linuxRunner = readText('tests/e2e/ci/run-linux-student-flow.sh');
+    const readinessFunction = linuxRunner.match(
+      /assert_linux_dns_policy_ready\(\) \{[\s\S]*?\n\}/
+    )?.[0];
+    assert.ok(readinessFunction, 'Linux student-policy runner should define DNS readiness');
+
+    assert.match(
+      readinessFunction,
+      /raw\.githubusercontent\.com/,
+      'Linux student-policy readiness should verify an essential allowlisted domain before Selenium'
+    );
+    assert.doesNotMatch(
+      readinessFunction,
+      /portal\.\$\{OPENPATH_STUDENT_HOST_SUFFIX\}|api\.site\.\$\{OPENPATH_STUDENT_HOST_SUFFIX\}/,
+      'Linux student-policy readiness should not require fixture hosts to be allowed before Selenium seeds baseline policy'
+    );
+    assert.match(
+      readinessFunction,
+      /blocked\.\$\{OPENPATH_STUDENT_HOST_SUFFIX\}/,
+      'Linux student-policy runner should probe an unwhitelisted sslip fixture host before Selenium'
+    );
+    assert.match(
+      readinessFunction,
+      /blocked_fixture_ip="127\.0\.0\.1"/,
+      'Linux student-policy runner should know the sslip fixture IP that indicates a missed DNS block'
+    );
+    assert.match(
+      readinessFunction,
+      /dig @127\.0\.0\.1 "\$blocked_probe_host"/,
+      'Linux student-policy runner should resolve the blocked fixture host through local dnsmasq'
+    );
+    assert.match(
+      readinessFunction,
+      /\[\[ "\$blocked_addresses" == \*"\$blocked_fixture_ip"\* \]\]/,
+      'Linux student-policy runner should reject blocked sslip fixture probes that still resolve to 127.0.0.1'
+    );
+  });
+
+  test('Linux student-policy runner gates Selenium on dnsmasq and Firefox native-host readiness', () => {
+    const linuxRunner = readText('tests/e2e/ci/run-linux-student-flow.sh');
+
+    assert.match(
+      linuxRunner,
+      /assert_linux_dns_policy_ready\(\) \{[\s\S]*?systemctl is-active --quiet dnsmasq[\s\S]*?ss -/,
+      'Linux student-policy runner should fail early when dnsmasq is inactive or not listening before Selenium'
+    );
+    assert.match(
+      linuxRunner,
+      /assert_linux_firefox_extension_ready\(\) \{[\s\S]*?openpath-firefox-extension\.xpi[\s\S]*?whitelist_native_host\.json[\s\S]*?openpath-native-host\.py/,
+      'Linux student-policy runner should verify the Firefox XPI and native messaging host before Selenium'
+    );
+    assert.match(
+      linuxRunner,
+      /configure_client true[\s\S]*?assert_linux_dns_policy_ready[\s\S]*?assert_linux_firefox_extension_ready[\s\S]*?run_student_suite sse/,
+      'Linux student-policy runner should gate the SSE Selenium phase after install/enroll/update'
+    );
+    assert.match(
+      linuxRunner,
+      /configure_client false[\s\S]*?assert_linux_dns_policy_ready[\s\S]*?assert_linux_firefox_extension_ready[\s\S]*?run_student_suite fallback/,
+      'Linux student-policy runner should gate the fallback Selenium phase after reconfiguration/update'
+    );
+  });
+
   test('root tooling can resolve drizzle-orm for hoisted drizzle-kit commands', () => {
     const packageJson = readPackageJson();
     const packageLock = readJson('package-lock.json');

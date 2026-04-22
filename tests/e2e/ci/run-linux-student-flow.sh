@@ -58,6 +58,21 @@ debug_state() {
     echo ""
     echo "Whitelist snapshot:"
     docker exec "$CONTAINER_NAME" bash -lc 'cat /var/lib/openpath/whitelist.txt 2>/dev/null || true' || true
+    echo ""
+    echo "DNS listener snapshot:"
+    docker exec "$CONTAINER_NAME" bash -lc 'ss -H -lunt 2>/dev/null | grep ":53" || true' || true
+    echo ""
+    echo "resolv.conf snapshot:"
+    docker exec "$CONTAINER_NAME" bash -lc 'cat /etc/resolv.conf 2>/dev/null || true' || true
+    echo ""
+    echo "DNS readiness probes:"
+    docker exec \
+        -e OPENPATH_STUDENT_HOST_SUFFIX="$OPENPATH_STUDENT_HOST_SUFFIX" \
+        "$CONTAINER_NAME" \
+        bash -lc 'for host in raw.githubusercontent.com github.com "blocked.${OPENPATH_STUDENT_HOST_SUFFIX}"; do echo "== $host =="; dig @127.0.0.1 "$host" +short +time=3 +tries=1 2>&1 || true; done' || true
+    echo ""
+    echo "Firefox native host snapshot:"
+    docker exec "$CONTAINER_NAME" bash -lc 'ls -l /openpath/firefox-extension/openpath-firefox-extension.xpi /usr/local/bin/openpath-native-host.py /usr/lib/mozilla/native-messaging-hosts/whitelist_native_host.json /root/.mozilla/native-messaging-hosts/whitelist_native_host.json 2>/dev/null || true' || true
 }
 
 on_error() {
@@ -422,6 +437,89 @@ with open(scenario_path, 'w', encoding='utf-8') as fh:
 PY
 }
 
+assert_linux_dns_policy_ready() {
+    echo "Verifying Linux DNS policy readiness..."
+    docker exec \
+        -e OPENPATH_STUDENT_HOST_SUFFIX="$OPENPATH_STUDENT_HOST_SUFFIX" \
+        "$CONTAINER_NAME" \
+        bash -lc '
+set -euo pipefail
+
+dns_errors=()
+
+if ! systemctl is-active --quiet dnsmasq; then
+    dns_errors+=("dnsmasq service is not active after install/enroll/update")
+fi
+
+if ! ss -H -lunt 2>/dev/null | awk "\$5 ~ /:53$/ { found = 1 } END { exit found ? 0 : 1 }"; then
+    dns_errors+=("dnsmasq is not listening on local port 53")
+fi
+
+if ! awk "\$1 == \"nameserver\" && \$2 == \"127.0.0.1\" { found = 1 } END { exit found ? 0 : 1 }" /etc/resolv.conf 2>/dev/null; then
+    dns_errors+=("/etc/resolv.conf does not point at local dnsmasq")
+fi
+
+for probe_host in raw.githubusercontent.com github.com; do
+    if ! probe_addresses="$(dig @127.0.0.1 "$probe_host" +short +time=3 +tries=1 2>&1)"; then
+        dns_errors+=("$probe_host failed through local dnsmasq: $probe_addresses")
+    elif [[ -z "$probe_addresses" ]]; then
+        dns_errors+=("$probe_host returned no records through local dnsmasq")
+    fi
+done
+
+blocked_probe_host="blocked.${OPENPATH_STUDENT_HOST_SUFFIX}"
+blocked_fixture_ip="127.0.0.1"
+blocked_addresses="$(dig @127.0.0.1 "$blocked_probe_host" +short +time=3 +tries=1 2>/dev/null || true)"
+if [[ "$blocked_addresses" == *"$blocked_fixture_ip"* ]]; then
+    dns_errors+=("$blocked_probe_host resolved to $blocked_fixture_ip through dnsmasq, expected default deny")
+fi
+
+if ((${#dns_errors[@]} > 0)); then
+    printf "Linux DNS policy readiness failed before Selenium:\n" >&2
+    printf " - %s\n" "${dns_errors[@]}" >&2
+    exit 1
+fi
+'
+}
+
+assert_linux_firefox_extension_ready() {
+    echo "Verifying Linux Firefox extension readiness..."
+    docker exec "$CONTAINER_NAME" bash -lc '
+set -euo pipefail
+
+readiness_errors=()
+xpi_path="/openpath/firefox-extension/openpath-firefox-extension.xpi"
+system_manifest="/usr/lib/mozilla/native-messaging-hosts/whitelist_native_host.json"
+root_manifest="/root/.mozilla/native-messaging-hosts/whitelist_native_host.json"
+native_host="/usr/local/bin/openpath-native-host.py"
+
+[[ -s "$xpi_path" ]] || readiness_errors+=("Firefox XPI missing or empty: $xpi_path")
+[[ -s "$system_manifest" ]] || readiness_errors+=("system Firefox native host manifest missing: $system_manifest")
+[[ -s "$root_manifest" ]] || readiness_errors+=("root Firefox native host manifest missing: $root_manifest")
+[[ -x "$native_host" ]] || readiness_errors+=("native host executable missing: $native_host")
+
+if [[ -s "$root_manifest" ]]; then
+    manifest_name="$(jq -r ".name // \"\"" "$root_manifest")"
+    manifest_path="$(jq -r ".path // \"\"" "$root_manifest")"
+    if [[ "$manifest_name" != "whitelist_native_host" ]]; then
+        readiness_errors+=("root Firefox native host manifest has unexpected name: $manifest_name")
+    fi
+    if [[ "$manifest_path" != "$native_host" ]]; then
+        readiness_errors+=("root Firefox native host manifest points to $manifest_path, expected $native_host")
+    fi
+    if ! jq -e ".allowed_extensions | index(\"monitor-bloqueos@openpath\")" "$root_manifest" >/dev/null; then
+        readiness_errors+=("root Firefox native host manifest does not allow monitor-bloqueos@openpath")
+    fi
+fi
+
+if ((${#readiness_errors[@]} > 0)); then
+    printf "Linux Firefox extension readiness failed before Selenium:\n" >&2
+    printf " - %s\n" "${readiness_errors[@]}" >&2
+    exit 1
+fi
+'
+}
+
 run_student_suite() {
     local mode="${1:-sse}"
     echo "Running Selenium student-policy suite inside container (mode: $mode)..."
@@ -461,9 +559,13 @@ main() {
     start_container
     start_container_fixture_server
     configure_client true
+    assert_linux_dns_policy_ready
+    assert_linux_firefox_extension_ready
     run_student_suite sse
     bootstrap_scenario "Linux Student Policy Fallback"
     configure_client false
+    assert_linux_dns_policy_ready
+    assert_linux_firefox_extension_ready
     run_student_suite fallback
 
     echo "Linux student-policy runner completed successfully"
