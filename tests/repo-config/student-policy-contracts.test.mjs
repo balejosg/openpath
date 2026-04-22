@@ -410,6 +410,64 @@ describe('repository verification contract', () => {
     }
   });
 
+  test('Linux student policy runner emits per-phase timing evidence', () => {
+    const linuxRunner = readText('tests/e2e/ci/run-linux-student-flow.sh');
+
+    assert.match(
+      linuxRunner,
+      /run_timed_step\(\)/,
+      'Linux student-policy runner should centralize per-phase timing'
+    );
+    assert.match(
+      linuxRunner,
+      /linux-student-policy-timings\.json/,
+      'Linux student-policy runner should write timing evidence into diagnostics artifacts'
+    );
+    assert.match(
+      linuxRunner,
+      /Linux Student Policy Timing/,
+      'Linux student-policy runner should publish timing evidence in the GitHub step summary'
+    );
+    for (const phase of [
+      'Build workspaces',
+      'Ensure test PostgreSQL',
+      'Initialize test database',
+      'Start API server',
+      'Run Selenium student suite (sse)',
+      'Run Selenium student suite (fallback)',
+    ]) {
+      assert.ok(
+        linuxRunner.includes(`run_timed_step "${phase}"`),
+        `Linux student-policy runner should time phase: ${phase}`
+      );
+    }
+  });
+
+  test('Linux student policy runner highlights readiness failures in GitHub summaries', () => {
+    const linuxRunner = readText('tests/e2e/ci/run-linux-student-flow.sh');
+
+    assert.match(
+      linuxRunner,
+      /linux-dns-readiness\.err\.log/,
+      'Linux student-policy runner should persist DNS readiness failures for artifact and summary parsing'
+    );
+    assert.match(
+      linuxRunner,
+      /linux-firefox-readiness\.err\.log/,
+      'Linux student-policy runner should persist Firefox readiness failures for artifact and summary parsing'
+    );
+    assert.match(
+      linuxRunner,
+      /GITHUB_STEP_SUMMARY[\s\S]*Readiness failures/,
+      'Linux student-policy runner should add readiness failures to the GitHub step summary'
+    );
+    assert.match(
+      linuxRunner,
+      /on_error\(\)[\s\S]*publish_github_step_summary "failure"/,
+      'Linux student-policy runner should publish the diagnostic summary before exiting on failure'
+    );
+  });
+
   test('windows DNS renderer avoids wildcard FW rules that override blocked descendants', () => {
     const dnsModule = readText('windows/lib/DNS.psm1');
     const dnsConfigModule = readText('windows/lib/internal/DNS.Acrylic.Config.ps1');

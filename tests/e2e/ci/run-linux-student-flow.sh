@@ -16,6 +16,151 @@ API_PID=""
 FIXTURE_PID=""
 _context_dir=""
 _started_test_db=false
+TIMINGS_TSV="$ARTIFACTS_DIR/linux-student-policy-timings.tsv"
+TIMINGS_JSON="$ARTIFACTS_DIR/linux-student-policy-timings.json"
+CURRENT_TIMING_NAME=""
+CURRENT_TIMING_STARTED_AT=""
+CURRENT_TIMING_STARTED_NS=""
+
+write_timing_evidence() {
+    if [[ ! -s "$TIMINGS_TSV" ]]; then
+        return 0
+    fi
+
+    mkdir -p "$ARTIFACTS_DIR"
+    python3 - "$TIMINGS_TSV" "$TIMINGS_JSON" <<'PY'
+import json
+import sys
+
+tsv_path, json_path = sys.argv[1:3]
+timings = []
+
+with open(tsv_path, 'r', encoding='utf-8') as fh:
+    for raw_line in fh:
+        line = raw_line.rstrip('\n')
+        if not line:
+            continue
+        name, status, started_at, ended_at, duration_ms, duration_seconds, error = line.split('\t', 6)
+        timings.append({
+            'name': name,
+            'status': status,
+            'startedAt': started_at,
+            'endedAt': ended_at,
+            'durationMs': int(duration_ms),
+            'durationSeconds': float(duration_seconds),
+            'error': error or None,
+        })
+
+with open(json_path, 'w', encoding='utf-8') as fh:
+    json.dump(timings, fh, indent=2)
+    fh.write('\n')
+PY
+}
+
+start_timing_phase() {
+    CURRENT_TIMING_NAME="$1"
+    CURRENT_TIMING_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    CURRENT_TIMING_STARTED_NS="$(date +%s%N)"
+}
+
+finish_timing_phase() {
+    local status="${1:-success}"
+    local error_message="${2:-}"
+
+    if [[ -z "$CURRENT_TIMING_NAME" ]]; then
+        return 0
+    fi
+
+    local phase_name="$CURRENT_TIMING_NAME"
+    local started_at="$CURRENT_TIMING_STARTED_AT"
+    local started_ns="$CURRENT_TIMING_STARTED_NS"
+    CURRENT_TIMING_NAME=""
+    CURRENT_TIMING_STARTED_AT=""
+    CURRENT_TIMING_STARTED_NS=""
+
+    local ended_at
+    local ended_ns
+    local duration_ms
+    local duration_seconds
+    ended_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    ended_ns="$(date +%s%N)"
+    duration_ms=$(((ended_ns - started_ns) / 1000000))
+    duration_seconds="$(awk -v ms="$duration_ms" 'BEGIN { printf "%.3f", ms / 1000 }')"
+    error_message="${error_message//$'\t'/ }"
+    error_message="${error_message//$'\n'/ }"
+
+    mkdir -p "$ARTIFACTS_DIR"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "$phase_name" \
+        "$status" \
+        "$started_at" \
+        "$ended_at" \
+        "$duration_ms" \
+        "$duration_seconds" \
+        "$error_message" >>"$TIMINGS_TSV"
+    write_timing_evidence
+}
+
+run_timed_step() {
+    local phase_name="$1"
+    shift
+
+    start_timing_phase "$phase_name"
+    "$@"
+    finish_timing_phase success ""
+}
+
+publish_github_step_summary() {
+    local mode="${1:-success}"
+
+    if [[ -z "${GITHUB_STEP_SUMMARY:-}" ]]; then
+        return 0
+    fi
+
+    {
+        echo ""
+        echo "## Linux Student Policy Diagnostics"
+        echo ""
+        echo "Status: $mode"
+        echo ""
+        echo "## Linux Student Policy Timing"
+        echo ""
+        echo "| Phase | Status | Seconds |"
+        echo "| --- | --- | ---: |"
+        if [[ -s "$TIMINGS_TSV" ]]; then
+            while IFS=$'\t' read -r phase_name phase_status _started_at _ended_at _duration_ms duration_seconds _error_message; do
+                echo "| $phase_name | $phase_status | $duration_seconds |"
+            done <"$TIMINGS_TSV"
+        else
+            echo "| none | not-recorded | 0 |"
+        fi
+
+        echo ""
+        echo "### Readiness failures"
+
+        local readiness_files=(
+            "$ARTIFACTS_DIR/linux-dns-readiness.err.log"
+            "$ARTIFACTS_DIR/linux-firefox-readiness.err.log"
+        )
+        local found_readiness_failure=false
+        local readiness_file
+        for readiness_file in "${readiness_files[@]}"; do
+            if [[ -s "$readiness_file" ]]; then
+                found_readiness_failure=true
+                echo ""
+                echo "#### $(basename "$readiness_file")"
+                echo '```'
+                sed -n '1,80p' "$readiness_file"
+                echo '```'
+            fi
+        done
+
+        if [[ "$found_readiness_failure" == false ]]; then
+            echo ""
+            echo "No readiness failures captured."
+        fi
+    } >>"$GITHUB_STEP_SUMMARY"
+}
 
 cleanup() {
     if [[ -n "$FIXTURE_PID" ]]; then
@@ -79,7 +224,9 @@ on_error() {
     local rc=$?
     echo ""
     echo "Linux student-policy runner failed (exit code: $rc)"
+    finish_timing_phase failure "${BASH_COMMAND:-unknown}" || true
     debug_state
+    publish_github_step_summary "failure" || true
     exit "$rc"
 }
 
@@ -492,7 +639,10 @@ PY
 
 assert_linux_dns_policy_ready() {
     echo "Verifying Linux DNS policy readiness..."
-    docker exec \
+    local readiness_log="$ARTIFACTS_DIR/linux-dns-readiness.err.log"
+    rm -f "$readiness_log"
+
+    if ! docker exec \
         -e OPENPATH_STUDENT_HOST_SUFFIX="$OPENPATH_STUDENT_HOST_SUFFIX" \
         "$CONTAINER_NAME" \
         bash -lc '
@@ -532,12 +682,20 @@ if ((${#dns_errors[@]} > 0)); then
     printf " - %s\n" "${dns_errors[@]}" >&2
     exit 1
 fi
-'
+' 2>"$readiness_log"; then
+        cat "$readiness_log" >&2 || true
+        return 1
+    fi
+
+    rm -f "$readiness_log"
 }
 
 assert_linux_firefox_extension_ready() {
     echo "Verifying Linux Firefox extension readiness..."
-    docker exec "$CONTAINER_NAME" bash -lc '
+    local readiness_log="$ARTIFACTS_DIR/linux-firefox-readiness.err.log"
+    rm -f "$readiness_log"
+
+    if ! docker exec "$CONTAINER_NAME" bash -lc '
 set -euo pipefail
 
 readiness_errors=()
@@ -572,7 +730,12 @@ if ((${#readiness_errors[@]} > 0)); then
     printf " - %s\n" "${readiness_errors[@]}" >&2
     exit 1
 fi
-'
+' 2>"$readiness_log"; then
+        cat "$readiness_log" >&2 || true
+        return 1
+    fi
+
+    rm -f "$readiness_log"
 }
 
 run_student_suite() {
@@ -604,27 +767,28 @@ main() {
     mkdir -p "$ARTIFACTS_DIR"
 
     reserve_runtime_ports
-    prepare_workspace
+    run_timed_step "Build workspaces" prepare_workspace
     resolve_student_host_suffix
-    start_test_db
-    initialize_test_database
-    start_api_server
-    bootstrap_scenario "Linux Student Policy SSE"
-    seed_initial_baseline_policy
-    build_image
-    start_container
-    start_container_fixture_server
-    configure_client true
-    assert_linux_dns_policy_ready
-    assert_linux_firefox_extension_ready
-    run_student_suite sse
-    bootstrap_scenario "Linux Student Policy Fallback"
-    seed_initial_baseline_policy
-    configure_client false
-    assert_linux_dns_policy_ready
-    assert_linux_firefox_extension_ready
-    run_student_suite fallback
+    run_timed_step "Ensure test PostgreSQL" start_test_db
+    run_timed_step "Initialize test database" initialize_test_database
+    run_timed_step "Start API server" start_api_server
+    run_timed_step "Bootstrap SSE scenario" bootstrap_scenario "Linux Student Policy SSE"
+    run_timed_step "Seed SSE baseline policy" seed_initial_baseline_policy
+    run_timed_step "Build Linux student-policy image" build_image
+    run_timed_step "Start student-policy container" start_container
+    run_timed_step "Start fixture server" start_container_fixture_server
+    run_timed_step "Install/enroll/update client" configure_client true
+    run_timed_step "Verify SSE DNS policy readiness" assert_linux_dns_policy_ready
+    run_timed_step "Verify SSE Firefox readiness" assert_linux_firefox_extension_ready
+    run_timed_step "Run Selenium student suite (sse)" run_student_suite sse
+    run_timed_step "Bootstrap fallback scenario" bootstrap_scenario "Linux Student Policy Fallback"
+    run_timed_step "Seed fallback baseline policy" seed_initial_baseline_policy
+    run_timed_step "Reconfigure/update client" configure_client false
+    run_timed_step "Verify fallback DNS policy readiness" assert_linux_dns_policy_ready
+    run_timed_step "Verify fallback Firefox readiness" assert_linux_firefox_extension_ready
+    run_timed_step "Run Selenium student suite (fallback)" run_student_suite fallback
 
+    publish_github_step_summary "success"
     echo "Linux student-policy runner completed successfully"
 }
 

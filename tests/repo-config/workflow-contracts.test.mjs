@@ -901,6 +901,31 @@ test('E2E workflow gates expensive platform lanes on targeted changed paths', ()
   );
 });
 
+test('Firefox extension changes exercise platform readiness gates before release evidence', () => {
+  const e2eWorkflow = readText('.github/workflows/e2e-tests.yml');
+  const linuxStudentPolicyBlock = extractWorkflowJobBlock(e2eWorkflow, 'linux-student-policy');
+  const windowsStudentPolicyBlock = extractWorkflowJobBlock(e2eWorkflow, 'windows-student-policy');
+
+  assert.match(
+    e2eWorkflow,
+    /linux_student_policy=[\s\S]*firefox-extension\//,
+    'Firefox extension changes should trigger Linux student-policy so native-host readiness is validated on Linux'
+  );
+  assert.match(
+    e2eWorkflow,
+    /windows_student_policy=[\s\S]*firefox-extension\//,
+    'Firefox extension changes should trigger Windows student-policy so browser readiness is validated on Windows'
+  );
+  assert.ok(
+    linuxStudentPolicyBlock.includes('run-linux-student-flow.sh'),
+    'Linux student-policy workflow should continue using the runner that gates Selenium on DNS and Firefox readiness'
+  );
+  assert.ok(
+    windowsStudentPolicyBlock.includes('run-windows-student-flow.ps1'),
+    'Windows student-policy workflow should continue using the runner that gates Selenium on Acrylic and Firefox readiness'
+  );
+});
+
 test('release artifact workflows wait for same-commit quality evidence before publishing', () => {
   const prereleaseWorkflow = readText('.github/workflows/prerelease-deb.yml');
   const scriptsReleaseWorkflow = readText('.github/workflows/release-scripts.yml');
