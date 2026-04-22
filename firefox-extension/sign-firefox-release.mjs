@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { prepareFirefoxReleaseArtifacts } from './build-firefox-release.mjs';
@@ -10,6 +11,7 @@ import { prepareFirefoxReleaseArtifacts } from './build-firefox-release.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const extensionRoot = path.dirname(__filename);
 const defaultArtifactsDir = path.join(extensionRoot, 'build', 'firefox-release-signing');
+const firefoxReleaseSourceEntries = ['manifest.json', 'dist', 'popup', 'blocked', 'icons'];
 
 function fail(message) {
   throw new Error(message);
@@ -64,6 +66,95 @@ function readManifest(manifestPath) {
   return JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 }
 
+function walkFiles(rootDir, relativeRoot = '') {
+  const absoluteRoot = path.join(rootDir, relativeRoot);
+  const entries = fs
+    .readdirSync(absoluteRoot, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const files = [];
+
+  for (const entry of entries) {
+    const relativePath = path.posix.join(
+      relativeRoot.split(path.sep).join(path.posix.sep),
+      entry.name
+    );
+    const absolutePath = path.join(rootDir, relativePath);
+
+    if (entry.isDirectory()) {
+      files.push(...walkFiles(rootDir, relativePath));
+      continue;
+    }
+
+    if (entry.isFile()) {
+      files.push(relativePath);
+    }
+  }
+
+  return files;
+}
+
+function listFirefoxReleasePayloadFiles(sourceDir) {
+  const resolvedSourceDir = path.resolve(sourceDir);
+  const files = [];
+
+  for (const entry of firefoxReleaseSourceEntries) {
+    const absolutePath = path.join(resolvedSourceDir, entry);
+
+    if (!fs.existsSync(absolutePath)) {
+      fail(`Firefox release payload entry missing: ${entry}`);
+    }
+
+    const stat = fs.statSync(absolutePath);
+    if (stat.isDirectory()) {
+      files.push(...walkFiles(resolvedSourceDir, entry));
+    } else if (stat.isFile()) {
+      files.push(entry);
+    } else {
+      fail(`Firefox release payload entry is not a file or directory: ${entry}`);
+    }
+  }
+
+  return files.sort();
+}
+
+export function computeFirefoxReleasePayloadHash(options = {}) {
+  const { sourceDir = extensionRoot } = options;
+  const resolvedSourceDir = path.resolve(sourceDir);
+  const hash = createHash('sha256');
+
+  for (const relativePath of listFirefoxReleasePayloadFiles(resolvedSourceDir)) {
+    const normalizedPath = relativePath.split(path.sep).join(path.posix.sep);
+    hash.update('file\0');
+    hash.update(normalizedPath);
+    hash.update('\0');
+    hash.update(fs.readFileSync(path.join(resolvedSourceDir, relativePath)));
+    hash.update('\0');
+  }
+
+  return hash.digest('hex');
+}
+
+function prepareFirefoxReleaseSourceDir(sourceDir) {
+  const resolvedSourceDir = path.resolve(sourceDir);
+  const tempSourceDir = fs.mkdtempSync(path.join(tmpdir(), 'openpath-firefox-sign-'));
+
+  try {
+    for (const entry of firefoxReleaseSourceEntries) {
+      const sourcePath = path.join(resolvedSourceDir, entry);
+      if (!fs.existsSync(sourcePath)) {
+        fail(`Firefox release payload entry missing: ${entry}`);
+      }
+
+      fs.cpSync(sourcePath, path.join(tempSourceDir, entry), { recursive: true });
+    }
+  } catch (error) {
+    fs.rmSync(tempSourceDir, { recursive: true, force: true });
+    throw error;
+  }
+
+  return tempSourceDir;
+}
+
 export function prepareSigningSourceDir(options) {
   const { sourceDir = extensionRoot, version = '' } = options;
   const resolvedSourceDir = path.resolve(sourceDir);
@@ -79,16 +170,7 @@ export function prepareSigningSourceDir(options) {
   }
 
   const effectiveVersion = version.trim() || baseVersion;
-  if (effectiveVersion === baseVersion) {
-    return {
-      sourceDir: resolvedSourceDir,
-      effectiveVersion,
-      cleanup() {},
-    };
-  }
-
-  const tempSourceDir = fs.mkdtempSync(path.join(tmpdir(), 'openpath-firefox-sign-'));
-  fs.cpSync(resolvedSourceDir, tempSourceDir, { recursive: true });
+  const tempSourceDir = prepareFirefoxReleaseSourceDir(resolvedSourceDir);
 
   manifest.version = effectiveVersion;
   fs.writeFileSync(

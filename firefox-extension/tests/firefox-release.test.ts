@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
   utimesSync,
 } from 'node:fs';
@@ -48,6 +49,7 @@ interface SignFirefoxReleaseModule {
     artifactsDir: string;
     sourceDir?: string;
   }) => string[];
+  computeFirefoxReleasePayloadHash: (options: { sourceDir?: string }) => string;
   findSignedXpiArtifact: (artifactsDir: string) => string;
   prepareSigningSourceDir: (options: { sourceDir?: string; version?: string }) => {
     sourceDir: string;
@@ -58,8 +60,12 @@ interface SignFirefoxReleaseModule {
 
 const { prepareFirefoxReleaseArtifacts } =
   (await import('../build-firefox-release.mjs')) as PrepareFirefoxReleaseArtifactsModule;
-const { buildWebExtSignArgs, findSignedXpiArtifact, prepareSigningSourceDir } =
-  (await import('../sign-firefox-release.mjs')) as SignFirefoxReleaseModule;
+const {
+  buildWebExtSignArgs,
+  computeFirefoxReleasePayloadHash,
+  findSignedXpiArtifact,
+  prepareSigningSourceDir,
+} = (await import('../sign-firefox-release.mjs')) as SignFirefoxReleaseModule;
 
 const tempDirectories: string[] = [];
 
@@ -206,5 +212,86 @@ void describe('Firefox release signing helpers', () => {
     } finally {
       signingSource.cleanup();
     }
+  });
+
+  void test('prepareSigningSourceDir copies only the Firefox runtime signing payload', () => {
+    const workingDir = createTempDir('openpath-firefox-signing-source-');
+    const sourceDir = path.join(workingDir, 'extension');
+
+    mkdirSync(path.join(sourceDir, 'dist'), { recursive: true });
+    mkdirSync(path.join(sourceDir, 'popup'), { recursive: true });
+    mkdirSync(path.join(sourceDir, 'blocked'), { recursive: true });
+    mkdirSync(path.join(sourceDir, 'icons'), { recursive: true });
+    mkdirSync(path.join(sourceDir, 'src'), { recursive: true });
+    mkdirSync(path.join(sourceDir, 'tests'), { recursive: true });
+    mkdirSync(path.join(sourceDir, 'native'), { recursive: true });
+
+    writeFileSync(
+      path.join(sourceDir, 'manifest.json'),
+      `${JSON.stringify({
+        version: '3.2.1',
+        browser_specific_settings: { gecko: { id: 'monitor-bloqueos@openpath' } },
+      })}\n`
+    );
+    writeFileSync(path.join(sourceDir, 'dist', 'background.js'), 'console.log("runtime");\n');
+    writeFileSync(path.join(sourceDir, 'popup', 'popup.html'), '<html></html>\n');
+    writeFileSync(path.join(sourceDir, 'blocked', 'blocked.html'), '<html>blocked</html>\n');
+    writeFileSync(path.join(sourceDir, 'icons', 'icon-48.png'), 'icon\n');
+    writeFileSync(path.join(sourceDir, 'src', 'background.ts'), 'source only\n');
+    writeFileSync(path.join(sourceDir, 'tests', 'background.test.ts'), 'test only\n');
+    writeFileSync(path.join(sourceDir, 'native', 'openpath-native-host.py'), 'native only\n');
+    writeFileSync(path.join(sourceDir, 'README.md'), '# Docs\n');
+
+    const signingSource = prepareSigningSourceDir({ sourceDir });
+
+    try {
+      assert.notEqual(signingSource.sourceDir, sourceDir);
+      assert.equal(statSync(path.join(signingSource.sourceDir, 'dist')).isDirectory(), true);
+      assert.equal(statSync(path.join(signingSource.sourceDir, 'popup')).isDirectory(), true);
+      assert.equal(statSync(path.join(signingSource.sourceDir, 'blocked')).isDirectory(), true);
+      assert.equal(statSync(path.join(signingSource.sourceDir, 'icons')).isDirectory(), true);
+      assert.equal(existsSync(path.join(signingSource.sourceDir, 'src')), false);
+      assert.equal(existsSync(path.join(signingSource.sourceDir, 'tests')), false);
+      assert.equal(existsSync(path.join(signingSource.sourceDir, 'native')), false);
+      assert.equal(existsSync(path.join(signingSource.sourceDir, 'README.md')), false);
+    } finally {
+      signingSource.cleanup();
+    }
+  });
+
+  void test('computeFirefoxReleasePayloadHash ignores non-runtime extension files', () => {
+    const workingDir = createTempDir('openpath-firefox-payload-hash-');
+    const sourceDir = path.join(workingDir, 'extension');
+
+    mkdirSync(path.join(sourceDir, 'dist'), { recursive: true });
+    mkdirSync(path.join(sourceDir, 'popup'), { recursive: true });
+    mkdirSync(path.join(sourceDir, 'blocked'), { recursive: true });
+    mkdirSync(path.join(sourceDir, 'icons'), { recursive: true });
+    mkdirSync(path.join(sourceDir, 'native'), { recursive: true });
+
+    writeFileSync(
+      path.join(sourceDir, 'manifest.json'),
+      `${JSON.stringify({
+        version: '3.2.1',
+        browser_specific_settings: { gecko: { id: 'monitor-bloqueos@openpath' } },
+      })}\n`
+    );
+    writeFileSync(path.join(sourceDir, 'dist', 'background.js'), 'console.log("runtime");\n');
+    writeFileSync(path.join(sourceDir, 'popup', 'popup.html'), '<html></html>\n');
+    writeFileSync(path.join(sourceDir, 'blocked', 'blocked.html'), '<html>blocked</html>\n');
+    writeFileSync(path.join(sourceDir, 'icons', 'icon-48.png'), 'icon\n');
+    writeFileSync(path.join(sourceDir, 'native', 'openpath-native-host.py'), 'native only\n');
+    writeFileSync(path.join(sourceDir, 'README.md'), '# Docs\n');
+
+    const originalHash = computeFirefoxReleasePayloadHash({ sourceDir });
+
+    writeFileSync(path.join(sourceDir, 'native', 'openpath-native-host.py'), 'native changed\n');
+    writeFileSync(path.join(sourceDir, 'README.md'), '# Docs changed\n');
+
+    assert.equal(computeFirefoxReleasePayloadHash({ sourceDir }), originalHash);
+
+    writeFileSync(path.join(sourceDir, 'dist', 'background.js'), 'console.log("changed");\n');
+
+    assert.notEqual(computeFirefoxReleasePayloadHash({ sourceDir }), originalHash);
   });
 });
