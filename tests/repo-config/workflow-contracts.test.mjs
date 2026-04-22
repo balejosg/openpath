@@ -847,6 +847,11 @@ test('E2E workflow gates expensive platform lanes on targeted changed paths', ()
     'windows-student-policy should reset persistent self-hosted Windows state before and after the Selenium flow'
   );
   assert.ok(
+    windowsStudentPolicyBlock.indexOf('name: Restore self-hosted Windows runner state') <
+      windowsStudentPolicyBlock.indexOf('name: Upload Windows student-policy diagnostics'),
+    'windows-student-policy should restore external DNS before uploading diagnostics artifacts'
+  );
+  assert.ok(
     !e2eWorkflow.includes('runs-on: windows-2022'),
     'e2e-tests.yml should stop using hosted windows-2022 runners for Windows lanes'
   );
