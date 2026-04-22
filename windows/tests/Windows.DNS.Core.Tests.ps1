@@ -100,7 +100,7 @@ Describe "DNS Module" {
                     '# DEFAULT BLOCK (sinkhole for everything else)',
                     '# This MUST come last after FW rules.',
                     '# Upstream DNS: 1.1.1.1',
-                    '0.0.0.0 *'
+                    '0.0.0.0 /^.*$'
                 )
 
                 foreach ($needle in $expectedNeedles) {
@@ -111,7 +111,7 @@ Describe "DNS Module" {
                 $content | Should -Not -Match 'NX >\*'
 
                 $whitelistSectionIndex = $content.IndexOf('# WHITELISTED DOMAINS')
-                $defaultBlockRuleIndex = $content.IndexOf('0.0.0.0 *')
+                $defaultBlockRuleIndex = $content.IndexOf('0.0.0.0 /^.*$')
                 $whitelistSectionIndex | Should -BeGreaterThan -1
                 $defaultBlockRuleIndex | Should -BeGreaterThan $whitelistSectionIndex
 
@@ -187,7 +187,7 @@ Describe "DNS Module" {
 
             Assert-ContentContainsAll -Content $configContent -Needles @(
                 'function Get-OpenPathDnsSettings',
-                '0.0.0.0 *',
+                '0.0.0.0 /^.*$',
                 'function Get-AcrylicForwardRules',
                 'function New-AcrylicHostsDefinition',
                 'function ConvertTo-AcrylicHostsContent',

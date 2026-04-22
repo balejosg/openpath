@@ -943,8 +943,8 @@ function Assert-WindowsDnsPolicyReady {
 
     $dnsErrors = @()
     foreach ($probeHost in @(
-            'portal.127.0.0.1.sslip.io',
-            'api.site.127.0.0.1.sslip.io'
+            'raw.githubusercontent.com',
+            'github.com'
         )) {
         try {
             $result = Resolve-DnsName -Name $probeHost -Server 127.0.0.1 -DnsOnly -ErrorAction Stop

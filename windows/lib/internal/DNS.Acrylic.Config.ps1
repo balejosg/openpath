@@ -154,7 +154,7 @@ function New-AcrylicHostsDefinition {
         $sections += New-AcrylicHostsSection -Title "BLOCKED SUBDOMAINS ($($blockedLines.Count))" -Lines $blockedLines
     }
     $sections += New-AcrylicHostsSection -Title "WHITELISTED DOMAINS ($($effectiveWhitelistedDomains.Count))" -Lines @($whitelistLines)
-    $sections += New-AcrylicHostsSection -Title 'DEFAULT BLOCK (sinkhole for everything else)' -Description 'This MUST come last after FW rules.' -Lines @('0.0.0.0 *')
+    $sections += New-AcrylicHostsSection -Title 'DEFAULT BLOCK (sinkhole for everything else)' -Description 'This MUST come last after FW rules.' -Lines @('0.0.0.0 /^.*$')
 
     $affinityMaskEntries = Get-AcrylicAffinityMaskEntries -Domains @($essentialDomains + $effectiveWhitelistedDomains)
 
