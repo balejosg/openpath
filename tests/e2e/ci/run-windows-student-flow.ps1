@@ -931,6 +931,8 @@ function Assert-InstalledAcrylicRuntime {
         'SecondaryServerProtocol=UDP',
         'LocalIPv4BindingAddress=0.0.0.0',
         'LocalIPv4BindingPort=53',
+        'PrimaryServerDomainNameAffinityMask=raw.githubusercontent.com',
+        'SecondaryServerDomainNameAffinityMask=raw.githubusercontent.com',
         'AddressCacheDisabled=No',
         'IP1=127.*',
         'IP2=::1',

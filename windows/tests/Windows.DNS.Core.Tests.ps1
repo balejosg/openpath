@@ -226,7 +226,7 @@ Describe "DNS Module" {
             $content | Should -Not -Match '"AddressCacheDisabled"\s*=\s*"Yes"'
         }
 
-        It "Leaves Acrylic upstream affinity masks empty so hosts rules control policy" {
+        It "Limits Acrylic upstream affinity masks to essential and whitelisted domains" {
             $script:capturedAcrylicConfig = $null
             $script:capturedAcrylicConfigEncoding = $null
 
@@ -259,8 +259,10 @@ Describe "DNS Module" {
             $script:capturedAcrylicConfig | Should -Not -BeNullOrEmpty
             Assert-ContentContainsAll -Content $script:capturedAcrylicConfig -Needles @(
                 '[GlobalSection]',
-                'PrimaryServerDomainNameAffinityMask=',
-                'SecondaryServerDomainNameAffinityMask=',
+                'PrimaryServerDomainNameAffinityMask=raw.githubusercontent.com;*.raw.githubusercontent.com',
+                'SecondaryServerDomainNameAffinityMask=raw.githubusercontent.com;*.raw.githubusercontent.com',
+                'example.com;*.example.com',
+                'test.com;*.test.com',
                 'PrimaryServerPort=53',
                 'PrimaryServerProtocol=UDP',
                 'SecondaryServerPort=53',
@@ -275,8 +277,8 @@ Describe "DNS Module" {
                 'AddressCacheDisabled=No'
             )
             $script:capturedAcrylicConfigEncoding | Should -Be 'ASCII'
-            $script:capturedAcrylicConfig | Should -Not -Match 'PrimaryServerDomainNameAffinityMask=.*example\.com'
-            $script:capturedAcrylicConfig | Should -Not -Match 'SecondaryServerDomainNameAffinityMask=.*raw\.githubusercontent\.com'
+            $script:capturedAcrylicConfig | Should -Not -Match 'PrimaryServerDomainNameAffinityMask=.*blocked\.127\.0\.0\.1\.sslip\.io'
+            $script:capturedAcrylicConfig | Should -Not -Match 'SecondaryServerDomainNameAffinityMask=.*blocked\.127\.0\.0\.1\.sslip\.io'
         }
 
         It "Allows install-time Acrylic configuration before any classroom whitelist exists" {
@@ -310,7 +312,7 @@ Describe "DNS Module" {
             $script:capturedAcrylicConfig | Should -Not -BeNullOrEmpty
             Assert-ContentContainsAll -Content $script:capturedAcrylicConfig -Needles @(
                 '[GlobalSection]',
-                'PrimaryServerDomainNameAffinityMask=',
+                'PrimaryServerDomainNameAffinityMask=raw.githubusercontent.com;*.raw.githubusercontent.com',
                 'PrimaryServerPort=53',
                 'PrimaryServerProtocol=UDP',
                 'LocalIPv4BindingAddress=0.0.0.0',
@@ -321,7 +323,7 @@ Describe "DNS Module" {
                 'AddressCacheDisabled=No'
             )
             $script:capturedAcrylicConfig | Should -Not -Match 'example\.com;'
-            $script:capturedAcrylicConfig | Should -Not -Match 'PrimaryServerDomainNameAffinityMask=.*raw\.githubusercontent\.com'
+            $script:capturedAcrylicConfig | Should -Match 'PrimaryServerDomainNameAffinityMask=.*raw\.githubusercontent\.com'
         }
 
         It "Allows updating Acrylic hosts before any classroom whitelist exists" {
@@ -366,7 +368,7 @@ Describe "DNS Module" {
             $script:capturedHostsEncoding | Should -Be 'ASCII'
             $script:capturedAcrylicConfig | Should -Not -BeNullOrEmpty
             Assert-ContentContainsAll -Content $script:capturedAcrylicConfig -Needles @(
-                'PrimaryServerDomainNameAffinityMask=',
+                'PrimaryServerDomainNameAffinityMask=raw.githubusercontent.com;*.raw.githubusercontent.com',
                 'IgnoreNegativeResponsesFromPrimaryServer=No',
                 'AddressCacheDisabled=No'
             )

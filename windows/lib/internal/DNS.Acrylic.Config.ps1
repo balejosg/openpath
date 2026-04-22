@@ -293,6 +293,14 @@ function Set-AcrylicConfiguration {
     $dnsSettings = Get-OpenPathDnsSettings
     Write-OpenPathLog "Configuring Acrylic..."
 
+    $allowedForwardDomains = @(
+        foreach ($group in @(Get-AcrylicEssentialDomainGroups)) {
+            @($group.Domains)
+        }
+    ) + @($WhitelistedDomains)
+    $affinityMaskEntries = Get-AcrylicAffinityMaskEntries -Domains $allowedForwardDomains
+    $domainAffinityMask = ($affinityMaskEntries -join ';')
+
     $iniContent = if (Test-Path $configPath) { Get-Content $configPath -Raw } else { "" }
     if ($iniContent -notmatch '(?m)^\[GlobalSection\]\s*$') {
         $iniContent = "[GlobalSection]`n$iniContent"
@@ -312,8 +320,8 @@ function Set-AcrylicConfiguration {
         "LocalIPv6BindingPort" = "53"
         "LocalIPv6BindingEnabledOnWindowsVersionsPriorToWindowsVistaOrWindowsServer2008" = "No"
         "GeneratedResponseTimeToLive" = "300"
-        "PrimaryServerDomainNameAffinityMask" = ""
-        "SecondaryServerDomainNameAffinityMask" = ""
+        "PrimaryServerDomainNameAffinityMask" = $domainAffinityMask
+        "SecondaryServerDomainNameAffinityMask" = $domainAffinityMask
         "IgnoreFailureResponsesFromPrimaryServer" = "No"
         "IgnoreNegativeResponsesFromPrimaryServer" = "No"
         "IgnoreFailureResponsesFromSecondaryServer" = "No"

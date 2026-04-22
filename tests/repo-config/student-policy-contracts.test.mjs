@@ -527,6 +527,32 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('windows Acrylic configuration limits upstream forwarding to allowed domains', () => {
+    const dnsConfigModule = readText('windows/lib/internal/DNS.Acrylic.Config.ps1');
+    const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
+
+    assert.match(
+      dnsConfigModule,
+      /\$allowedForwardDomains = @\([\s\S]*?Get-AcrylicEssentialDomainGroups[\s\S]*?\+ @\(\$WhitelistedDomains\)[\s\S]*?\)/,
+      'Set-AcrylicConfiguration should build upstream forwarding masks from essential and whitelisted domains'
+    );
+    assert.match(
+      dnsConfigModule,
+      /\$domainAffinityMask = \(\$affinityMaskEntries -join ';'\)/,
+      'Set-AcrylicConfiguration should serialize the allowed-domain affinity mask'
+    );
+    assert.ok(
+      dnsConfigModule.includes('"PrimaryServerDomainNameAffinityMask" = $domainAffinityMask') &&
+        dnsConfigModule.includes('"SecondaryServerDomainNameAffinityMask" = $domainAffinityMask'),
+      'Acrylic upstream resolvers should only forward domains in the allowlist affinity mask'
+    );
+    assert.ok(
+      windowsRunner.includes('PrimaryServerDomainNameAffinityMask=raw.githubusercontent.com') &&
+        windowsRunner.includes('SecondaryServerDomainNameAffinityMask=raw.githubusercontent.com'),
+      'Windows student-policy runner should assert the installed resolver affinity mask is active'
+    );
+  });
+
   test('windows Acrylic configuration keeps required global section for fresh portable installs', () => {
     const dnsConfigModule = readText('windows/lib/internal/DNS.Acrylic.Config.ps1');
 
