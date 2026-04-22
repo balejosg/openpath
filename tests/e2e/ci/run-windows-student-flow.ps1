@@ -858,6 +858,78 @@ function Get-EnrollmentTicket {
     return [string]$response.enrollmentToken
 }
 
+function Get-AcrylicRootCandidates {
+    $roots = @()
+    if (${env:ProgramFiles(x86)}) {
+        $roots += Join-Path ${env:ProgramFiles(x86)} 'Acrylic DNS Proxy'
+    }
+    if ($env:ProgramFiles) {
+        $roots += Join-Path $env:ProgramFiles 'Acrylic DNS Proxy'
+    }
+
+    return $roots | Select-Object -Unique
+}
+
+function Get-AcrylicConfigurationPath {
+    foreach ($acrylicRoot in Get-AcrylicRootCandidates) {
+        $candidatePath = Join-Path $acrylicRoot 'AcrylicConfiguration.ini'
+        if (Test-Path $candidatePath) {
+            return $candidatePath
+        }
+    }
+
+    return $null
+}
+
+function Assert-InstalledAcrylicRuntime {
+    Write-Step 'Verifying installed Windows Acrylic runtime...'
+
+    $runtimePath = 'C:\OpenPath\lib\internal\DNS.Acrylic.Config.ps1'
+    if (-not (Test-Path $runtimePath)) {
+        throw "Installed Acrylic runtime missing at $runtimePath"
+    }
+
+    $runtimeContent = Get-Content $runtimePath -Raw
+    $runtimeHash = (Get-FileHash -Algorithm SHA256 -Path $runtimePath).Hash
+    $requiredRuntimeMarkers = @(
+        'Set-AcrylicGlobalSetting',
+        '"PrimaryServerPort" = "53"',
+        '"PrimaryServerProtocol" = "UDP"',
+        '"SecondaryServerPort" = "53"',
+        '"SecondaryServerProtocol" = "UDP"',
+        '[AllowedAddressesSection]'
+    )
+    $missingRuntimeMarkers = @($requiredRuntimeMarkers | Where-Object { -not $runtimeContent.Contains($_) })
+    if ($missingRuntimeMarkers.Count -gt 0) {
+        throw "Installed Acrylic runtime is stale or incomplete at $runtimePath (sha256=$runtimeHash); missing markers: $($missingRuntimeMarkers -join ', ')"
+    }
+
+    $configPath = Get-AcrylicConfigurationPath
+    if (-not $configPath) {
+        throw 'AcrylicConfiguration.ini was not found after Windows client install/update.'
+    }
+
+    $configContent = Get-Content $configPath -Raw
+    $configHash = (Get-FileHash -Algorithm SHA256 -Path $configPath).Hash
+    $requiredConfigMarkers = @(
+        '[GlobalSection]',
+        'PrimaryServerPort=53',
+        'PrimaryServerProtocol=UDP',
+        'SecondaryServerPort=53',
+        'SecondaryServerProtocol=UDP',
+        'LocalIPv4BindingAddress=127.0.0.1',
+        'LocalIPv4BindingPort=53',
+        '[AllowedAddressesSection]'
+    )
+    $missingConfigMarkers = @($requiredConfigMarkers | Where-Object { -not $configContent.Contains($_) })
+    if ($missingConfigMarkers.Count -gt 0) {
+        throw "AcrylicConfiguration.ini is missing required Windows student-policy defaults at $configPath (sha256=$configHash); missing markers: $($missingConfigMarkers -join ', ')"
+    }
+
+    Write-DiagnosticNote "Installed Acrylic runtime hash sha256=$runtimeHash path=$runtimePath"
+    Write-DiagnosticNote "AcrylicConfiguration.ini hash sha256=$configHash path=$configPath"
+}
+
 function Install-AndEnrollClient {
     param(
         [Parameter(Mandatory = $true)][pscustomobject]$Scenario,
@@ -898,6 +970,8 @@ function Install-AndEnrollClient {
     if ($LASTEXITCODE -ne 0) {
         throw "Update-OpenPath.ps1 failed with exit code $LASTEXITCODE"
     }
+
+    Assert-InstalledAcrylicRuntime
 
     $scenarioPath = Join-Path $script:ArtifactsRoot 'student-scenario.json'
     if (-not (Test-Path $scenarioPath)) {
@@ -1025,16 +1099,18 @@ function Write-WindowsDiagnostics {
     $whitelistPath = 'C:\OpenPath\data\whitelist.txt'
     $logPath = 'C:\OpenPath\data\logs\openpath.log'
     $acrylicArtifactDir = Join-Path $script:ArtifactsRoot 'acrylic'
+    $runtimeArtifactDir = Join-Path $script:ArtifactsRoot 'installed-runtime'
     $acrylicFiles = @(
         'AcrylicConfiguration.ini',
         'AcrylicHosts.txt',
         'AcrylicCache.dat',
         'AcrylicDebug.txt'
     )
-    $acrylicRoots = @(
-        "${env:ProgramFiles(x86)}\Acrylic DNS Proxy",
-        "$env:ProgramFiles\Acrylic DNS Proxy"
-    ) | Where-Object { $_ } | Select-Object -Unique
+    $acrylicRoots = Get-AcrylicRootCandidates
+    $installedRuntimeFiles = @(
+        'C:\OpenPath\lib\DNS.psm1',
+        'C:\OpenPath\lib\internal\DNS.Acrylic.Config.ps1'
+    )
 
     New-Item -ItemType Directory -Path $acrylicArtifactDir -Force | Out-Null
     foreach ($acrylicRoot in $acrylicRoots) {
@@ -1043,6 +1119,42 @@ function Write-WindowsDiagnostics {
             if (Test-Path $candidatePath) {
                 $destinationPath = Join-Path $acrylicArtifactDir $fileName
                 Copy-Item $candidatePath -Destination $destinationPath -Force
+            }
+        }
+    }
+
+    New-Item -ItemType Directory -Path $runtimeArtifactDir -Force | Out-Null
+    foreach ($runtimeFile in $installedRuntimeFiles) {
+        if (Test-Path $runtimeFile) {
+            Copy-Item $runtimeFile -Destination (Join-Path $runtimeArtifactDir (Split-Path $runtimeFile -Leaf)) -Force
+        }
+    }
+
+    $runtimeEvidenceOutput = foreach ($runtimeFile in $installedRuntimeFiles) {
+        "=== Installed Runtime $runtimeFile ==="
+        if (Test-Path $runtimeFile) {
+            Get-FileHash -Algorithm SHA256 -Path $runtimeFile | Format-List | Out-String
+            if ($runtimeFile -like '*DNS.Acrylic.Config.ps1') {
+                $runtimeContent = Get-Content $runtimeFile -Raw
+                foreach ($marker in @('Set-AcrylicGlobalSetting', 'PrimaryServerPort', 'AllowedAddressesSection')) {
+                    "$marker=$($runtimeContent.Contains($marker))"
+                }
+            }
+        }
+        else {
+            'MISSING'
+        }
+    }
+
+    $acrylicFileEvidenceOutput = foreach ($acrylicRoot in $acrylicRoots) {
+        foreach ($fileName in $acrylicFiles) {
+            $candidatePath = Join-Path $acrylicRoot $fileName
+            "=== Acrylic File $candidatePath ==="
+            if (Test-Path $candidatePath) {
+                Get-FileHash -Algorithm SHA256 -Path $candidatePath | Format-List | Out-String
+            }
+            else {
+                'MISSING'
             }
         }
     }
@@ -1076,6 +1188,10 @@ function Write-WindowsDiagnostics {
         $(if (Test-Path 'C:\OpenPath\data\config.json') { Get-Content 'C:\OpenPath\data\config.json' -Raw } else { 'Config file missing' })
         '=== Student Scenario ==='
         $(if (Test-Path (Join-Path $script:ArtifactsRoot 'student-scenario.json')) { Get-Content (Join-Path $script:ArtifactsRoot 'student-scenario.json') -Raw } else { 'Student scenario missing' })
+        '=== Installed Runtime Evidence ==='
+        ($runtimeEvidenceOutput | Out-String)
+        '=== Acrylic File Evidence ==='
+        ($acrylicFileEvidenceOutput | Out-String)
         '=== DNS Probes ==='
         ($dnsProbeOutput | Out-String)
         '=== Whitelist ==='

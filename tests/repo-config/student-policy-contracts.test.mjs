@@ -556,6 +556,35 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('Windows student-policy runner verifies the installed Acrylic runtime before Selenium', () => {
+    const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
+
+    assert.match(
+      windowsRunner,
+      /function Assert-InstalledAcrylicRuntime/,
+      'Windows student-policy runner should have a focused post-install Acrylic runtime assertion'
+    );
+    assert.ok(
+      windowsRunner.includes('C:\\OpenPath\\lib\\internal\\DNS.Acrylic.Config.ps1'),
+      'Windows student-policy runner should inspect the installed DNS.Acrylic.Config.ps1 file'
+    );
+    assert.ok(
+      windowsRunner.includes('Set-AcrylicGlobalSetting') &&
+        windowsRunner.includes('PrimaryServerPort=53') &&
+        windowsRunner.includes('[AllowedAddressesSection]'),
+      'Windows student-policy runner should assert the installed runtime/config contain the current Acrylic defaults'
+    );
+    assert.ok(
+      windowsRunner.includes('Get-FileHash -Algorithm SHA256'),
+      'Windows student-policy diagnostics should record file hashes for installed Acrylic runtime evidence'
+    );
+    assert.match(
+      windowsRunner,
+      /Install-AndEnrollClient[\s\S]*Assert-InstalledAcrylicRuntime/,
+      'Windows student-policy runner should verify Acrylic runtime state immediately after install/enroll/update'
+    );
+  });
+
   test('root tooling can resolve drizzle-orm for hoisted drizzle-kit commands', () => {
     const packageJson = readPackageJson();
     const packageLock = readJson('package-lock.json');
