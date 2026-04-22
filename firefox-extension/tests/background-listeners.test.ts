@@ -34,6 +34,7 @@ interface AutoAllowCall {
   hostname: string;
   origin: string | null;
   requestType: WebRequest.ResourceType;
+  targetUrl: string;
 }
 
 function waitForAsyncListeners(): Promise<void> {
@@ -138,9 +139,10 @@ function createListenerHarness(
       tabId: number,
       hostname: string,
       origin: string | null,
-      requestType: WebRequest.ResourceType
+      requestType: WebRequest.ResourceType,
+      targetUrl: string
     ) => {
-      autoAllowCalls.push({ tabId, hostname, origin, requestType });
+      autoAllowCalls.push({ tabId, hostname, origin, requestType, targetUrl });
       return Promise.resolve();
     },
     browser,
@@ -212,14 +214,14 @@ void describe('background listeners blocked-screen routing', () => {
     assert.deepEqual(responses, [{ success: true, id: 'request-1' }]);
   });
 
-  void test('registers path blocking only for frame navigation request types', () => {
+  void test('registers path blocking for frame and ajax request types', () => {
     const harness = createListenerHarness();
 
     assert.ok(harness.webRequestBefore);
     assert.deepEqual(harness.beforeRequestFilters, [
       {
         urls: ['<all_urls>'],
-        types: ['main_frame', 'sub_frame'],
+        types: ['main_frame', 'sub_frame', 'xmlhttprequest', 'fetch'],
       },
     ]);
   });
@@ -537,8 +539,9 @@ void describe('background listeners blocked-screen routing', () => {
       {
         tabId: 13,
         hostname: 'api.blocked.example',
-        origin: 'allowed.example',
+        origin: 'https://allowed.example/app',
         requestType: 'xmlhttprequest',
+        targetUrl: 'https://api.blocked.example/data.json',
       },
     ]);
   });

@@ -50,7 +50,8 @@ interface BackgroundListenersOptions {
     tabId: number,
     hostname: string,
     origin: string | null,
-    requestType: WebRequest.ResourceType
+    requestType: WebRequest.ResourceType,
+    targetUrl: string
   ) => Promise<void>;
   browser: Browser;
   clearTabRuntimeState: (tabId: number) => void;
@@ -361,7 +362,7 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
         return;
       }
 
-      const origin = extractHostname(details.originUrl ?? details.documentUrl ?? '');
+      const originPage = details.originUrl ?? details.documentUrl ?? null;
 
       handleBlockedScreenNavigationError(details, {
         recordBlockedDomain: true,
@@ -369,7 +370,13 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
       });
 
       if (isAutoAllowRequestType(details.type)) {
-        void options.autoAllowBlockedDomain(details.tabId, hostname, origin, details.type);
+        void options.autoAllowBlockedDomain(
+          details.tabId,
+          hostname,
+          originPage,
+          details.type,
+          details.url
+        );
       }
     },
     { urls: ['<all_urls>'] }

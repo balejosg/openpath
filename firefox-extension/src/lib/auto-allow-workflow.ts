@@ -2,7 +2,7 @@ import { fetchWithFallback, type RequestApiRuntimeConfig } from './request-api.j
 
 export interface AutoAllowApiResponse {
   success: boolean;
-  status?: 'approved' | 'duplicate';
+  status?: 'approved' | 'duplicate' | 'pending';
   duplicate?: boolean;
   error?: string;
 }
@@ -66,7 +66,8 @@ export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
     tabId: number,
     hostname: string,
     origin: string | null,
-    requestType: string
+    requestType: string,
+    targetUrl?: string
   ) => Promise<void>;
   retryLocalUpdate: (tabId: number, hostname: string) => Promise<{ success: boolean }>;
 } {
@@ -85,9 +86,10 @@ export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
     tabId: number,
     hostname: string,
     origin: string | null,
-    requestType: string
+    requestType: string,
+    targetUrl?: string
   ): Promise<void> {
-    const requestKey = `${tabId.toString()}:${hostname}:${origin ?? 'unknown'}`;
+    const requestKey = `${tabId.toString()}:${hostname}:${origin ?? 'unknown'}:${targetUrl ?? hostname}`;
     if (deps.inFlightAutoRequests.has(requestKey)) {
       return;
     }
@@ -159,6 +161,7 @@ export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
           body: JSON.stringify({
             domain: hostname,
             origin_page: origin ?? 'desconocido',
+            ...(targetUrl ? { target_url: targetUrl } : {}),
             token: tokenResponse.token,
             hostname: hostnameResponse.hostname,
             reason: `auto-allow ajax (${requestType})`,
@@ -176,6 +179,16 @@ export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
           state: 'apiError',
           updatedAt: now(),
           message: payload.error ?? 'Fallo de API al auto-aprobar',
+          requestType,
+        });
+        return;
+      }
+
+      if (payload.status === 'pending') {
+        deps.setDomainStatus(tabId, hostname, {
+          state: 'pending',
+          updatedAt: now(),
+          message: 'Solicitud pendiente de aprobacion',
           requestType,
         });
         return;

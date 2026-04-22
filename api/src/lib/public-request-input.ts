@@ -5,6 +5,7 @@ export interface AutoRequestInput {
   hostnameRaw: string;
   token: string;
   originPageRaw: string;
+  targetUrlRaw: string;
   reasonRaw: string;
 }
 
@@ -53,6 +54,7 @@ export function parseAutoRequestPayload(body: unknown): AutoRequestInput {
     hostnameRaw: getStringField(rec, 'hostname'),
     token: getStringField(rec, 'token'),
     originPageRaw: getFirstStringField(rec, ['origin_page', 'originPage']),
+    targetUrlRaw: getFirstStringField(rec, ['target_url', 'targetUrl']),
     reasonRaw: getStringField(rec, 'reason').trim(),
   };
 }

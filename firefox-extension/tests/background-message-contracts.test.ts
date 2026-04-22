@@ -154,7 +154,10 @@ void describe('background message contract compatibility', () => {
       },
       {
         success: true,
-        outcome: null,
+        outcome: {
+          cancel: true,
+          reason: 'BLOCKED_PATH_POLICY:example.com/private',
+        },
       }
     );
   });

@@ -299,6 +299,20 @@ jobs:
           ADMIN_TOKEN: test-admin-token-for-ci
           SHARED_SECRET: test-shared-secret-for-ci
 
+      - name: Run public request contracts
+        id: run-public-request-contracts
+        run: npm run test:public-requests --workspace=@openpath/api
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: openpath
+          DB_USER: openpath
+          DB_PASSWORD: openpath_dev
+          JWT_SECRET: test-jwt-secret-for-ci-testing
+          ADMIN_TOKEN: test-admin-token-for-ci
+          SHARED_SECRET: test-shared-secret-for-ci
+
       - name: Run Firefox extension tests
         id: run-firefox-extension-tests
         run: npm test --workspace=@openpath/firefox-extension
@@ -314,6 +328,7 @@ jobs:
              [[ "${{ steps.build-workspaces.outcome }}" == "success" ]] && \
              [[ "${{ steps.run-database-migrations.outcome }}" == "success" ]] && \
              [[ "${{ steps.run-token-delivery-contracts.outcome }}" == "success" ]] && \
+             [[ "${{ steps.run-public-request-contracts.outcome }}" == "success" ]] && \
              [[ "${{ steps.run-firefox-extension-tests.outcome }}" == "success" ]]; then
             echo "tests_passed=true" >> "$GITHUB_OUTPUT"
           else

@@ -291,6 +291,30 @@ test('Codecov coverage uploads stay wired to active workflows and the README bad
   );
 });
 
+test('delivery contracts run public request regressions before reporting success', () => {
+  const ciWorkflow = readText('.github/workflows/ci.yml');
+  const deliveryJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-delivery-contracts');
+  const apiPackage = JSON.parse(readText('api/package.json'));
+
+  assert.equal(
+    apiPackage.scripts['test:public-requests'],
+    'tsx scripts/run-node-test-suite.ts tests/lib/public-request-input.test.ts tests/api-submit-routes.test.ts tests/routes/public-requests.test.ts',
+    'the API package should expose a focused public request contract suite for CI'
+  );
+  assert.ok(
+    deliveryJobBlock.includes('id: run-public-request-contracts'),
+    'ci.yml should give the public request contract step a stable id'
+  );
+  assert.ok(
+    deliveryJobBlock.includes('npm run test:public-requests --workspace=@openpath/api'),
+    'ci.yml should run public request contracts in the delivery-contract lane'
+  );
+  assert.ok(
+    deliveryJobBlock.includes('steps.run-public-request-contracts.outcome'),
+    'ci.yml should include public request contracts in the delivery-contract lane outcome'
+  );
+});
+
 test('required Windows CI runs Pester in an untracked child host without success shortcuts', () => {
   const ciWorkflow = readText('.github/workflows/ci.yml');
   const linuxJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-linux-dnsmasq');

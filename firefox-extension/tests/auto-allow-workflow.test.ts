@@ -107,17 +107,27 @@ await describe('auto allow workflow', async () => {
   });
 
   await test('marks a domain autoApproved after API and local update succeed', async () => {
+    const requestBodies: unknown[] = [];
     const { fixture, statuses, workflow } = createWorkflowFixture({
-      fetchImpl: () =>
-        Promise.resolve(
+      fetchImpl: (_url, init) => {
+        const body = typeof init?.body === 'string' ? init.body : '{}';
+        requestBodies.push(JSON.parse(body));
+        return Promise.resolve(
           new Response(JSON.stringify({ success: true, status: 'approved' }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           })
-        ),
+        );
+      },
     });
 
-    await workflow.autoAllowBlockedDomain(5, 'example.com', 'portal.school', 'xmlhttprequest');
+    await workflow.autoAllowBlockedDomain(
+      5,
+      'example.com',
+      'https://portal.school/app',
+      'xmlhttprequest',
+      'https://example.com/data.json'
+    );
 
     assert.deepEqual(statuses.get('example.com'), {
       message: 'Auto-aprobado y actualizado',
@@ -125,8 +135,47 @@ await describe('auto allow workflow', async () => {
       state: 'autoApproved',
       updatedAt: 1234567890,
     });
+    assert.deepEqual(requestBodies, [
+      {
+        domain: 'example.com',
+        hostname: 'lab-pc-01',
+        origin_page: 'https://portal.school/app',
+        reason: 'auto-allow ajax (xmlhttprequest)',
+        target_url: 'https://example.com/data.json',
+        token: 'machine-token',
+      },
+    ]);
     assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
     assert.equal(fixture.refreshBlockedPathRulesCalls, 1);
+  });
+
+  await test('keeps pending API responses pending without refreshing the local whitelist', async () => {
+    const { fixture, statuses, workflow } = createWorkflowFixture({
+      fetchImpl: () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ success: true, status: 'pending', id: 'req-1' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        ),
+    });
+
+    await workflow.autoAllowBlockedDomain(
+      5,
+      'example.com',
+      'https://portal.school/app',
+      'fetch',
+      'https://example.com/data.json'
+    );
+
+    assert.deepEqual(statuses.get('example.com'), {
+      message: 'Solicitud pendiente de aprobacion',
+      requestType: 'fetch',
+      state: 'pending',
+      updatedAt: 1234567890,
+    });
+    assert.equal(fixture.requestLocalWhitelistUpdateCalls, 0);
+    assert.equal(fixture.refreshBlockedPathRulesCalls, 0);
   });
 
   await test('marks duplicate when the API reports an existing rule', async () => {

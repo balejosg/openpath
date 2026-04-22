@@ -14,6 +14,7 @@ void describe('public-request-input', () => {
       hostname: 'HOST',
       token: 't',
       origin_page: 'https://origin.example/path',
+      target_url: 'https://api.example/private.json',
       reason: '  ok  ',
     });
 
@@ -21,6 +22,7 @@ void describe('public-request-input', () => {
     assert.strictEqual(result.hostnameRaw, 'HOST');
     assert.strictEqual(result.token, 't');
     assert.strictEqual(result.originPageRaw, 'https://origin.example/path');
+    assert.strictEqual(result.targetUrlRaw, 'https://api.example/private.json');
     assert.strictEqual(result.reasonRaw, 'ok');
   });
 

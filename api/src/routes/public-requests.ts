@@ -47,6 +47,7 @@ export function registerPublicRequestRoutes(app: Express): void {
             hostnameRaw: body.hostnameRaw,
             token: body.token,
             originPage: body.originPageRaw.slice(0, 2048) || undefined,
+            targetUrl: body.targetUrlRaw.slice(0, 2048) || undefined,
             reason: body.reasonRaw.slice(0, 200) || undefined,
           });
 

@@ -18,6 +18,9 @@ interface StudentPolicyTargets {
   baseOnlyCdnAssetUrl: string;
   alternateOnlyUrl: string;
   autoDomainFetchUrl: string;
+  ajaxDependencyFetchUrl: string;
+  ajaxBlockedSubdomainFetchUrl: string;
+  ajaxBlockedPathFetchUrl: string;
   hosts: {
     request: string;
     rejected: string;
@@ -26,6 +29,9 @@ interface StudentPolicyTargets {
     baseOnly: string;
     alternateOnly: string;
     auto: string;
+    ajaxDependency: string;
+    ajaxBlockedSubdomain: string;
+    ajaxBlockedPath: string;
   };
 }
 
@@ -37,6 +43,9 @@ function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
   const baseOnlyHost = buildScenarioHost(scenario, 'base-only');
   const alternateOnlyHost = buildScenarioHost(scenario, 'alternate-only');
   const autoHost = buildScenarioHost(scenario, 'auto-domain');
+  const ajaxDependencyHost = `api.${buildScenarioHost(scenario, 'ajax-dependency')}`;
+  const ajaxBlockedSubdomainHost = `api.${buildScenarioHost(scenario, 'ajax-blocked-subdomain')}`;
+  const ajaxBlockedPathHost = `api.${buildScenarioHost(scenario, 'ajax-blocked-path')}`;
 
   return {
     portalOkUrl: buildFixtureUrl(scenario.fixtures.portal, '/ok'),
@@ -52,6 +61,9 @@ function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
     baseOnlyCdnAssetUrl: buildFixtureUrl(`cdn.${baseOnlyHost}`, '/asset.js'),
     alternateOnlyUrl: buildFixtureUrl(alternateOnlyHost, '/ok'),
     autoDomainFetchUrl: buildFixtureUrl(autoHost, '/fetch/private.json'),
+    ajaxDependencyFetchUrl: buildFixtureUrl(ajaxDependencyHost, '/fetch/private.json'),
+    ajaxBlockedSubdomainFetchUrl: buildFixtureUrl(ajaxBlockedSubdomainHost, '/fetch/private.json'),
+    ajaxBlockedPathFetchUrl: buildFixtureUrl(ajaxBlockedPathHost, '/fetch/private.json'),
     hosts: {
       request: requestHost,
       rejected: rejectedHost,
@@ -60,6 +72,9 @@ function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
       baseOnly: baseOnlyHost,
       alternateOnly: alternateOnlyHost,
       auto: autoHost,
+      ajaxDependency: ajaxDependencyHost,
+      ajaxBlockedSubdomain: ajaxBlockedSubdomainHost,
+      ajaxBlockedPath: ajaxBlockedPathHost,
     },
   };
 }
@@ -244,6 +259,122 @@ async function runRequestLifecycleScenarios(
   await driver.assertDnsBlocked(targets.hosts.duplicate);
 }
 
+async function runAllowedOriginAjaxAutoAllowScenarios(
+  client: StudentPolicyServerClient,
+  driver: StudentPolicyDriver,
+  mode: PolicyMode,
+  targets: StudentPolicyTargets
+): Promise<void> {
+  logScenarioStep('SP-006 ajax dependency auto-allow from whitelisted origin');
+
+  await client.setAutoApprove(false);
+  await driver.assertWhitelistMissing(targets.hosts.ajaxDependency);
+  await driver.assertDnsBlocked(targets.hosts.ajaxDependency);
+  await driver.openAndExpectLoaded({
+    url: targets.siteOkUrl,
+    title: 'OpenPath Site Fixture',
+    selector: '#page-status',
+  });
+
+  const firstFetch = await driver.runCrossOriginFetchProbe(targets.ajaxDependencyFetchUrl);
+  assert.strictEqual(firstFetch, 'blocked');
+
+  await settlePolicyChange(
+    driver,
+    mode,
+    async () => {
+      await driver.assertWhitelistContains(targets.hosts.ajaxDependency);
+      await driver.assertDnsAllowed(targets.hosts.ajaxDependency);
+    },
+    { timeoutMs: 45_000 }
+  );
+
+  await driver.openAndExpectLoaded({
+    url: targets.siteOkUrl,
+    title: 'OpenPath Site Fixture',
+    selector: '#page-status',
+  });
+  const secondFetch = await driver.runCrossOriginFetchProbe(targets.ajaxDependencyFetchUrl);
+  assert.strictEqual(secondFetch, 'ok');
+
+  logScenarioStep('SP-006 blocked subdomain prevents ajax auto-allow');
+  const blockedSubdomainRule = await client.createGroupRule(
+    driver.scenario.groups.restricted.id,
+    'blocked_subdomain',
+    targets.hosts.ajaxBlockedSubdomain,
+    'Block AJAX dependency subdomain for Selenium policy test'
+  );
+
+  try {
+    await driver.openAndExpectLoaded({
+      url: targets.siteOkUrl,
+      title: 'OpenPath Site Fixture',
+      selector: '#page-status',
+    });
+    const blockedSubdomainFetch = await driver.runCrossOriginFetchProbe(
+      targets.ajaxBlockedSubdomainFetchUrl
+    );
+    assert.strictEqual(blockedSubdomainFetch, 'blocked');
+    await driver.waitForConvergence(
+      async () => {
+        await driver.assertWhitelistMissing(targets.hosts.ajaxBlockedSubdomain);
+        await driver.assertDnsBlocked(targets.hosts.ajaxBlockedSubdomain);
+      },
+      { timeoutMs: 20_000, pollMs: 1_000 }
+    );
+  } finally {
+    await client.deleteGroupRule(blockedSubdomainRule.id, driver.scenario.groups.restricted.id);
+    await driver.forceLocalUpdate();
+  }
+
+  logScenarioStep('SP-006 blocked path prevents ajax auto-allow');
+  const blockedPathRule = await client.createGroupRule(
+    driver.scenario.groups.restricted.id,
+    'blocked_path',
+    `${targets.hosts.ajaxBlockedPath}/fetch/private`,
+    'Block AJAX dependency path for Selenium policy test'
+  );
+
+  try {
+    await driver.forceLocalUpdate();
+    await driver.refreshBlockedPathRules();
+    await settlePolicyChange(
+      driver,
+      mode,
+      async () => {
+        assert.deepStrictEqual(
+          await driver.evaluateBlockedPathDebug(targets.ajaxBlockedPathFetchUrl, 'fetch'),
+          {
+            cancel: true,
+            reason: `BLOCKED_PATH_POLICY:${targets.hosts.ajaxBlockedPath}/fetch/private`,
+          }
+        );
+      },
+      { refreshBlockedPaths: true, timeoutMs: 20_000 }
+    );
+    await driver.openAndExpectLoaded({
+      url: targets.siteOkUrl,
+      title: 'OpenPath Site Fixture',
+      selector: '#page-status',
+    });
+    const blockedPathFetch = await driver.runCrossOriginFetchProbe(targets.ajaxBlockedPathFetchUrl);
+    assert.strictEqual(blockedPathFetch, 'blocked');
+    await delay(1_000);
+    await driver.assertWhitelistMissing(targets.hosts.ajaxBlockedPath);
+    await driver.assertDnsBlocked(targets.hosts.ajaxBlockedPath);
+  } finally {
+    await client.deleteGroupRule(blockedPathRule.id, driver.scenario.groups.restricted.id);
+    await driver.forceLocalUpdate();
+    try {
+      await driver.refreshBlockedPathRules();
+    } catch (error) {
+      logScenarioStep(
+        `blocked-path cleanup refresh error: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+}
+
 async function runBlockedSubdomainScenarios(
   client: StudentPolicyServerClient,
   driver: StudentPolicyDriver,
@@ -351,12 +482,12 @@ async function runBlockedPathScenarios(
       });
       await driver.rerunIframeProbe();
       await driver.waitForDomStatus('#iframe-status', 'blocked');
-      logScenarioStep('SP-013 verify XHR path allowed');
+      logScenarioStep('SP-013 verify XHR path block');
       await driver.rerunXhrProbe();
-      await driver.waitForDomStatus('#xhr-status', 'ok');
-      logScenarioStep('SP-014 verify fetch path allowed');
+      await driver.waitForDomStatus('#xhr-status', 'blocked');
+      logScenarioStep('SP-014 verify fetch path block');
       await driver.rerunFetchProbe();
-      await driver.waitForDomStatus('#fetch-status', 'ok');
+      await driver.waitForDomStatus('#fetch-status', 'blocked');
     },
     { refreshBlockedPaths: true }
   );
@@ -511,6 +642,7 @@ export async function runStudentPolicyMatrix(
   const targets = buildTargets(driver.scenario);
 
   await seedBaselineWhitelist(client, driver, mode, targets);
+  await runAllowedOriginAjaxAutoAllowScenarios(client, driver, mode, targets);
   await runRequestLifecycleScenarios(client, driver, mode, targets);
   await runBlockedSubdomainScenarios(client, driver, mode, targets);
   await runBlockedPathScenarios(client, driver, mode, targets);

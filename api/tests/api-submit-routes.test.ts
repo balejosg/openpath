@@ -124,6 +124,199 @@ void describe('Request API tests - public submit routes', async () => {
       assert.strictEqual(duplicateData.success, false);
       assert.match(duplicateData.error ?? '', /pending request exists/i);
     });
+
+    await test('should auto-approve ajax targets when the origin domain is already whitelisted', async () => {
+      const suffix = `${Date.now().toString()}-origin-allowed`;
+      const groupId = `grp-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const originDomain = `lesson-${suffix}.example.com`;
+      const domain = `api-${suffix}.example.net`;
+      const token = `machine-token-${suffix}`;
+
+      await insertMachineAccessContext({
+        activeGroupId: groupId,
+        classroomId,
+        defaultGroupId: groupId,
+        hostname,
+        machineId,
+        token,
+      });
+      await db.execute(
+        sql.raw(
+          `INSERT INTO whitelist_rules (id, group_id, type, value, source) VALUES ('rule-origin-${suffix}', '${groupId}', 'whitelist', '${originDomain}', 'manual')`
+        )
+      );
+
+      const response = await fetch(`${getApiUrl()}/api/requests/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          hostname,
+          token,
+          origin_page: `https://${originDomain}/lesson`,
+          target_url: `https://${domain}/data.json`,
+          reason: 'auto-allow ajax (fetch)',
+        }),
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = (await response.json()) as {
+        approved: boolean;
+        autoApproved: boolean;
+        duplicate?: boolean;
+        groupId: string;
+        source: string;
+        status: string;
+        success: boolean;
+      };
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.approved, true);
+      assert.strictEqual(data.autoApproved, true);
+      assert.strictEqual(data.status, 'approved');
+      assert.strictEqual(data.groupId, groupId);
+      assert.strictEqual(data.source, 'auto_extension');
+      assert.strictEqual(data.duplicate, false);
+
+      assert.strictEqual(
+        getRows(
+          await db.execute(
+            sql.raw(
+              `SELECT id FROM whitelist_rules WHERE group_id='${groupId}' AND type='whitelist' AND value='${domain}'`
+            )
+          )
+        ).length,
+        1
+      );
+      assert.strictEqual(
+        getRows(
+          await db.execute(
+            sql.raw(`SELECT id FROM requests WHERE domain='${domain}' AND group_id='${groupId}'`)
+          )
+        ).length,
+        0
+      );
+    });
+
+    await test('should reject ajax auto-allow when the target matches a blocked subdomain rule', async () => {
+      const suffix = `${Date.now().toString()}-blocked-sub`;
+      const groupId = `grp-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const originDomain = `lesson-${suffix}.example.com`;
+      const blockedBaseDomain = `blocked-${suffix}.example.net`;
+      const domain = `api.${blockedBaseDomain}`;
+      const token = `machine-token-${suffix}`;
+
+      await insertMachineAccessContext({
+        activeGroupId: groupId,
+        classroomId,
+        defaultGroupId: groupId,
+        hostname,
+        machineId,
+        token,
+      });
+      await db.execute(
+        sql.raw(
+          `INSERT INTO whitelist_rules (id, group_id, type, value, source) VALUES ('rule-origin-${suffix}', '${groupId}', 'whitelist', '${originDomain}', 'manual')`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO whitelist_rules (id, group_id, type, value, source) VALUES ('rule-blocked-${suffix}', '${groupId}', 'blocked_subdomain', '${blockedBaseDomain}', 'manual')`
+        )
+      );
+
+      const response = await fetch(`${getApiUrl()}/api/requests/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          hostname,
+          token,
+          origin_page: `https://${originDomain}/lesson`,
+          target_url: `https://${domain}/data.json`,
+          reason: 'auto-allow ajax (xmlhttprequest)',
+        }),
+      });
+
+      assert.strictEqual(response.status, 403);
+      const data = (await response.json()) as { error?: string; success: boolean };
+      assert.strictEqual(data.success, false);
+      assert.match(data.error ?? '', /blocked subdomain/i);
+      assert.strictEqual(
+        getRows(
+          await db.execute(
+            sql.raw(
+              `SELECT id FROM whitelist_rules WHERE group_id='${groupId}' AND type='whitelist' AND value='${domain}'`
+            )
+          )
+        ).length,
+        0
+      );
+    });
+
+    await test('should reject ajax auto-allow when the target URL matches a blocked path rule', async () => {
+      const suffix = `${Date.now().toString()}-blocked-path`;
+      const groupId = `grp-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const originDomain = `lesson-${suffix}.example.com`;
+      const domain = `api-${suffix}.example.net`;
+      const token = `machine-token-${suffix}`;
+
+      await insertMachineAccessContext({
+        activeGroupId: groupId,
+        classroomId,
+        defaultGroupId: groupId,
+        hostname,
+        machineId,
+        token,
+      });
+      await db.execute(
+        sql.raw(
+          `INSERT INTO whitelist_rules (id, group_id, type, value, source) VALUES ('rule-origin-${suffix}', '${groupId}', 'whitelist', '${originDomain}', 'manual')`
+        )
+      );
+      await db.execute(
+        sql.raw(
+          `INSERT INTO whitelist_rules (id, group_id, type, value, source) VALUES ('rule-path-${suffix}', '${groupId}', 'blocked_path', '${domain}/private', 'manual')`
+        )
+      );
+
+      const response = await fetch(`${getApiUrl()}/api/requests/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          hostname,
+          token,
+          origin_page: `https://${originDomain}/lesson`,
+          target_url: `https://${domain}/private/data.json`,
+          reason: 'auto-allow ajax (fetch)',
+        }),
+      });
+
+      assert.strictEqual(response.status, 403);
+      const data = (await response.json()) as { error?: string; success: boolean };
+      assert.strictEqual(data.success, false);
+      assert.match(data.error ?? '', /blocked path/i);
+      assert.strictEqual(
+        getRows(
+          await db.execute(
+            sql.raw(
+              `SELECT id FROM whitelist_rules WHERE group_id='${groupId}' AND type='whitelist' AND value='${domain}'`
+            )
+          )
+        ).length,
+        0
+      );
+    });
   });
 
   await describe('Submit Request Endpoint', async () => {

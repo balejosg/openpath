@@ -37,6 +37,7 @@ interface CreateMachineRequestInput {
   originPage?: string | undefined;
   reason?: string | undefined;
   source: 'auto_extension' | 'firefox-extension';
+  targetUrl?: string | undefined;
   token: string;
 }
 
@@ -61,6 +62,99 @@ export interface ApprovedMachineRequestOutcome {
 export type AutoMachineRequestOutcome =
   | PendingMachineRequestOutcome
   | ApprovedMachineRequestOutcome;
+
+function normalizeDomainCandidate(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^\.+|\.+$/g, '');
+}
+
+function extractHostname(value: string | undefined): string | null {
+  const raw = value?.trim();
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return normalizeDomainCandidate(new URL(raw).hostname);
+  } catch {
+    const withoutProtocol = raw.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+    const host = withoutProtocol.split(/[/?#]/, 1)[0]?.split(':', 1)[0] ?? '';
+    const normalized = normalizeDomainCandidate(host);
+    return normalized.length > 0 ? normalized : null;
+  }
+}
+
+function domainMatchesRule(hostname: string, ruleValue: string): boolean {
+  const normalizedHostname = normalizeDomainCandidate(hostname);
+  const normalizedRule = normalizeDomainCandidate(ruleValue.replace(/^\*\./, ''));
+  return normalizedHostname === normalizedRule || normalizedHostname.endsWith(`.${normalizedRule}`);
+}
+
+async function isOriginWhitelisted(
+  groupId: string,
+  originPage: string | undefined
+): Promise<boolean> {
+  const originHost = extractHostname(originPage);
+  if (!originHost) {
+    return false;
+  }
+
+  const rules = await groupsStorage.getRulesByGroup(groupId, 'whitelist');
+  return rules.some((rule) => domainMatchesRule(originHost, rule.value));
+}
+
+function wildcardToRegex(value: string): RegExp {
+  const escaped = value.replace(/[\\^$+?.()|[\]{}]/g, '\\$&').replace(/\*/g, '.*');
+  return new RegExp(`^${escaped}$`, 'i');
+}
+
+function blockedPathRuleMatchesUrl(ruleValue: string, targetUrl: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(targetUrl);
+  } catch {
+    return false;
+  }
+
+  const normalizedRule = ruleValue
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i, '');
+  const slashIndex = normalizedRule.indexOf('/');
+  if (slashIndex < 0) {
+    return false;
+  }
+
+  const ruleDomain = normalizedRule.slice(0, slashIndex);
+  const rulePath = normalizedRule.slice(slashIndex);
+  const targetHostname = normalizeDomainCandidate(parsed.hostname);
+  const domainMatches =
+    ruleDomain === '*' ||
+    (ruleDomain.startsWith('*.')
+      ? domainMatchesRule(targetHostname, ruleDomain)
+      : domainMatchesRule(targetHostname, ruleDomain));
+
+  if (!domainMatches) {
+    return false;
+  }
+
+  const pathPattern = rulePath.endsWith('*') ? rulePath : `${rulePath}*`;
+  return wildcardToRegex(pathPattern).test(`${parsed.pathname}${parsed.search}`);
+}
+
+async function isTargetBlockedPath(
+  groupId: string,
+  targetUrl: string | undefined
+): Promise<boolean> {
+  if (!targetUrl) {
+    return false;
+  }
+
+  const rules = await groupsStorage.getRulesByGroup(groupId, 'blocked_path');
+  return rules.some((rule) => blockedPathRuleMatchesUrl(rule.value, targetUrl));
+}
 
 async function resolveMachineRequestContext(
   input: ResolveMachineRequestContextInput
@@ -183,23 +277,42 @@ export async function submitMachineRequest(
 export async function handleAutoMachineRequest(
   input: Pick<
     CreateMachineRequestInput,
-    'domainRaw' | 'hostnameRaw' | 'originPage' | 'reason' | 'token'
+    'domainRaw' | 'hostnameRaw' | 'originPage' | 'reason' | 'targetUrl' | 'token'
   >
 ): Promise<PublicRequestResult<AutoMachineRequestOutcome>> {
-  if (!config.autoApproveMachineRequests) {
-    return createMachineRequest({
-      ...input,
-      logContext: 'Auto request',
-      source: 'auto_extension',
-    });
-  }
-
   const context = await resolveMachineRequestContext({
     ...input,
     logContext: 'Auto request',
   });
   if (!context.ok) {
     return context;
+  }
+
+  const blockedSubdomain = await groupsStorage.isDomainBlocked(
+    context.data.groupId,
+    context.data.domain
+  );
+  if (blockedSubdomain.blocked) {
+    return {
+      ok: false,
+      error: { code: 'FORBIDDEN', message: 'Target matches a blocked subdomain rule' },
+    };
+  }
+
+  if (await isTargetBlockedPath(context.data.groupId, input.targetUrl)) {
+    return {
+      ok: false,
+      error: { code: 'FORBIDDEN', message: 'Target URL matches a blocked path rule' },
+    };
+  }
+
+  const originWhitelisted = await isOriginWhitelisted(context.data.groupId, input.originPage);
+  if (!config.autoApproveMachineRequests && !originWhitelisted) {
+    return createMachineRequest({
+      ...input,
+      logContext: 'Auto request',
+      source: 'auto_extension',
+    });
   }
 
   const reasonText = input.reason ?? '';

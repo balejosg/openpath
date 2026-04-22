@@ -33,7 +33,12 @@ export interface PathBlockingEvaluationResult {
 
 export const BLOCKED_SCREEN_PATH = 'blocked/blocked.html';
 export const ROUTE_BLOCK_REASON = 'BLOCKED_PATH_POLICY';
-export const PATH_BLOCKING_FILTER_TYPES = ['main_frame', 'sub_frame'] as const;
+export const PATH_BLOCKING_FILTER_TYPES = [
+  'main_frame',
+  'sub_frame',
+  'xmlhttprequest',
+  'fetch',
+] as const;
 export const MAX_BLOCKED_PATH_RULES = 500;
 
 const PATH_BLOCKING_REQUEST_TYPES = new Set<string>(PATH_BLOCKING_FILTER_TYPES);

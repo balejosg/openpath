@@ -45,7 +45,7 @@ void describe('background path blocking flow', () => {
     assert.strictEqual(matched.rawRule, 'site.127.0.0.1.sslip.io/*private*');
   });
 
-  void test('redirects main-frame requests and permits ajax requests', () => {
+  void test('blocks frame and ajax requests that match blocked paths', () => {
     const rules = compileBlockedPathRules(['example.com/private']);
 
     const mainFrameOutcome = evaluatePathBlocking(
@@ -71,7 +71,10 @@ void describe('background path blocking flow', () => {
       rules,
       { extensionOrigin: 'moz-extension://unit-test-id/' }
     );
-    assert.strictEqual(xhrOutcome, null);
+    assert.deepStrictEqual(xhrOutcome, {
+      cancel: true,
+      reason: 'BLOCKED_PATH_POLICY:example.com/private',
+    });
 
     const fetchOutcome = evaluatePathBlocking(
       {
@@ -82,7 +85,10 @@ void describe('background path blocking flow', () => {
       rules,
       { extensionOrigin: 'moz-extension://unit-test-id/' }
     );
-    assert.strictEqual(fetchOutcome, null);
+    assert.deepStrictEqual(fetchOutcome, {
+      cancel: true,
+      reason: 'BLOCKED_PATH_POLICY:example.com/private',
+    });
   });
 
   void test('ignores non-target resource types and extension URLs', () => {
