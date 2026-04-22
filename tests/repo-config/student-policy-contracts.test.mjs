@@ -501,6 +501,7 @@ describe('repository verification contract', () => {
       '"PrimaryServerProtocol" = "UDP"',
       '"SecondaryServerPort" = "53"',
       '"SecondaryServerProtocol" = "UDP"',
+      '"LocalIPv4BindingAddress" = "0.0.0.0"',
       '"LocalIPv6BindingAddress" = ""',
       '"LocalIPv6BindingPort" = "53"',
       '"GeneratedResponseTimeToLive" = "300"',
@@ -518,7 +519,7 @@ describe('repository verification contract', () => {
       'Set-AcrylicConfiguration should preserve or create [AllowedAddressesSection] after the global settings block'
     );
     assert.ok(
-      dnsConfigModule.includes("-Key 'IP1' -Value '127.0.0.1'") &&
+      dnsConfigModule.includes("-Key 'IP1' -Value '127.*'") &&
         dnsConfigModule.includes("-Key 'IP2' -Value '::1'"),
       'Set-AcrylicConfiguration should explicitly allow local loopback requests in [AllowedAddressesSection]'
     );

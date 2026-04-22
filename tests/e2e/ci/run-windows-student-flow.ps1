@@ -917,8 +917,10 @@ function Assert-InstalledAcrylicRuntime {
         'PrimaryServerProtocol=UDP',
         'SecondaryServerPort=53',
         'SecondaryServerProtocol=UDP',
-        'LocalIPv4BindingAddress=127.0.0.1',
+        'LocalIPv4BindingAddress=0.0.0.0',
         'LocalIPv4BindingPort=53',
+        'IP1=127.*',
+        'IP2=::1',
         '[AllowedAddressesSection]'
     )
     $missingConfigMarkers = @($requiredConfigMarkers | Where-Object { -not $configContent.Contains($_) })

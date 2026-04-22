@@ -306,7 +306,7 @@ function Set-AcrylicConfiguration {
         "SecondaryServerPort" = "53"
         "SecondaryServerProtocol" = "UDP"
         "SecondaryServerQueryTypeAffinityMask" = ""
-        "LocalIPv4BindingAddress" = "127.0.0.1"
+        "LocalIPv4BindingAddress" = "0.0.0.0"
         "LocalIPv4BindingPort" = "53"
         "LocalIPv6BindingAddress" = ""
         "LocalIPv6BindingPort" = "53"
@@ -344,7 +344,7 @@ function Set-AcrylicConfiguration {
     if ($iniContent -notmatch '(?m)^\[AllowedAddressesSection\]\s*$') {
         $iniContent = $iniContent.TrimEnd() + "`n`n[AllowedAddressesSection]`n"
     }
-    $iniContent = Set-AcrylicAllowedAddress -Content $iniContent -Key 'IP1' -Value '127.0.0.1'
+    $iniContent = Set-AcrylicAllowedAddress -Content $iniContent -Key 'IP1' -Value '127.*'
     $iniContent = Set-AcrylicAllowedAddress -Content $iniContent -Key 'IP2' -Value '::1'
 
     $iniContent | Set-Content $configPath -Encoding UTF8 -Force
