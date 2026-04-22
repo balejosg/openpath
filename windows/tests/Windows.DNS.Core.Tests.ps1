@@ -97,10 +97,10 @@ Describe "DNS Module" {
                     'FW >example.com',
                     'FW test.com',
                     'FW >test.com',
-                    '# DEFAULT BLOCK (sinkhole for everything else)',
+                    '# DEFAULT BLOCK (NXDOMAIN for everything else)',
                     '# This MUST come last after FW rules.',
                     '# Upstream DNS: 1.1.1.1',
-                    '0.0.0.0 /^.*$'
+                    'NX *'
                 )
 
                 foreach ($needle in $expectedNeedles) {
@@ -213,16 +213,17 @@ Describe "DNS Module" {
             )
         }
 
-        It "Configures Acrylic to ignore and avoid caching upstream negative responses" {
+        It "Configures Acrylic to ignore upstream negative responses while keeping hosts policy enabled" {
             $modulePath = Join-Path $PSScriptRoot ".." "lib" "internal" "DNS.Acrylic.Config.ps1"
             $content = Get-Content $modulePath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 '"IgnoreNegativeResponsesFromPrimaryServer" = "No"',
                 '"IgnoreNegativeResponsesFromSecondaryServer" = "No"',
-                '"AddressCacheDisabled" = "Yes"',
+                '"AddressCacheDisabled" = "No"',
                 '"AddressCacheNegativeTime" = "0"'
             )
+            $content | Should -Not -Match '"AddressCacheDisabled"\s*=\s*"Yes"'
         }
 
         It "Leaves Acrylic upstream affinity masks empty so hosts rules control policy" {
@@ -271,7 +272,7 @@ Describe "DNS Module" {
                 'IP2=::1',
                 'IgnoreNegativeResponsesFromPrimaryServer=No',
                 'IgnoreNegativeResponsesFromSecondaryServer=No',
-                'AddressCacheDisabled=Yes'
+                'AddressCacheDisabled=No'
             )
             $script:capturedAcrylicConfigEncoding | Should -Be 'ASCII'
             $script:capturedAcrylicConfig | Should -Not -Match 'PrimaryServerDomainNameAffinityMask=.*example\.com'
@@ -317,7 +318,7 @@ Describe "DNS Module" {
                 'IP1=127.*',
                 'IP2=::1',
                 'IgnoreNegativeResponsesFromPrimaryServer=No',
-                'AddressCacheDisabled=Yes'
+                'AddressCacheDisabled=No'
             )
             $script:capturedAcrylicConfig | Should -Not -Match 'example\.com;'
             $script:capturedAcrylicConfig | Should -Not -Match 'PrimaryServerDomainNameAffinityMask=.*raw\.githubusercontent\.com'
@@ -367,7 +368,7 @@ Describe "DNS Module" {
             Assert-ContentContainsAll -Content $script:capturedAcrylicConfig -Needles @(
                 'PrimaryServerDomainNameAffinityMask=',
                 'IgnoreNegativeResponsesFromPrimaryServer=No',
-                'AddressCacheDisabled=Yes'
+                'AddressCacheDisabled=No'
             )
         }
 

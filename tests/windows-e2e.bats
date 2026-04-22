@@ -220,7 +220,7 @@ load 'test_helper'
     run grep -nF '"AddressCacheNegativeTime" = "0"' "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Config.ps1"
     [ "$status" -eq 0 ]
 
-    run grep -nF '"AddressCacheDisabled" = "Yes"' "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Config.ps1"
+    run grep -nF '"AddressCacheDisabled" = "No"' "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Config.ps1"
     [ "$status" -eq 0 ]
 
     run grep -nF '"PrimaryServerDomainNameAffinityMask" = ""' "$PROJECT_DIR/windows/lib/internal/DNS.Acrylic.Config.ps1"

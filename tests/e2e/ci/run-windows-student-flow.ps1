@@ -881,6 +881,17 @@ function Get-AcrylicConfigurationPath {
     return $null
 }
 
+function Get-AcrylicHostsPath {
+    foreach ($acrylicRoot in Get-AcrylicRootCandidates) {
+        $candidatePath = Join-Path $acrylicRoot 'AcrylicHosts.txt'
+        if (Test-Path $candidatePath) {
+            return $candidatePath
+        }
+    }
+
+    return $null
+}
+
 function Assert-InstalledAcrylicRuntime {
     Write-Step 'Verifying installed Windows Acrylic runtime...'
 
@@ -897,6 +908,7 @@ function Assert-InstalledAcrylicRuntime {
         '"PrimaryServerProtocol" = "UDP"',
         '"SecondaryServerPort" = "53"',
         '"SecondaryServerProtocol" = "UDP"',
+        '"AddressCacheDisabled" = "No"',
         '[AllowedAddressesSection]'
     )
     $missingRuntimeMarkers = @($requiredRuntimeMarkers | Where-Object { -not $runtimeContent.Contains($_) })
@@ -919,6 +931,7 @@ function Assert-InstalledAcrylicRuntime {
         'SecondaryServerProtocol=UDP',
         'LocalIPv4BindingAddress=0.0.0.0',
         'LocalIPv4BindingPort=53',
+        'AddressCacheDisabled=No',
         'IP1=127.*',
         'IP2=::1',
         '[AllowedAddressesSection]'
@@ -928,8 +941,26 @@ function Assert-InstalledAcrylicRuntime {
         throw "AcrylicConfiguration.ini is missing required Windows student-policy defaults at $configPath (sha256=$configHash); missing markers: $($missingConfigMarkers -join ', ')"
     }
 
+    $hostsPath = Get-AcrylicHostsPath
+    if (-not $hostsPath) {
+        throw 'AcrylicHosts.txt was not found after Windows client install/update.'
+    }
+
+    $hostsContent = Get-Content $hostsPath -Raw
+    $hostsHash = (Get-FileHash -Algorithm SHA256 -Path $hostsPath).Hash
+    $requiredHostsMarkers = @(
+        'FW raw.githubusercontent.com',
+        'FW github.com',
+        'NX *'
+    )
+    $missingHostsMarkers = @($requiredHostsMarkers | Where-Object { -not $hostsContent.Contains($_) })
+    if ($missingHostsMarkers.Count -gt 0) {
+        throw "AcrylicHosts.txt is missing required Windows student-policy rules at $hostsPath (sha256=$hostsHash); missing markers: $($missingHostsMarkers -join ', ')"
+    }
+
     Write-DiagnosticNote "Installed Acrylic runtime hash sha256=$runtimeHash path=$runtimePath"
     Write-DiagnosticNote "AcrylicConfiguration.ini hash sha256=$configHash path=$configPath"
+    Write-DiagnosticNote "AcrylicHosts.txt hash sha256=$hostsHash path=$hostsPath"
 }
 
 function Assert-WindowsDnsPolicyReady {

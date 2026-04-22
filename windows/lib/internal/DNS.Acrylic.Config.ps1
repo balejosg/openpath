@@ -154,7 +154,7 @@ function New-AcrylicHostsDefinition {
         $sections += New-AcrylicHostsSection -Title "BLOCKED SUBDOMAINS ($($blockedLines.Count))" -Lines $blockedLines
     }
     $sections += New-AcrylicHostsSection -Title "WHITELISTED DOMAINS ($($effectiveWhitelistedDomains.Count))" -Lines @($whitelistLines)
-    $sections += New-AcrylicHostsSection -Title 'DEFAULT BLOCK (sinkhole for everything else)' -Description 'This MUST come last after FW rules.' -Lines @('0.0.0.0 /^.*$')
+    $sections += New-AcrylicHostsSection -Title 'DEFAULT BLOCK (NXDOMAIN for everything else)' -Description 'This MUST come last after FW rules.' -Lines @('NX *')
 
     $affinityMaskEntries = Get-AcrylicAffinityMaskEntries -Domains @($essentialDomains + $effectiveWhitelistedDomains)
 
@@ -321,8 +321,8 @@ function Set-AcrylicConfiguration {
         "SinkholeIPv6Lookups" = "No"
         "ForwardPrivateReverseLookups" = "No"
         "AddressCacheFailureTime" = "0"
-        "AddressCacheDisabled" = "Yes"
-        "AddressCacheInMemoryOnly" = "No"
+        "AddressCacheDisabled" = "No"
+        "AddressCacheInMemoryOnly" = "Yes"
         "AddressCacheNegativeTime" = "0"
         "AddressCacheScavengingTime" = "5760"
         "AddressCacheSilentUpdateTime" = "1440"

@@ -483,25 +483,47 @@ describe('repository verification contract', () => {
     );
   });
 
-  test('windows DNS renderer uses a default sinkhole that blocks sslip wildcard fixture misses', () => {
+  test('windows DNS renderer uses documented default NXDOMAIN deny for unmatched fixture misses', () => {
     const dnsConfigModule = readText('windows/lib/internal/DNS.Acrylic.Config.ps1');
 
     assert.match(
       dnsConfigModule,
-      /New-AcrylicHostsSection -Title 'DEFAULT BLOCK \(sinkhole for everything else\)'[\s\S]*-Lines @\('0\.0\.0\.0 \/\^\.\*\$'\)/,
-      'Acrylic default deny should sinkhole unmatched domains with a regex rule so wildcard DNS providers like sslip.io cannot bypass fixture misses'
+      /New-AcrylicHostsSection -Title 'DEFAULT BLOCK \(NXDOMAIN for everything else\)'[\s\S]*-Lines @\('NX \*'\)/,
+      'Acrylic default deny should use the documented NX * catch-all so unmatched domains cannot forward upstream'
     );
     assert.ok(
       !dnsConfigModule.includes(
-        "New-AcrylicHostsSection -Title 'DEFAULT BLOCK (NXDOMAIN for everything else)'"
+        "New-AcrylicHostsSection -Title 'DEFAULT BLOCK (sinkhole for everything else)'"
       ),
-      'Acrylic default deny should not rely on NX * for sslip fixture hosts because CI observed those hosts forwarding upstream'
+      'Acrylic default deny should not use a sinkhole fallback when Acrylic can return NXDOMAIN for unmatched domains'
     );
     assert.ok(
       !dnsConfigModule.includes(
         "New-AcrylicHostsSection -Title 'DEFAULT BLOCK (sinkhole for everything else)' -Description 'This MUST come last after FW rules.' -Lines @('0.0.0.0 *')"
       ),
       'Acrylic default deny should not rely on the bare * wildcard because CI observed it forwarding sslip fixture hosts upstream'
+    );
+  });
+
+  test('windows Acrylic configuration keeps the hosts cache enabled so policy rules are evaluated', () => {
+    const dnsConfigModule = readText('windows/lib/internal/DNS.Acrylic.Config.ps1');
+    const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
+
+    assert.ok(
+      dnsConfigModule.includes('"AddressCacheDisabled" = "No"'),
+      'Set-AcrylicConfiguration should keep Acrylic hosts/cache resolution enabled; Yes makes Acrylic forwarding-only'
+    );
+    assert.ok(
+      !dnsConfigModule.includes('"AddressCacheDisabled" = "Yes"'),
+      'Set-AcrylicConfiguration should not disable Acrylic address cache because that bypasses policy hosts in CI'
+    );
+    assert.ok(
+      windowsRunner.includes('AddressCacheDisabled=No'),
+      'Windows student-policy runner should assert the installed Acrylic config still evaluates hosts rules'
+    );
+    assert.ok(
+      windowsRunner.includes("'NX *'"),
+      'Windows student-policy runner should assert the installed Acrylic hosts file contains the default deny rule'
     );
   });
 
@@ -648,6 +670,8 @@ describe('repository verification contract', () => {
     assert.ok(
       windowsRunner.includes('Set-AcrylicGlobalSetting') &&
         windowsRunner.includes('PrimaryServerPort=53') &&
+        windowsRunner.includes('AddressCacheDisabled=No') &&
+        windowsRunner.includes('AcrylicHosts.txt') &&
         windowsRunner.includes('[AllowedAddressesSection]'),
       'Windows student-policy runner should assert the installed runtime/config contain the current Acrylic defaults'
     );
