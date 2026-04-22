@@ -37,6 +37,14 @@ recovery, or timeout-sentinel logic to the required Windows Pester lane as a
 repo-side fix if the lane ever returns to hosted Windows. Changing this stance
 requires new upstream runner evidence and maintainer approval.
 
+## CI/CD Runner Measurement
+
+For CI speed or runner follow-up work, read
+[`docs/ci-cd-runner-measurement.md`](docs/ci-cd-runner-measurement.md) before
+changing workflow routing, runner setup, or diagnostic artifact handling. Record
+workflow run IDs, per-job durations, cache signals, artifact evidence, and
+runner health instead of relying on informal timing notes.
+
 ## Branch And Git Policy
 
 OpenPath uses a trunk-based workflow.
