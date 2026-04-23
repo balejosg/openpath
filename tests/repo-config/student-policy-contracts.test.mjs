@@ -463,6 +463,16 @@ describe('repository verification contract', () => {
     );
     assert.match(
       linuxRunner,
+      /Artifacts:[\s\S]*linux-student-policy-timings\.json[\s\S]*linux-dns-readiness\.err\.log[\s\S]*linux-firefox-readiness\.err\.log/,
+      'Linux student-policy runner should name the timing and readiness artifacts in the GitHub step summary'
+    );
+    assert.match(
+      linuxRunner,
+      /No readiness failures captured\./,
+      'Linux student-policy runner should make successful readiness explicit in the GitHub step summary'
+    );
+    assert.match(
+      linuxRunner,
       /on_error\(\)[\s\S]*publish_github_step_summary "failure"/,
       'Linux student-policy runner should publish the diagnostic summary before exiting on failure'
     );

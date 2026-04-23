@@ -123,6 +123,8 @@ publish_github_step_summary() {
         echo ""
         echo "Status: $mode"
         echo ""
+        echo "Artifacts: linux-student-policy-timings.json, linux-dns-readiness.err.log, and linux-firefox-readiness.err.log are uploaded with this job when present."
+        echo ""
         echo "## Linux Student Policy Timing"
         echo ""
         echo "| Phase | Status | Seconds |"
