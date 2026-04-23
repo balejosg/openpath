@@ -27,6 +27,7 @@ FIREFOX_RELEASE_SOURCE="${OPENPATH_BROWSER_SETUP_RELEASE_SOURCE:-$(default_brows
 FIREFOX_EXTENSION_ID="${OPENPATH_FIREFOX_EXTENSION_ID:-monitor-bloqueos@openpath}"
 FIREFOX_APP_ID="{ec8030f7-c20a-464f-9b0e-13a3a9e97384}"
 FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS="${OPENPATH_FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS:-20}"
+FIREFOX_EXTENSION_REGISTRATION_MIN_PROBES="${OPENPATH_FIREFOX_EXTENSION_REGISTRATION_MIN_PROBES:-2}"
 
 load_common_runtime() {
     if [ -f "$INSTALL_DIR/lib/common.sh" ]; then
@@ -309,6 +310,7 @@ verify_firefox_extension_registered() {
     local profile_home=""
     local deadline=0
     local activation_status=0
+    local activation_attempts=0
     local marker_path="${FIREFOX_EXTENSION_READY_FILE:-$VAR_STATE_DIR/firefox-extension-ready}"
 
     rm -f "$marker_path" 2>/dev/null || true
@@ -324,12 +326,13 @@ verify_firefox_extension_registered() {
     }
 
     deadline=$((SECONDS + FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS))
-    while [ "$SECONDS" -le "$deadline" ]; do
+    while [ "$SECONDS" -le "$deadline" ] || [ "$activation_attempts" -lt "$FIREFOX_EXTENSION_REGISTRATION_MIN_PROBES" ]; do
         if firefox_profile_has_extension_registration "$profile_home" "$FIREFOX_EXTENSION_ID"; then
             write_firefox_extension_ready_marker "$activation_user" "$profile_home"
             return 0
         fi
 
+        activation_attempts=$((activation_attempts + 1))
         if run_firefox_activation_probe "$firefox_binary" "$activation_user" "$profile_home"; then
             activation_status=0
         else
@@ -341,7 +344,9 @@ verify_firefox_extension_registered() {
             return 0
         fi
 
-        if [ "$activation_status" -ne 0 ] && [ "$SECONDS" -gt "$deadline" ]; then
+        if [ "$activation_status" -ne 0 ] \
+            && [ "$SECONDS" -gt "$deadline" ] \
+            && [ "$activation_attempts" -ge "$FIREFOX_EXTENSION_REGISTRATION_MIN_PROBES" ]; then
             break
         fi
 

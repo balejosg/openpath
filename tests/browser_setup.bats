@@ -65,6 +65,42 @@ EOF
     chmod +x "$bin_dir/timeout"
 }
 
+write_timeout_first_probe_exceeds_deadline_then_registers() {
+    local bin_dir="$1"
+    local calls_file="$2"
+
+    cat > "$bin_dir/timeout" <<EOF
+#!/bin/bash
+echo "\$*" >> "$calls_file"
+case " \$* " in
+    *" --kill-after=5s "*)
+        shift
+        shift
+        count_file="\${HOME:-}/.mozilla/firefox/openpath-test-timeout-count"
+        mkdir -p "\$(dirname "\$count_file")"
+        run_count=0
+        if [ -f "\$count_file" ]; then
+            run_count=\$(cat "\$count_file" 2>/dev/null || echo 0)
+        fi
+        run_count=\$((run_count + 1))
+        echo "\$run_count" > "\$count_file"
+        if [ "\$run_count" -eq 1 ]; then
+            OPENPATH_FAKE_FIREFOX_MODE=policy-only "\$@" || true
+            sleep 2
+            exit 124
+        fi
+        "\$@" || true
+        exit 124
+        ;;
+    *)
+        echo "timeout missing --kill-after=5s" >&2
+        exit 99
+        ;;
+esac
+EOF
+    chmod +x "$bin_dir/timeout"
+}
+
 write_fake_common_sh() {
     local target="$1"
 
@@ -490,6 +526,44 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"Firefox browser setup is ready"* ]]
     grep -F -- '--kill-after=5s' "$timeout_calls_file"
+}
+
+@test "openpath-browser-setup retries when first activation timeout exceeds registration deadline" {
+    local fake_install="$TEST_TMP_DIR/install"
+    local fake_scripts="$TEST_TMP_DIR/scripts"
+    local firefox_dir="$TEST_TMP_DIR/usr/lib/firefox-esr"
+    local ext_root="$TEST_TMP_DIR/share/mozilla/extensions"
+    local policies_file="$TEST_TMP_DIR/etc/firefox/policies/policies.json"
+    local calls_file="$TEST_TMP_DIR/browser-setup.calls"
+    local timeout_calls_file="$TEST_TMP_DIR/timeout.calls"
+    local bin_dir="$TEST_TMP_DIR/bin"
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
+
+    mkdir -p "$fake_install/lib" "$fake_scripts" "$ext_root" "$bin_dir" "$etc_dir"
+    printf '%s' 'https://control.example' > "$etc_dir/api-url.conf"
+    printf '%s' 'https://control.example/w/token123/whitelist.txt' > "$etc_dir/whitelist-url.conf"
+    printf '%s' 'cls_123' > "$etc_dir/class""room-id.conf"
+    write_mock_id "$bin_dir"
+    write_timeout_first_probe_exceeds_deadline_then_registers "$bin_dir" "$timeout_calls_file"
+    write_fake_common_sh "$fake_install/lib/common.sh"
+    write_fake_browser_sh "$fake_install/lib/browser.sh" "$calls_file" "$firefox_dir" "$ext_root" "$policies_file" "managed-api"
+
+    run env \
+        PATH="$bin_dir:$PATH" \
+        HOME="$TEST_TMP_DIR/home" \
+        OPENPATH_FAKE_FIREFOX_MODE="delayed-registration" \
+        OPENPATH_FIREFOX_PROFILE_HOME="$TEST_TMP_DIR/home" \
+        OPENPATH_FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS="1" \
+        INSTALL_DIR="$fake_install" \
+        SCRIPTS_DIR="$fake_scripts" \
+        ETC_CONFIG_DIR="$etc_dir" \
+        FIREFOX_POLICIES="$policies_file" \
+        FIREFOX_EXTENSIONS_ROOT="$ext_root" \
+        bash "$PROJECT_DIR/linux/scripts/runtime/openpath-browser-setup.sh"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Firefox browser setup is ready"* ]]
+    [ "$(wc -l < "$timeout_calls_file")" -ge 2 ]
 }
 
 @test "openpath-browser-setup requires native host for firefox managed blocking" {
