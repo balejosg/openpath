@@ -322,17 +322,23 @@ verify_firefox_extension_registered() {
         return 1
     }
 
-    if ! run_firefox_activation_probe "$firefox_binary" "$activation_user" "$profile_home"; then
-        log_error "Firefox could not be started to activate managed extension policies"
-        return 1
-    fi
-
     deadline=$((SECONDS + FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS))
     while [ "$SECONDS" -le "$deadline" ]; do
         if firefox_profile_has_extension_registration "$profile_home" "$FIREFOX_EXTENSION_ID"; then
             write_firefox_extension_ready_marker "$activation_user" "$profile_home"
             return 0
         fi
+
+        if ! run_firefox_activation_probe "$firefox_binary" "$activation_user" "$profile_home"; then
+            log_error "Firefox could not be started to activate managed extension policies"
+            return 1
+        fi
+
+        if firefox_profile_has_extension_registration "$profile_home" "$FIREFOX_EXTENSION_ID"; then
+            write_firefox_extension_ready_marker "$activation_user" "$profile_home"
+            return 0
+        fi
+
         sleep 1
     done
 
