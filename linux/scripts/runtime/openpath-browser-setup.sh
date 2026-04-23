@@ -218,7 +218,7 @@ resolve_firefox_activation_home() {
     printf '%s\n' "$home_dir"
 }
 
-firefox_profile_has_extension_registration() {
+detect_firefox_extension_registration() {
     local profile_home="$1"
     local extension_id="$2"
 
@@ -264,11 +264,34 @@ for root in candidate_roots:
     for profile in root.glob("*"):
         if not profile.is_dir():
             continue
-        if prefs_has_uuid(profile / "prefs.js") or extensions_json_has_addon(profile / "extensions.json"):
+        if prefs_has_uuid(profile / "prefs.js"):
+            print(f"prefs.js\t{profile}")
+            raise SystemExit(0)
+        if extensions_json_has_addon(profile / "extensions.json"):
+            print(f"extensions.json\t{profile}")
             raise SystemExit(0)
 
 raise SystemExit(1)
 PY
+}
+
+firefox_profile_has_extension_registration() {
+    local profile_home="$1"
+    local extension_id="$2"
+
+    detect_firefox_extension_registration "$profile_home" "$extension_id" >/dev/null
+}
+
+log_firefox_registration_probe() {
+    local probe_attempt="$1"
+    local activation_user="$2"
+    local profile_home="$3"
+    local probe_exit_status="$4"
+    local registration_source="$5"
+    local registration_profile="$6"
+
+    log \
+        "Firefox registration probe_attempt=$probe_attempt activation_user=$activation_user profile_home=$profile_home probe_exit_status=$probe_exit_status registration_source=$registration_source registration_profile=$registration_profile"
 }
 
 run_firefox_activation_probe() {
@@ -321,6 +344,9 @@ verify_firefox_extension_registered() {
     local activation_status=0
     local activation_attempts=0
     local marker_path="${FIREFOX_EXTENSION_READY_FILE:-$VAR_STATE_DIR/firefox-extension-ready}"
+    local registration_info=""
+    local registration_source="missing"
+    local registration_profile=""
 
     rm -f "$marker_path" 2>/dev/null || true
 
@@ -336,7 +362,11 @@ verify_firefox_extension_registered() {
 
     deadline=$((SECONDS + FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS))
     while [ "$SECONDS" -le "$deadline" ] || [ "$activation_attempts" -lt "$FIREFOX_EXTENSION_REGISTRATION_MIN_PROBES" ]; do
-        if firefox_profile_has_extension_registration "$profile_home" "$FIREFOX_EXTENSION_ID"; then
+        registration_info="$(detect_firefox_extension_registration "$profile_home" "$FIREFOX_EXTENSION_ID" 2>/dev/null || true)"
+        if [ -n "$registration_info" ]; then
+            registration_source="${registration_info%%$'\t'*}"
+            registration_profile="${registration_info#*$'\t'}"
+            log_firefox_registration_probe 0 "$activation_user" "$profile_home" 0 "$registration_source" "$registration_profile"
             write_firefox_extension_ready_marker "$activation_user" "$profile_home"
             return 0
         fi
@@ -348,7 +378,16 @@ verify_firefox_extension_registered() {
             activation_status=$?
         fi
 
-        if firefox_profile_has_extension_registration "$profile_home" "$FIREFOX_EXTENSION_ID"; then
+        registration_source="missing"
+        registration_profile=""
+        registration_info="$(detect_firefox_extension_registration "$profile_home" "$FIREFOX_EXTENSION_ID" 2>/dev/null || true)"
+        if [ -n "$registration_info" ]; then
+            registration_source="${registration_info%%$'\t'*}"
+            registration_profile="${registration_info#*$'\t'}"
+        fi
+        log_firefox_registration_probe "$activation_attempts" "$activation_user" "$profile_home" "$activation_status" "$registration_source" "$registration_profile"
+
+        if [ "$registration_source" != "missing" ]; then
             write_firefox_extension_ready_marker "$activation_user" "$profile_home"
             return 0
         fi
@@ -362,7 +401,8 @@ verify_firefox_extension_registered() {
         sleep 1
     done
 
-    log_error "Firefox did not register managed extension: $FIREFOX_EXTENSION_ID"
+    log_error \
+        "Firefox did not register managed extension: $FIREFOX_EXTENSION_ID activation_user=$activation_user profile_home=$profile_home probe_attempt=$activation_attempts registration_source=$registration_source"
     return 1
 }
 

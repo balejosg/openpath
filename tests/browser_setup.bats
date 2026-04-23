@@ -405,11 +405,13 @@ EOF
     local calls_file="$TEST_TMP_DIR/browser-setup.calls"
     local bin_dir="$TEST_TMP_DIR/bin"
     local etc_dir="$TEST_TMP_DIR/etc/openpath"
+    local expected_activation_user=""
 
     mkdir -p "$fake_install/lib" "$fake_scripts" "$ext_root" "$bin_dir" "$etc_dir"
     printf '%s' 'https://control.example' > "$etc_dir/api-url.conf"
     printf '%s' 'https://control.example/w/token123/whitelist.txt' > "$etc_dir/whitelist-url.conf"
     printf '%s' 'cls_123' > "$etc_dir/classroom-id.conf"
+    expected_activation_user="$(id -un)"
     write_mock_id "$bin_dir"
     write_fake_common_sh "$fake_install/lib/common.sh"
     write_fake_browser_sh "$fake_install/lib/browser.sh" "$calls_file" "$firefox_dir" "$ext_root" "$policies_file" "policy-only"
@@ -429,6 +431,10 @@ EOF
 
     [ "$status" -eq 1 ]
     [[ "$output" == *"Firefox did not register managed extension"* ]]
+    [[ "$output" == *"probe_attempt=1"* ]]
+    [[ "$output" == *"activation_user=$expected_activation_user"* ]]
+    [[ "$output" == *"profile_home=$TEST_TMP_DIR/home"* ]]
+    [[ "$output" == *"registration_source=missing"* ]]
 }
 
 @test "openpath-browser-setup retries firefox activation while waiting for managed extension registration" {
@@ -464,6 +470,7 @@ EOF
 
     [ "$status" -eq 0 ]
     [[ "$output" == *"Firefox browser setup is ready"* ]]
+    [[ "$output" == *"registration_source=extensions.json"* ]]
     [ "$(cat "$TEST_TMP_DIR/home/.mozilla/firefox/openpath-test-run-count")" -ge 2 ]
 }
 
