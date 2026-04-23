@@ -221,18 +221,14 @@ resolve_firefox_activation_home() {
 firefox_profile_has_extension_registration() {
     local profile_home="$1"
     local extension_id="$2"
-    local firefox_profile_root="$profile_home/.mozilla/firefox"
 
-    python3 - "$firefox_profile_root" "$extension_id" <<'PY'
+    python3 - "$profile_home" "$extension_id" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-root = Path(sys.argv[1])
+profile_home = Path(sys.argv[1])
 extension_id = sys.argv[2]
-
-if not root.exists():
-    raise SystemExit(1)
 
 def prefs_has_uuid(path: Path) -> bool:
     try:
@@ -254,11 +250,22 @@ def extensions_json_has_addon(path: Path) -> bool:
         return False
     return any(isinstance(addon, dict) and addon.get("id") == extension_id for addon in addons)
 
-for profile in root.glob("*"):
-    if not profile.is_dir():
+candidate_roots = []
+for root in (
+    profile_home / ".mozilla/firefox",
+    profile_home / "snap/firefox/common/.mozilla/firefox",
+):
+    if root not in candidate_roots:
+        candidate_roots.append(root)
+
+for root in candidate_roots:
+    if not root.exists():
         continue
-    if prefs_has_uuid(profile / "prefs.js") or extensions_json_has_addon(profile / "extensions.json"):
-        raise SystemExit(0)
+    for profile in root.glob("*"):
+        if not profile.is_dir():
+            continue
+        if prefs_has_uuid(profile / "prefs.js") or extensions_json_has_addon(profile / "extensions.json"):
+            raise SystemExit(0)
 
 raise SystemExit(1)
 PY
