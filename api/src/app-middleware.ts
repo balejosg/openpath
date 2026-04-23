@@ -144,6 +144,8 @@ function isTrustedExtensionOrigin(origin: string): boolean {
 }
 
 function registerRateLimits(app: express.Express, runtimeConfig: Config): void {
+  const rateLimitDisabled = runtimeConfig.isTest && !runtimeConfig.enableRateLimitInTest;
+
   const globalLimiter = rateLimit({
     windowMs: runtimeConfig.globalRateLimitWindowMs,
     max: runtimeConfig.globalRateLimitMax,
@@ -155,9 +157,24 @@ function registerRateLimits(app: express.Express, runtimeConfig: Config): void {
     standardHeaders: true,
     legacyHeaders: false,
     skip: (req) =>
-      req.path === '/health' || (runtimeConfig.isTest && !runtimeConfig.enableRateLimitInTest),
+      req.path === '/health' || req.path.startsWith('/api/agent/') || rateLimitDisabled,
   });
   app.use(globalLimiter);
+
+  const agentDeliveryLimiter = rateLimit({
+    windowMs: runtimeConfig.agentDeliveryRateLimitWindowMs,
+    max: runtimeConfig.agentDeliveryRateLimitMax,
+    message: {
+      success: false,
+      error: 'Too many agent delivery requests from this IP, please try again later',
+      code: 'AGENT_DELIVERY_RATE_LIMITED',
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => req.ip ?? 'unknown',
+    skip: () => rateLimitDisabled,
+  });
+  app.use('/api/agent', agentDeliveryLimiter);
 
   const authLimiter = rateLimit({
     windowMs: runtimeConfig.authRateLimitWindowMs,
@@ -170,7 +187,7 @@ function registerRateLimits(app: express.Express, runtimeConfig: Config): void {
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req) => req.ip ?? 'unknown',
-    skip: () => runtimeConfig.isTest && !runtimeConfig.enableRateLimitInTest,
+    skip: () => rateLimitDisabled,
   });
 
   const publicRequestLimiter = rateLimit({
@@ -184,7 +201,7 @@ function registerRateLimits(app: express.Express, runtimeConfig: Config): void {
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req) => req.ip ?? 'unknown',
-    skip: () => runtimeConfig.isTest && !runtimeConfig.enableRateLimitInTest,
+    skip: () => rateLimitDisabled,
   });
 
   app.use('/trpc/auth.login', authLimiter);

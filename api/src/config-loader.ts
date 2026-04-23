@@ -28,6 +28,8 @@ export interface LoadedConfig {
   readonly googleClientId: string;
   readonly globalRateLimitWindowMs: number;
   readonly globalRateLimitMax: number;
+  readonly agentDeliveryRateLimitWindowMs: number;
+  readonly agentDeliveryRateLimitMax: number;
   readonly authRateLimitWindowMs: number;
   readonly authRateLimitMax: number;
   readonly corsAllowedOrigins: string[];
@@ -85,6 +87,8 @@ export function loadConfig(
     googleClientId: env.GOOGLE_CLIENT_ID ?? '',
     globalRateLimitWindowMs: parseIntEnv(env.RATE_LIMIT_WINDOW_MS, 60 * 1000),
     globalRateLimitMax: parseIntEnv(env.RATE_LIMIT_MAX, 200),
+    agentDeliveryRateLimitWindowMs: parseIntEnv(env.AGENT_DELIVERY_RATE_LIMIT_WINDOW_MS, 60 * 1000),
+    agentDeliveryRateLimitMax: parseIntEnv(env.AGENT_DELIVERY_RATE_LIMIT_MAX, 500),
     authRateLimitWindowMs: parseIntEnv(env.AUTH_RATE_LIMIT_WINDOW_MS, 60 * 1000),
     authRateLimitMax: parseIntEnv(env.AUTH_RATE_LIMIT_MAX, 10),
     corsAllowedOrigins,
