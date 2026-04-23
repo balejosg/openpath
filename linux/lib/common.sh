@@ -77,6 +77,7 @@ export CONFIG_DIR="$VAR_STATE_DIR"
 # Browser policies - exported for use by other scripts
 export FIREFOX_POLICIES="${FIREFOX_POLICIES:-/etc/firefox/policies/policies.json}"
 export CHROMIUM_POLICIES_BASE="${CHROMIUM_POLICIES_BASE:-/etc/chromium/policies/managed}"
+export FIREFOX_EXTENSION_READY_FILE="${FIREFOX_EXTENSION_READY_FILE:-$VAR_STATE_DIR/firefox-extension-ready}"
 
 # Default URL (must be provided via defaults.conf or environment)
 # Empty default forces explicit configuration

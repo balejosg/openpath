@@ -321,10 +321,43 @@ cmd_health() {
     echo ""
 
     echo -e "${YELLOW}Browser Policies:${NC}"
+    local request_setup_complete=false
+    local browser_etc_dir="${ETC_CONFIG_DIR:-/etc/openpath}"
+    local browser_api_url=""
+    local browser_whitelist_url=""
+    local browser_classroom=""
+    local browser_classroom_id=""
+    local firefox_policy_has_managed_extension=false
+
+    browser_api_url="$(tr -d '\r\n' < "$browser_etc_dir/api-url.conf" 2>/dev/null || true)"
+    browser_whitelist_url="$(tr -d '\r\n' < "$browser_etc_dir/whitelist-url.conf" 2>/dev/null || true)"
+    browser_classroom="$(tr -d '\r\n' < "$browser_etc_dir/classroom.conf" 2>/dev/null || true)"
+    browser_classroom_id="$(tr -d '\r\n' < "$browser_etc_dir/classroom-id.conf" 2>/dev/null || true)"
+    if [[ "$browser_api_url" =~ ^https?://[^[:space:]]+$ ]] \
+        && [[ "$browser_whitelist_url" =~ /w/[^/]+/whitelist\.txt($|[?#].*) ]] \
+        && { [ -n "$browser_classroom" ] || [ -n "$browser_classroom_id" ]; }; then
+        request_setup_complete=true
+    fi
+
     if [ -f "$FIREFOX_POLICIES" ]; then
         echo -e "  Firefox policies: ${GREEN}✓ present${NC}"
+        if grep -q "monitor-bloqueos@openpath" "$FIREFOX_POLICIES" 2>/dev/null \
+            && grep -q "force_installed" "$FIREFOX_POLICIES" 2>/dev/null; then
+            firefox_policy_has_managed_extension=true
+        fi
     else
         echo -e "  Firefox policies: ${YELLOW}⚠ not found${NC}"
+    fi
+    if [ "$request_setup_complete" = true ]; then
+        local firefox_ready_file="${FIREFOX_EXTENSION_READY_FILE:-$VAR_STATE_DIR/firefox-extension-ready}"
+        if [ "$firefox_policy_has_managed_extension" = true ] \
+            && [ -f "$firefox_ready_file" ] \
+            && grep -q "extension_id=monitor-bloqueos@openpath" "$firefox_ready_file" 2>/dev/null; then
+            echo -e "  Firefox extension: ${GREEN}✓ registered${NC}"
+        else
+            echo -e "  Firefox extension: ${RED}✗ not registered${NC}"
+            failed=1
+        fi
     fi
     if find /etc/chromium/policies/managed/openpath.json /etc/chromium-browser/policies/managed/openpath.json /etc/google-chrome/policies/managed/openpath.json -maxdepth 0 2>/dev/null | head -1 | grep -q .; then
         echo -e "  Chromium policies: ${GREEN}✓ present${NC}"

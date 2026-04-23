@@ -26,6 +26,7 @@ FIREFOX_EXTENSION_SOURCE="${OPENPATH_BROWSER_SETUP_EXTENSION_SOURCE:-$(default_b
 FIREFOX_RELEASE_SOURCE="${OPENPATH_BROWSER_SETUP_RELEASE_SOURCE:-$(default_browser_setup_source "$INSTALL_DIR/firefox-release" "/usr/share/openpath/firefox-release")}"
 FIREFOX_EXTENSION_ID="${OPENPATH_FIREFOX_EXTENSION_ID:-monitor-bloqueos@openpath}"
 FIREFOX_APP_ID="{ec8030f7-c20a-464f-9b0e-13a3a9e97384}"
+FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS="${OPENPATH_FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS:-20}"
 
 load_common_runtime() {
     if [ -f "$INSTALL_DIR/lib/common.sh" ]; then
@@ -156,6 +157,189 @@ verify_firefox_extension_payload() {
     return 1
 }
 
+resolve_firefox_binary_path() {
+    local firefox_dir=""
+    local candidate=""
+
+    firefox_dir="$(detect_firefox_dir 2>/dev/null || true)"
+    if [ -n "$firefox_dir" ]; then
+        for candidate in "$firefox_dir/firefox" "$firefox_dir/firefox-bin"; do
+            if [ -x "$candidate" ]; then
+                printf '%s\n' "$candidate"
+                return 0
+            fi
+        done
+    fi
+
+    candidate="$(command -v firefox-esr 2>/dev/null || command -v firefox 2>/dev/null || true)"
+    if [ -n "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    return 1
+}
+
+resolve_firefox_activation_user() {
+    if [ -n "${OPENPATH_FIREFOX_PROFILE_USER:-}" ]; then
+        printf '%s\n' "$OPENPATH_FIREFOX_PROFILE_USER"
+        return 0
+    fi
+
+    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+        printf '%s\n' "$SUDO_USER"
+        return 0
+    fi
+
+    id -un 2>/dev/null || printf '%s\n' "root"
+}
+
+resolve_firefox_activation_home() {
+    local activation_user="$1"
+    local home_dir=""
+
+    if [ -n "${OPENPATH_FIREFOX_PROFILE_HOME:-}" ]; then
+        printf '%s\n' "$OPENPATH_FIREFOX_PROFILE_HOME"
+        return 0
+    fi
+
+    if [ -n "$activation_user" ] && command -v getent >/dev/null 2>&1; then
+        home_dir="$(getent passwd "$activation_user" | cut -d: -f6 || true)"
+    fi
+
+    if [ -z "$home_dir" ]; then
+        home_dir="${HOME:-}"
+    fi
+
+    [ -n "$home_dir" ] || return 1
+    printf '%s\n' "$home_dir"
+}
+
+firefox_profile_has_extension_registration() {
+    local profile_home="$1"
+    local extension_id="$2"
+    local firefox_profile_root="$profile_home/.mozilla/firefox"
+
+    python3 - "$firefox_profile_root" "$extension_id" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+extension_id = sys.argv[2]
+
+if not root.exists():
+    raise SystemExit(1)
+
+def prefs_has_uuid(path: Path) -> bool:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    marker = 'user_pref("extensions.webextensions.uuids",'
+    if marker not in text:
+        return False
+    return extension_id in text
+
+def extensions_json_has_addon(path: Path) -> bool:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    addons = payload.get("addons")
+    if not isinstance(addons, list):
+        return False
+    return any(isinstance(addon, dict) and addon.get("id") == extension_id for addon in addons)
+
+for profile in root.glob("*"):
+    if not profile.is_dir():
+        continue
+    if prefs_has_uuid(profile / "prefs.js") or extensions_json_has_addon(profile / "extensions.json"):
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+}
+
+run_firefox_activation_probe() {
+    local firefox_binary="$1"
+    local activation_user="$2"
+    local profile_home="$3"
+    local screenshot_path="/tmp/openpath-firefox-extension-activation.png"
+    local current_user=""
+
+    force_browser_close || true
+    current_user="$(id -un 2>/dev/null || true)"
+
+    if [ "$(id -u)" -eq 0 ] \
+        && [ -n "$activation_user" ] \
+        && [ "$activation_user" != "root" ] \
+        && [ "$activation_user" != "$current_user" ] \
+        && { [ -n "${SUDO_USER:-}" ] || [ -n "${OPENPATH_FIREFOX_PROFILE_USER:-}" ]; } \
+        && command -v sudo >/dev/null 2>&1; then
+        sudo -H -u "$activation_user" \
+            env HOME="$profile_home" \
+            timeout 30 "$firefox_binary" --headless --screenshot "$screenshot_path" about:blank \
+            >/dev/null 2>&1
+        return $?
+    fi
+
+    HOME="$profile_home" timeout 30 "$firefox_binary" --headless --screenshot "$screenshot_path" about:blank \
+        >/dev/null 2>&1
+}
+
+write_firefox_extension_ready_marker() {
+    local activation_user="$1"
+    local profile_home="$2"
+    local marker_path="${FIREFOX_EXTENSION_READY_FILE:-$VAR_STATE_DIR/firefox-extension-ready}"
+
+    mkdir -p "$(dirname "$marker_path")"
+    {
+        printf 'extension_id=%s\n' "$FIREFOX_EXTENSION_ID"
+        printf 'user=%s\n' "$activation_user"
+        printf 'profile_home=%s\n' "$profile_home"
+        printf 'verified_at=%s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    } > "$marker_path"
+    chmod 600 "$marker_path" 2>/dev/null || true
+}
+
+verify_firefox_extension_registered() {
+    local firefox_binary=""
+    local activation_user=""
+    local profile_home=""
+    local deadline=0
+    local marker_path="${FIREFOX_EXTENSION_READY_FILE:-$VAR_STATE_DIR/firefox-extension-ready}"
+
+    rm -f "$marker_path" 2>/dev/null || true
+
+    firefox_binary="$(resolve_firefox_binary_path)" || {
+        log_error "Firefox executable not found after browser setup"
+        return 1
+    }
+    activation_user="$(resolve_firefox_activation_user)"
+    profile_home="$(resolve_firefox_activation_home "$activation_user")" || {
+        log_error "Firefox profile home could not be resolved for extension verification"
+        return 1
+    }
+
+    if ! run_firefox_activation_probe "$firefox_binary" "$activation_user" "$profile_home"; then
+        log_error "Firefox could not be started to activate managed extension policies"
+        return 1
+    fi
+
+    deadline=$((SECONDS + FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS))
+    while [ "$SECONDS" -le "$deadline" ]; do
+        if firefox_profile_has_extension_registration "$profile_home" "$FIREFOX_EXTENSION_ID"; then
+            write_firefox_extension_ready_marker "$activation_user" "$profile_home"
+            return 0
+        fi
+        sleep 1
+    done
+
+    log_error "Firefox did not register managed extension: $FIREFOX_EXTENSION_ID"
+    return 1
+}
+
 verify_firefox_setup() {
     local firefox_dir=""
 
@@ -167,6 +351,7 @@ verify_firefox_setup() {
 
     verify_firefox_policy_contract || return 1
     verify_firefox_extension_payload || return 1
+    verify_firefox_extension_registered || return 1
 }
 
 main() {
