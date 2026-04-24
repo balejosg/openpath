@@ -218,6 +218,112 @@ resolve_firefox_activation_home() {
     printf '%s\n' "$home_dir"
 }
 
+resolve_firefox_activation_profile_dir() {
+    local profile_home="$1"
+    local firefox_root="$profile_home/.mozilla/firefox"
+    local profiles_ini="$firefox_root/profiles.ini"
+    local profile_dir=""
+
+    if [ -n "${OPENPATH_FIREFOX_PROFILE_DIR:-}" ]; then
+        printf '%s\n' "$OPENPATH_FIREFOX_PROFILE_DIR"
+        return 0
+    fi
+
+    if [ -f "$profiles_ini" ]; then
+        profile_dir="$(
+            python3 - "$firefox_root" "$profiles_ini" <<'PY' 2>/dev/null || true
+import configparser
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+profiles_ini = Path(sys.argv[2])
+parser = configparser.RawConfigParser()
+parser.read(profiles_ini, encoding="utf-8")
+
+sections = [section for section in parser.sections() if section.lower().startswith("profile")]
+selected = None
+for section in sections:
+    if parser.get(section, "Default", fallback="") == "1":
+        selected = section
+        break
+if selected is None and sections:
+    selected = sections[0]
+
+if selected:
+    profile_path = parser.get(selected, "Path", fallback="").strip()
+    is_relative = parser.get(selected, "IsRelative", fallback="1").strip()
+    if profile_path:
+        path = root / profile_path if is_relative != "0" else Path(profile_path)
+        print(path)
+PY
+        )"
+    fi
+
+    if [ -n "$profile_dir" ]; then
+        printf '%s\n' "$profile_dir"
+        return 0
+    fi
+
+    printf '%s\n' "$firefox_root/openpath.default"
+    return 0
+}
+
+ensure_firefox_activation_profile() {
+    local activation_user="$1"
+    local profile_home="$2"
+    local firefox_root="$profile_home/.mozilla/firefox"
+    local profiles_ini="$firefox_root/profiles.ini"
+    local profile_dir=""
+    local current_user=""
+
+    profile_dir="$(resolve_firefox_activation_profile_dir "$profile_home")" || return 1
+    current_user="$(id -un 2>/dev/null || true)"
+
+    if [ "$(id -u)" -eq 0 ] \
+        && [ -n "$activation_user" ] \
+        && [ "$activation_user" != "root" ] \
+        && [ "$activation_user" != "$current_user" ] \
+        && { [ -n "${SUDO_USER:-}" ] || [ -n "${OPENPATH_FIREFOX_PROFILE_USER:-}" ]; } \
+        && command -v sudo >/dev/null 2>&1; then
+        sudo -H -u "$activation_user" env HOME="$profile_home" mkdir -p "$profile_dir" || return 1
+        if [ ! -f "$profiles_ini" ]; then
+            sudo -H -u "$activation_user" env HOME="$profile_home" sh -c '
+                mkdir -p "$(dirname "$1")"
+                cat > "$1" <<EOF
+[General]
+StartWithLastProfile=1
+Version=2
+
+[Profile0]
+Name=openpath
+IsRelative=1
+Path=openpath.default
+Default=1
+EOF
+            ' sh "$profiles_ini" || true
+        fi
+    else
+        mkdir -p "$profile_dir" || return 1
+        if [ ! -f "$profiles_ini" ] && [ "$profile_dir" = "$firefox_root/openpath.default" ]; then
+            mkdir -p "$firefox_root"
+            cat > "$profiles_ini" <<'EOF'
+[General]
+StartWithLastProfile=1
+Version=2
+
+[Profile0]
+Name=openpath
+IsRelative=1
+Path=openpath.default
+Default=1
+EOF
+        fi
+    fi
+
+    printf '%s\n' "$profile_dir"
+}
+
 detect_firefox_extension_registration() {
     local profile_home="$1"
     local extension_id="$2"
@@ -300,9 +406,11 @@ run_firefox_activation_probe() {
     local profile_home="$3"
     local screenshot_path="/tmp/openpath-firefox-extension-activation.png"
     local current_user=""
+    local activation_profile=""
 
     force_browser_close || true
     current_user="$(id -un 2>/dev/null || true)"
+    activation_profile="$(ensure_firefox_activation_profile "$activation_user" "$profile_home")" || return 1
 
     if [ "$(id -u)" -eq 0 ] \
         && [ -n "$activation_user" ] \
@@ -312,12 +420,12 @@ run_firefox_activation_probe() {
         && command -v sudo >/dev/null 2>&1; then
         sudo -H -u "$activation_user" \
             env HOME="$profile_home" \
-            timeout --kill-after=5s "${FIREFOX_ACTIVATION_PROBE_TIMEOUT_SECONDS}s" "$firefox_binary" --headless --screenshot "$screenshot_path" about:blank \
+            timeout --kill-after=5s "${FIREFOX_ACTIVATION_PROBE_TIMEOUT_SECONDS}s" "$firefox_binary" --headless --profile "$activation_profile" --screenshot "$screenshot_path" about:blank \
             >/dev/null 2>&1
         return $?
     fi
 
-    HOME="$profile_home" timeout --kill-after=5s "${FIREFOX_ACTIVATION_PROBE_TIMEOUT_SECONDS}s" "$firefox_binary" --headless --screenshot "$screenshot_path" about:blank \
+    HOME="$profile_home" timeout --kill-after=5s "${FIREFOX_ACTIVATION_PROBE_TIMEOUT_SECONDS}s" "$firefox_binary" --headless --profile "$activation_profile" --screenshot "$screenshot_path" about:blank \
         >/dev/null 2>&1
 }
 
