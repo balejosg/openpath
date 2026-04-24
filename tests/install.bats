@@ -476,8 +476,11 @@ EOF
     run grep -n 'name: Installer Contracts Success' "$PROJECT_DIR/.github/workflows/installer-contracts.yml"
     [ "$status" -eq 0 ]
 
-    run grep -n 'npm run test:installer:contracts' "$PROJECT_DIR/.github/workflows/release-scripts.yml"
+    run grep -n -- '--require "Installer Contracts::Installer Contracts Success"' "$PROJECT_DIR/.github/workflows/release-scripts.yml"
     [ "$status" -eq 0 ]
+
+    run grep -n 'npm run test:installer:contracts' "$PROJECT_DIR/.github/workflows/release-scripts.yml"
+    [ "$status" -ne 0 ]
 
     run grep -n '/openpath/linux/uninstall.sh --auto-yes' "$PROJECT_DIR/tests/e2e/ci/run-linux-apt-contracts.sh"
     [ "$status" -eq 0 ]

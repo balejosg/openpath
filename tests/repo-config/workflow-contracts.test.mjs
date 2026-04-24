@@ -966,8 +966,16 @@ test('release artifact workflows wait for same-commit quality evidence before pu
     'prerelease-deb.yml should require CI, E2E, and installer contract summary jobs before publishing'
   );
   assert.ok(
-    prereleaseWorkflow.includes('needs: [ci-success, release-quality-gate]'),
-    'prerelease build should not start until the same-SHA release quality gate passes'
+    prereleaseWorkflow.includes('needs: ci-success'),
+    'prerelease build should start as soon as CI Success is recovered so package build work runs in parallel with the release quality gate'
+  );
+  assert.ok(
+    !prereleaseWorkflow.includes('needs: [ci-success, release-quality-gate]'),
+    'prerelease build should not serialize behind the release quality gate'
+  );
+  assert.ok(
+    prereleaseWorkflow.includes('needs: [build-prerelease, release-quality-gate]'),
+    'prerelease publish should remain blocked on both the package build and the same-SHA release quality gate'
   );
   assert.ok(
     prereleaseWorkflow.includes('ref: ${{ github.event.workflow_run.head_sha }}'),
@@ -1004,6 +1012,10 @@ test('release artifact workflows wait for same-commit quality evidence before pu
   assert.ok(
     scriptsReleaseWorkflow.includes('--require "Installer Contracts::Installer Contracts Success"'),
     'release-scripts.yml should require installer contract evidence before publishing installer artifacts'
+  );
+  assert.ok(
+    !scriptsReleaseWorkflow.includes('npm run test:installer:contracts'),
+    'release-scripts.yml should not duplicate installer contract execution after requiring same-SHA installer evidence'
   );
   assert.ok(
     extensionReleaseWorkflow.includes('npm test --workspace=@openpath/firefox-extension'),
