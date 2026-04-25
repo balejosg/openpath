@@ -27,7 +27,15 @@ export interface AutoAllowWorkflowDeps {
   setDomainStatus: (tabId: number, hostname: string, status: DomainStatus) => void;
 }
 
-const AUTO_ALLOW_REQUEST_TYPES = new Set(['xmlhttprequest', 'fetch']);
+const AUTO_ALLOW_REQUEST_TYPES = new Set([
+  'xmlhttprequest',
+  'fetch',
+  'script',
+  'stylesheet',
+  'image',
+  'font',
+  'media',
+]);
 
 interface NativeHostnameResponse {
   success: boolean;

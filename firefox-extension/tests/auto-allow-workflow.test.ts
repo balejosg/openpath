@@ -76,7 +76,13 @@ await describe('auto allow workflow', async () => {
   await test('detects request types eligible for auto-allow', () => {
     assert.equal(isAutoAllowRequestType('xmlhttprequest'), true);
     assert.equal(isAutoAllowRequestType('fetch'), true);
-    assert.equal(isAutoAllowRequestType('script'), false);
+    assert.equal(isAutoAllowRequestType('script'), true);
+    assert.equal(isAutoAllowRequestType('stylesheet'), true);
+    assert.equal(isAutoAllowRequestType('image'), true);
+    assert.equal(isAutoAllowRequestType('font'), true);
+    assert.equal(isAutoAllowRequestType('media'), true);
+    assert.equal(isAutoAllowRequestType('main_frame'), false);
+    assert.equal(isAutoAllowRequestType('sub_frame'), false);
   });
 
   await test('resolves final states for auto-allow outcomes', () => {

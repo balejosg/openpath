@@ -546,6 +546,64 @@ void describe('background listeners blocked-screen routing', () => {
     ]);
   });
 
+  void test('auto-allows blocked page subresources from an allowed origin without redirecting', async () => {
+    const resourceTypes: WebRequest.ResourceType[] = [
+      'script',
+      'image',
+      'stylesheet',
+      'font',
+      'media',
+    ];
+
+    for (const requestType of resourceTypes) {
+      const harness = createListenerHarness({
+        confirmBlockedScreenNavigation: () => Promise.resolve(true),
+      });
+      assert.ok(harness.webRequestError);
+
+      harness.webRequestError({
+        error: 'NS_ERROR_NET_TIMEOUT',
+        originUrl: 'https://allowed.example/app',
+        tabId: 31,
+        type: requestType,
+        url: `https://${requestType}.blocked.example/resource`,
+      } as WebRequest.OnErrorOccurredDetailsType);
+
+      await waitForAsyncListeners();
+
+      assert.deepEqual(harness.confirmCalls, []);
+      assert.deepEqual(harness.redirects, []);
+      assert.deepEqual(harness.autoAllowCalls, [
+        {
+          tabId: 31,
+          hostname: `${requestType}.blocked.example`,
+          origin: 'https://allowed.example/app',
+          requestType,
+          targetUrl: `https://${requestType}.blocked.example/resource`,
+        },
+      ]);
+    }
+  });
+
+  void test('does not auto-allow blocked frame navigation errors', async () => {
+    const harness = createListenerHarness({
+      confirmBlockedScreenNavigation: () => Promise.resolve(true),
+    });
+    assert.ok(harness.webRequestError);
+
+    harness.webRequestError({
+      error: 'NS_ERROR_NET_TIMEOUT',
+      originUrl: 'https://allowed.example/app',
+      tabId: 32,
+      type: 'sub_frame',
+      url: 'https://embed.blocked.example/frame',
+    } as WebRequest.OnErrorOccurredDetailsType);
+
+    await waitForAsyncListeners();
+
+    assert.deepEqual(harness.autoAllowCalls, []);
+  });
+
   void test('uses the current tab URL as ajax origin when Firefox omits request origins', async () => {
     const harness = createListenerHarness({
       confirmBlockedScreenNavigation: () => Promise.resolve(true),

@@ -3,11 +3,16 @@ import assert from 'node:assert';
 import { isAutoAllowRequestType, resolveAutoAllowState } from '../src/lib/auto-allow-workflow.js';
 
 void describe('background auto-allow flow', () => {
-  void test('auto-allows only AJAX/fetch request types', () => {
+  void test('auto-allows page subresource request types', () => {
     assert.strictEqual(isAutoAllowRequestType('xmlhttprequest'), true);
     assert.strictEqual(isAutoAllowRequestType('fetch'), true);
-    assert.strictEqual(isAutoAllowRequestType('script'), false);
-    assert.strictEqual(isAutoAllowRequestType('image'), false);
+    assert.strictEqual(isAutoAllowRequestType('script'), true);
+    assert.strictEqual(isAutoAllowRequestType('image'), true);
+    assert.strictEqual(isAutoAllowRequestType('stylesheet'), true);
+    assert.strictEqual(isAutoAllowRequestType('font'), true);
+    assert.strictEqual(isAutoAllowRequestType('media'), true);
+    assert.strictEqual(isAutoAllowRequestType('main_frame'), false);
+    assert.strictEqual(isAutoAllowRequestType('sub_frame'), false);
   });
 
   void test('resolves state transitions for api and local-update outcomes', () => {
