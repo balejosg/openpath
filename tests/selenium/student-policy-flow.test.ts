@@ -475,6 +475,79 @@ test('submitBlockedScreenRequest reads request status textContent when WebDriver
   assert.match(statusText, /Solicitud enviada/);
 });
 
+test('submitBlockedScreenRequest keeps polling when the blocked page status element is stale', async () => {
+  let statusReads = 0;
+  const events: string[] = [];
+  const elements = new Map([
+    [
+      '#request-reason',
+      {
+        async clear() {
+          events.push('clear');
+        },
+        async sendKeys(value: string) {
+          events.push(`reason:${value}`);
+        },
+      },
+    ],
+    [
+      '#submit-unblock-request',
+      {
+        async click() {
+          events.push('click');
+        },
+      },
+    ],
+    [
+      '#request-status',
+      {
+        async getText() {
+          statusReads += 1;
+          if (statusReads === 1) {
+            throw new Error(
+              'The element with the reference stale-id is stale; either its node document is not the active document, or it is no longer connected to the DOM'
+            );
+          }
+          return 'Solicitud enviada. Quedara pendiente hasta que la revisen.';
+        },
+      },
+    ],
+  ]);
+
+  const state = {
+    getDriver() {
+      return {
+        async findElement(locator: { value: string }) {
+          const element = elements.get(locator.value);
+          assert.ok(element, `Missing fake element for ${locator.value}`);
+          return element;
+        },
+        async getCurrentUrl() {
+          return 'moz-extension://extension-id/blocked/blocked.html?domain=blocked.test';
+        },
+        async getTitle() {
+          return 'Sitio bloqueado';
+        },
+        async wait(condition: (driver: unknown) => Promise<boolean>) {
+          const firstResult = await condition(this);
+          assert.equal(firstResult, false);
+          const secondResult = await condition(this);
+          assert.equal(secondResult, true);
+          return secondResult;
+        },
+      };
+    },
+  };
+
+  const statusText = await submitBlockedScreenRequest(state as never, {
+    reason: 'Necesario para una actividad de clase',
+  });
+
+  assert.deepEqual(events, ['clear', 'reason:Necesario para una actividad de clase', 'click']);
+  assert.equal(statusReads, 2);
+  assert.match(statusText, /Solicitud enviada/);
+});
+
 test('StudentPolicyDriver submits requests after blocked-page navigation timeout with the requested timeout', async () => {
   const timeoutError = new Error('Navigation timed out after 8000 ms');
   timeoutError.name = 'TimeoutError';

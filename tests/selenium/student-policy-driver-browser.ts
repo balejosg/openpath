@@ -38,6 +38,13 @@ async function readElementText(
   return (await element.getText()).trim();
 }
 
+function isStaleElementError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\bstale\b|no longer connected to the DOM|node document is not the active document/i.test(
+    message
+  );
+}
+
 async function readBlockedPageDomDiagnostics(state: StudentPolicyDriverState): Promise<string> {
   const driver = state.getDriver();
   try {
@@ -334,9 +341,16 @@ export async function submitBlockedScreenRequest(
   let latestStatus = '';
   try {
     await driver.wait(async () => {
-      const statusElement = await driver.findElement(By.css('#request-status'));
-      latestStatus = await readElementText(state, statusElement);
-      return /Solicitud enviada|Request submitted/i.test(latestStatus);
+      try {
+        const statusElement = await driver.findElement(By.css('#request-status'));
+        latestStatus = await readElementText(state, statusElement);
+        return /Solicitud enviada|Request submitted/i.test(latestStatus);
+      } catch (error) {
+        if (isStaleElementError(error)) {
+          return false;
+        }
+        throw error;
+      }
     }, timeoutMs);
   } catch (error) {
     const currentUrl = await driver.getCurrentUrl().catch(() => '<unavailable>');
