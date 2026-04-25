@@ -747,10 +747,10 @@ export async function runFallbackPropagationProbe(
       driver,
       mode,
       async () => {
-        const blockedPathOutcome = await driver.evaluateBlockedPathDebug(
+        const blockedPathOutcome = (await driver.evaluateBlockedPathDebug(
           targets.sitePrivateUrl,
           'main_frame'
-        );
+        )) as { reason?: string; redirectUrl?: string };
         assert.strictEqual(
           blockedPathOutcome.reason,
           `BLOCKED_PATH_POLICY:${driver.scenario.fixtures.site}/*private*`
