@@ -1070,6 +1070,27 @@ test('release artifact workflows wait for same-commit quality evidence before pu
   );
 });
 
+test('release scripts workflow triggers for every packaged installer input', () => {
+  const scriptsReleaseWorkflow = readText('.github/workflows/release-scripts.yml');
+
+  for (const pathPattern of [
+    'VERSION',
+    'package.json',
+    'package-lock.json',
+    'linux/**',
+    'windows/**',
+    'runtime/**',
+    'firefox-extension/**',
+    'tests/e2e/**',
+    '.github/workflows/release-scripts.yml',
+  ]) {
+    assert.ok(
+      scriptsReleaseWorkflow.includes(`- '${pathPattern}'`),
+      `release-scripts.yml should trigger when ${pathPattern} changes`
+    );
+  }
+});
+
 test('E2E release evidence is not cancelled by newer pushes on the same branch', () => {
   const e2eWorkflow = readText('.github/workflows/e2e-tests.yml');
 

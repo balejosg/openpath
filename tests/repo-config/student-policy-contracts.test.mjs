@@ -400,6 +400,21 @@ describe('repository verification contract', () => {
       /Windows Student Policy Timing/,
       'Windows student-policy runner should publish timing evidence in the GitHub step summary'
     );
+    assert.match(
+      windowsRunner,
+      /::group::\$Name/,
+      'Windows student-policy runner should group each timed phase in GitHub Actions logs'
+    );
+    assert.match(
+      windowsRunner,
+      /::endgroup::/,
+      'Windows student-policy runner should close each GitHub Actions timing group even on failure'
+    );
+    assert.match(
+      windowsRunner,
+      /::notice title=Windows Student Policy Timing::/,
+      'Windows student-policy runner should emit a searchable GitHub notice for every timed phase'
+    );
     for (const phase of [
       'Build workspaces',
       'Install Selenium dependencies',

@@ -5,10 +5,11 @@ on:
     branches: [main, master]
     paths:
       - 'VERSION'
-      - 'linux/install.sh'
-      - 'linux/uninstall.sh'
-      - 'linux/lib/**'
-      - 'linux/scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'linux/**'
+      - 'runtime/**'
+      - 'firefox-extension/**'
       - 'tests/e2e/**'
       - 'windows/**'
       - '.github/workflows/release-scripts.yml'

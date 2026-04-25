@@ -65,6 +65,7 @@ function Invoke-TimedStep {
     $status = 'success'
     $errorMessage = $null
 
+    Write-Host "::group::$Name"
     try {
         & $ScriptBlock
     }
@@ -86,6 +87,8 @@ function Invoke-TimedStep {
             error           = $errorMessage
         }
         Write-TimingEvidence
+        Write-Host "::notice title=Windows Student Policy Timing::$Name $status in $([math]::Round($timer.Elapsed.TotalSeconds, 3))s"
+        Write-Host '::endgroup::'
     }
 }
 
