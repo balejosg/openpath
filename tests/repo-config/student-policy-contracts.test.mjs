@@ -88,6 +88,15 @@ describe('repository verification contract', () => {
       /SP-011 verify main-frame path block[\s\S]*refreshBlockedPaths: true/,
       'blocked-path convergence should refresh extension rules after a forced local update'
     );
+    const unblockSegment = scenarios.slice(
+      scenarios.indexOf('deleteGroupRule(rule.id'),
+      scenarios.indexOf('async function runTemporaryExemptionScenarios')
+    );
+    assert.match(
+      unblockSegment,
+      /SP-015 verify path unblock[\s\S]*refreshBlockedPaths: true/,
+      'blocked-path unblock convergence should refresh extension rules after deleting the rule'
+    );
   });
 
   test('windows student policy runner packages the Firefox XPI with the canonical build script', () => {

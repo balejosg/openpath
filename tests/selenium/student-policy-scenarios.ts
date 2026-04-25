@@ -582,25 +582,30 @@ async function runBlockedPathScenarios(
   await client.deleteGroupRule(rule.id, driver.scenario.groups.restricted.id);
   await driver.forceLocalUpdate();
   await driver.restart();
-  await settlePolicyChange(driver, mode, async () => {
-    logScenarioStep('SP-015 verify path unblock');
-    await driver.openAndExpectLoaded({
-      url: targets.sitePrivateUrl,
-      title: 'Private Fixture',
-      selector: '#page-status',
-    });
-    await driver.openAndExpectLoaded({
-      url: targets.siteOkUrl,
-      title: 'OpenPath Site Fixture',
-      selector: '#page-status',
-    });
-    await driver.rerunIframeProbe();
-    await driver.waitForDomStatus('#iframe-status', 'ok');
-    await driver.rerunXhrProbe();
-    await driver.waitForDomStatus('#xhr-status', 'ok');
-    await driver.rerunFetchProbe();
-    await driver.waitForDomStatus('#fetch-status', 'ok');
-  });
+  await settlePolicyChange(
+    driver,
+    mode,
+    async () => {
+      logScenarioStep('SP-015 verify path unblock');
+      await driver.openAndExpectLoaded({
+        url: targets.sitePrivateUrl,
+        title: 'Private Fixture',
+        selector: '#page-status',
+      });
+      await driver.openAndExpectLoaded({
+        url: targets.siteOkUrl,
+        title: 'OpenPath Site Fixture',
+        selector: '#page-status',
+      });
+      await driver.rerunIframeProbe();
+      await driver.waitForDomStatus('#iframe-status', 'ok');
+      await driver.rerunXhrProbe();
+      await driver.waitForDomStatus('#xhr-status', 'ok');
+      await driver.rerunFetchProbe();
+      await driver.waitForDomStatus('#fetch-status', 'ok');
+    },
+    { refreshBlockedPaths: true }
+  );
 }
 
 async function runTemporaryExemptionScenarios(
