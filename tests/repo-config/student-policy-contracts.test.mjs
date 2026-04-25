@@ -441,6 +441,11 @@ describe('repository verification contract', () => {
       'Selenium scenarios should expose a dedicated fallback propagation probe'
     );
     assert.match(
+      seleniumScenarios,
+      /evaluateBlockedPathDebug\(\s*targets\.sitePrivateUrl,\s*'main_frame'\s*\)[\s\S]*blockedPathOutcome\.redirectUrl[\s\S]*blocked\\.html/,
+      'Fallback propagation probe should prove main-frame blocked paths through the blocked-page redirect outcome'
+    );
+    assert.match(
       harness,
       /fallback-propagation[\s\S]*runFallbackPropagationProbe/s,
       'Selenium harness should map the fallback-propagation profile to the targeted probe'

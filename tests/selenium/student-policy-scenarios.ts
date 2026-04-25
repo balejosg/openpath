@@ -747,13 +747,15 @@ export async function runFallbackPropagationProbe(
       driver,
       mode,
       async () => {
-        assert.deepStrictEqual(
-          await driver.evaluateBlockedPathDebug(targets.sitePrivateUrl, 'main_frame'),
-          {
-            cancel: true,
-            reason: `BLOCKED_PATH_POLICY:${driver.scenario.fixtures.site}/*private*`,
-          }
+        const blockedPathOutcome = await driver.evaluateBlockedPathDebug(
+          targets.sitePrivateUrl,
+          'main_frame'
         );
+        assert.strictEqual(
+          blockedPathOutcome.reason,
+          `BLOCKED_PATH_POLICY:${driver.scenario.fixtures.site}/*private*`
+        );
+        assert.match(String(blockedPathOutcome.redirectUrl ?? ''), /\/blocked\/blocked\.html/);
         await driver.openAndExpectBlockedScreen(targets.sitePrivateUrl, {
           reasonPrefix: 'BLOCKED_PATH_POLICY:',
         });
