@@ -1,5 +1,7 @@
 import assert from 'node:assert';
-import { buildFixtureUrl, buildScenarioHost, delay, readWhitelistFile } from './student-policy-env';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { buildFixtureUrl, buildScenarioHost, readWhitelistFile } from './student-policy-env';
 import { StudentPolicyServerClient } from './student-policy-client';
 import { StudentPolicyDriver } from './student-policy-driver';
 import type { PolicyMode, StudentScenario } from './student-policy-types';
@@ -34,6 +36,22 @@ interface StudentPolicyTargets {
     ajaxBlockedPath: string;
   };
 }
+
+interface StudentPolicyScenarioTiming {
+  name: string;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  durationSeconds: number;
+}
+
+let activeScenarioTiming: {
+  name: string;
+  startedAt: string;
+  startedAtNs: bigint;
+} | null = null;
+
+const scenarioTimings: StudentPolicyScenarioTiming[] = [];
 
 function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
   const requestHost = buildScenarioHost(scenario, 'request-domain');
@@ -122,7 +140,6 @@ async function settlePolicyChange(
 
   const forceConvergence = async (): Promise<void> => {
     await driver.forceLocalUpdate();
-    await delay(2_000);
     if (options.refreshBlockedPaths === true) {
       await driver.refreshBlockedPathRules();
     }
@@ -148,7 +165,46 @@ async function settlePolicyChange(
 }
 
 function logScenarioStep(message: string): void {
+  finishActiveScenarioTiming();
+  activeScenarioTiming = {
+    name: message,
+    startedAt: new Date().toISOString(),
+    startedAtNs: process.hrtime.bigint(),
+  };
   process.stdout.write(`student-policy: ${message}\n`);
+}
+
+function finishActiveScenarioTiming(): void {
+  if (activeScenarioTiming === null) {
+    return;
+  }
+
+  const endedAt = new Date().toISOString();
+  const durationMs = Number(
+    (process.hrtime.bigint() - activeScenarioTiming.startedAtNs) / 1_000_000n
+  );
+  scenarioTimings.push({
+    name: activeScenarioTiming.name,
+    startedAt: activeScenarioTiming.startedAt,
+    endedAt,
+    durationMs,
+    durationSeconds: Number((durationMs / 1000).toFixed(3)),
+  });
+  activeScenarioTiming = null;
+}
+
+export function writeStudentPolicyScenarioTimings(diagnosticsDir: string): void {
+  finishActiveScenarioTiming();
+  if (scenarioTimings.length === 0) {
+    return;
+  }
+
+  mkdirSync(diagnosticsDir, { recursive: true });
+  writeFileSync(
+    join(diagnosticsDir, 'student-policy-scenario-timings.json'),
+    `${JSON.stringify(scenarioTimings, null, 2)}\n`,
+    'utf8'
+  );
 }
 
 async function seedBaselineWhitelist(

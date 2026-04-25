@@ -476,13 +476,75 @@ describe('repository verification contract', () => {
       'Initialize test database',
       'Start API server',
       'Run Selenium student suite (sse)',
-      'Run Selenium student suite (fallback)',
+      'Run Selenium student suite (fallback, fallback-propagation)',
     ]) {
       assert.ok(
         linuxRunner.includes(`run_timed_step "${phase}"`),
         `Linux student-policy runner should time phase: ${phase}`
       );
     }
+  });
+
+  test('Linux student policy runner keeps full SSE coverage and narrows fallback to propagation proof', () => {
+    const linuxRunner = readText('tests/e2e/ci/run-linux-student-flow.sh');
+
+    assert.match(
+      linuxRunner,
+      /run_student_suite\(\)[\s\S]*local coverage_profile=/,
+      'Linux student-policy runner should pass an explicit Selenium coverage profile per mode'
+    );
+    assert.match(
+      linuxRunner,
+      /Run Selenium student suite \(sse\)[\s\S]*run_student_suite sse full/,
+      'Linux student-policy runner should keep the SSE pass on the full Selenium matrix'
+    );
+    assert.match(
+      linuxRunner,
+      /Run Selenium student suite \(fallback, fallback-propagation\)[\s\S]*run_student_suite fallback fallback-propagation/,
+      'Linux student-policy runner should run fallback as a targeted propagation proof'
+    );
+    assert.match(
+      linuxRunner,
+      /-e OPENPATH_STUDENT_COVERAGE_PROFILE="\$coverage_profile"/,
+      'Linux student-policy runner should expose the selected profile to the Selenium harness'
+    );
+  });
+
+  test('Linux student policy image build uses buildx cache with a docker build fallback', () => {
+    const linuxRunner = readText('tests/e2e/ci/run-linux-student-flow.sh');
+    const e2eWorkflow = readText('.github/workflows/e2e-tests.yml');
+
+    assert.match(
+      linuxRunner,
+      /docker buildx build[\s\S]*--cache-from type=gha[\s\S]*--cache-to type=gha,mode=max[\s\S]*--load/,
+      'Linux student-policy image build should use GitHub Actions cache when buildx is available'
+    );
+    assert.match(
+      linuxRunner,
+      /docker build -f "\$_context_dir\/Dockerfile\.student" -t "\$IMAGE_TAG" "\$_context_dir"/,
+      'Linux student-policy image build should keep a plain docker build fallback'
+    );
+    assert.match(
+      e2eWorkflow,
+      /docker\/setup-buildx-action@v[0-9]+/,
+      'E2E workflow should provision buildx before Linux student-policy Docker cache is used'
+    );
+  });
+
+  test('student policy Selenium harness writes per-scenario timing evidence', () => {
+    const harness = readText('tests/selenium/student-policy-harness.ts');
+    const scenarios = readText('tests/selenium/student-policy-scenarios.ts');
+
+    assert.match(
+      scenarios,
+      /student-policy-scenario-timings\.json/,
+      'Selenium scenarios should write a per-scenario timing artifact'
+    );
+    assert.match(
+      harness,
+      /writeStudentPolicyScenarioTimings\(diagnosticsDir\)/,
+      'Selenium harness should flush per-scenario timing evidence after every run'
+    );
   });
 
   test('Linux student policy runner highlights readiness failures in GitHub summaries', () => {

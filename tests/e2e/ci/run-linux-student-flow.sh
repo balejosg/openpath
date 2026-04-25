@@ -556,6 +556,21 @@ PY
 build_image() {
     echo "Building Linux student-policy image..."
     _context_dir="$(create_context)"
+
+    if docker buildx version >/dev/null 2>&1; then
+        if docker buildx build \
+            -f "$_context_dir/Dockerfile.student" \
+            -t "$IMAGE_TAG" \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            --load \
+            "$_context_dir"; then
+            return 0
+        fi
+
+        echo "Docker buildx cache build failed; falling back to plain docker build." >&2
+    fi
+
     docker build -f "$_context_dir/Dockerfile.student" -t "$IMAGE_TAG" "$_context_dir"
 }
 
@@ -742,7 +757,8 @@ fi
 
 run_student_suite() {
     local mode="${1:-sse}"
-    echo "Running Selenium student-policy suite inside container (mode: $mode)..."
+    local coverage_profile="${2:-full}"
+    echo "Running Selenium student-policy suite inside container (mode: $mode, coverage profile: $coverage_profile)..."
     docker exec \
         -e OPENPATH_STUDENT_SCENARIO_FILE=/artifacts/student-scenario.json \
         -e OPENPATH_STUDENT_DIAGNOSTICS_DIR=/artifacts/selenium-diagnostics \
@@ -754,6 +770,7 @@ run_student_suite() {
         -e OPENPATH_DISABLE_SSE_COMMAND='systemctl stop openpath-sse-listener.service' \
         -e OPENPATH_ENABLE_SSE_COMMAND='systemctl start openpath-sse-listener.service' \
         -e OPENPATH_STUDENT_MODE="$mode" \
+        -e OPENPATH_STUDENT_COVERAGE_PROFILE="$coverage_profile" \
         -e CI=true \
         "$CONTAINER_NAME" \
         bash -lc 'cd /openpath/tests/selenium && npm run test:student-policy:ci'
@@ -782,13 +799,13 @@ main() {
     run_timed_step "Install/enroll/update client" configure_client true
     run_timed_step "Verify SSE DNS policy readiness" assert_linux_dns_policy_ready
     run_timed_step "Verify SSE Firefox readiness" assert_linux_firefox_extension_ready
-    run_timed_step "Run Selenium student suite (sse)" run_student_suite sse
+    run_timed_step "Run Selenium student suite (sse)" run_student_suite sse full
     run_timed_step "Bootstrap fallback scenario" bootstrap_scenario "Linux Student Policy Fallback"
     run_timed_step "Seed fallback baseline policy" seed_initial_baseline_policy
     run_timed_step "Reconfigure/update client" configure_client false
     run_timed_step "Verify fallback DNS policy readiness" assert_linux_dns_policy_ready
     run_timed_step "Verify fallback Firefox readiness" assert_linux_firefox_extension_ready
-    run_timed_step "Run Selenium student suite (fallback)" run_student_suite fallback
+    run_timed_step "Run Selenium student suite (fallback, fallback-propagation)" run_student_suite fallback fallback-propagation
 
     publish_github_step_summary "success"
     echo "Linux student-policy runner completed successfully"

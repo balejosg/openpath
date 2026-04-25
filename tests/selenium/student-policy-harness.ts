@@ -11,6 +11,7 @@ import {
   runFallbackPropagationProbe,
   runStudentPolicyMatrix,
   runStudentPolicyMatrixPhaseTwo,
+  writeStudentPolicyScenarioTimings,
 } from './student-policy-scenarios';
 import type {
   PolicyMode,
@@ -90,24 +91,28 @@ export async function runStudentPolicySuite(
     }
   };
 
-  for (const phase of getStudentPolicyPhasePlan(mode, coverageProfile)) {
-    await runPhase(
-      phase.name,
-      async (driver) => {
-        if (phase.suite === 'matrix') {
-          await runStudentPolicyMatrix(client, driver, mode);
-          return;
-        }
+  try {
+    for (const phase of getStudentPolicyPhasePlan(mode, coverageProfile)) {
+      await runPhase(
+        phase.name,
+        async (driver) => {
+          if (phase.suite === 'matrix') {
+            await runStudentPolicyMatrix(client, driver, mode);
+            return;
+          }
 
-        if (phase.suite === 'matrix-phase-two') {
-          await runStudentPolicyMatrixPhaseTwo(client, driver, mode);
-          return;
-        }
+          if (phase.suite === 'matrix-phase-two') {
+            await runStudentPolicyMatrixPhaseTwo(client, driver, mode);
+            return;
+          }
 
-        await runFallbackPropagationProbe(client, driver, mode);
-      },
-      { useBrowser: phase.useBrowser }
-    );
+          await runFallbackPropagationProbe(client, driver, mode);
+        },
+        { useBrowser: phase.useBrowser }
+      );
+    }
+  } finally {
+    writeStudentPolicyScenarioTimings(diagnosticsDir);
   }
 
   return { success: true, diagnosticsDir };
