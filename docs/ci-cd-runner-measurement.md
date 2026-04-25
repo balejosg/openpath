@@ -9,6 +9,64 @@ Use this runbook when continuing CI optimization work. It replaces temporary
 planning notes as the durable place to record how OpenPath runner timing is
 measured.
 
+## Test Portfolio Baseline
+
+The current OpenPath test portfolio follows a practical test pyramid rather
+than a pure unit-heavy shape. Source-local unit tests cover API, SPA, shared,
+dashboard, and extension logic. Integration and contract tests remain a large
+middle layer because endpoint behavior depends on Linux services, Windows
+services, browser policy, packaging, and delivery artifacts that unit tests
+cannot prove.
+
+Latest tracked-test inventory, excluding fixtures, snapshots, generated
+artifacts, and local worktrees:
+
+| Component                  |                  Unit | Integration / contract |                           E2E / target platform |
+| -------------------------- | --------------------: | ---------------------: | ----------------------------------------------: |
+| API                        | 167 files / 477 cases |    11 files / 30 cases |                       Covered by endpoint flows |
+| React SPA                  | 106 files / 736 cases |                      - |                             9 files / 122 cases |
+| Shared                     |  11 files / 196 cases |                      - |                                               - |
+| Dashboard proxy            |    2 files / 14 cases |                      - |                                               - |
+| Firefox extension          |  26 files / 108 cases |    12 files / 46 cases |    Covered by delivery and student-policy flows |
+| Linux agent                |                     - |   21 files / 409 cases |   Covered by Linux E2E and student-policy lanes |
+| Windows agent              |                     - |   21 files / 214 cases | Covered by Windows E2E and student-policy lanes |
+| Repo and release contracts |                     - |     5 files / 70 cases |                              8 files / 81 cases |
+
+The inventory is intentionally file- and case-count based. Use it to spot
+portfolio drift, not as an exact assertion count.
+
+## Component Quality-Speed Policy
+
+Use the smallest layer that proves the risk:
+
+- API changes should start with focused Node tests and add integration only
+  for database, authentication, token delivery, public request, SSE, or
+  cross-route authorization boundaries. Do not turn API-only regressions into
+  browser E2E unless the bug crosses into an installed endpoint or browser.
+- React SPA changes should keep most behavior in Vitest component, hook, and
+  public-surface tests. Playwright should stay focused on smoke, auth, domain
+  management, visual, and performance coverage instead of duplicating every UI
+  branch.
+- Shared and dashboard changes should remain unit-first. Dashboard is allowed a
+  small contract surface while it stays a thin proxy, but new route or client
+  behavior needs a focused test.
+- Firefox extension changes should prefer unit and contract coverage for
+  background logic, native-host messaging, manifest policy, and release
+  artifacts. Release readiness must prove the managed payload and force-install
+  path, not only the existence of browser policy files.
+- Linux agent changes should keep BATS as the primary integration layer. Add
+  focused BATS tests for pure shell helpers, and reserve APT, installer, and
+  student-policy lanes for packaging, service, DNS, firewall, and browser-policy
+  risks.
+- Windows agent changes should keep Pester as the fast contract layer and use
+  Windows Student Policy as the required target-platform proof. Do not promote
+  hosted Windows advisory results to required gates until repeated samples show
+  stable runner teardown behavior.
+
+Do not expand `.test-allowlist`. It is legacy debt only. When touching an
+allowlisted file, either add a focused test or add an explicit `.test-file-map`
+entry to an existing split suite.
+
 ## What To Measure
 
 For each representative push, record:
@@ -140,6 +198,14 @@ SSE: blocked-page request submission, backend approval, manual/update-based
 propagation, and blocked-path enforcement in the installed Windows client. This
 exploits the current constraint by removing duplicate browser-matrix work while
 preserving a required Windows gate.
+
+Release-infrastructure-only diffs now stay on the `E2E Summary` evidence path
+without consuming destructive target-platform runners. The `Detect Relevant
+Changes` job publishes `release_infra_only=true` only when the diff is limited
+to release workflows, the release quality-gate helper, or repo-config contract
+tests. In that case the expensive Linux and Windows E2E/student-policy lanes
+are skipped explicitly; product, runtime, installer, browser, API, shared, and
+Selenium changes still route to the full relevant platform lanes.
 
 ## Decision Rules
 

@@ -39,6 +39,7 @@ jobs:
     name: Detect Relevant Changes
     runs-on: ubuntu-latest
     outputs:
+      release_infra_only: ${{ steps.filter.outputs.release_infra_only }}
       linux_e2e: ${{ steps.filter.outputs.linux_e2e }}
       windows_e2e: ${{ steps.filter.outputs.windows_e2e }}
       linux_student_policy: ${{ steps.filter.outputs.linux_student_policy }}
@@ -58,6 +59,7 @@ jobs:
           set -euo pipefail
 
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "release_infra_only=false" >> "$GITHUB_OUTPUT"
             echo "linux_e2e=true" >> "$GITHUB_OUTPUT"
             echo "windows_e2e=true" >> "$GITHUB_OUTPUT"
             echo "linux_student_policy=true" >> "$GITHUB_OUTPUT"
@@ -89,23 +91,35 @@ jobs:
           windows_e2e=false
           linux_student_policy=false
           windows_student_policy=false
+          release_infra_only=false
 
-          if echo "$changed_files" | grep -Eq '^(linux/|runtime/|firefox-extension/|tests/e2e/(Dockerfile|Dockerfile\.bats-runner|agent-integration\.bats|ci/run-linux-e2e\.sh|docker-compose\.e2e\.yml|docker-e2e-runner\.sh|linux-e2e-tests\.sh|pre-install-validation\.sh|validation/)|package\.json$|package-lock\.json$|scripts/require-release-quality-gate\.mjs$|\.github/actions/(setup-node|build-workspaces)/|\.github/workflows/(e2e-tests|installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml$)'; then
+          if [ -n "$changed_files" ] && echo "$changed_files" | grep -Eq '^(.github/workflows/(installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml|scripts/require-release-quality-gate\.mjs|tests/repo-config/)'; then
+            non_release_infra_files="$(
+              echo "$changed_files" |
+                grep -Ev '^(.github/workflows/(installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml|scripts/require-release-quality-gate\.mjs|tests/repo-config/)' || true
+            )"
+            if [ -z "$non_release_infra_files" ]; then
+              release_infra_only=true
+            fi
+          fi
+
+          if [ "$release_infra_only" != "true" ] && echo "$changed_files" | grep -Eq '^(linux/|runtime/|firefox-extension/|tests/e2e/(Dockerfile|Dockerfile\.bats-runner|agent-integration\.bats|ci/run-linux-e2e\.sh|docker-compose\.e2e\.yml|docker-e2e-runner\.sh|linux-e2e-tests\.sh|pre-install-validation\.sh|validation/)|package\.json$|package-lock\.json$|scripts/require-release-quality-gate\.mjs$|\.github/actions/(setup-node|build-workspaces)/|\.github/workflows/(e2e-tests|installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml$)'; then
             linux_e2e=true
           fi
 
-          if echo "$changed_files" | grep -Eq '^(windows/|runtime/|firefox-extension/|tests/e2e/(Windows-E2E\.Tests\.ps1|ci/run-windows-e2e\.ps1|ci/report-windows-processes\.ps1|validation/)|package\.json$|package-lock\.json$|scripts/require-release-quality-gate\.mjs$|\.github/workflows/(e2e-tests|installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml$)'; then
+          if [ "$release_infra_only" != "true" ] && echo "$changed_files" | grep -Eq '^(windows/|runtime/|firefox-extension/|tests/e2e/(Windows-E2E\.Tests\.ps1|ci/run-windows-e2e\.ps1|ci/report-windows-processes\.ps1|validation/)|package\.json$|package-lock\.json$|scripts/require-release-quality-gate\.mjs$|\.github/workflows/(e2e-tests|installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml$)'; then
             windows_e2e=true
           fi
 
-          if echo "$changed_files" | grep -Eq '^(api/|shared/|linux/|runtime/|firefox-extension/|tests/e2e/(Dockerfile\.student|ci/run-linux-student-flow\.sh|student-flow/|validation/)|tests/selenium/|docker-compose\.test\.yml$|package\.json$|package-lock\.json$|scripts/require-release-quality-gate\.mjs$|\.github/actions/setup-node/|\.github/workflows/(e2e-tests|installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml$)'; then
+          if [ "$release_infra_only" != "true" ] && echo "$changed_files" | grep -Eq '^(api/|shared/|linux/|runtime/|firefox-extension/|tests/e2e/(Dockerfile\.student|ci/run-linux-student-flow\.sh|student-flow/|validation/)|tests/selenium/|docker-compose\.test\.yml$|package\.json$|package-lock\.json$|scripts/require-release-quality-gate\.mjs$|\.github/actions/setup-node/|\.github/workflows/(e2e-tests|installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml$)'; then
             linux_student_policy=true
           fi
 
-          if echo "$changed_files" | grep -Eq '^(api/|shared/|windows/|runtime/|firefox-extension/|tests/e2e/(ci/run-windows-student-flow\.ps1|student-flow/|validation/)|tests/selenium/|package\.json$|package-lock\.json$|scripts/require-release-quality-gate\.mjs$|\.github/actions/setup-node/|\.github/workflows/(e2e-tests|installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml$)'; then
+          if [ "$release_infra_only" != "true" ] && echo "$changed_files" | grep -Eq '^(api/|shared/|windows/|runtime/|firefox-extension/|tests/e2e/(ci/run-windows-student-flow\.ps1|student-flow/|validation/)|tests/selenium/|package\.json$|package-lock\.json$|scripts/require-release-quality-gate\.mjs$|\.github/actions/setup-node/|\.github/workflows/(e2e-tests|installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml$)'; then
             windows_student_policy=true
           fi
 
+          echo "release_infra_only=$release_infra_only" >> "$GITHUB_OUTPUT"
           echo "linux_e2e=$linux_e2e" >> "$GITHUB_OUTPUT"
           echo "windows_e2e=$windows_e2e" >> "$GITHUB_OUTPUT"
           echo "linux_student_policy=$linux_student_policy" >> "$GITHUB_OUTPUT"

@@ -878,6 +878,25 @@ test('E2E workflow gates expensive platform lanes on targeted changed paths', ()
   }
 
   assert.ok(
+    e2eWorkflow.includes('release_infra_only: ${{ steps.filter.outputs.release_infra_only }}'),
+    'e2e-tests.yml should expose release_infra_only from Detect Relevant Changes'
+  );
+  assert.ok(
+    e2eWorkflow.includes('release_infra_only=true') &&
+      e2eWorkflow.includes('release_infra_only=false'),
+    'e2e-tests.yml should classify release-infrastructure-only diffs explicitly'
+  );
+  assert.ok(
+    e2eWorkflow.includes(
+      '^(.github/workflows/(installer-contracts|prerelease-deb|release-extension|release-scripts)\\.yml|scripts/require-release-quality-gate\\.mjs|tests/repo-config/)'
+    ),
+    'release-infrastructure-only classification should stay limited to release workflows, release gate helper, and repo-config contracts'
+  );
+  assert.ok(
+    e2eWorkflow.includes('[ "$release_infra_only" != "true" ] && echo "$changed_files" | grep -Eq'),
+    'expensive E2E lane routing should skip release-infrastructure-only diffs'
+  );
+  assert.ok(
     linuxE2eBlock.includes("needs.detect-relevant-changes.outputs.linux_e2e == 'true'"),
     'linux-e2e should run only for Linux E2E relevant changes'
   );
