@@ -17,6 +17,7 @@ interface ConfirmBlockedScreenContext extends BlockedScreenContext {
 
 type WebRequestErrorListener = (details: WebRequest.OnErrorOccurredDetailsType) => void;
 type WebRequestBeforeListener = (details: WebRequest.OnBeforeRequestDetailsType) => unknown;
+type EvaluateBlockedPath = Parameters<typeof registerBackgroundListeners>[0]['evaluateBlockedPath'];
 type WebNavigationBeforeListener = (details: {
   frameId: number;
   tabId: number;
@@ -47,6 +48,7 @@ function createListenerHarness(
   options: {
     confirmBlockedScreenNavigation?: (context: ConfirmBlockedScreenContext) => Promise<boolean>;
     currentTabUrl?: string | null;
+    evaluateBlockedPath?: EvaluateBlockedPath;
     handleRuntimeMessage?: (message: unknown, sender: unknown) => unknown;
   } = {}
 ): {
@@ -148,7 +150,8 @@ function createListenerHarness(
     browser,
     clearTabRuntimeState: () => undefined,
     disposeTab: () => undefined,
-    evaluateBlockedPath: () => null,
+    evaluateBlockedPath:
+      options.evaluateBlockedPath ?? ((): ReturnType<EvaluateBlockedPath> => null),
     handleRuntimeMessage:
       options.handleRuntimeMessage ?? ((): Promise<undefined> => Promise.resolve(undefined)),
     redirectToBlockedScreen: (context: BlockedScreenContext) => {
@@ -214,14 +217,13 @@ void describe('background listeners blocked-screen routing', () => {
     assert.deepEqual(responses, [{ success: true, id: 'request-1' }]);
   });
 
-  void test('registers path blocking for frame and ajax request types', () => {
+  void test('registers request interception for all page resource types', () => {
     const harness = createListenerHarness();
 
     assert.ok(harness.webRequestBefore);
     assert.deepEqual(harness.beforeRequestFilters, [
       {
         urls: ['<all_urls>'],
-        types: ['main_frame', 'sub_frame', 'xmlhttprequest', 'fetch'],
       },
     ]);
   });
@@ -544,6 +546,58 @@ void describe('background listeners blocked-screen routing', () => {
         targetUrl: 'https://api.blocked.example/data.json',
       },
     ]);
+  });
+
+  void test('starts auto-allow from page subresource requests before network timeout', async () => {
+    const resourceTypes: WebRequest.ResourceType[] = ['script', 'image', 'stylesheet', 'font'];
+
+    for (const requestType of resourceTypes) {
+      const harness = createListenerHarness({
+        confirmBlockedScreenNavigation: () => Promise.resolve(true),
+      });
+      assert.ok(harness.webRequestBefore);
+
+      const result = harness.webRequestBefore({
+        originUrl: 'https://allowed.example/app',
+        tabId: 35,
+        type: requestType,
+        url: `https://${requestType}.blocked.example/resource`,
+      } as WebRequest.OnBeforeRequestDetailsType);
+
+      await waitForAsyncListeners();
+
+      assert.equal(result, undefined);
+      assert.deepEqual(harness.confirmCalls, []);
+      assert.deepEqual(harness.redirects, []);
+      assert.deepEqual(harness.autoAllowCalls, [
+        {
+          tabId: 35,
+          hostname: `${requestType}.blocked.example`,
+          origin: 'https://allowed.example/app',
+          requestType,
+          targetUrl: `https://${requestType}.blocked.example/resource`,
+        },
+      ]);
+    }
+  });
+
+  void test('does not auto-allow requests cancelled by blocked path policy', async () => {
+    const harness = createListenerHarness({
+      evaluateBlockedPath: () => ({ cancel: true, reason: 'BLOCKED_PATH_POLICY:test' }),
+    });
+    assert.ok(harness.webRequestBefore);
+
+    const result = harness.webRequestBefore({
+      originUrl: 'https://allowed.example/app',
+      tabId: 36,
+      type: 'script',
+      url: 'https://cdn.blocked.example/private.js',
+    } as WebRequest.OnBeforeRequestDetailsType);
+
+    await waitForAsyncListeners();
+
+    assert.deepEqual(result, { cancel: true });
+    assert.deepEqual(harness.autoAllowCalls, []);
   });
 
   void test('auto-allows blocked page subresources from an allowed origin without redirecting', async () => {

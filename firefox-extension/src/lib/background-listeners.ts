@@ -3,7 +3,6 @@ import { getErrorMessage, logger } from './logger.js';
 import { shouldClearBlockedMonitorStateOnNavigate } from './blocked-screen-contract.js';
 import {
   BLOCKED_SCREEN_PATH,
-  PATH_BLOCKING_FILTER_TYPES,
   ROUTE_BLOCK_REASON,
   extractHostname,
   isExtensionUrl,
@@ -364,10 +363,34 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
     }
   }
 
+  function triggerAutoAllowForEligibleRequest(details: {
+    documentUrl?: string;
+    originUrl?: string;
+    tabId: number;
+    type?: WebRequest.ResourceType;
+    url: string;
+  }): void {
+    const hostname = extractHostname(details.url);
+    const requestType = details.type;
+    if (
+      !hostname ||
+      details.tabId < 0 ||
+      requestType === undefined ||
+      !isAutoAllowRequestType(requestType)
+    ) {
+      return;
+    }
+
+    void resolveAutoAllowOriginPage(details).then((originPage) =>
+      options.autoAllowBlockedDomain(details.tabId, hostname, originPage, requestType, details.url)
+    );
+  }
+
   options.browser.webRequest.onBeforeRequest.addListener(
     (details: WebRequest.OnBeforeRequestDetailsType) => {
       const result = options.evaluateBlockedPath(details);
       if (!result) {
+        triggerAutoAllowForEligibleRequest(details);
         return;
       }
 
@@ -388,7 +411,7 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
 
       return { cancel: true };
     },
-    { urls: ['<all_urls>'], types: [...PATH_BLOCKING_FILTER_TYPES] as WebRequest.ResourceType[] },
+    { urls: ['<all_urls>'] },
     ['blocking']
   );
 
@@ -404,17 +427,7 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
         requestType: details.type,
       });
 
-      if (isAutoAllowRequestType(details.type)) {
-        void resolveAutoAllowOriginPage(details).then((originPage) =>
-          options.autoAllowBlockedDomain(
-            details.tabId,
-            hostname,
-            originPage,
-            details.type,
-            details.url
-          )
-        );
-      }
+      triggerAutoAllowForEligibleRequest(details);
     },
     { urls: ['<all_urls>'] }
   );
