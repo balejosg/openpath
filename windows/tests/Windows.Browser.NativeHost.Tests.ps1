@@ -287,5 +287,22 @@ Describe "Browser Module - Native Host" {
                 'OpenPath update task did not write expected domains'
             )
         }
+
+        It "Logs update-whitelist action evidence without depending on downstream wrappers" {
+            $nativeHostActionsPath = Join-Path $PSScriptRoot ".." "lib" "internal" "NativeHost.Actions.ps1"
+            $nativeHostActionsContent = Get-Content $nativeHostActionsPath -Raw
+
+            Assert-ContentContainsAll -Content $nativeHostActionsContent -Needles @(
+                'function Write-NativeHostActionLog',
+                'Get-Command Write-NativeHostLog -ErrorAction SilentlyContinue',
+                'action=$Action',
+                'elapsedMs=',
+                'domains=',
+                'Write-NativeHostActionLog -Action ''update-whitelist'''
+            )
+
+            $nativeHostActionsContent | Should -Not -Match ('Classroom' + 'Path')
+            $nativeHostActionsContent | Should -Not -Match ('C' + 'P_')
+        }
     }
 }

@@ -37,58 +37,140 @@ function Test-NativeWhitelistContainsDomains {
     return $true
 }
 
+function Format-NativeHostActionLogValue {
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    $text = ([string]$Value).Replace("`r", ' ').Replace("`n", ' ').Replace("`t", ' ')
+    $text = $text -replace '/w/[^/\s]+/whitelist\.txt', '/w/[redacted]/whitelist.txt'
+    $text = $text -replace '(?i)(token=)[^&\s]+', '$1[redacted]'
+    $text = $text -replace '\s+', ' '
+    if ($text.Length -gt 240) {
+        return $text.Substring(0, 240)
+    }
+
+    return $text
+}
+
+function Write-NativeHostActionLog {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Action,
+        [string[]]$Domains = @(),
+        [bool]$Success = $false,
+        [AllowNull()]
+        [string]$Message = '',
+        [AllowNull()]
+        [string]$ErrorMessage = '',
+        [long]$ElapsedMs = 0
+    )
+
+    try {
+        if (-not (Get-Command Write-NativeHostLog -ErrorAction SilentlyContinue)) {
+            return
+        }
+
+        $safeDomains = @(Get-NativeHostValidDomains -Domains $Domains)
+        $fields = @(
+            "action=$Action",
+            "success=$($Success -eq $true)",
+            "elapsedMs=$ElapsedMs",
+            "domains=$($safeDomains -join ',')"
+        )
+        if ($Message) {
+            $fields += "message=$(Format-NativeHostActionLogValue -Value $Message)"
+        }
+        if ($ErrorMessage) {
+            $fields += "error=$(Format-NativeHostActionLogValue -Value $ErrorMessage)"
+        }
+
+        Write-NativeHostLog ("Native host {0}" -f ($fields -join ' '))
+    }
+    catch {
+        return
+    }
+}
+
 function Invoke-UpdateTask {
     param(
         [string[]]$Domains = @(),
         [int]$TimeoutSeconds = 45
     )
 
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $result = $null
     try {
         $null = & schtasks.exe /Run /TN $script:UpdateTaskName 2>$null
         if ($LASTEXITCODE -ne 0) {
-            return @{
+            $result = @{
                 success = $false
                 action = 'update-whitelist'
                 error = "schtasks exit code $LASTEXITCODE"
+                domains = @($Domains)
             }
         }
-
-        if (-not (Test-NativeWhitelistContainsDomains -Domains $Domains)) {
+        elseif (-not (Test-NativeWhitelistContainsDomains -Domains $Domains)) {
             $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
             while ((Get-Date) -lt $deadline) {
                 Start-Sleep -Milliseconds 1000
                 if (Test-NativeWhitelistContainsDomains -Domains $Domains) {
-                    return @{
+                    $result = @{
                         success = $true
                         action = 'update-whitelist'
                         message = 'OpenPath update task wrote expected domains'
                         domains = @($Domains)
                     }
+                    break
                 }
             }
 
-            return @{
-                success = $false
+            if (-not $result) {
+                $result = @{
+                    success = $false
+                    action = 'update-whitelist'
+                    error = "OpenPath update task did not write expected domains: $(@($Domains) -join ', ')"
+                    domains = @($Domains)
+                }
+            }
+        }
+        else {
+            $result = @{
+                success = $true
                 action = 'update-whitelist'
-                error = "OpenPath update task did not write expected domains: $(@($Domains) -join ', ')"
+                message = 'OpenPath update task triggered'
                 domains = @($Domains)
             }
         }
-
-        return @{
-            success = $true
-            action = 'update-whitelist'
-            message = 'OpenPath update task triggered'
-            domains = @($Domains)
-        }
     }
     catch {
-        return @{
+        $result = @{
             success = $false
             action = 'update-whitelist'
             error = [string]$_
+            domains = @($Domains)
         }
     }
+
+    $stopwatch.Stop()
+    $logMessage = ''
+    if ($result.ContainsKey('message')) {
+        $logMessage = [string]$result.message
+    }
+    $logError = ''
+    if ($result.ContainsKey('error')) {
+        $logError = [string]$result.error
+    }
+
+    Write-NativeHostActionLog -Action 'update-whitelist' `
+        -Domains $Domains `
+        -Success ($result.success -eq $true) `
+        -Message $logMessage `
+        -ErrorMessage $logError `
+        -ElapsedMs $stopwatch.ElapsedMilliseconds
+
+    return $result
 }
 
 function Get-NativeHostMachineName {
