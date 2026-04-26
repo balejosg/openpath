@@ -228,4 +228,56 @@ void describe('page activity content script', () => {
       },
     ]);
   });
+
+  void test('defers page observer injection until the document has an append target', () => {
+    const sentMessages: unknown[] = [];
+    interface PageMessageEvent {
+      data?: unknown;
+      origin?: string;
+      source?: unknown;
+    }
+    const listeners = new Map<string, (event: PageMessageEvent) => void>();
+    const scriptElement = {
+      removeCalls: 0,
+      textContent: '',
+      remove(): void {
+        this.removeCalls += 1;
+      },
+    };
+    const appended: unknown[] = [];
+    const runtime: PageActivityRuntime = {
+      sendMessage: (message): void => {
+        sentMessages.push(message);
+      },
+    };
+    const runtimeGlobal = {
+      addEventListener(type: string, callback: (event: PageMessageEvent) => void): void {
+        listeners.set(type, callback);
+      },
+      document: {
+        createElement(): typeof scriptElement {
+          return scriptElement;
+        },
+        documentElement: undefined as undefined | { appendChild(node: unknown): void },
+        head: undefined as undefined | { appendChild(node: unknown): void },
+      },
+      location: { href: 'https://allowed.example/app' },
+      window: {},
+    };
+
+    installPageResourceObserver(runtime, runtimeGlobal);
+    assert.equal(appended.length, 0);
+    assert.equal(scriptElement.removeCalls, 0);
+
+    runtimeGlobal.document.documentElement = {
+      appendChild(node: unknown): void {
+        appended.push(node);
+      },
+    };
+    listeners.get('DOMContentLoaded')?.({});
+
+    assert.deepEqual(appended, [scriptElement]);
+    assert.match(scriptElement.textContent, /window\.fetch/);
+    assert.equal(scriptElement.removeCalls, 1);
+  });
 });

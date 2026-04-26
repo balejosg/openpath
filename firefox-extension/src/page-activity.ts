@@ -9,15 +9,16 @@ interface RuntimeGlobal {
   chrome?: { runtime?: Partial<PageActivityRuntime> };
   addEventListener?: (
     type: string,
-    listener: (event: { data?: unknown; origin?: string; source?: unknown }) => void
+    listener: (event: { data?: unknown; origin?: string; source?: unknown }) => void,
+    options?: unknown
   ) => void;
   document?: {
     createElement?: (tagName: string) => {
       remove?: () => void;
       textContent?: string | null;
     };
-    documentElement?: { appendChild?: (node: unknown) => void };
-    head?: { appendChild?: (node: unknown) => void };
+    documentElement?: { appendChild?: (node: unknown) => void } | undefined;
+    head?: { appendChild?: (node: unknown) => void } | undefined;
   };
   location?: { href?: string };
   window?: unknown;
@@ -174,15 +175,28 @@ export function installPageResourceObserver(
     notifyPageResourceCandidate(runtime, data.url, kind, getCurrentUrl(runtimeGlobal));
   });
 
-  const script = runtimeGlobal.document?.createElement?.('script');
-  const appendTarget = runtimeGlobal.document?.documentElement ?? runtimeGlobal.document?.head;
-  if (!script || !appendTarget?.appendChild) {
-    return;
-  }
+  let observerInjected = false;
+  const injectObserver = (): boolean => {
+    if (observerInjected) {
+      return true;
+    }
 
-  script.textContent = buildPageResourceObserverScript();
-  appendTarget.appendChild(script);
-  script.remove?.();
+    const script = runtimeGlobal.document?.createElement?.('script');
+    const appendTarget = runtimeGlobal.document?.documentElement ?? runtimeGlobal.document?.head;
+    if (!script || !appendTarget?.appendChild) {
+      return false;
+    }
+
+    script.textContent = buildPageResourceObserverScript();
+    appendTarget.appendChild(script);
+    script.remove?.();
+    observerInjected = true;
+    return true;
+  };
+
+  if (!injectObserver()) {
+    runtimeGlobal.addEventListener?.('DOMContentLoaded', injectObserver, { once: true });
+  }
 }
 
 function getRuntime(): PageActivityRuntime | null {

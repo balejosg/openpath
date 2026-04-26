@@ -140,7 +140,7 @@ function createRuntimeHarness(): {
   Object.assign(globalThis, {
     browser,
     fetch: (_url: string, init?: RequestInit) => {
-      const body = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+      const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
       fetchBodies.push(body);
       return Promise.resolve(
         new Response(JSON.stringify({ success: true, status: 'approved' }), {
@@ -156,18 +156,18 @@ function createRuntimeHarness(): {
     browser,
     fetchBodies,
     nativeMessages,
-    get pathRuleRefreshes() {
+    get pathRuleRefreshes(): number {
       return pathRuleRefreshes;
     },
     responses,
-    restoreGlobals: () => {
+    restoreGlobals: (): void => {
       Object.assign(globalThis, {
         browser: originalBrowser,
         fetch: originalFetch,
         setInterval: originalSetInterval,
       });
     },
-    get runtimeMessage() {
+    get runtimeMessage(): RuntimeMessageListener | null {
       return runtimeMessage;
     },
   };
@@ -330,7 +330,7 @@ void test('background runtime exposes native diagnostics through runtime message
     ]);
     assert.equal(diagnostics.nativeBlockedPaths?.success, true);
     assert.equal(diagnostics.pathRules?.success, true);
-    assert.equal(diagnostics.pathRules?.count, 0);
+    assert.equal(diagnostics.pathRules.count, 0);
   } finally {
     harness.restoreGlobals();
   }
