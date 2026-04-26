@@ -437,7 +437,34 @@ prepare_workspace() {
         cd "$PROJECT_ROOT"
         npm run build --workspace=@openpath/shared
         npm run build --workspace=@openpath/firefox-extension
+        prepare_firefox_release_artifacts
     )
+}
+
+prepare_firefox_release_artifacts() {
+    echo "Packaging Firefox release artifacts for the Linux student-policy API..."
+    local extension_dir="$PROJECT_ROOT/firefox-extension"
+    local manifest_path="$extension_dir/manifest.json"
+    local version
+    local built_xpi_path
+    local release_root="$extension_dir/build/firefox-release"
+
+    version="$(
+        node -e 'const fs = require("node:fs"); const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(manifest.version);' \
+            "$manifest_path"
+    )"
+    built_xpi_path="$extension_dir/monitor-bloqueos-red-$version.xpi"
+
+    rm -f "$built_xpi_path"
+    "$extension_dir/build-xpi.sh"
+    require_file "$built_xpi_path"
+
+    npm run build:firefox-release --workspace=@openpath/firefox-extension -- \
+        --signed-xpi "$built_xpi_path" \
+        --install-url "http://host.docker.internal:$API_PORT/api/extensions/firefox/openpath.xpi"
+
+    require_file "$release_root/metadata.json"
+    require_file "$release_root/openpath-firefox-extension.xpi"
 }
 
 resolve_student_host_suffix() {
@@ -462,6 +489,7 @@ start_api_server() {
         PORT="$API_PORT" \
         DATA_DIR="$data_dir" \
         PUBLIC_URL="http://host.docker.internal:$API_PORT" \
+        OPENPATH_FIREFOX_RELEASE_ROOT="$PROJECT_ROOT/firefox-extension/build/firefox-release" \
         node --import tsx api/src/server.ts >"$ARTIFACTS_DIR/api.log" 2>&1
     ) &
     API_PID=$!

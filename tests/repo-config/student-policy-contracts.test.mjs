@@ -113,6 +113,31 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('Linux student policy runner publishes Firefox release artifacts before starting the API', () => {
+    const linuxRunner = readText('tests/e2e/ci/run-linux-student-flow.sh');
+
+    assert.match(
+      linuxRunner,
+      /build-xpi\.sh/,
+      'Linux student-policy runner should use firefox-extension/build-xpi.sh to create the E2E XPI'
+    );
+    assert.match(
+      linuxRunner,
+      /build:firefox-release/,
+      'Linux student-policy runner should prepare API-served Firefox release artifacts for browser setup'
+    );
+    assert.match(
+      linuxRunner,
+      /OPENPATH_FIREFOX_RELEASE_ROOT="\$PROJECT_ROOT\/firefox-extension\/build\/firefox-release"/,
+      'Linux student-policy API should read Firefox release artifacts from the repo build output'
+    );
+    assert.match(
+      linuxRunner,
+      /run_timed_step "Build workspaces" prepare_workspace[\s\S]*run_timed_step "Start API server" start_api_server/,
+      'Linux student-policy runner should prepare Firefox release artifacts before the API can serve openpath.xpi'
+    );
+  });
+
   test('windows student policy runner enables Firefox unsigned addon support for Selenium', () => {
     const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
 
