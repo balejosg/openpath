@@ -2,6 +2,8 @@ import { buildPopupUrl } from './student-policy-env';
 import type { DomainStatusPayload, RuntimeResponse } from './student-policy-types';
 import type { StudentPolicyDriverState } from './student-policy-driver-state';
 
+export type CrossOriginElementProbeType = 'script' | 'image' | 'stylesheet';
+
 async function openPopupContext(state: StudentPolicyDriverState): Promise<void> {
   const driver = state.getDriver();
   try {
@@ -153,6 +155,93 @@ export async function runCrossOriginFetchProbe(
        .catch(() => done('blocked'))
        .finally(() => clearTimeout(timeoutId));`,
     targetUrl
+  );
+  return result;
+}
+
+export async function runCrossOriginXhrProbe(
+  state: StudentPolicyDriverState,
+  targetUrl: string
+): Promise<'ok' | 'blocked'> {
+  const driver = state.getDriver();
+  const result: 'ok' | 'blocked' = await driver.executeAsyncScript(
+    `const [url, done] = [arguments[0], arguments[arguments.length - 1]];
+     const xhr = new XMLHttpRequest();
+     let completed = false;
+     const finish = (value) => {
+       if (completed) {
+         return;
+       }
+       completed = true;
+       clearTimeout(timeoutId);
+       done(value);
+     };
+     const timeoutId = setTimeout(() => {
+       try {
+         xhr.abort();
+       } catch {}
+       finish('blocked');
+     }, 3000);
+     xhr.open('GET', url);
+     xhr.onload = () => finish(xhr.status >= 200 && xhr.status < 300 ? 'ok' : 'blocked');
+     xhr.onerror = () => finish('blocked');
+     xhr.send();`,
+    targetUrl
+  );
+  return result;
+}
+
+export async function runCrossOriginElementProbe(
+  state: StudentPolicyDriverState,
+  targetUrl: string,
+  probeType: CrossOriginElementProbeType
+): Promise<'ok' | 'blocked'> {
+  const driver = state.getDriver();
+  const result: 'ok' | 'blocked' = await driver.executeAsyncScript(
+    `const [url, probeType, done] = [arguments[0], arguments[1], arguments[arguments.length - 1]];
+     let completed = false;
+     const finish = (value) => {
+       if (completed) {
+         return;
+       }
+       completed = true;
+       clearTimeout(timeoutId);
+       done(value);
+     };
+     const withCacheBust = url + (url.includes('?') ? '&' : '?') + 'cache=' + Date.now();
+     const timeoutId = setTimeout(() => finish('blocked'), 3000);
+
+     if (probeType === 'script') {
+       const script = document.createElement('script');
+       script.async = true;
+       script.onload = () => finish('ok');
+       script.onerror = () => finish('blocked');
+       script.src = withCacheBust;
+       document.body.appendChild(script);
+       return;
+     }
+
+     if (probeType === 'image') {
+       const image = new Image();
+       image.onload = () => finish('ok');
+       image.onerror = () => finish('blocked');
+       image.src = withCacheBust;
+       return;
+     }
+
+     if (probeType === 'stylesheet') {
+       const link = document.createElement('link');
+       link.rel = 'stylesheet';
+       link.onload = () => finish('ok');
+       link.onerror = () => finish('blocked');
+       link.href = withCacheBust;
+       document.head.appendChild(link);
+       return;
+     }
+
+     finish('blocked');`,
+    targetUrl,
+    probeType
   );
   return result;
 }

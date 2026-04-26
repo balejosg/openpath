@@ -7,6 +7,28 @@ import {
   resolveAutoAllowState,
 } from '../src/lib/auto-allow-workflow.js';
 
+const AUTO_ALLOW_PAGE_RESOURCE_TYPES = [
+  'xmlhttprequest',
+  'fetch',
+  'script',
+  'stylesheet',
+  'image',
+  'object',
+  'xslt',
+  'ping',
+  'beacon',
+  'xml_dtd',
+  'font',
+  'media',
+  'websocket',
+  'csp_report',
+  'imageset',
+  'web_manifest',
+  'speculative',
+  'json',
+  'other',
+];
+
 function createWorkflowFixture(
   overrides: Partial<Parameters<typeof createAutoAllowWorkflow>[0]> = {}
 ): {
@@ -74,15 +96,13 @@ function createWorkflowFixture(
 
 await describe('auto allow workflow', async () => {
   await test('detects request types eligible for auto-allow', () => {
-    assert.equal(isAutoAllowRequestType('xmlhttprequest'), true);
-    assert.equal(isAutoAllowRequestType('fetch'), true);
-    assert.equal(isAutoAllowRequestType('script'), true);
-    assert.equal(isAutoAllowRequestType('stylesheet'), true);
-    assert.equal(isAutoAllowRequestType('image'), true);
-    assert.equal(isAutoAllowRequestType('font'), true);
-    assert.equal(isAutoAllowRequestType('media'), true);
+    for (const requestType of AUTO_ALLOW_PAGE_RESOURCE_TYPES) {
+      assert.equal(isAutoAllowRequestType(requestType), true, requestType);
+    }
+
     assert.equal(isAutoAllowRequestType('main_frame'), false);
     assert.equal(isAutoAllowRequestType('sub_frame'), false);
+    assert.equal(isAutoAllowRequestType(undefined), false);
   });
 
   await test('resolves final states for auto-allow outcomes', () => {
@@ -146,7 +166,7 @@ await describe('auto allow workflow', async () => {
         domain: 'example.com',
         hostname: 'lab-pc-01',
         origin_page: 'https://portal.school/app',
-        reason: 'auto-allow ajax (xmlhttprequest)',
+        reason: 'auto-allow page-resource (xmlhttprequest)',
         target_url: 'https://example.com/data.json',
         token: 'machine-token',
       },

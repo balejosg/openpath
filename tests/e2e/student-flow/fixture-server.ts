@@ -94,6 +94,16 @@ function setScriptHeaders(res: ServerResponse): void {
   res.setHeader('Cache-Control', 'no-store');
 }
 
+function setCssHeaders(res: ServerResponse): void {
+  res.setHeader('Content-Type', 'text/css; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+}
+
+function setImageHeaders(res: ServerResponse): void {
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'no-store');
+}
+
 function notFound(res: ServerResponse): void {
   res.statusCode = 404;
   setHtmlHeaders(res);
@@ -296,6 +306,16 @@ function sendJson(res: ServerResponse, payload: unknown): void {
   res.end(JSON.stringify(payload));
 }
 
+function sendTransparentPixel(res: ServerResponse): void {
+  setImageHeaders(res);
+  res.end(
+    Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+      'base64'
+    )
+  );
+}
+
 function routePortalHost(pathname: string, res: ServerResponse): void {
   if (pathname === '/ok') {
     setHtmlHeaders(res);
@@ -377,6 +397,25 @@ function routeApiSiteHost(pathname: string, res: ServerResponse): void {
   notFound(res);
 }
 
+function routeImageHost(pathname: string, res: ServerResponse): void {
+  if (pathname === '/pixel.png') {
+    sendTransparentPixel(res);
+    return;
+  }
+
+  notFound(res);
+}
+
+function routeStyleHost(pathname: string, res: ServerResponse): void {
+  if (pathname === '/style.css') {
+    setCssHeaders(res);
+    res.end('body { --openpath-style-probe: loaded; }');
+    return;
+  }
+
+  notFound(res);
+}
+
 export function createStudentFixtureRequestHandler(
   fixtures: StudentFixtureHosts = getStudentFixtureHosts()
 ): http.RequestListener {
@@ -413,6 +452,16 @@ export function createStudentFixtureRequestHandler(
 
       if (host.startsWith('api.')) {
         routeApiSiteHost(pathname, res);
+        return;
+      }
+
+      if (host.startsWith('image.')) {
+        routeImageHost(pathname, res);
+        return;
+      }
+
+      if (host.startsWith('style.')) {
+        routeStyleHost(pathname, res);
         return;
       }
 

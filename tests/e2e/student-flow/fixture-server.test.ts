@@ -138,6 +138,27 @@ await describe('student fixture server', async () => {
     assert.deepStrictEqual(JSON.parse(fetchResponse.body), { status: 'ok', kind: 'fetch-private' });
   });
 
+  await test('serves host-routed image and stylesheet probes', async () => {
+    const suffix = fixtureServer.fixtures.site.replace(/^site\./, '');
+
+    const imageResponse = await requestFixture({
+      server: fixtureServer,
+      host: `image.ajax-dependency.${suffix}`,
+      path: '/pixel.png',
+    });
+    assert.strictEqual(imageResponse.statusCode, 200);
+    assert.match(imageResponse.headers['content-type'] ?? '', /image\/png/);
+
+    const stylesheetResponse = await requestFixture({
+      server: fixtureServer,
+      host: `style.ajax-dependency.${suffix}`,
+      path: '/style.css',
+    });
+    assert.strictEqual(stylesheetResponse.statusCode, 200);
+    assert.match(stylesheetResponse.headers['content-type'] ?? '', /text\/css/);
+    assert.match(stylesheetResponse.body, /--openpath-style-probe/);
+  });
+
   await test('returns host-specific 404s for unknown routes or hosts', async () => {
     const unknownRoute = await requestFixture({
       server: fixtureServer,

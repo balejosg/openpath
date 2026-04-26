@@ -46,12 +46,15 @@ import {
   getDomainStatuses,
   getNativeBlockedPathsDebug,
   refreshBlockedPathRules,
+  runCrossOriginElementProbe,
   rerunFetchProbe,
   rerunIframeProbe,
   rerunPortalSubdomainProbe,
   rerunXhrProbe,
   runCrossOriginFetchProbe,
+  runCrossOriginXhrProbe,
   sendRuntimeMessage,
+  type CrossOriginElementProbeType,
 } from './student-policy-driver-runtime';
 import type { StudentPolicyDriverState } from './student-policy-driver-state';
 import type {
@@ -351,6 +354,17 @@ export class StudentPolicyDriver implements StudentPolicyDriverState {
 
   public async runCrossOriginFetchProbe(targetUrl: string): Promise<'ok' | 'blocked'> {
     return runCrossOriginFetchProbe(this, targetUrl);
+  }
+
+  public async runCrossOriginXhrProbe(targetUrl: string): Promise<'ok' | 'blocked'> {
+    return runCrossOriginXhrProbe(this, targetUrl);
+  }
+
+  public async runCrossOriginElementProbe(
+    targetUrl: string,
+    probeType: CrossOriginElementProbeType
+  ): Promise<'ok' | 'blocked'> {
+    return runCrossOriginElementProbe(this, targetUrl, probeType);
   }
 
   public async rerunPortalSubdomainProbe(): Promise<void> {

@@ -21,6 +21,10 @@ interface StudentPolicyTargets {
   alternateOnlyUrl: string;
   autoDomainFetchUrl: string;
   ajaxDependencyFetchUrl: string;
+  ajaxDependencyXhrUrl: string;
+  ajaxDependencyScriptUrl: string;
+  ajaxDependencyImageUrl: string;
+  ajaxDependencyStylesheetUrl: string;
   ajaxBlockedSubdomainFetchUrl: string;
   ajaxBlockedPathFetchUrl: string;
   hosts: {
@@ -32,6 +36,11 @@ interface StudentPolicyTargets {
     alternateOnly: string;
     auto: string;
     ajaxDependency: string;
+    ajaxDependencyFetch: string;
+    ajaxDependencyXhr: string;
+    ajaxDependencyScript: string;
+    ajaxDependencyImage: string;
+    ajaxDependencyStylesheet: string;
     ajaxBlockedSubdomain: string;
     ajaxBlockedPath: string;
   };
@@ -61,7 +70,14 @@ function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
   const baseOnlyHost = buildScenarioHost(scenario, 'base-only');
   const alternateOnlyHost = buildScenarioHost(scenario, 'alternate-only');
   const autoHost = buildScenarioHost(scenario, 'auto-domain');
-  const ajaxDependencyHost = `api.${buildScenarioHost(scenario, 'ajax-dependency')}`;
+  const ajaxDependencyFetchHost = `api.${buildScenarioHost(scenario, 'ajax-dependency-fetch')}`;
+  const ajaxDependencyXhrHost = `api.${buildScenarioHost(scenario, 'ajax-dependency-xhr')}`;
+  const ajaxDependencyScriptHost = `cdn.${buildScenarioHost(scenario, 'ajax-dependency-script')}`;
+  const ajaxDependencyImageHost = `image.${buildScenarioHost(scenario, 'ajax-dependency-image')}`;
+  const ajaxDependencyStylesheetHost = `style.${buildScenarioHost(
+    scenario,
+    'ajax-dependency-stylesheet'
+  )}`;
   const ajaxBlockedSubdomainHost = `api.${buildScenarioHost(scenario, 'ajax-blocked-subdomain')}`;
   const ajaxBlockedPathHost = `api.${buildScenarioHost(scenario, 'ajax-blocked-path')}`;
 
@@ -79,7 +95,11 @@ function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
     baseOnlyCdnAssetUrl: buildFixtureUrl(`cdn.${baseOnlyHost}`, '/asset.js'),
     alternateOnlyUrl: buildFixtureUrl(alternateOnlyHost, '/ok'),
     autoDomainFetchUrl: buildFixtureUrl(autoHost, '/fetch/private.json'),
-    ajaxDependencyFetchUrl: buildFixtureUrl(ajaxDependencyHost, '/fetch/private.json'),
+    ajaxDependencyFetchUrl: buildFixtureUrl(ajaxDependencyFetchHost, '/fetch/private.json'),
+    ajaxDependencyXhrUrl: buildFixtureUrl(ajaxDependencyXhrHost, '/xhr/private.json'),
+    ajaxDependencyScriptUrl: buildFixtureUrl(ajaxDependencyScriptHost, '/asset.js'),
+    ajaxDependencyImageUrl: buildFixtureUrl(ajaxDependencyImageHost, '/pixel.png'),
+    ajaxDependencyStylesheetUrl: buildFixtureUrl(ajaxDependencyStylesheetHost, '/style.css'),
     ajaxBlockedSubdomainFetchUrl: buildFixtureUrl(ajaxBlockedSubdomainHost, '/fetch/private.json'),
     ajaxBlockedPathFetchUrl: buildFixtureUrl(ajaxBlockedPathHost, '/fetch/private.json'),
     hosts: {
@@ -90,7 +110,12 @@ function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
       baseOnly: baseOnlyHost,
       alternateOnly: alternateOnlyHost,
       auto: autoHost,
-      ajaxDependency: ajaxDependencyHost,
+      ajaxDependency: ajaxDependencyFetchHost,
+      ajaxDependencyFetch: ajaxDependencyFetchHost,
+      ajaxDependencyXhr: ajaxDependencyXhrHost,
+      ajaxDependencyScript: ajaxDependencyScriptHost,
+      ajaxDependencyImage: ajaxDependencyImageHost,
+      ajaxDependencyStylesheet: ajaxDependencyStylesheetHost,
       ajaxBlockedSubdomain: ajaxBlockedSubdomainHost,
       ajaxBlockedPath: ajaxBlockedPathHost,
     },
@@ -321,38 +346,74 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
   mode: PolicyMode,
   targets: StudentPolicyTargets
 ): Promise<void> {
-  logScenarioStep('SP-006 ajax dependency auto-allow from whitelisted origin');
-
   await client.setAutoApprove(false);
-  await driver.assertWhitelistMissing(targets.hosts.ajaxDependency);
-  await driver.assertDnsBlocked(targets.hosts.ajaxDependency);
-  await driver.openAndExpectLoaded({
-    url: targets.siteOkUrl,
-    title: 'OpenPath Site Fixture',
-    selector: '#page-status',
-  });
-
-  const firstFetch = await driver.runCrossOriginFetchProbe(targets.ajaxDependencyFetchUrl);
-  assert.strictEqual(firstFetch, 'blocked');
-
-  await settlePolicyChange(
-    driver,
-    mode,
-    async () => {
-      await driver.assertWhitelistContains(targets.hosts.ajaxDependency);
-      await driver.assertDnsAllowed(targets.hosts.ajaxDependency);
+  const dependencyProbes = [
+    {
+      id: 'fetch',
+      host: targets.hosts.ajaxDependencyFetch,
+      url: targets.ajaxDependencyFetchUrl,
+      run: () => driver.runCrossOriginFetchProbe(targets.ajaxDependencyFetchUrl),
     },
-    { timeoutMs: 45_000 }
-  );
+    {
+      id: 'xhr',
+      host: targets.hosts.ajaxDependencyXhr,
+      url: targets.ajaxDependencyXhrUrl,
+      run: () => driver.runCrossOriginXhrProbe(targets.ajaxDependencyXhrUrl),
+    },
+    {
+      id: 'script',
+      host: targets.hosts.ajaxDependencyScript,
+      url: targets.ajaxDependencyScriptUrl,
+      run: () => driver.runCrossOriginElementProbe(targets.ajaxDependencyScriptUrl, 'script'),
+    },
+    {
+      id: 'image',
+      host: targets.hosts.ajaxDependencyImage,
+      url: targets.ajaxDependencyImageUrl,
+      run: () => driver.runCrossOriginElementProbe(targets.ajaxDependencyImageUrl, 'image'),
+    },
+    {
+      id: 'stylesheet',
+      host: targets.hosts.ajaxDependencyStylesheet,
+      url: targets.ajaxDependencyStylesheetUrl,
+      run: () =>
+        driver.runCrossOriginElementProbe(targets.ajaxDependencyStylesheetUrl, 'stylesheet'),
+    },
+  ];
 
-  await driver.restart();
-  await driver.openAndExpectLoaded({
-    url: targets.siteOkUrl,
-    title: 'OpenPath Site Fixture',
-    selector: '#page-status',
-  });
-  const secondFetch = await driver.runCrossOriginFetchProbe(targets.ajaxDependencyFetchUrl);
-  assert.strictEqual(secondFetch, 'ok');
+  for (const probe of dependencyProbes) {
+    logScenarioStep(`SP-006 ${probe.id} dependency auto-allow from whitelisted origin`);
+
+    await driver.assertWhitelistMissing(probe.host);
+    await driver.assertDnsBlocked(probe.host);
+    await driver.openAndExpectLoaded({
+      url: targets.siteOkUrl,
+      title: 'OpenPath Site Fixture',
+      selector: '#page-status',
+    });
+
+    const firstResult = await probe.run();
+    assert.strictEqual(firstResult, 'blocked', `${probe.id} dependency should start blocked`);
+
+    await settlePolicyChange(
+      driver,
+      mode,
+      async () => {
+        await driver.assertWhitelistContains(probe.host);
+        await driver.assertDnsAllowed(probe.host);
+      },
+      { timeoutMs: 45_000 }
+    );
+
+    await driver.restart();
+    await driver.openAndExpectLoaded({
+      url: targets.siteOkUrl,
+      title: 'OpenPath Site Fixture',
+      selector: '#page-status',
+    });
+    const secondResult = await probe.run();
+    assert.strictEqual(secondResult, 'ok', `${probe.id} dependency should load after auto-allow`);
+  }
 
   logScenarioStep('SP-006 blocked subdomain prevents ajax auto-allow');
   const blockedSubdomainRule = await client.createGroupRule(

@@ -553,6 +553,13 @@ void describe('background listeners blocked-screen routing', () => {
       'stylesheet',
       'font',
       'media',
+      'imageset',
+      'beacon',
+      'ping',
+      'websocket',
+      'web_manifest',
+      'json',
+      'other',
     ];
 
     for (const requestType of resourceTypes) {

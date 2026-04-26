@@ -27,16 +27,6 @@ export interface AutoAllowWorkflowDeps {
   setDomainStatus: (tabId: number, hostname: string, status: DomainStatus) => void;
 }
 
-const AUTO_ALLOW_REQUEST_TYPES = new Set([
-  'xmlhttprequest',
-  'fetch',
-  'script',
-  'stylesheet',
-  'image',
-  'font',
-  'media',
-]);
-
 interface NativeHostnameResponse {
   success: boolean;
   hostname?: string;
@@ -54,7 +44,7 @@ export function isAutoAllowRequestType(type?: string): boolean {
     return false;
   }
 
-  return AUTO_ALLOW_REQUEST_TYPES.has(type);
+  return type !== 'main_frame' && type !== 'sub_frame';
 }
 
 export function resolveAutoAllowState(payload: AutoAllowStateResolutionInput): DomainStatusState {
@@ -172,7 +162,7 @@ export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
             ...(targetUrl ? { target_url: targetUrl } : {}),
             token: tokenResponse.token,
             hostname: hostnameResponse.hostname,
-            reason: `auto-allow ajax (${requestType})`,
+            reason: `auto-allow page-resource (${requestType})`,
           }),
         },
         requestConfig.requestTimeout,
