@@ -124,6 +124,9 @@ export function createBackgroundMessageHandler(
     const msg = message as BackgroundMessage;
 
     switch (msg.action) {
+      case 'openpathPageActivity':
+        return { success: true };
+
       case 'getBlockedDomains':
         return {
           domains: deps.getBlockedDomainsForTab(msg.tabId),

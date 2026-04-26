@@ -102,6 +102,48 @@ await describe('background message handler', async () => {
     });
   });
 
+  await test('returns blocked-domain and domain-status snapshots for the tab', async () => {
+    const handler = createHandlerFixture();
+
+    assert.deepEqual(await handler({ action: 'getBlockedDomains', tabId: 7 }, {}), {
+      domains: {
+        'tab-7': { errors: [] },
+      },
+    });
+    assert.deepEqual(await handler({ action: 'getDomainStatuses', tabId: 7 }, {}), {
+      statuses: {
+        'tab-7': { state: 'detected' },
+      },
+    });
+  });
+
+  await test('clears blocked-domain state through the injected store', async () => {
+    let clearedTabId: number | undefined;
+    const handler = createHandlerFixture({
+      clearBlockedDomains: (tabId) => {
+        clearedTabId = tabId;
+      },
+    });
+
+    const response = await handler({ action: 'clearBlockedDomains', tabId: 4 }, {});
+
+    assert.equal(clearedTabId, 4);
+    assert.deepEqual(response, { success: true });
+  });
+
+  await test('returns native blocked-path debug failures as structured errors', async () => {
+    const handler = createHandlerFixture({
+      getNativeBlockedPathsDebug: () => Promise.reject(new Error('native debug failed')),
+    });
+
+    const response = await handler({ action: 'getNativeBlockedPathsDebug', tabId: 1 }, {});
+
+    assert.deepEqual(response, {
+      success: false,
+      error: 'native debug failed',
+    });
+  });
+
   await test('maps blocked-path evaluation requests through the injected evaluator', async () => {
     const handler = createHandlerFixture();
 
@@ -162,6 +204,113 @@ await describe('background message handler', async () => {
     });
   });
 
+  await test('returns extension diagnostic failures as structured errors', async () => {
+    const handler = createHandlerFixture({
+      getOpenPathDiagnostics: () => Promise.reject(new Error('diagnostics failed')),
+    });
+
+    const response = await handler(
+      {
+        action: 'getOpenPathDiagnostics',
+        domains: 'not-a-list',
+        tabId: 1,
+      },
+      {}
+    );
+
+    assert.deepEqual(response, {
+      success: false,
+      error: 'diagnostics failed',
+    });
+  });
+
+  await test('accepts page activity wake-up messages without native side effects', async () => {
+    const handler = createHandlerFixture({
+      getMachineToken: () => Promise.reject(new Error('should not be called')),
+      getOpenPathDiagnostics: () => Promise.reject(new Error('should not be called')),
+      getSystemHostname: () => Promise.reject(new Error('should not be called')),
+      isNativeHostAvailable: () => Promise.reject(new Error('should not be called')),
+      triggerWhitelistUpdate: () => Promise.reject(new Error('should not be called')),
+    });
+
+    const response = await handler(
+      {
+        action: 'openpathPageActivity',
+        url: 'https://allowed.example/app',
+        tabId: 1,
+      },
+      {}
+    );
+
+    assert.deepEqual(response, { success: true });
+  });
+
+  await test('verifies domains through both message aliases and reports failures', async () => {
+    const handler = createHandlerFixture();
+    const failingHandler = createHandlerFixture({
+      verifyDomains: () => Promise.reject(new Error('verify failed')),
+    });
+
+    assert.deepEqual(
+      await handler({ action: 'checkWithNative', domains: ['example.com'], tabId: 1 }, {}),
+      {
+        success: true,
+        results: [{ domain: 'example.com', inWhitelist: true }],
+      }
+    );
+    assert.deepEqual(await handler({ action: 'verifyDomains', domains: 'invalid', tabId: 1 }, {}), {
+      success: true,
+      results: [],
+    });
+    assert.deepEqual(
+      await failingHandler({ action: 'verifyDomains', domains: ['example.com'], tabId: 1 }, {}),
+      {
+        success: false,
+        results: [],
+        error: 'verify failed',
+      }
+    );
+  });
+
+  await test('checks native availability through both message aliases', async () => {
+    const handler = createHandlerFixture();
+    const unavailableHandler = createHandlerFixture({
+      isNativeHostAvailable: () => Promise.resolve(false),
+    });
+    const failingHandler = createHandlerFixture({
+      isNativeHostAvailable: () => Promise.reject(new Error('native unavailable')),
+    });
+
+    assert.deepEqual(await handler({ action: 'isNativeAvailable', tabId: 1 }, {}), {
+      available: true,
+      success: true,
+    });
+    assert.deepEqual(await unavailableHandler({ action: 'checkNative', tabId: 1 }, {}), {
+      available: false,
+      success: false,
+    });
+    assert.deepEqual(await failingHandler({ action: 'checkNative', tabId: 1 }, {}), {
+      available: false,
+      success: false,
+    });
+  });
+
+  await test('returns hostname and machine-token failures as structured errors', async () => {
+    const handler = createHandlerFixture({
+      getMachineToken: () => Promise.reject(new Error('token failed')),
+      getSystemHostname: () => Promise.reject(new Error('hostname failed')),
+    });
+
+    assert.deepEqual(await handler({ action: 'getHostname', tabId: 1 }, {}), {
+      success: false,
+      error: 'hostname failed',
+    });
+    assert.deepEqual(await handler({ action: 'getMachineToken', tabId: 1 }, {}), {
+      success: false,
+      error: 'token failed',
+    });
+  });
+
   await test('validates blocked-domain submissions before delegating', async () => {
     const handler = createHandlerFixture();
 
@@ -207,6 +356,27 @@ await describe('background message handler', async () => {
     assert.deepEqual(response, { success: true, status: 'pending' });
   });
 
+  await test('reports blocked-domain submission failures as structured errors', async () => {
+    const handler = createHandlerFixture({
+      submitBlockedDomainRequest: () => Promise.reject(new Error('submit failed')),
+    });
+
+    const response = await handler(
+      {
+        action: SUBMIT_BLOCKED_DOMAIN_REQUEST_ACTION,
+        tabId: 1,
+        domain: 'example.com',
+        reason: 'needed for class',
+      },
+      {}
+    );
+
+    assert.deepEqual(response, {
+      success: false,
+      error: 'submit failed',
+    });
+  });
+
   await test('returns a recent successful blocked-domain submission for replacement blocked pages', async () => {
     const handler = createHandlerFixture({
       submitBlockedDomainRequest: (input) =>
@@ -248,8 +418,110 @@ await describe('background message handler', async () => {
     });
   });
 
-  await test('reports hostname validation errors for retryLocalUpdate', async () => {
+  await test('does not cache failed or expired blocked-domain submission statuses', async () => {
+    const realNow = Date.now;
+    let now = 1_000;
+    Date.now = () => now;
+    try {
+      const handler = createHandlerFixture({
+        submitBlockedDomainRequest: () =>
+          Promise.resolve({
+            success: false,
+            error: 'rejected',
+          }),
+      });
+
+      await handler(
+        {
+          action: SUBMIT_BLOCKED_DOMAIN_REQUEST_ACTION,
+          tabId: 1,
+          domain: 'failed.example',
+          reason: 'needed for class',
+        },
+        {}
+      );
+      assert.deepEqual(
+        await handler(
+          {
+            action: 'getRecentBlockedDomainRequestStatus',
+            tabId: 1,
+            domain: 'failed.example',
+          },
+          {}
+        ),
+        { success: true, request: null }
+      );
+
+      const expiringHandler = createHandlerFixture();
+      await expiringHandler(
+        {
+          action: SUBMIT_BLOCKED_DOMAIN_REQUEST_ACTION,
+          tabId: 1,
+          domain: 'expired.example',
+          reason: 'needed for class',
+        },
+        {}
+      );
+      now += 121_000;
+      assert.deepEqual(
+        await expiringHandler(
+          {
+            action: 'getRecentBlockedDomainRequestStatus',
+            tabId: 1,
+            domain: 'expired.example',
+          },
+          {}
+        ),
+        { success: true, request: null }
+      );
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  await test('validates recent blocked-domain status messages', async () => {
     const handler = createHandlerFixture();
+
+    const response = await handler(
+      {
+        action: 'getRecentBlockedDomainRequestStatus',
+        tabId: 1,
+      },
+      {}
+    );
+
+    assert.deepEqual(response, {
+      success: false,
+      error: 'domain is required',
+    });
+  });
+
+  await test('triggers native refresh operations and reports failures', async () => {
+    const handler = createHandlerFixture();
+    const failingHandler = createHandlerFixture({
+      triggerWhitelistUpdate: () => Promise.reject(new Error('update failed')),
+    });
+
+    assert.deepEqual(await handler({ action: 'triggerWhitelistUpdate', tabId: 1 }, {}), {
+      success: true,
+    });
+    assert.deepEqual(await failingHandler({ action: 'triggerWhitelistUpdate', tabId: 1 }, {}), {
+      success: false,
+      error: 'update failed',
+    });
+    assert.deepEqual(await handler({ action: 'refreshBlockedPathRules', tabId: 1 }, {}), {
+      success: true,
+    });
+  });
+
+  await test('reports hostname validation errors for retryLocalUpdate', async () => {
+    let retryInput: { tabId: number; hostname: string } | undefined;
+    const handler = createHandlerFixture({
+      retryLocalUpdate: (tabId, hostname) => {
+        retryInput = { tabId, hostname };
+        return Promise.resolve({ success: true });
+      },
+    });
 
     const response = await handler({ action: 'retryLocalUpdate', tabId: 1 }, {});
 
@@ -257,5 +529,18 @@ await describe('background message handler', async () => {
       success: false,
       error: 'hostname is required',
     });
+    assert.deepEqual(
+      await handler({ action: 'retryLocalUpdate', tabId: 2, hostname: 'example.com' }, {}),
+      { success: true }
+    );
+    assert.deepEqual(retryInput, { tabId: 2, hostname: 'example.com' });
+  });
+
+  await test('reports unknown actions without side effects', async () => {
+    const handler = createHandlerFixture();
+
+    const response = await handler({ action: 'notSupported', tabId: 1 }, {});
+
+    assert.deepEqual(response, { error: 'Unknown action' });
   });
 });

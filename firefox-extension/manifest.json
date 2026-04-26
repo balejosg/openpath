@@ -32,6 +32,13 @@
     "scripts": ["dist/background.js"],
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["dist/page-activity.js"],
+      "run_at": "document_start"
+    }
+  ],
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {

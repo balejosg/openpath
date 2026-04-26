@@ -9,6 +9,11 @@ interface FirefoxManifest {
   content_security_policy?: {
     extension_pages?: string;
   };
+  content_scripts?: {
+    js?: string[];
+    matches?: string[];
+    run_at?: string;
+  }[];
   host_permissions?: string[];
 }
 
@@ -31,5 +36,17 @@ void describe('Firefox extension manifest policy', () => {
     const manifest = await readManifest();
 
     assert.deepEqual(manifest.host_permissions, ['<all_urls>']);
+  });
+
+  void test('wakes the background runtime at document start on normal web pages', async () => {
+    const manifest = await readManifest();
+
+    assert.deepEqual(manifest.content_scripts, [
+      {
+        matches: ['http://*/*', 'https://*/*'],
+        js: ['dist/page-activity.js'],
+        run_at: 'document_start',
+      },
+    ]);
   });
 });
