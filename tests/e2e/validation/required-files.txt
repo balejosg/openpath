@@ -13,6 +13,7 @@ required linux/lib/browser.sh
 required linux/lib/chromium-managed-extension.sh
 required linux/lib/firefox-policy.sh
 required linux/lib/firefox-managed-extension.sh
+required linux/lib/browser-request-readiness.sh
 required linux/lib/firefox-extension-assets.sh
 required linux/lib/services.sh
 required linux/lib/rollback.sh

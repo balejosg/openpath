@@ -298,6 +298,7 @@ CRITICAL_FILES=(
     "$INSTALL_DIR/lib/browser-process.sh"
     "$INSTALL_DIR/lib/browser-firefox.sh"
     "$INSTALL_DIR/lib/browser-native-host.sh"
+    "$INSTALL_DIR/lib/browser-request-readiness.sh"
     "$INSTALL_DIR/lib/chromium-managed-extension.sh"
     "$INSTALL_DIR/lib/firefox-policy.sh"
     "$INSTALL_DIR/lib/firefox-managed-extension.sh"
@@ -328,6 +329,7 @@ load_libraries() {
         chromium-managed-extension.sh \
         firefox-policy.sh \
         firefox-managed-extension.sh \
+        browser-request-readiness.sh \
         browser-process.sh \
         browser-firefox.sh \
         browser-native-host.sh \

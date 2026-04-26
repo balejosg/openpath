@@ -111,7 +111,7 @@ set -euo pipefail
 export INSTALL_DIR="${INSTALL_DIR:-/usr/local/lib/openpath}"
 export SCRIPTS_DIR="${SCRIPTS_DIR:-/usr/local/bin}"
 ETC_CONFIG_DIR="${ETC_CONFIG_DIR:-/etc/openpath}"
-VAR_STATE_DIR="${VAR_STATE_DIR:-/var/lib/openpath}"
+VAR_STATE_DIR="${VAR_STATE_DIR:-/tmp/openpath-browser-setup-test-state-$$}"
 LOG_FILE="${LOG_FILE:-/var/log/openpath.log}"
 export FIREFOX_POLICIES="${FIREFOX_POLICIES:-/etc/firefox/policies/policies.json}"
 export FIREFOX_EXTENSIONS_ROOT="${FIREFOX_EXTENSIONS_ROOT:-/usr/share/mozilla/extensions}"
@@ -257,6 +257,17 @@ install_browser_integrations() {
         return 1
     fi
 
+    if [[ " \$* " == *" --native-host "* ]]; then
+        local native_manifest_dir="\${FIREFOX_NATIVE_HOST_DIR:-$TEST_TMP_DIR/lib/mozilla/native-messaging-hosts}"
+        local native_script_dir="\${OPENPATH_NATIVE_HOST_INSTALL_DIR:-$TEST_TMP_DIR/local/lib/openpath}"
+        mkdir -p "\$native_manifest_dir" "\$native_script_dir"
+        cat > "\$native_manifest_dir/whitelist_native_host.json" <<'JSON'
+{"name":"whitelist_native_host","path":"/usr/local/lib/openpath/openpath-native-host.py","type":"stdio","allowed_extensions":["monitor-bloqueos@openpath"]}
+JSON
+        echo '#!/usr/bin/env python3' > "\$native_script_dir/openpath-native-host.py"
+        chmod +x "\$native_script_dir/openpath-native-host.py"
+    fi
+
     if [ "$mode" = "success" ]; then
         local app_id="{ec8030f7-c20a-464f-9b0e-13a3a9e97384}"
         local ext_dir="$ext_root/\$app_id/monitor-bloqueos@openpath"
@@ -264,7 +275,7 @@ install_browser_integrations() {
         touch "\$ext_dir/manifest.json"
         mkdir -p "\$(dirname "$policies_file")"
         cat > "$policies_file" <<'JSON'
-{"policies":{"ExtensionSettings":{"monitor-bloqueos@openpath":{"installation_mode":"force_installed"}}}}
+{"policies":{"ExtensionSettings":{"monitor-bloqueos@openpath":{"installation_mode":"force_installed","install_url":"https://control.example/api/extensions/firefox/openpath.xpi"}}}}
 JSON
     elif [ "$mode" = "managed-api" ]; then
         mkdir -p "\$(dirname "$policies_file")"
@@ -295,14 +306,120 @@ detect_firefox_dir() {
     return 0
 }
 
+force_browser_close() {
+    return 0
+}
+
 get_firefox_extensions_root() {
     echo "$ext_root"
+}
+
+get_firefox_native_host_dir() {
+    echo "\${FIREFOX_NATIVE_HOST_DIR:-$TEST_TMP_DIR/lib/mozilla/native-messaging-hosts}"
+}
+
+get_native_host_install_dir() {
+    echo "\${OPENPATH_NATIVE_HOST_INSTALL_DIR:-$TEST_TMP_DIR/local/lib/openpath}"
 }
 
 run_browser_json_helper() {
     python3 "$PROJECT_DIR/linux/libexec/browser-json.py" "\$@"
 }
 EOF
+}
+
+@test "browser request readiness facts reject policy-only firefox setup" {
+    local policies_file="$TEST_TMP_DIR/firefox-policies.json"
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
+    mkdir -p "$(dirname "$policies_file")" "$etc_dir"
+    printf '%s' 'https://control.example' > "$etc_dir/api-url.conf"
+    printf '%s' 'https://control.example/w/token123/whitelist.txt' > "$etc_dir/whitelist-url.conf"
+    printf '%s' 'cls_123' > "$etc_dir/classroom-id.conf"
+    cat > "$policies_file" <<'JSON'
+{"policies":{"ExtensionSettings":{"monitor-bloqueos@openpath":{"installation_mode":"force_installed","install_url":"https://control.example/api/extensions/firefox/openpath.xpi"}}}}
+JSON
+
+    export ETC_CONFIG_DIR="$etc_dir"
+    export WHITELIST_URL_CONF="$etc_dir/whitelist-url.conf"
+    export FIREFOX_POLICIES="$policies_file"
+    export FIREFOX_EXTENSION_ID="monitor-bloqueos@openpath"
+
+    read_single_line_file() {
+        local file="$1"
+        [ -r "$file" ] || return 1
+        tr -d '\r\n' < "$file"
+    }
+    log() { echo "$1"; }
+    log_error() { echo "$1" >&2; }
+    detect_firefox_dir() { echo "$TEST_TMP_DIR/usr/lib/firefox-esr"; }
+    resolve_firefox_extensions_root_dir() { echo "$TEST_TMP_DIR/share/mozilla/extensions"; }
+    resolve_firefox_binary_path() { echo "$TEST_TMP_DIR/usr/lib/firefox-esr/firefox"; }
+    verify_firefox_extension_registered() { return 1; }
+    get_firefox_native_host_dir() { echo "$TEST_TMP_DIR/lib/mozilla/native-messaging-hosts"; }
+    get_native_host_install_dir() { echo "$TEST_TMP_DIR/local/lib/openpath"; }
+    run_browser_json_helper() {
+        python3 "$PROJECT_DIR/linux/libexec/browser-json.py" "$@"
+    }
+
+    mkdir -p "$TEST_TMP_DIR/usr/lib/firefox-esr" "$TEST_TMP_DIR/share/mozilla/extensions" "$TEST_TMP_DIR/lib/mozilla/native-messaging-hosts" "$TEST_TMP_DIR/local/lib/openpath"
+    touch "$TEST_TMP_DIR/usr/lib/firefox-esr/firefox"
+    touch "$TEST_TMP_DIR/lib/mozilla/native-messaging-hosts/whitelist_native_host.json"
+    touch "$TEST_TMP_DIR/local/lib/openpath/openpath-native-host.py"
+
+    source "$PROJECT_DIR/linux/lib/browser-request-readiness.sh"
+
+    run collect_openpath_browser_request_readiness
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"ready=false"* ]]
+    [[ "$output" == *"fact.firefox_policy=ready"* ]]
+    [[ "$output" == *"fact.firefox_registration=missing"* ]]
+    [[ "$output" == *"failure_reason=firefox_registration_missing"* ]]
+}
+
+@test "browser request readiness facts require linux native host proof" {
+    local policies_file="$TEST_TMP_DIR/firefox-policies.json"
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
+    local ext_root="$TEST_TMP_DIR/share/mozilla/extensions"
+    local app_id="{ec8030f7-c20a-464f-9b0e-13a3a9e97384}"
+    mkdir -p "$(dirname "$policies_file")" "$etc_dir" "$ext_root/$app_id/monitor-bloqueos@openpath" "$TEST_TMP_DIR/usr/lib/firefox-esr"
+    printf '%s' 'https://control.example' > "$etc_dir/api-url.conf"
+    printf '%s' 'https://control.example/w/token123/whitelist.txt' > "$etc_dir/whitelist-url.conf"
+    printf '%s' 'cls_123' > "$etc_dir/classroom-id.conf"
+    touch "$TEST_TMP_DIR/usr/lib/firefox-esr/firefox"
+    touch "$ext_root/$app_id/monitor-bloqueos@openpath/manifest.json"
+    cat > "$policies_file" <<'JSON'
+{"policies":{"ExtensionSettings":{"monitor-bloqueos@openpath":{"installation_mode":"force_installed"}}}}
+JSON
+
+    export ETC_CONFIG_DIR="$etc_dir"
+    export WHITELIST_URL_CONF="$etc_dir/whitelist-url.conf"
+    export FIREFOX_POLICIES="$policies_file"
+    export FIREFOX_EXTENSION_ID="monitor-bloqueos@openpath"
+
+    read_single_line_file() {
+        local file="$1"
+        [ -r "$file" ] || return 1
+        tr -d '\r\n' < "$file"
+    }
+    log() { echo "$1"; }
+    log_error() { echo "$1" >&2; }
+    detect_firefox_dir() { echo "$TEST_TMP_DIR/usr/lib/firefox-esr"; }
+    resolve_firefox_extensions_root_dir() { echo "$ext_root"; }
+    resolve_firefox_binary_path() { echo "$TEST_TMP_DIR/usr/lib/firefox-esr/firefox"; }
+    verify_firefox_extension_registered() { return 0; }
+    get_firefox_native_host_dir() { echo "$TEST_TMP_DIR/lib/mozilla/native-messaging-hosts"; }
+    get_native_host_install_dir() { echo "$TEST_TMP_DIR/local/lib/openpath"; }
+    run_browser_json_helper() {
+        python3 "$PROJECT_DIR/linux/libexec/browser-json.py" "$@"
+    }
+
+    source "$PROJECT_DIR/linux/lib/browser-request-readiness.sh"
+
+    run collect_openpath_browser_request_readiness
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"fact.firefox_registration=ready"* ]]
+    [[ "$output" == *"fact.firefox_native_host=missing"* ]]
+    [[ "$output" == *"failure_reason=firefox_native_host_missing"* ]]
 }
 
 @test "openpath-browser-setup installs firefox integrations and policies" {

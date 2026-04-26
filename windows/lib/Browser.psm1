@@ -6,6 +6,7 @@ Import-Module "$PSScriptRoot\Common.psm1" -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\Browser.Common.psm1" -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\Browser.FirefoxPolicy.psm1" -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\Browser.FirefoxNativeHost.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Browser.RequestReadiness.psm1" -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\Browser.Diagnostics.psm1" -Force -ErrorAction Stop
 
 function Get-OpenPathChromiumManagedMetadataPath {
@@ -92,6 +93,16 @@ function Get-OpenPathBrowserDoctorReport {
     param()
 
     Browser.Diagnostics\Get-OpenPathBrowserDoctorReport
+}
+
+function Get-OpenPathBrowserRequestReadiness {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [object]$Config = $null
+    )
+
+    Browser.RequestReadiness\Get-OpenPathBrowserRequestReadiness -Config $Config
 }
 
 function Set-FirefoxPolicy {
@@ -221,6 +232,7 @@ function Set-AllBrowserPolicy {
 
 Export-ModuleMember -Function @(
     'Get-OpenPathBrowserDoctorReport',
+    'Get-OpenPathBrowserRequestReadiness',
     'Register-OpenPathFirefoxNativeHost',
     'Sync-OpenPathFirefoxNativeHostArtifacts',
     'Sync-OpenPathFirefoxNativeHostState',

@@ -4,6 +4,7 @@ Import-Module "$PSScriptRoot\Common.psm1" -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\Browser.Common.psm1" -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\Browser.FirefoxPolicy.psm1" -Force -ErrorAction Stop
 Import-Module "$PSScriptRoot\Browser.FirefoxNativeHost.psm1" -Force -ErrorAction Stop
+Import-Module "$PSScriptRoot\Browser.RequestReadiness.psm1" -Force -ErrorAction Stop
 
 function Get-OpenPathBrowserDoctorScheduledTaskDiagnostic {
     param(
@@ -338,6 +339,28 @@ function Get-OpenPathBrowserDoctorReport {
     else {
         '(unresolved)'
     }
+    $nativeHostRegistered = [bool](
+        $nativeHostManifestParse -eq 'ok' -and
+        $nativeHostWrapperPresent -and
+        $nativeHostScriptPresent -and
+        (@($nativeHostRegistryStates | Where-Object { $_ -like '*=present' }).Count -gt 0)
+    )
+    $browserRequestReadiness = Get-OpenPathBrowserRequestReadiness `
+        -Config $requestSetupState `
+        -ManagedExtensionPolicy $managedExtensionPolicy `
+        -NativeHostRegistered $nativeHostRegistered `
+        -NativeHostStatePresent $nativeHostStateReadable
+    $browserRequestReadinessFacts = @(
+        "request_setup=$($browserRequestReadiness.Facts.request_setup)"
+        "firefox_policy=$($browserRequestReadiness.Facts.firefox_policy)"
+        "firefox_native_host=$($browserRequestReadiness.Facts.firefox_native_host)"
+    ) -join '; '
+    $browserRequestReadinessFailures = if (@($browserRequestReadiness.FailureReasons).Count -gt 0) {
+        @($browserRequestReadiness.FailureReasons) -join '; '
+    }
+    else {
+        '(none)'
+    }
 
     if (Test-Path $policyPath) {
         try {
@@ -403,6 +426,9 @@ function Get-OpenPathBrowserDoctorReport {
         "Native host update task check: $nativeHostUpdateTaskCheck"
         "Native host update task present: $nativeHostUpdateTaskPresent"
         "Native host update task user access: $nativeHostUpdateTaskUserAccess"
+        "Browser request readiness: $($browserRequestReadiness.Ready)"
+        "Browser request readiness facts: $browserRequestReadinessFacts"
+        "Browser request readiness failures: $browserRequestReadinessFailures"
         "Resolved install_url: $resolvedInstallUrl"
         "Policy file path: $policyPath"
         "Policy file present: $(Test-Path $policyPath)"

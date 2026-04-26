@@ -752,6 +752,7 @@ test('required Windows CI runs Pester in an untracked child host without success
     'windows/tests/Windows.Browser.Diagnostics.Tests.ps1',
     'windows/tests/Windows.Browser.FirefoxPolicy.Tests.ps1',
     'windows/tests/Windows.Browser.NativeHost.Tests.ps1',
+    'windows/tests/Windows.Browser.RequestReadiness.Tests.ps1',
   ]) {
     const browserTest = readText(relativePath);
 

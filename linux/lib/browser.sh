@@ -29,6 +29,8 @@ source "$_browser_lib_dir/firefox-extension-assets.sh"
 source "$_browser_lib_dir/firefox-policy.sh"
 # shellcheck source=firefox-managed-extension.sh
 source "$_browser_lib_dir/firefox-managed-extension.sh"
+# shellcheck source=browser-request-readiness.sh
+source "$_browser_lib_dir/browser-request-readiness.sh"
 # shellcheck source=chromium-managed-extension.sh
 source "$_browser_lib_dir/chromium-managed-extension.sh"
 # shellcheck source=browser-process.sh

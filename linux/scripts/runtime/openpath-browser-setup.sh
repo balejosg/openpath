@@ -25,7 +25,9 @@ default_browser_setup_source() {
 FIREFOX_EXTENSION_SOURCE="${OPENPATH_BROWSER_SETUP_EXTENSION_SOURCE:-$(default_browser_setup_source "$INSTALL_DIR/firefox-extension" "/usr/share/openpath/firefox-extension")}"
 FIREFOX_RELEASE_SOURCE="${OPENPATH_BROWSER_SETUP_RELEASE_SOURCE:-$(default_browser_setup_source "$INSTALL_DIR/firefox-release" "/usr/share/openpath/firefox-release")}"
 FIREFOX_EXTENSION_ID="${OPENPATH_FIREFOX_EXTENSION_ID:-monitor-bloqueos@openpath}"
+export FIREFOX_EXTENSION_SOURCE FIREFOX_RELEASE_SOURCE FIREFOX_EXTENSION_ID
 FIREFOX_APP_ID="{ec8030f7-c20a-464f-9b0e-13a3a9e97384}"
+export FIREFOX_APP_ID
 FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS="${OPENPATH_FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS:-60}"
 FIREFOX_EXTENSION_REGISTRATION_MIN_PROBES="${OPENPATH_FIREFOX_EXTENSION_REGISTRATION_MIN_PROBES:-3}"
 # First-run managed extension downloads can land near the end of the probe on slow runners.
@@ -85,6 +87,27 @@ load_browser_runtime() {
     exit 1
 }
 
+load_browser_request_readiness_runtime() {
+    if declare -F collect_openpath_browser_request_readiness >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if [ -f "$INSTALL_DIR/lib/browser-request-readiness.sh" ]; then
+        # shellcheck source=/usr/local/lib/openpath/lib/browser-request-readiness.sh
+        source "$INSTALL_DIR/lib/browser-request-readiness.sh"
+        return 0
+    fi
+
+    if [ -f "$SCRIPT_DIR/../../lib/browser-request-readiness.sh" ]; then
+        # shellcheck source=../../lib/browser-request-readiness.sh
+        source "$SCRIPT_DIR/../../lib/browser-request-readiness.sh"
+        return 0
+    fi
+
+    log_error "Required browser request readiness runtime not found"
+    exit 1
+}
+
 require_root() {
     if [ "$(id -u)" -ne 0 ]; then
         log_error "Browser setup must run as root"
@@ -99,85 +122,6 @@ resolve_firefox_extensions_root_dir() {
     fi
 
     printf '%s\n' "${FIREFOX_EXTENSIONS_ROOT:-/usr/share/mozilla/extensions}"
-}
-
-verify_firefox_policy_contract() {
-    if [ ! -f "$FIREFOX_POLICIES" ]; then
-        log_error "Firefox policies file not found: $FIREFOX_POLICIES"
-        return 1
-    fi
-
-    if ! grep -q "ExtensionSettings" "$FIREFOX_POLICIES" 2>/dev/null; then
-        log_error "Firefox policies missing ExtensionSettings"
-        return 1
-    fi
-
-    if ! grep -q "$FIREFOX_EXTENSION_ID" "$FIREFOX_POLICIES" 2>/dev/null; then
-        log_error "Firefox policies missing managed extension id: $FIREFOX_EXTENSION_ID"
-        return 1
-    fi
-
-    return 0
-}
-
-read_browser_setup_api_base_url() {
-    local api_url_conf="${OPENPATH_API_URL_CONF:-$ETC_CONFIG_DIR/api-url.conf}"
-    local api_url=""
-
-    api_url="$(read_single_line_file "$api_url_conf" 2>/dev/null || true)"
-    api_url="${api_url%/}"
-    if [ -z "$api_url" ]; then
-        return 1
-    fi
-
-    printf '%s\n' "$api_url"
-}
-
-read_firefox_policy_install_url() {
-    if declare -F read_firefox_managed_extension_install_url >/dev/null 2>&1; then
-        read_firefox_managed_extension_install_url "$FIREFOX_POLICIES" "$FIREFOX_EXTENSION_ID"
-        return $?
-    fi
-
-    run_browser_json_helper \
-        read-firefox-managed-install-url \
-        --policies-file "$FIREFOX_POLICIES" \
-        --extension-id "$FIREFOX_EXTENSION_ID"
-}
-
-verify_firefox_managed_api_payload() {
-    local api_base_url=""
-    local install_url=""
-    local expected_install_url=""
-
-    api_base_url="$(read_browser_setup_api_base_url)" || return 1
-    install_url="$(read_firefox_policy_install_url 2>/dev/null || true)"
-    expected_install_url="${api_base_url}/api/extensions/firefox/openpath.xpi"
-
-    [ "$install_url" = "$expected_install_url" ]
-}
-
-verify_firefox_extension_payload() {
-    local extensions_root=""
-    local unpacked_extension_dir=""
-
-    extensions_root="$(resolve_firefox_extensions_root_dir)"
-    unpacked_extension_dir="$extensions_root/$FIREFOX_APP_ID/$FIREFOX_EXTENSION_ID"
-
-    if [ -d "$unpacked_extension_dir" ] && [ -f "$unpacked_extension_dir/manifest.json" ]; then
-        return 0
-    fi
-
-    if [ -f "$FIREFOX_RELEASE_SOURCE/metadata.json" ]; then
-        return 0
-    fi
-
-    if verify_firefox_managed_api_payload; then
-        return 0
-    fi
-
-    log_error "Firefox extension payload not available after setup"
-    return 1
 }
 
 resolve_firefox_binary_path() {
@@ -543,9 +487,7 @@ verify_firefox_setup() {
         return 1
     fi
 
-    verify_firefox_policy_contract || return 1
-    verify_firefox_extension_payload || return 1
-    verify_firefox_extension_registered || return 1
+    require_openpath_browser_request_readiness || return 1
 }
 
 main() {
@@ -554,6 +496,7 @@ main() {
     if ! load_libraries; then
         load_browser_runtime
     fi
+    load_browser_request_readiness_runtime
     require_root
 
     log "Ensuring Firefox is installed..."

@@ -329,6 +329,9 @@ EOF
     run grep -nF 'source "$_browser_lib_dir/firefox-managed-extension.sh"' "$PROJECT_DIR/linux/lib/browser.sh"
     [ "$status" -eq 0 ]
 
+    run grep -nF 'source "$_browser_lib_dir/browser-request-readiness.sh"' "$PROJECT_DIR/linux/lib/browser.sh"
+    [ "$status" -eq 0 ]
+
     run grep -nF 'source "$_browser_lib_dir/browser-firefox.sh"' "$PROJECT_DIR/linux/lib/browser.sh"
     [ "$status" -eq 0 ]
 
@@ -341,6 +344,9 @@ EOF
     [ "$status" -eq 0 ]
 
     run grep -nF '"$INSTALL_DIR/lib/firefox-managed-extension.sh"' "$PROJECT_DIR/linux/lib/common.sh"
+    [ "$status" -eq 0 ]
+
+    run grep -nF '"$INSTALL_DIR/lib/browser-request-readiness.sh"' "$PROJECT_DIR/linux/lib/common.sh"
     [ "$status" -eq 0 ]
 
     run grep -nF '"$INSTALL_DIR/lib/browser-firefox.sh"' "$PROJECT_DIR/linux/lib/common.sh"

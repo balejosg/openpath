@@ -19,6 +19,7 @@ $suiteFiles = @(
     "Windows.Installer.Tests.ps1",
     "Windows.Enrollment.Tests.ps1",
     "Windows.Whitelist.Tests.ps1",
+    "Windows.Browser.RequestReadiness.Tests.ps1",
     "Windows.Browser.NativeHost.Tests.ps1",
     "Windows.Browser.Diagnostics.Tests.ps1"
 )

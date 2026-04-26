@@ -57,7 +57,10 @@ Describe "Browser Module - Diagnostics" {
                 'Native host request setup complete:',
                 'Native host update task check:',
                 'Native host update task present:',
-                'Native host update task user access:'
+                'Native host update task user access:',
+                'Browser request readiness:',
+                'Browser request readiness facts:',
+                'Browser request readiness failures:'
             )
         }
 
