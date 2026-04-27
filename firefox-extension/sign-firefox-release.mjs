@@ -12,6 +12,9 @@ const __filename = fileURLToPath(import.meta.url);
 const extensionRoot = path.dirname(__filename);
 const defaultArtifactsDir = path.join(extensionRoot, 'build', 'firefox-release-signing');
 const firefoxReleaseSourceEntries = ['manifest.json', 'dist', 'popup', 'blocked', 'icons'];
+const defaultWebExtSignMaxRetries = 2;
+const defaultWebExtSignRetryBufferSeconds = 10;
+const defaultWebExtSignMaxThrottleWaitSeconds = 900;
 
 function fail(message) {
   throw new Error(message);
@@ -37,6 +40,85 @@ export function buildWebExtSignArgs(options) {
     `--api-key=${apiKey}`,
     `--api-secret=${apiSecret}`,
   ];
+}
+
+function parseNonNegativeInteger(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+export function parseWebExtThrottleDelaySeconds(output) {
+  const match = /Expected available in\s+(\d+)\s+seconds?/i.exec(output);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+function sleepSync(milliseconds) {
+  if (milliseconds <= 0) {
+    return;
+  }
+
+  const waitBuffer = new SharedArrayBuffer(4);
+  const waitArray = new Int32Array(waitBuffer);
+  Atomics.wait(waitArray, 0, 0, milliseconds);
+}
+
+export function runWebExtSignWithRetry(options) {
+  const {
+    args,
+    cwd,
+    env = process.env,
+    spawnSyncImpl = spawnSync,
+    sleepSyncImpl = sleepSync,
+    stdout = process.stdout,
+    stderr = process.stderr,
+  } = options;
+  const maxRetries = parseNonNegativeInteger(
+    env.WEB_EXT_SIGN_MAX_RETRIES,
+    defaultWebExtSignMaxRetries
+  );
+  const retryBufferSeconds = parseNonNegativeInteger(
+    env.WEB_EXT_SIGN_RETRY_BUFFER_SECONDS,
+    defaultWebExtSignRetryBufferSeconds
+  );
+  const maxThrottleWaitSeconds = parseNonNegativeInteger(
+    env.WEB_EXT_SIGN_MAX_THROTTLE_WAIT_SECONDS,
+    defaultWebExtSignMaxThrottleWaitSeconds
+  );
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const result = spawnSyncImpl('npx', args, {
+      cwd,
+      encoding: 'utf8',
+    });
+    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+
+    if (result.stdout) {
+      stdout.write(result.stdout);
+    }
+    if (result.stderr) {
+      stderr.write(result.stderr);
+    }
+
+    if (result.status === 0) {
+      return result;
+    }
+
+    const throttleDelaySeconds = parseWebExtThrottleDelaySeconds(output);
+    const retriesRemaining = attempt < maxRetries;
+    const canWait = throttleDelaySeconds !== null && throttleDelaySeconds <= maxThrottleWaitSeconds;
+
+    if (!retriesRemaining || !canWait) {
+      return result;
+    }
+
+    const waitSeconds = throttleDelaySeconds + retryBufferSeconds;
+    console.warn(
+      `[sign:firefox-release] AMO signing request was throttled; retrying in ${waitSeconds} seconds`
+    );
+    sleepSyncImpl(waitSeconds * 1000);
+  }
+
+  return { status: 1 };
 }
 
 export function findSignedXpiArtifact(artifactsDir) {
@@ -249,10 +331,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
         sourceDir: signingSource.sourceDir,
       });
 
-      const result = spawnSync('npx', args, {
+      const result = runWebExtSignWithRetry({
+        args,
         cwd: extensionRoot,
-        encoding: 'utf8',
-        stdio: 'inherit',
       });
 
       if (result.status !== 0) {

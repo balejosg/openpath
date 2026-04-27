@@ -1,6 +1,7 @@
 import { afterEach, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import type { SpawnSyncReturns } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -51,11 +52,25 @@ interface SignFirefoxReleaseModule {
   }) => string[];
   computeFirefoxReleasePayloadHash: (options: { sourceDir?: string }) => string;
   findSignedXpiArtifact: (artifactsDir: string) => string;
+  parseWebExtThrottleDelaySeconds: (output: string) => number | null;
   prepareSigningSourceDir: (options: { sourceDir?: string; version?: string }) => {
     sourceDir: string;
     effectiveVersion: string;
     cleanup: () => void;
   };
+  runWebExtSignWithRetry: (options: {
+    args: string[];
+    cwd: string;
+    env?: NodeJS.ProcessEnv;
+    spawnSyncImpl?: (
+      command: string,
+      args: string[],
+      options: { cwd: string; encoding: 'utf8' }
+    ) => SpawnSyncReturns<string>;
+    sleepSyncImpl?: (milliseconds: number) => void;
+    stdout?: { write: (chunk: string) => unknown };
+    stderr?: { write: (chunk: string) => unknown };
+  }) => SpawnSyncReturns<string> | { status: number };
 }
 
 const { prepareFirefoxReleaseArtifacts } =
@@ -64,7 +79,9 @@ const {
   buildWebExtSignArgs,
   computeFirefoxReleasePayloadHash,
   findSignedXpiArtifact,
+  parseWebExtThrottleDelaySeconds,
   prepareSigningSourceDir,
+  runWebExtSignWithRetry,
 } = (await import('../sign-firefox-release.mjs')) as SignFirefoxReleaseModule;
 
 const tempDirectories: string[] = [];
@@ -189,6 +206,73 @@ void describe('Firefox release signing helpers', () => {
     utimesSync(newerXpiPath, new Date('2026-03-26T11:00:00Z'), new Date('2026-03-26T11:00:00Z'));
 
     assert.equal(findSignedXpiArtifact(artifactsDir), newerXpiPath);
+  });
+
+  void test('parseWebExtThrottleDelaySeconds reads AMO throttling responses', () => {
+    assert.equal(
+      parseWebExtThrottleDelaySeconds(
+        'WebExtError: Submission failed (2): Unknown Error\n' +
+          '{ "detail": "Request was throttled. Expected available in 631 seconds." }'
+      ),
+      631
+    );
+    assert.equal(parseWebExtThrottleDelaySeconds('WebExtError: unrelated failure'), null);
+  });
+
+  void test('runWebExtSignWithRetry waits and retries AMO throttling responses', () => {
+    const attempts: string[] = [];
+    const waits: number[] = [];
+    const stdoutChunks: string[] = [];
+    const stderrChunks: string[] = [];
+    const spawnSyncImpl = (
+      command: string,
+      args: string[],
+      options: { cwd: string; encoding: 'utf8' }
+    ): SpawnSyncReturns<string> => {
+      attempts.push(`${command} ${args.join(' ')} ${options.cwd} ${options.encoding}`);
+      if (attempts.length === 1) {
+        return {
+          status: 1,
+          signal: null,
+          output: [],
+          pid: 123,
+          stdout: '',
+          stderr:
+            'WebExtError: Submission failed (2): Unknown Error\n' +
+            '{ "detail": "Request was throttled. Expected available in 631 seconds." }\n',
+        };
+      }
+
+      return {
+        status: 0,
+        signal: null,
+        output: [],
+        pid: 124,
+        stdout: 'signed\n',
+        stderr: '',
+      };
+    };
+
+    const result = runWebExtSignWithRetry({
+      args: ['--yes', 'web-ext', 'sign'],
+      cwd: extensionRoot,
+      env: {
+        WEB_EXT_SIGN_MAX_RETRIES: '1',
+        WEB_EXT_SIGN_RETRY_BUFFER_SECONDS: '2',
+        WEB_EXT_SIGN_MAX_THROTTLE_WAIT_SECONDS: '900',
+      },
+      spawnSyncImpl,
+      sleepSyncImpl: (milliseconds) => waits.push(milliseconds),
+      stdout: { write: (chunk) => stdoutChunks.push(chunk) },
+      stderr: { write: (chunk) => stderrChunks.push(chunk) },
+    });
+
+    assert.equal(result.status, 0);
+    assert.equal(attempts.length, 2);
+    assert.deepEqual(waits, [633_000]);
+    assert.deepEqual(stdoutChunks, ['signed\n']);
+    assert.equal(stderrChunks.length, 1);
+    assert.match(stderrChunks[0] ?? '', /Request was throttled/);
   });
 
   void test('prepareSigningSourceDir can override the manifest version in a temporary copy', () => {
