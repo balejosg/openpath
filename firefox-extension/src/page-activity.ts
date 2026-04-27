@@ -1,8 +1,13 @@
+import {
+  buildPageResourceCandidateMessage,
+  type PageResourceKind,
+} from './lib/auto-allow-observation.js';
+
+export { buildPageResourceCandidateMessage, type PageResourceKind };
+
 export interface PageActivityRuntime {
   sendMessage: (message: unknown) => unknown;
 }
-
-type PageResourceKind = 'fetch' | 'xmlhttprequest' | 'image' | 'script' | 'stylesheet' | 'other';
 
 interface RuntimeGlobal {
   browser?: { runtime?: Partial<PageActivityRuntime> };
@@ -34,24 +39,6 @@ export function buildPageActivityMessage(url: string): { action: string; url: st
   return {
     action: 'openpathPageActivity',
     url,
-  };
-}
-
-export function buildPageResourceCandidateMessage(
-  pageUrl: string,
-  resourceUrl: string,
-  kind: PageResourceKind
-): {
-  action: string;
-  kind: PageResourceKind;
-  pageUrl: string;
-  resourceUrl: string;
-} {
-  return {
-    action: 'openpathPageResourceCandidate',
-    kind,
-    pageUrl,
-    resourceUrl,
   };
 }
 
