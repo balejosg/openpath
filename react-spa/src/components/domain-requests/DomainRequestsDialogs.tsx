@@ -1,71 +1,28 @@
-import type { DomainRequest } from '@openpath/api';
+import type { DomainRequestsDialogsModel } from '../../hooks/useDomainRequestsViewModel';
 import { ConfirmDialog, DangerConfirmDialog } from '../ui/ConfirmDialog';
 
-interface RequestModalState {
-  open: boolean;
-  request: DomainRequest | null;
-}
-
-interface BulkConfirmState {
-  mode: 'approve' | 'reject';
-  requestIds: string[];
-  rejectReason?: string;
-}
-
 interface DomainRequestsDialogsProps {
-  bulkConfirm: BulkConfirmState | null;
-  approveModal: RequestModalState;
-  rejectModal: RequestModalState;
-  deleteModal: RequestModalState;
-  rejectionReason: string;
-  actionsLoading: boolean;
-  onBulkConfirmClose: () => void;
-  onBulkApproveConfirm: (requestIds: string[]) => void;
-  onBulkRejectConfirm: (requestIds: string[], reason?: string) => void;
-  onApproveClose: () => void;
-  onApproveConfirm: () => void | Promise<void>;
-  onRejectClose: () => void;
-  onRejectConfirm: () => void | Promise<void>;
-  onRejectReasonChange: (value: string) => void;
-  onDeleteClose: () => void;
-  onDeleteConfirm: () => void | Promise<void>;
-  getGroupName: (groupId: string) => string;
+  model: DomainRequestsDialogsModel;
 }
 
-export function DomainRequestsDialogs({
-  bulkConfirm,
-  approveModal,
-  rejectModal,
-  deleteModal,
-  rejectionReason,
-  actionsLoading,
-  onBulkConfirmClose,
-  onBulkApproveConfirm,
-  onBulkRejectConfirm,
-  onApproveClose,
-  onApproveConfirm,
-  onRejectClose,
-  onRejectConfirm,
-  onRejectReasonChange,
-  onDeleteClose,
-  onDeleteConfirm,
-  getGroupName,
-}: DomainRequestsDialogsProps) {
+export function DomainRequestsDialogs({ model }: DomainRequestsDialogsProps) {
   return (
     <>
-      {bulkConfirm ? (
-        bulkConfirm.mode === 'approve' ? (
+      {model.bulkConfirm ? (
+        model.bulkConfirm.mode === 'approve' ? (
           <ConfirmDialog
             isOpen
             title="Aprobar solicitudes"
             confirmLabel="Aprobar"
             cancelLabel="Cancelar"
-            disableConfirm={bulkConfirm.requestIds.length === 0}
-            onClose={onBulkConfirmClose}
-            onConfirm={() => onBulkApproveConfirm(bulkConfirm.requestIds)}
+            disableConfirm={model.bulkConfirm.requestIds.length === 0}
+            onClose={model.onBulkConfirmClose}
+            onConfirm={() => {
+              void model.onBulkApproveConfirm(model.bulkConfirm?.requestIds ?? []);
+            }}
           >
             <p className="text-sm text-slate-600">
-              ¿Aprobar {bulkConfirm.requestIds.length} solicitudes seleccionadas?
+              ¿Aprobar {model.bulkConfirm.requestIds.length} solicitudes seleccionadas?
             </p>
             <p className="text-xs text-slate-500">
               Las solicitudes se aprobarán en sus grupos originales.
@@ -77,16 +34,22 @@ export function DomainRequestsDialogs({
             title="Rechazar solicitudes"
             confirmLabel="Rechazar"
             cancelLabel="Cancelar"
-            disableConfirm={bulkConfirm.requestIds.length === 0}
-            onClose={onBulkConfirmClose}
-            onConfirm={() => onBulkRejectConfirm(bulkConfirm.requestIds, bulkConfirm.rejectReason)}
+            disableConfirm={model.bulkConfirm.requestIds.length === 0}
+            onClose={model.onBulkConfirmClose}
+            onConfirm={() => {
+              void model.onBulkRejectConfirm(
+                model.bulkConfirm?.requestIds ?? [],
+                model.bulkConfirm?.rejectReason
+              );
+            }}
           >
             <p className="text-sm text-slate-600">
-              ¿Rechazar {bulkConfirm.requestIds.length} solicitudes seleccionadas?
+              ¿Rechazar {model.bulkConfirm.requestIds.length} solicitudes seleccionadas?
             </p>
-            {bulkConfirm.rejectReason ? (
+            {model.bulkConfirm.rejectReason ? (
               <p className="text-xs text-slate-500 break-words">
-                Motivo (opcional): <span className="font-medium">{bulkConfirm.rejectReason}</span>
+                Motivo (opcional):{' '}
+                <span className="font-medium">{model.bulkConfirm.rejectReason}</span>
               </p>
             ) : (
               <p className="text-xs text-slate-500">Motivo (opcional): (sin motivo)</p>
@@ -95,40 +58,40 @@ export function DomainRequestsDialogs({
         )
       ) : null}
 
-      {approveModal.open && approveModal.request && (
+      {model.approveModal.open && model.approveModal.request && (
         <ConfirmDialog
           isOpen
           title="Aprobar Solicitud"
           confirmLabel="Aprobar"
           cancelLabel="Cancelar"
-          isLoading={actionsLoading}
-          onClose={onApproveClose}
-          onConfirm={onApproveConfirm}
+          isLoading={model.actionsLoading}
+          onClose={model.onApproveClose}
+          onConfirm={model.onApproveConfirm}
         >
           <p className="text-sm text-slate-600">
-            Aprobar acceso a <strong>{approveModal.request.domain}</strong> solicitado por{' '}
-            <strong>{approveModal.request.machineHostname ?? 'máquina desconocida'}</strong>
+            Aprobar acceso a <strong>{model.approveModal.request.domain}</strong> solicitado por{' '}
+            <strong>{model.approveModal.request.machineHostname}</strong>
           </p>
           <p className="text-sm text-slate-600">
             La solicitud se aprobara en el grupo original:{' '}
-            <strong>{getGroupName(approveModal.request.groupId)}</strong>
+            <strong>{model.approveModal.request.groupName}</strong>
           </p>
         </ConfirmDialog>
       )}
 
-      {rejectModal.open && rejectModal.request && (
+      {model.rejectModal.open && model.rejectModal.request && (
         <DangerConfirmDialog
           isOpen
           title="Rechazar Solicitud"
           confirmLabel="Rechazar"
           cancelLabel="Cancelar"
-          isLoading={actionsLoading}
-          onClose={onRejectClose}
-          onConfirm={onRejectConfirm}
+          isLoading={model.actionsLoading}
+          onClose={model.onRejectClose}
+          onConfirm={model.onRejectConfirm}
         >
           <p className="text-sm text-slate-600">
-            Rechazar acceso a <strong>{rejectModal.request.domain}</strong> solicitado por{' '}
-            <strong>{rejectModal.request.machineHostname ?? 'máquina desconocida'}</strong>
+            Rechazar acceso a <strong>{model.rejectModal.request.domain}</strong> solicitado por{' '}
+            <strong>{model.rejectModal.request.machineHostname}</strong>
           </p>
 
           <div>
@@ -136,8 +99,8 @@ export function DomainRequestsDialogs({
               Motivo del rechazo (opcional)
             </label>
             <textarea
-              value={rejectionReason}
-              onChange={(event) => onRejectReasonChange(event.target.value)}
+              value={model.rejectionReason}
+              onChange={(event) => model.onRejectReasonChange(event.target.value)}
               placeholder="Explica por qué se rechaza esta solicitud..."
               rows={3}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
@@ -146,19 +109,19 @@ export function DomainRequestsDialogs({
         </DangerConfirmDialog>
       )}
 
-      {deleteModal.open && deleteModal.request && (
+      {model.deleteModal.open && model.deleteModal.request && (
         <DangerConfirmDialog
           isOpen
           title="Eliminar Solicitud"
           confirmLabel="Eliminar"
           cancelLabel="Cancelar"
-          isLoading={actionsLoading}
-          onClose={onDeleteClose}
-          onConfirm={onDeleteConfirm}
+          isLoading={model.actionsLoading}
+          onClose={model.onDeleteClose}
+          onConfirm={model.onDeleteConfirm}
         >
           <p className="text-sm text-slate-600">
             ¿Estás seguro de que deseas eliminar la solicitud de acceso a{' '}
-            <strong>{deleteModal.request.domain}</strong>?
+            <strong>{model.deleteModal.request.domain}</strong>?
           </p>
           <p className="text-xs text-slate-500">Esta acción no se puede deshacer.</p>
         </DangerConfirmDialog>

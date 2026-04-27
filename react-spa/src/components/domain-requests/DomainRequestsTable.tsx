@@ -1,55 +1,12 @@
-import type { DomainRequest } from '@openpath/api';
 import { CheckCircle, CheckCircle2, Clock, Search, Trash2, XCircle } from 'lucide-react';
-import { STATUS_COLORS, STATUS_LABELS } from '../../views/domain-requests.constants';
+import type { DomainRequestsTableModel } from '../../hooks/useDomainRequestsViewModel';
 
 interface DomainRequestsTableProps {
-  paginatedRequests: DomainRequest[];
-  filteredRequests: DomainRequest[];
-  sortedRequests: DomainRequest[];
-  hasActiveFilters: boolean;
-  selectedRequestIds: string[];
-  pendingIdsInPage: string[];
-  canBulkSelectInPage: boolean;
-  bulkSelectTitle: string;
-  currentPage: number;
-  pageSize: number;
-  totalPages: number;
-  getGroupName: (groupId: string) => string;
-  formatDate: (date: string) => string;
-  onToggleSelectAllInPage: () => void;
-  onToggleRequestSelection: (requestId: string) => void;
-  onOpenApprove: (request: DomainRequest) => void;
-  onOpenReject: (request: DomainRequest) => void;
-  onOpenDelete: (request: DomainRequest) => void;
-  onChangePage: (updater: number | ((page: number) => number)) => void;
-  onClearFilters: () => void;
-  canDeleteRequests?: boolean;
+  model: DomainRequestsTableModel;
 }
 
-export function DomainRequestsTable({
-  paginatedRequests,
-  filteredRequests,
-  sortedRequests,
-  hasActiveFilters,
-  selectedRequestIds,
-  pendingIdsInPage,
-  canBulkSelectInPage,
-  bulkSelectTitle,
-  currentPage,
-  pageSize,
-  totalPages,
-  getGroupName,
-  formatDate,
-  onToggleSelectAllInPage,
-  onToggleRequestSelection,
-  onOpenApprove,
-  onOpenReject,
-  onOpenDelete,
-  onChangePage,
-  onClearFilters,
-  canDeleteRequests = true,
-}: DomainRequestsTableProps) {
-  if (filteredRequests.length === 0 && !hasActiveFilters) {
+export function DomainRequestsTable({ model }: DomainRequestsTableProps) {
+  if (model.emptyState === 'no-requests') {
     return (
       <div className="flex flex-col items-center justify-center h-[50vh] bg-white rounded-lg border border-slate-200 shadow-sm text-slate-500">
         <div className="bg-green-50 p-4 rounded-full mb-4">
@@ -63,14 +20,14 @@ export function DomainRequestsTable({
     );
   }
 
-  if (filteredRequests.length === 0 && hasActiveFilters) {
+  if (model.emptyState === 'no-filter-results') {
     return (
       <div className="bg-white border border-slate-200 rounded-lg p-8 shadow-sm text-center">
         <Search size={32} className="mx-auto text-slate-300 mb-3" />
         <p className="text-slate-500">No hay solicitudes para los filtros seleccionados</p>
         <button
           type="button"
-          onClick={onClearFilters}
+          onClick={model.onClearFilters}
           className="mt-4 px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50"
         >
           Limpiar filtros
@@ -89,14 +46,11 @@ export function DomainRequestsTable({
                 <th className="text-left px-4 py-3">
                   <input
                     type="checkbox"
-                    checked={
-                      canBulkSelectInPage &&
-                      pendingIdsInPage.every((id) => selectedRequestIds.includes(id))
-                    }
-                    onChange={onToggleSelectAllInPage}
-                    disabled={!canBulkSelectInPage}
+                    checked={model.bulkSelection.allPagePendingSelected}
+                    onChange={model.bulkSelection.onToggleSelectPage}
+                    disabled={!model.bulkSelection.canSelectPage}
                     className="rounded border-slate-300"
-                    title={bulkSelectTitle}
+                    title={model.bulkSelection.title}
                     aria-label="Seleccion masiva de pagina"
                   />
                 </th>
@@ -121,7 +75,7 @@ export function DomainRequestsTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {paginatedRequests.map((request) => (
+              {model.rows.map((request) => (
                 <tr
                   key={request.id}
                   data-testid="request-row"
@@ -129,11 +83,11 @@ export function DomainRequestsTable({
                   className="hover:bg-slate-50 transition-colors"
                 >
                   <td className="px-4 py-3">
-                    {request.status === 'pending' ? (
+                    {request.selectable ? (
                       <input
                         type="checkbox"
-                        checked={selectedRequestIds.includes(request.id)}
-                        onChange={() => onToggleRequestSelection(request.id)}
+                        checked={request.selected}
+                        onChange={() => model.bulkSelection.onToggleRequest(request.id)}
                         className="rounded border-slate-300"
                         aria-label={`Seleccionar ${request.domain}`}
                       />
@@ -150,47 +104,38 @@ export function DomainRequestsTable({
                         </div>
                       )}
                       <div className="text-xs text-slate-400 mt-0.5 truncate max-w-xs">
-                        {(request.source ?? 'manual') === 'firefox-extension'
-                          ? `Firefox${request.clientVersion ? ` v${request.clientVersion}` : ''}`
-                          : 'Manual/API'}
-                        {request.originHost ? ` · Origen: ${request.originHost}` : ''}
-                        {request.machineHostname ? ` · Host: ${request.machineHostname}` : ''}
-                        {request.errorType ? ` · Error: ${request.errorType}` : ''}
+                        {request.sourceSummary}
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm text-slate-600">
-                    {request.machineHostname ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-slate-600">
-                    {getGroupName(request.groupId)}
-                  </td>
+                  <td className="px-4 py-3 text-sm text-slate-600">{request.machineHostname}</td>
+                  <td className="px-4 py-3 text-sm text-slate-600">{request.groupName}</td>
                   <td className="px-4 py-3">
                     <span
-                      className={`text-xs px-2 py-0.5 rounded-full border font-medium ${STATUS_COLORS[request.status]}`}
+                      className={`text-xs px-2 py-0.5 rounded-full border font-medium ${request.statusClassName}`}
                     >
-                      {STATUS_LABELS[request.status]}
+                      {request.statusLabel}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-slate-500">
                     <div className="flex items-center gap-1">
                       <Clock size={14} />
-                      {formatDate(request.createdAt)}
+                      {request.formattedCreatedAt}
                     </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
-                      {request.status === 'pending' && (
+                      {request.reviewable && (
                         <>
                           <button
-                            onClick={() => onOpenApprove(request)}
+                            onClick={() => model.onOpenApprove(request.id)}
                             className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                             title="Aprobar"
                           >
                             <CheckCircle size={18} />
                           </button>
                           <button
-                            onClick={() => onOpenReject(request)}
+                            onClick={() => model.onOpenReject(request.id)}
                             className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Rechazar"
                           >
@@ -198,9 +143,9 @@ export function DomainRequestsTable({
                           </button>
                         </>
                       )}
-                      {canDeleteRequests ? (
+                      {model.canDeleteRequests ? (
                         <button
-                          onClick={() => onOpenDelete(request)}
+                          onClick={() => model.onOpenDelete(request.id)}
                           className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Eliminar"
                         >
@@ -216,26 +161,30 @@ export function DomainRequestsTable({
         </div>
       </div>
 
-      {sortedRequests.length > 0 && (
+      {model.pagination.totalItems > 0 && (
         <div className="flex items-center justify-between text-sm text-slate-600">
           <span>
-            Mostrando {(currentPage - 1) * pageSize + 1}-
-            {Math.min(currentPage * pageSize, sortedRequests.length)} de {sortedRequests.length}
+            Mostrando {model.pagination.visibleStart}-{model.pagination.visibleEnd} de{' '}
+            {model.pagination.totalItems}
           </span>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onChangePage((page) => Math.max(1, page - 1))}
-              disabled={currentPage <= 1}
+              onClick={() => model.pagination.onChangePage((page) => Math.max(1, page - 1))}
+              disabled={model.pagination.currentPage <= 1}
               className="px-3 py-1 border border-slate-300 rounded disabled:opacity-50"
             >
               Anterior
             </button>
             <span>
-              Pagina {currentPage} de {totalPages}
+              Pagina {model.pagination.currentPage} de {model.pagination.totalPages}
             </span>
             <button
-              onClick={() => onChangePage((page) => Math.min(totalPages, page + 1))}
-              disabled={currentPage >= totalPages}
+              onClick={() =>
+                model.pagination.onChangePage((page) =>
+                  Math.min(model.pagination.totalPages, page + 1)
+                )
+              }
+              disabled={model.pagination.currentPage >= model.pagination.totalPages}
               className="px-3 py-1 border border-slate-300 rounded disabled:opacity-50"
             >
               Siguiente
