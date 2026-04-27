@@ -1029,7 +1029,10 @@ test('release artifact workflows wait for same-commit quality evidence before pu
   const gateScript = readText('scripts/require-release-quality-gate.mjs');
 
   assert.ok(
-    gateScript.includes('gh run list') && gateScript.includes('gh run view'),
+    gateScript.includes('listWorkflowRuns') &&
+      gateScript.includes('ghJson') &&
+      gateScript.includes("'run',") &&
+      gateScript.includes("'view',"),
     'release quality gate should inspect GitHub Actions runs and their summary jobs with gh'
   );
   assert.ok(

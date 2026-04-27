@@ -94,24 +94,39 @@ function newestMatchingRun(runs, sha) {
     .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))[0];
 }
 
+function listWorkflowRuns({ repo, workflowName, sha, useCommitFilter }) {
+  const args = [
+    'run',
+    'list',
+    '--repo',
+    repo,
+    '--workflow',
+    workflowName,
+    '--limit',
+    '20',
+    '--json',
+    'databaseId,status,conclusion,headSha,createdAt,url,workflowName',
+  ];
+
+  if (useCommitFilter) {
+    args.splice(6, 0, '--commit', sha);
+  }
+
+  return ghJson(args);
+}
+
 async function waitForRequirement({ repo, sha, workflowName, jobName, timeoutAt, pollSeconds }) {
   while (Date.now() < timeoutAt) {
-    // The gate first uses `gh run list` to find the same-SHA workflow run.
-    const runs = ghJson([
-      'run',
-      'list',
-      '--repo',
-      repo,
-      '--workflow',
-      workflowName,
-      '--commit',
-      sha,
-      '--limit',
-      '20',
-      '--json',
-      'databaseId,status,conclusion,headSha,createdAt,url,workflowName',
-    ]);
-    const run = newestMatchingRun(runs, sha);
+    // Prefer the narrow GH CLI query, then fall back to filtering recent workflow runs.
+    // GitHub occasionally returns no rows for --commit immediately after a workflow
+    // completes even though run view/check-runs already expose the correct headSha.
+    let runs = listWorkflowRuns({ repo, workflowName, sha, useCommitFilter: true });
+    let run = newestMatchingRun(runs, sha);
+
+    if (!run) {
+      runs = listWorkflowRuns({ repo, workflowName, sha, useCommitFilter: false });
+      run = newestMatchingRun(runs, sha);
+    }
 
     if (!run) {
       console.log(`Waiting for ${workflowName} on ${sha}...`);
