@@ -124,7 +124,18 @@ Describe "SSE Listener" {
     }
 
     Context "Update process triggering" {
-        It "starts update scripts through detached PowerShell processes instead of in-process jobs" {
+        It "prefers the registered OpenPath-Update task for SSE-triggered local policy refreshes" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Start-SSEListener.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                "Start-ScheduledTask -TaskName 'OpenPath-Update'",
+                'SSE: Starting OpenPath-Update scheduled task',
+                'SSE: OpenPath-Update scheduled task started'
+            )
+        }
+
+        It "keeps a detached PowerShell direct-update fallback instead of in-process jobs" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Start-SSEListener.ps1"
             $content = Get-Content $scriptPath -Raw
 

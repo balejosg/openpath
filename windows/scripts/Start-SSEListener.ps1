@@ -145,13 +145,26 @@ function Start-OpenPathSseUpdateProcess {
         [int]$DelaySeconds = 0
     )
 
+    $taskName = 'OpenPath-Update'
+    if ($DelaySeconds -gt 0) {
+        Write-OpenPathLog "SSE: Waiting ${DelaySeconds}s before starting OpenPath-Update scheduled task"
+        Start-Sleep -Seconds $DelaySeconds
+    }
+
+    try {
+        Write-OpenPathLog "SSE: Starting OpenPath-Update scheduled task"
+        Start-ScheduledTask -TaskName 'OpenPath-Update' -ErrorAction Stop
+        Write-OpenPathLog "SSE: OpenPath-Update scheduled task started"
+        return
+    }
+    catch {
+        Write-OpenPathLog "SSE: Failed to start $taskName scheduled task, falling back to direct update process: $_" -Level WARN
+    }
+
     if (Test-Path $script:UpdateScript) {
         try {
             $escapedScriptPath = $script:UpdateScript.Replace("'", "''")
             $command = "& '$escapedScriptPath'"
-            if ($DelaySeconds -gt 0) {
-                $command = "Start-Sleep -Seconds $DelaySeconds; $command"
-            }
 
             $encodedCommand = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
             $processInfo = [System.Diagnostics.ProcessStartInfo]::new()
