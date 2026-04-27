@@ -250,12 +250,6 @@ Write-InstallerVerbose '  DNS configurado a 127.0.0.1'
 
 Show-InstallerProgress -Step 6 -Total 7 -Status 'Registrando tareas programadas'
 Register-OpenPathTask -UpdateIntervalMinutes 15 -WatchdogIntervalMinutes 1
-if (Start-OpenPathTask -TaskType SSE) {
-    Write-InstallerVerbose '  Listener SSE iniciado'
-}
-else {
-    Write-Host '  ADVERTENCIA: No se pudo iniciar el listener SSE automaticamente' -ForegroundColor Yellow
-}
 Write-InstallerVerbose '  Tareas registradas'
 
 $machineRegistered = 'NOT_REQUESTED'
@@ -310,6 +304,10 @@ Invoke-OpenPathInstallerFirstUpdate `
     -OpenPathRoot $OpenPathRoot `
     -ClassroomModeRequested:$classroomModeRequested `
     -MachineRegistered $machineRegistered
+
+Start-OpenPathInstallerRealtimeUpdates `
+    -ClassroomModeRequested:$classroomModeRequested `
+    -MachineRegistered $machineRegistered | Out-Null
 
 Initialize-OpenPathInstallerIntegrity
 

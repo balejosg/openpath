@@ -129,5 +129,19 @@ Describe "SSE Listener" {
                 '-Name $script:UpdateJobName'
             )
         }
+
+        It "queues one delayed catch-up update when whitelist changes arrive during cooldown" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Start-SSEListener.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                '$script:DelayedUpdateJobName = "OpenPath-SSE-Delayed-Update"',
+                'function Start-OpenPathSseUpdateJob',
+                '[int]$DelaySeconds = 0',
+                'Start-Sleep -Seconds $delaySeconds',
+                'Get-Job -Name $script:DelayedUpdateJobName',
+                'SSE: Queuing delayed update'
+            )
+        }
     }
 }

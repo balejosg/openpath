@@ -47,6 +47,7 @@ Initialize-OpenPathScriptSession `
 $script:LastUpdateTime = [datetime]::MinValue
 $script:UpdateScript = "$OpenPathRoot\scripts\Update-OpenPath.ps1"
 $script:UpdateJobName = "OpenPath-SSE-Update"
+$script:DelayedUpdateJobName = "OpenPath-SSE-Delayed-Update"
 
 function Get-SSEConfig {
     <#
@@ -121,14 +122,26 @@ function Invoke-DebouncedUpdate {
     $elapsed = ($now - $script:LastUpdateTime).TotalSeconds
 
     if ($elapsed -lt $CooldownSeconds) {
-        Write-OpenPathLog "SSE: Skipping update (last update ${elapsed}s ago, cooldown ${CooldownSeconds}s)"
+        $delaySeconds = [Math]::Max(1, [int][Math]::Ceiling($CooldownSeconds - $elapsed))
+        $existingDelayedJobs = @(Get-Job -Name $script:DelayedUpdateJobName -ErrorAction SilentlyContinue)
+        if ($existingDelayedJobs.Count -gt 0) {
+            $activeDelayedJob = $existingDelayedJobs | Where-Object { $_.State -notin @('Completed', 'Failed', 'Stopped') } | Select-Object -First 1
+            if ($activeDelayedJob) {
+                Write-OpenPathLog "SSE: Delayed update already queued (state: $($activeDelayedJob.State))"
+                return
+            }
+
+            $existingDelayedJobs | Remove-Job -Force -ErrorAction SilentlyContinue
+        }
+
+        Write-OpenPathLog "SSE: Queuing delayed update in ${delaySeconds}s (last update ${elapsed}s ago, cooldown ${CooldownSeconds}s)"
+        Start-OpenPathSseUpdateJob -JobName $script:DelayedUpdateJobName -DelaySeconds $delaySeconds
         return
     }
 
     Write-OpenPathLog "SSE: Whitelist change detected - triggering immediate update"
     $script:LastUpdateTime = $now
 
-    # Keep one update job at a time for this listener process
     $existingJobs = @(Get-Job -Name $script:UpdateJobName -ErrorAction SilentlyContinue)
     if ($existingJobs.Count -gt 0) {
         $activeJob = $existingJobs | Where-Object { $_.State -notin @('Completed', 'Failed', 'Stopped') } | Select-Object -First 1
@@ -140,13 +153,26 @@ function Invoke-DebouncedUpdate {
         $existingJobs | Remove-Job -Force -ErrorAction SilentlyContinue
     }
 
-    # Run update in a background job so we don't block the SSE stream
+    Start-OpenPathSseUpdateJob -JobName $script:UpdateJobName
+}
+
+function Start-OpenPathSseUpdateJob {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$JobName,
+
+        [int]$DelaySeconds = 0
+    )
+
     if (Test-Path $script:UpdateScript) {
         try {
             Start-Job -ScriptBlock {
-                param($scriptPath)
+                param($scriptPath, $delaySeconds)
+                if ($delaySeconds -gt 0) {
+                    Start-Sleep -Seconds $delaySeconds
+                }
                 & $scriptPath
-            } -Name $script:UpdateJobName -ArgumentList $script:UpdateScript -ErrorAction Stop | Out-Null
+            } -Name $JobName -ArgumentList $script:UpdateScript, $DelaySeconds -ErrorAction Stop | Out-Null
         }
         catch {
             Write-OpenPathLog "SSE: Failed to start update job: $_" -Level WARN

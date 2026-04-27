@@ -441,14 +441,26 @@ Describe "Installer" {
     }
 
     Context "SSE bootstrap" {
-        It "Starts the SSE listener immediately after registering scheduled tasks" {
+        It "Starts the SSE listener only after enrollment and first update can provide request config" {
             $scriptPath = Join-Path $PSScriptRoot ".." "Install-OpenPath.ps1"
+            $runtimeHelperPath = Join-Path $PSScriptRoot ".." "lib" "install" "Installer.Runtime.ps1"
             $content = Get-Content $scriptPath -Raw
+            $runtimeHelper = Get-Content $runtimeHelperPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 'Register-OpenPathTask -UpdateIntervalMinutes 15 -WatchdogIntervalMinutes 1',
+                'Invoke-OpenPathInstallerFirstUpdate',
+                'Start-OpenPathInstallerRealtimeUpdates'
+            )
+
+            Assert-ContentContainsAll -Content $runtimeHelper -Needles @(
+                'function Start-OpenPathInstallerRealtimeUpdates',
+                'Get-OpenPathBrowserRequestReadiness',
                 'Start-OpenPathTask -TaskType SSE'
             )
+
+            $content | Should -Match '(?s)Invoke-OpenPathInstallerFirstUpdate.*Start-OpenPathInstallerRealtimeUpdates'
+            $content | Should -Not -Match '(?s)Register-OpenPathTask -UpdateIntervalMinutes 15 -WatchdogIntervalMinutes 1.*Start-OpenPathTask -TaskType SSE.*Invoke-OpenPathInstallerEnrollment'
         }
     }
 }

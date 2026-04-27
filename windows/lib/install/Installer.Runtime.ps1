@@ -29,6 +29,42 @@ function Invoke-OpenPathInstallerFirstUpdate {
     }
 }
 
+function Start-OpenPathInstallerRealtimeUpdates {
+    param(
+        [Parameter(Mandatory = $true)]
+        [bool]$ClassroomModeRequested,
+
+        [Parameter(Mandatory = $true)]
+        [string]$MachineRegistered
+    )
+
+    if ($ClassroomModeRequested -and $MachineRegistered -ne 'REGISTERED') {
+        Write-Host '  ADVERTENCIA: Registro no completado; se omite listener SSE' -ForegroundColor Yellow
+        return $false
+    }
+
+    try {
+        $config = Get-OpenPathConfig
+        $readiness = Get-OpenPathBrowserRequestReadiness -Config $config
+        if (-not $readiness.Ready) {
+            Write-Host '  ADVERTENCIA: Configuracion de solicitudes incompleta; se omite listener SSE' -ForegroundColor Yellow
+            return $false
+        }
+    }
+    catch {
+        Write-Host "  ADVERTENCIA: No se pudo validar la configuracion de solicitudes: $_" -ForegroundColor Yellow
+        return $false
+    }
+
+    if (Start-OpenPathTask -TaskType SSE) {
+        Write-InstallerVerbose '  Listener SSE iniciado'
+        return $true
+    }
+
+    Write-Host '  ADVERTENCIA: No se pudo iniciar el listener SSE automaticamente' -ForegroundColor Yellow
+    return $false
+}
+
 function Initialize-OpenPathInstallerIntegrity {
     try {
         if (Save-OpenPathIntegrityBackup) {
