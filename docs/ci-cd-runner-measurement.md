@@ -2,7 +2,7 @@
 
 > Status: maintained
 > Applies to: OpenPath CI/E2E timing, artifact evidence, and controlled runner follow-up
-> Last verified: 2026-04-25
+> Last verified: 2026-04-27
 > Source of truth: `docs/ci-cd-runner-measurement.md`
 
 Use this runbook when continuing CI optimization work. It replaces temporary
@@ -62,6 +62,12 @@ Use the smallest layer that proves the risk:
   Windows Student Policy as the required target-platform proof. Do not promote
   hosted Windows advisory results to required gates until repeated samples show
   stable runner teardown behavior.
+
+When selecting a first hypothesis-check lane from the shared Linux workspace,
+prefer `../scripts/validate-hypothesis.sh openpath windows-direct` over GitHub
+workflow fan-out if the question is Windows-targeted and only needs the
+runner/platform signal. Reserve `windows-gh` workflow dispatch for
+integration-time verification.
 
 Do not expand `.test-allowlist`. It is legacy debt only. When touching an
 allowlisted file, either add a focused test or add an explicit `.test-file-map`

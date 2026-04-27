@@ -27,6 +27,8 @@
 - How-to guide: [`docs/HOWTO.md`](HOWTO.md)
 - Troubleshooting: [`docs/TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
 - CI/CD runner timing and artifact measurement: [`docs/ci-cd-runner-measurement.md`](ci-cd-runner-measurement.md)
+- Shared workspace hypothesis-validation wrapper: [`../../scripts/validate-hypothesis.sh`](../../scripts/validate-hypothesis.sh)
+- Direct Windows runner diagnostic: [`scripts/run-windows-runner-direct.mjs`](../scripts/run-windows-runner-direct.mjs)
 - Migration notes: [`docs/MIGRATION.md`](MIGRATION.md)
 - Security hardening: [`docs/SECURITY-HARDENING.md`](SECURITY-HARDENING.md)
 - APT signing key workflow: [`docs/apt-signing-key.md`](apt-signing-key.md)

@@ -64,6 +64,24 @@ Technical enforcement lives in `.husky/pre-commit`, `.husky/pre-push`, and `scri
 
 Do not run `npm run verify:full` manually immediately before every push just to duplicate the hook. Run it manually only when debugging a failure or when the user explicitly asks for it.
 
+## Hypothesis Validation Order
+
+Do not use broad CI or release workflows as the first signal for a development hypothesis when a cheaper lane can falsify it first.
+
+Default order:
+
+- focused local suite or `npm run verify:quick`
+- direct runner connection for Windows-targeted endpoint, browser-policy, or runtime hypotheses
+- broader CI for integrated evidence
+
+From the shared workspace, use `../scripts/validate-hypothesis.sh` when choosing the first pass:
+
+- `../scripts/validate-hypothesis.sh openpath local`
+- `../scripts/validate-hypothesis.sh openpath windows-direct`
+- `../scripts/validate-hypothesis.sh openpath windows-gh`
+
+On a Windows-capable development environment, prefer focused Pester or `npm run test:student-policy:windows` before waiting on broader workflow fan-out. From the shared Linux workspace, prefer the direct runner lane first; keep `windows-gh` for integration-time verification rather than the default development loop.
+
 ## Repo Map
 
 - `linux/`: Bash endpoint agent (`dnsmasq`, firewall rules, systemd, browser policy helpers)
