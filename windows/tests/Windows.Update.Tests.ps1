@@ -1,8 +1,8 @@
 Describe "Update Script" {
     Context "Concurrency guard" {
-        It "Update-OpenPath.ps1 uses a global mutex lock" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
-            $content = Get-Content $scriptPath -Raw
+        It "Update runtime uses a global mutex lock" {
+            $runtimePath = Join-Path $PSScriptRoot ".." "lib" "Update.Runtime.psm1"
+            $content = Get-Content $runtimePath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
                 'System.Threading.Mutex',
@@ -13,11 +13,18 @@ Describe "Update Script" {
     }
 
     Context "Module import resilience" {
-        It "Uses the shared standalone bootstrap helper" {
+        It "Uses the shared standalone bootstrap helper from the runtime module" {
             $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
-            $content = Get-Content $scriptPath -Raw
+            $runtimePath = Join-Path $PSScriptRoot ".." "lib" "Update.Runtime.psm1"
+            $scriptContent = Get-Content $scriptPath -Raw
+            $runtimeContent = Get-Content $runtimePath -Raw
 
-            Assert-ContentContainsAll -Content $content -Needles @(
+            Assert-ContentContainsAll -Content $scriptContent -Needles @(
+                'Import-Module "$OpenPathRoot\lib\Update.Runtime.psm1" -Force',
+                'Invoke-OpenPathUpdateCycle -OpenPathRoot $OpenPathRoot'
+            )
+
+            Assert-ContentContainsAll -Content $runtimeContent -Needles @(
                 'Import-Module "$OpenPathRoot\lib\ScriptBootstrap.psm1" -Force',
                 'Initialize-OpenPathScriptSession `',
                 '-OpenPathRoot $OpenPathRoot',
@@ -30,10 +37,10 @@ Describe "Update Script" {
 
     Context "Rollback system" {
         It "Creates rolling checkpoints before applying new whitelist" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $runtimePath = Join-Path $PSScriptRoot ".." "lib" "Update.Runtime.psm1"
             $configHelperPath = Join-Path $PSScriptRoot ".." "lib" "internal" "Update.Script.Config.ps1"
             $whitelistHelperPath = Join-Path $PSScriptRoot ".." "lib" "internal" "Common.Whitelist.ps1"
-            $content = Get-Content $scriptPath -Raw
+            $content = Get-Content $runtimePath -Raw
             $configHelperContent = Get-Content $configHelperPath -Raw
             $commonContent = Get-Content $whitelistHelperPath -Raw
 
@@ -57,9 +64,9 @@ Describe "Update Script" {
         }
 
         It "Restores checkpoint and falls back to backup on update failure" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $runtimeModulePath = Join-Path $PSScriptRoot ".." "lib" "Update.Runtime.psm1"
             $runtimePath = Join-Path $PSScriptRoot ".." "lib" "internal" "Update.Script.Rollback.ps1"
-            $content = Get-Content $scriptPath -Raw
+            $content = Get-Content $runtimeModulePath -Raw
             $runtimeContent = Get-Content $runtimePath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
@@ -78,9 +85,9 @@ Describe "Update Script" {
 
     Context "Health report" {
         It "Sends health report to API after successful update" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $runtimePath = Join-Path $PSScriptRoot ".." "lib" "Update.Runtime.psm1"
             $commonPath = Join-Path $PSScriptRoot ".." "lib" "internal" "Common.Http.Health.ps1"
-            $updateContent = Get-Content $scriptPath -Raw
+            $updateContent = Get-Content $runtimePath -Raw
             $commonContent = Get-Content $commonPath -Raw
 
             $updateContent.Contains('Send-OpenPathHealthReport') | Should -BeTrue
@@ -91,9 +98,9 @@ Describe "Update Script" {
 
     Context "Stale whitelist fail-safe" {
         It "Includes stale threshold logic and restores protected mode via shared helper" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $runtimePath = Join-Path $PSScriptRoot ".." "lib" "Update.Runtime.psm1"
             $helperPath = Join-Path $PSScriptRoot ".." "lib" "internal" "Update.Script.Apply.ps1"
-            $content = Get-Content $scriptPath -Raw
+            $content = Get-Content $runtimePath -Raw
             $helperContent = Get-Content $helperPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
@@ -113,10 +120,10 @@ Describe "Update Script" {
 
     Context "Protected mode recovery" {
         It "Restores local DNS and firewall through the shared helper after applying a valid whitelist" {
-            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Update-OpenPath.ps1"
+            $runtimePath = Join-Path $PSScriptRoot ".." "lib" "Update.Runtime.psm1"
             $applyHelperPath = Join-Path $PSScriptRoot ".." "lib" "internal" "Update.Script.Apply.ps1"
             $rollbackHelperPath = Join-Path $PSScriptRoot ".." "lib" "internal" "Update.Script.Rollback.ps1"
-            $content = Get-Content $scriptPath -Raw
+            $content = Get-Content $runtimePath -Raw
             $applyContent = Get-Content $applyHelperPath -Raw
             $rollbackContent = Get-Content $rollbackHelperPath -Raw
 
