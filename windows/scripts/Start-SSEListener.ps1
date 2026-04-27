@@ -49,6 +49,33 @@ $script:UpdateScript = "$OpenPathRoot\scripts\Update-OpenPath.ps1"
 $script:UpdateJobName = "OpenPath-SSE-Update"
 $script:DelayedUpdateJobName = "OpenPath-SSE-Delayed-Update"
 
+function Write-OpenPathSseUpdateJobLog {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LogPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Message,
+
+        [ValidateSet('INFO', 'WARN', 'ERROR')]
+        [string]$Level = 'INFO'
+    )
+
+    try {
+        $logDir = Split-Path $LogPath -Parent
+        if ($logDir -and -not (Test-Path $logDir)) {
+            New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        }
+
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $logEntry = "$timestamp [$Level] [Start-SSEListener.ps1] [PID:$PID] $Message"
+        Add-Content -Path $LogPath -Value $logEntry -Encoding UTF8
+    }
+    catch {
+        # Best-effort diagnostic logging must never block the update path.
+    }
+}
+
 function Get-SSEConfig {
     <#
     .SYNOPSIS
@@ -166,13 +193,57 @@ function Start-OpenPathSseUpdateJob {
 
     if (Test-Path $script:UpdateScript) {
         try {
-            Start-Job -ScriptBlock {
-                param($scriptPath, $delaySeconds)
+            $logPath = Join-Path $OpenPathRoot 'data\logs\openpath.log'
+            Write-OpenPathLog "SSE: Starting update job $JobName (delay ${DelaySeconds}s)"
+
+            $job = Start-Job -ScriptBlock {
+                param($scriptPath, $delaySeconds, $jobName, $logPath)
+                function Write-OpenPathSseUpdateJobLog {
+                    param(
+                        [Parameter(Mandatory = $true)]
+                        [string]$LogPath,
+
+                        [Parameter(Mandatory = $true)]
+                        [string]$Message,
+
+                        [ValidateSet('INFO', 'WARN', 'ERROR')]
+                        [string]$Level = 'INFO'
+                    )
+
+                    try {
+                        $logDir = Split-Path $LogPath -Parent
+                        if ($logDir -and -not (Test-Path $logDir)) {
+                            New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+                        }
+
+                        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                        $logEntry = "$timestamp [$Level] [Start-SSEListener.ps1] [PID:$PID] $Message"
+                        Add-Content -Path $LogPath -Value $logEntry -Encoding UTF8
+                    }
+                    catch {
+                        # Best-effort diagnostic logging must never block the update path.
+                    }
+                }
+
+                Write-OpenPathSseUpdateJobLog -LogPath $logPath -Message "SSE update job started (jobName=$jobName, delaySeconds=$delaySeconds)"
                 if ($delaySeconds -gt 0) {
+                    Write-OpenPathSseUpdateJobLog -LogPath $logPath -Message "SSE update job waiting before update (jobName=$jobName, delaySeconds=$delaySeconds)"
                     Start-Sleep -Seconds $delaySeconds
                 }
-                & $scriptPath
-            } -Name $JobName -ArgumentList $script:UpdateScript, $DelaySeconds -ErrorAction Stop | Out-Null
+
+                try {
+                    Write-OpenPathSseUpdateJobLog -LogPath $logPath -Message "SSE update job invoking update script (jobName=$jobName, scriptPath=$scriptPath)"
+                    & $scriptPath
+                    $exitCode = if ($null -eq $global:LASTEXITCODE) { 0 } else { $global:LASTEXITCODE }
+                    Write-OpenPathSseUpdateJobLog -LogPath $logPath -Message "SSE update job completed (jobName=$jobName, exitCode=$exitCode)"
+                }
+                catch {
+                    Write-OpenPathSseUpdateJobLog -LogPath $logPath -Message "SSE update job failed (jobName=$jobName): $_" -Level ERROR
+                    throw
+                }
+            } -Name $JobName -ArgumentList $script:UpdateScript, $DelaySeconds, $JobName, $logPath -ErrorAction Stop
+
+            Write-OpenPathLog "SSE: Update job queued (jobName=$JobName, id=$($job.Id), state=$($job.State))"
         }
         catch {
             Write-OpenPathLog "SSE: Failed to start update job: $_" -Level WARN

@@ -143,5 +143,20 @@ Describe "SSE Listener" {
                 'SSE: Queuing delayed update'
             )
         }
+
+        It "logs SSE update job lifecycle boundaries for production diagnostics" {
+            $scriptPath = Join-Path $PSScriptRoot ".." "scripts" "Start-SSEListener.ps1"
+            $content = Get-Content $scriptPath -Raw
+
+            Assert-ContentContainsAll -Content $content -Needles @(
+                'function Write-OpenPathSseUpdateJobLog',
+                'SSE: Starting update job',
+                'SSE: Update job queued',
+                'SSE update job started',
+                'SSE update job invoking update script',
+                'SSE update job completed',
+                'SSE update job failed'
+            )
+        }
     }
 }
