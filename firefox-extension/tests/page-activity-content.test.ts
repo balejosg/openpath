@@ -48,6 +48,7 @@ void describe('page activity content script', () => {
 
     const sentMessages: unknown[] = [];
     const appendedScripts: { remove(): void; textContent: string }[] = [];
+    const scheduledCallbacks: (() => void)[] = [];
     const scheduledDelays: number[] = [];
     let messageListener:
       | ((event: { data?: unknown; origin?: string; source?: unknown }) => void)
@@ -87,10 +88,15 @@ void describe('page activity content script', () => {
         };
         return script;
       },
-      documentElement: {
-        appendChild(script: { remove(): void; textContent: string }): void {
-          appendedScripts.push(script);
-        },
+      documentElement: undefined as
+        | undefined
+        | {
+            appendChild(script: { remove(): void; textContent: string }): void;
+          },
+    };
+    const appendTarget = {
+      appendChild(script: { remove(): void; textContent: string }): void {
+        appendedScripts.push(script);
       },
     };
     const fakeWindow = {
@@ -103,7 +109,8 @@ void describe('page activity content script', () => {
         }
       },
       location: { href: 'https://allowed.example/app' },
-      setTimeout(_callback: () => void, delay: number): number {
+      setTimeout(callback: () => void, delay: number): number {
+        scheduledCallbacks.push(callback);
         scheduledDelays.push(delay);
         return scheduledDelays.length;
       },
@@ -124,9 +131,13 @@ void describe('page activity content script', () => {
     });
 
     try {
+      // @ts-expect-error page-activity-content is intentionally a classic script for manifest loading.
       await import('../src/page-activity-content.ts');
 
       assert.deepEqual(scheduledDelays, [0, 5, 25, 100, 500]);
+      assert.equal(appendedScripts.length, 0);
+      fakeDocument.documentElement = appendTarget;
+      scheduledCallbacks[0]?.();
       assert.equal(appendedScripts.length, 1);
       assert.match(appendedScripts[0]?.textContent ?? '', /window\.fetch = function/);
       assert.deepEqual(sentMessages, [

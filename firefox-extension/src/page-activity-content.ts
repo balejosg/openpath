@@ -74,8 +74,13 @@ interface OpenPathContentGlobal {
     }
   }
 
-  function installPageWorldObserver(): void {
+  function installPageWorldObserver(): boolean {
     const script = document.createElement('script');
+    const appendTarget =
+      (document.head as HTMLElement | null) ?? (document.documentElement as HTMLElement | null);
+    if (!appendTarget) {
+      return false;
+    }
 
     script.textContent = `(() => {
   const INSTALLED_KEY = '__openpathPageResourceObserverInstalled';
@@ -141,8 +146,9 @@ interface OpenPathContentGlobal {
     };
   }
 })();`;
-    document.documentElement.appendChild(script);
+    appendTarget.appendChild(script);
     script.remove();
+    return true;
   }
 
   function getDomResourceCandidate(
