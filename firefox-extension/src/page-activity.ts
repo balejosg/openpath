@@ -259,7 +259,7 @@ export function installPageResourceObserver(
 
   const injectObserver = (): boolean => {
     const script = runtimeGlobal.document?.createElement?.('script');
-    const appendTarget = runtimeGlobal.document?.documentElement ?? runtimeGlobal.document?.head;
+    const appendTarget = runtimeGlobal.document?.head ?? runtimeGlobal.document?.documentElement;
     if (!script || !appendTarget?.appendChild) {
       return false;
     }
@@ -270,11 +270,9 @@ export function installPageResourceObserver(
     return true;
   };
 
-  const injectedImmediately = injectObserver();
-  if (!injectedImmediately) {
-    for (const delay of [0, 5, 25, 100, 500]) {
-      runtimeGlobal.setTimeout?.(injectObserver, delay);
-    }
+  injectObserver();
+  for (const delay of [0, 5, 25, 100, 500]) {
+    runtimeGlobal.setTimeout?.(injectObserver, delay);
   }
   runtimeGlobal.addEventListener?.('DOMContentLoaded', injectObserver, { once: true });
 }

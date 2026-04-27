@@ -338,6 +338,64 @@ void describe('page activity content script', () => {
     assert.ok(listeners.has('DOMContentLoaded'));
   });
 
+  void test('keeps retrying page observer injection after an early document_start append', () => {
+    interface PageMessageEvent {
+      data?: unknown;
+      origin?: string;
+      source?: unknown;
+    }
+    const listeners = new Map<string, (event: PageMessageEvent) => void>();
+    const scheduled: { delay: number; callback: () => void }[] = [];
+    let createdScripts = 0;
+    const appended: string[] = [];
+    const runtimeGlobal = {
+      addEventListener(type: string, callback: (event: PageMessageEvent) => void): void {
+        listeners.set(type, callback);
+      },
+      document: {
+        createElement(): { remove(): void; textContent: string } {
+          createdScripts += 1;
+          return {
+            textContent: '',
+            remove(): void {
+              // The injected page script is intentionally short-lived.
+            },
+          };
+        },
+        documentElement: {
+          appendChild(): void {
+            appended.push('documentElement');
+          },
+        },
+        head: undefined as undefined | { appendChild(): void },
+      },
+      location: { href: 'https://allowed.example/app' },
+      setTimeout(callback: () => void, delay: number): void {
+        scheduled.push({ callback, delay });
+      },
+      window: {},
+    };
+
+    installPageResourceObserver(undefined, runtimeGlobal);
+
+    assert.deepEqual(
+      scheduled.map((timer) => timer.delay),
+      [0, 5, 25, 100, 500]
+    );
+    assert.deepEqual(appended, ['documentElement']);
+
+    runtimeGlobal.document.head = {
+      appendChild(): void {
+        appended.push('head');
+      },
+    };
+    scheduled[0]?.callback();
+    listeners.get('DOMContentLoaded')?.({});
+
+    assert.deepEqual(appended, ['documentElement', 'head', 'head']);
+    assert.equal(createdScripts, 3);
+  });
+
   void test('reports DOM subresource candidates from added and changed nodes', () => {
     const sentMessages: unknown[] = [];
     const ignoredEvents: string[] = [];
