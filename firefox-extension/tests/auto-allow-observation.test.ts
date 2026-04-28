@@ -34,6 +34,7 @@ void describe('auto allow observation', () => {
 
   void test('maps unknown page resource kinds to other and rejects malformed candidates', () => {
     assert.equal(pageResourceKindToRequestType('fetch'), 'xmlhttprequest');
+    assert.equal(pageResourceKindToRequestType('font'), 'font');
     assert.equal(pageResourceKindToRequestType('unknown-kind'), 'other');
 
     assert.deepEqual(

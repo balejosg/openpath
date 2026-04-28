@@ -258,6 +258,7 @@ void describe('background listeners blocked-screen routing', () => {
       ['image', 'http://image.example/pixel.png', 'image'],
       ['script', 'http://script.example/asset.js', 'script'],
       ['stylesheet', 'http://style.example/site.css', 'stylesheet'],
+      ['font', 'http://fonts.example/font.woff2', 'font'],
       ['xmlhttprequest', 'http://xhr.example/data.json', 'xmlhttprequest'],
       ['unknown', 'http://other.example/resource', 'other'],
     ] as const;
@@ -286,6 +287,7 @@ void describe('background listeners blocked-screen routing', () => {
         { hostname: 'image.example', requestType: 'image' },
         { hostname: 'script.example', requestType: 'script' },
         { hostname: 'style.example', requestType: 'stylesheet' },
+        { hostname: 'fonts.example', requestType: 'font' },
         { hostname: 'xhr.example', requestType: 'xmlhttprequest' },
         { hostname: 'other.example', requestType: 'other' },
       ]
@@ -676,6 +678,36 @@ void describe('background listeners blocked-screen routing', () => {
         },
       ]);
     }
+  });
+
+  void test('uses top-level tab URL as origin for stylesheet-initiated font subresources', async () => {
+    const harness = createListenerHarness({
+      confirmBlockedScreenNavigation: () => Promise.resolve(true),
+      currentTabUrl: 'https://www.reddit.com/r/openpath',
+    });
+    assert.ok(harness.webRequestBefore);
+
+    const result = harness.webRequestBefore({
+      originUrl: 'https://fonts.googleapis.com/css2?family=Inter',
+      tabId: 41,
+      type: 'font',
+      url: 'https://fonts.gstatic.com/s/inter/v12/font.woff2',
+    } as WebRequest.OnBeforeRequestDetailsType);
+
+    await waitForAsyncListeners();
+
+    assert.equal(result, undefined);
+    assert.deepEqual(harness.confirmCalls, []);
+    assert.deepEqual(harness.redirects, []);
+    assert.deepEqual(harness.autoAllowCalls, [
+      {
+        tabId: 41,
+        hostname: 'fonts.gstatic.com',
+        origin: 'https://www.reddit.com/r/openpath',
+        requestType: 'font',
+        targetUrl: 'https://fonts.gstatic.com/s/inter/v12/font.woff2',
+      },
+    ]);
   });
 
   void test('starts auto-allow when Firefox omits a usable tab id for a page subresource', async () => {

@@ -7,6 +7,7 @@ export type PageResourceKind =
   | 'image'
   | 'script'
   | 'stylesheet'
+  | 'font'
   | 'other';
 
 export interface PageResourceCandidateMessage {
@@ -63,6 +64,7 @@ export function pageResourceKindToRequestType(kind: unknown): WebRequest.Resourc
     case 'image':
     case 'script':
     case 'stylesheet':
+    case 'font':
       return kind;
     default:
       return 'other';

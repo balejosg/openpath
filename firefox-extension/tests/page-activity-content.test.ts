@@ -69,7 +69,7 @@ void describe('page activity content script', () => {
       observe(target: unknown, options: unknown): void {
         assert.equal(target, fakeDocument);
         assert.deepEqual(options, {
-          attributeFilter: ['src', 'href'],
+          attributeFilter: ['src', 'href', 'rel', 'as'],
           attributes: true,
           childList: true,
           subtree: true,
@@ -160,6 +160,12 @@ void describe('page activity content script', () => {
           addedNodes: [
             { src: 'https://cdn.example/pixel.png', tagName: 'IMG' },
             { href: 'https://cdn.example/app.css', rel: 'stylesheet', tagName: 'LINK' },
+            {
+              as: 'font',
+              href: 'https://fonts.gstatic.com/s/inter/v12/font.woff2',
+              rel: 'preload',
+              tagName: 'LINK',
+            },
           ],
           target: {},
         },
@@ -188,6 +194,12 @@ void describe('page activity content script', () => {
           kind: 'stylesheet',
           pageUrl: 'https://allowed.example/app',
           resourceUrl: 'https://cdn.example/app.css',
+        },
+        {
+          action: 'openpathPageResourceCandidate',
+          kind: 'font',
+          pageUrl: 'https://allowed.example/app',
+          resourceUrl: 'https://fonts.gstatic.com/s/inter/v12/font.woff2',
         },
         {
           action: 'openpathPageResourceCandidate',

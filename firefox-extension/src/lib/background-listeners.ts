@@ -374,6 +374,18 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
     tabId: number;
     url: string;
   }): Promise<string | null> {
+    if (details.tabId >= 0) {
+      try {
+        const tab = await options.browser.tabs.get(details.tabId);
+        const tabOrigin = normalizeAutoAllowOriginCandidate(tab.url, details.url);
+        if (tabOrigin) {
+          return tabOrigin;
+        }
+      } catch {
+        // Fall back to Firefox's request context below.
+      }
+    }
+
     const explicitOrigin = normalizeAutoAllowOriginCandidate(
       details.originUrl ?? details.documentUrl,
       details.url
@@ -382,16 +394,7 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
       return explicitOrigin;
     }
 
-    if (details.tabId < 0) {
-      return null;
-    }
-
-    try {
-      const tab = await options.browser.tabs.get(details.tabId);
-      return normalizeAutoAllowOriginCandidate(tab.url, details.url);
-    } catch {
-      return null;
-    }
+    return null;
   }
 
   function resolveAutoAllowRequestType(details: {

@@ -2,6 +2,14 @@ import { buildRequestDomainOptions, shouldEnableSubmitRequest } from './popup-re
 import { shouldEnableRequestAction, type BlockedDomainsData } from './popup-state.js';
 import { buildBlockedDomainListItems } from './popup-view-models.js';
 
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 export function hidePopupRequestSection(requestSectionEl: HTMLElement): void {
   requestSectionEl.classList.add('hidden');
 }
@@ -70,15 +78,18 @@ export function renderPopupDomainsList(input: {
   }).forEach((viewModel) => {
     const item = createListItem();
     item.className = 'domain-item';
+    const hostname = escapeHtmlAttribute(viewModel.hostname);
+    const statusLabel = escapeHtmlAttribute(viewModel.statusLabel);
+    const statusTitle = escapeHtmlAttribute(viewModel.statusTitle);
     const retryButton = viewModel.retryHostname
-      ? `<button class="retry-update-btn" data-hostname="${viewModel.retryHostname}" title="Reintentar actualización local">Reintentar</button>`
+      ? `<button class="retry-update-btn" data-hostname="${escapeHtmlAttribute(viewModel.retryHostname)}" title="Reintentar actualización local">Reintentar</button>`
       : '';
 
     item.innerHTML = `
-            <span class="domain-name" title="${viewModel.hostname}">${viewModel.hostname}</span>
+            <span class="domain-name" title="${hostname}">${hostname}</span>
             <span class="domain-meta">
                 <span class="domain-count" title="Intentos de conexión">${viewModel.attempts.toString()}</span>
-                <span class="domain-status ${viewModel.statusClassName}" title="${viewModel.statusLabel}">${viewModel.statusLabel}</span>
+                <span class="domain-status ${viewModel.statusClassName}" title="${statusTitle}">${statusLabel}</span>
                 ${retryButton}
             </span>
         `;

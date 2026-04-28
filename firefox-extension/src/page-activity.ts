@@ -130,9 +130,29 @@ export function buildPageResourceObserverScript(): string {
       }
     });
   };
+  const getLinkResourceKind = (link) => {
+    const relTokens = String(link && link.rel || '').toLowerCase().split(/\\s+/);
+    const asValue = String(link && link.as || '').toLowerCase();
+    if (relTokens.includes('preload') && asValue === 'font') return 'font';
+    if (relTokens.includes('stylesheet')) return 'stylesheet';
+    return 'other';
+  };
   if (typeof HTMLImageElement !== 'undefined') patchUrlProperty(HTMLImageElement.prototype, 'src', 'image');
   if (typeof HTMLScriptElement !== 'undefined') patchUrlProperty(HTMLScriptElement.prototype, 'src', 'script');
-  if (typeof HTMLLinkElement !== 'undefined') patchUrlProperty(HTMLLinkElement.prototype, 'href', 'stylesheet');
+  if (typeof HTMLLinkElement !== 'undefined') {
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLLinkElement.prototype, 'href');
+    if (descriptor && typeof descriptor.set === 'function') {
+      Object.defineProperty(HTMLLinkElement.prototype, 'href', {
+        configurable: true,
+        enumerable: descriptor.enumerable,
+        get: descriptor.get,
+        set(value) {
+          notify(unwrapUrl(value), getLinkResourceKind(this));
+          return descriptor.set.call(this, value);
+        }
+      });
+    }
+  }
   const originalSetAttribute = typeof Element !== 'undefined' ? Element.prototype.setAttribute : null;
   if (typeof originalSetAttribute === 'function') {
     Element.prototype.setAttribute = function(name, value) {
@@ -140,7 +160,7 @@ export function buildPageResourceObserverScript(): string {
       const attr = String(name || '').toLowerCase();
       if (tag === 'img' && attr === 'src') notify(value, 'image');
       if (tag === 'script' && attr === 'src') notify(value, 'script');
-      if (tag === 'link' && attr === 'href') notify(value, 'stylesheet');
+      if (tag === 'link' && attr === 'href') notify(value, getLinkResourceKind(this));
       return originalSetAttribute.call(this, name, value);
     };
   }
@@ -151,7 +171,13 @@ function getDomResourceCandidate(node: unknown): {
   kind: Exclude<PageResourceKind, 'fetch' | 'xmlhttprequest' | 'other'>;
   url: string;
 } | null {
-  const element = node as { href?: unknown; rel?: unknown; src?: unknown; tagName?: unknown };
+  const element = node as {
+    as?: unknown;
+    href?: unknown;
+    rel?: unknown;
+    src?: unknown;
+    tagName?: unknown;
+  };
   const tagName = typeof element.tagName === 'string' ? element.tagName.toLowerCase() : '';
   if (tagName === 'img' && typeof element.src === 'string' && element.src.length > 0) {
     return { kind: 'image', url: element.src };
@@ -161,14 +187,15 @@ function getDomResourceCandidate(node: unknown): {
     return { kind: 'script', url: element.src };
   }
 
-  if (
-    tagName === 'link' &&
-    typeof element.rel === 'string' &&
-    element.rel.toLowerCase() === 'stylesheet' &&
-    typeof element.href === 'string' &&
-    element.href.length > 0
-  ) {
-    return { kind: 'stylesheet', url: element.href };
+  if (tagName === 'link' && typeof element.href === 'string' && element.href.length > 0) {
+    const relTokens = typeof element.rel === 'string' ? element.rel.toLowerCase().split(/\s+/) : [];
+    const asValue = typeof element.as === 'string' ? element.as.toLowerCase() : '';
+    if (relTokens.includes('preload') && asValue === 'font') {
+      return { kind: 'font', url: element.href };
+    }
+    if (relTokens.includes('stylesheet')) {
+      return { kind: 'stylesheet', url: element.href };
+    }
   }
 
   return null;
@@ -201,14 +228,19 @@ function installDomResourceObserver(
         reportDomResourceCandidate(runtime, runtimeGlobal, node);
       }
 
-      if (record.attributeName === 'src' || record.attributeName === 'href') {
+      if (
+        record.attributeName === 'src' ||
+        record.attributeName === 'href' ||
+        record.attributeName === 'rel' ||
+        record.attributeName === 'as'
+      ) {
         reportDomResourceCandidate(runtime, runtimeGlobal, record.target);
       }
     }
   });
 
   observer.observe?.(runtimeGlobal.document, {
-    attributeFilter: ['src', 'href'],
+    attributeFilter: ['src', 'href', 'rel', 'as'],
     attributes: true,
     childList: true,
     subtree: true,
@@ -236,7 +268,8 @@ export function installPageResourceObserver(
       data.kind === 'xmlhttprequest' ||
       data.kind === 'image' ||
       data.kind === 'script' ||
-      data.kind === 'stylesheet'
+      data.kind === 'stylesheet' ||
+      data.kind === 'font'
         ? data.kind
         : 'other';
 

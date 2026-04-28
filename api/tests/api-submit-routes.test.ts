@@ -201,6 +201,74 @@ void describe('Request API tests - public submit routes', async () => {
       );
     });
 
+    await test('should auto-approve font targets when the top-level origin page is whitelisted', async () => {
+      const suffix = `${Date.now().toString()}-font-origin`;
+      const groupId = `grp-${suffix}`;
+      const classroomId = `cls-${suffix}`;
+      const machineId = `mach-${suffix}`;
+      const hostname = `host-${suffix}`;
+      const originDomain = `reddit-${suffix}.example.com`;
+      const domain = `fonts-${suffix}.gstatic.com`;
+      const token = `machine-token-${suffix}`;
+
+      await insertMachineAccessContext({
+        activeGroupId: groupId,
+        classroomId,
+        defaultGroupId: groupId,
+        hostname,
+        machineId,
+        token,
+      });
+      await db.execute(
+        sql.raw(
+          `INSERT INTO whitelist_rules (id, group_id, type, value, source) VALUES ('rule-origin-font-${suffix}', '${groupId}', 'whitelist', '${originDomain}', 'manual')`
+        )
+      );
+
+      const response = await fetch(`${getApiUrl()}/api/requests/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          hostname,
+          token,
+          origin_page: `https://${originDomain}/r/openpath`,
+          target_url: `https://${domain}/s/inter/v12/font.woff2`,
+          reason: 'auto-allow page-resource (font)',
+        }),
+      });
+
+      assert.strictEqual(response.status, 200);
+      const data = (await response.json()) as {
+        approved: boolean;
+        autoApproved: boolean;
+        duplicate?: boolean;
+        groupId: string;
+        source: string;
+        status: string;
+        success: boolean;
+      };
+
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.approved, true);
+      assert.strictEqual(data.autoApproved, true);
+      assert.strictEqual(data.status, 'approved');
+      assert.strictEqual(data.groupId, groupId);
+      assert.strictEqual(data.source, 'auto_extension');
+      assert.strictEqual(data.duplicate, false);
+
+      assert.strictEqual(
+        getRows(
+          await db.execute(
+            sql.raw(
+              `SELECT id FROM whitelist_rules WHERE group_id='${groupId}' AND type='whitelist' AND value='${domain}'`
+            )
+          )
+        ).length,
+        1
+      );
+    });
+
     await test('should reject ajax auto-allow when the target matches a blocked subdomain rule', async () => {
       const suffix = `${Date.now().toString()}-blocked-sub`;
       const groupId = `grp-${suffix}`;

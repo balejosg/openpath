@@ -6,6 +6,7 @@ export interface BlockedDomainListItemViewModel {
   retryHostname?: string;
   statusClassName: string;
   statusLabel: string;
+  statusTitle: string;
 }
 
 export function buildBlockedDomainListItems(input: {
@@ -22,6 +23,7 @@ export function buildBlockedDomainListItems(input: {
       }
 
       const meta = statusMeta(input.domainStatusesData[hostname]);
+      const status = input.domainStatusesData[hostname];
       return [
         {
           attempts: info.count ?? info.errors?.length ?? 1,
@@ -29,6 +31,7 @@ export function buildBlockedDomainListItems(input: {
           ...(meta.retryable && input.currentTabId !== null ? { retryHostname: hostname } : {}),
           statusClassName: meta.className,
           statusLabel: meta.label,
+          statusTitle: status?.message ?? meta.label,
         },
       ];
     });

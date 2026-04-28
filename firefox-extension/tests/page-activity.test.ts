@@ -90,6 +90,7 @@ void describe('page activity content script', () => {
     assert.match(script, /HTMLImageElement/);
     assert.match(script, /HTMLScriptElement/);
     assert.match(script, /HTMLLinkElement/);
+    assert.match(script, /as=font|font/);
     assert.match(script, /openpath-page-resource-candidate/);
     assert.match(script, /__openpathPageResourceObserverInstalled/);
   });
@@ -421,7 +422,7 @@ void describe('page activity content script', () => {
       observe(target: unknown, options: unknown): void {
         assert.equal(target, runtimeGlobal.document);
         assert.deepEqual(options, {
-          attributeFilter: ['src', 'href'],
+          attributeFilter: ['src', 'href', 'rel', 'as'],
           attributes: true,
           childList: true,
           subtree: true,
@@ -462,6 +463,12 @@ void describe('page activity content script', () => {
           { tagName: 'IMG', src: 'https://cdn.example/pixel.png' },
           { tagName: 'SCRIPT', src: 'https://cdn.example/app.js' },
           { href: 'https://cdn.example/app.css', rel: 'stylesheet', tagName: 'LINK' },
+          {
+            as: 'font',
+            href: 'https://fonts.gstatic.com/s/inter/v12/font.woff2',
+            rel: 'preload',
+            tagName: 'LINK',
+          },
         ],
       },
       {
@@ -488,6 +495,12 @@ void describe('page activity content script', () => {
         kind: 'stylesheet',
         pageUrl: 'https://allowed.example/app',
         resourceUrl: 'https://cdn.example/app.css',
+      },
+      {
+        action: 'openpathPageResourceCandidate',
+        kind: 'font',
+        pageUrl: 'https://allowed.example/app',
+        resourceUrl: 'https://fonts.gstatic.com/s/inter/v12/font.woff2',
       },
       {
         action: 'openpathPageResourceCandidate',

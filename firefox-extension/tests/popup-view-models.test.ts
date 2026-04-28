@@ -22,6 +22,7 @@ await describe('popup view models', async () => {
       currentTabId: 4,
       domainStatusesData: {
         'a.example.com': {
+          message: 'Token is not valid for this hostname',
           state: 'localUpdateError',
           updatedAt: 10,
         },
@@ -39,12 +40,14 @@ await describe('popup view models', async () => {
         retryHostname: 'a.example.com',
         statusClassName: 'status-update-error',
         statusLabel: 'Error update local',
+        statusTitle: 'Token is not valid for this hostname',
       },
       {
         attempts: 1,
         hostname: 'b.example.com',
         statusClassName: 'status-pending',
         statusLabel: 'Pendiente',
+        statusTitle: 'Pendiente',
       },
     ]);
   });
