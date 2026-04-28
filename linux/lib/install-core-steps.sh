@@ -174,7 +174,7 @@ step_install_scripts() {
 
     mkdir -p "$ETC_CONFIG_DIR"
     chown root:root "$ETC_CONFIG_DIR" "$CONFIG_DIR" 2>/dev/null || true
-    chmod 750 "$ETC_CONFIG_DIR" 2>/dev/null || true
+    chmod 755 "$ETC_CONFIG_DIR" 2>/dev/null || true
 
     if [ -n "$WHITELIST_URL" ]; then
         if ! persist_openpath_whitelist_url "$WHITELIST_URL"; then

@@ -217,6 +217,26 @@ teardown() {
     [ "$output" = "none" ]
 }
 
+@test "request runtime config is readable by the Firefox native host user" {
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
+
+    export ETC_CONFIG_DIR="$etc_dir"
+    export WHITELIST_URL_CONF="$etc_dir/whitelist-url.conf"
+
+    source "$PROJECT_DIR/linux/lib/common.sh"
+
+    run persist_openpath_enrollment_state \
+        'https://control.example' \
+        'Room 101' \
+        'cls_123' \
+        'https://control.example/w/token123/whitelist.txt'
+    [ "$status" -eq 0 ]
+
+    [ "$(stat -c '%a' "$etc_dir")" = "755" ]
+    [ "$(stat -c '%a' "$etc_dir/api-url.conf")" = "644" ]
+    [ "$(stat -c '%a' "$WHITELIST_URL_CONF")" = "644" ]
+}
+
 @test "parse_whitelist_sections preserves protected control-plane domains and strips their block rules" {
     local wl_file="$TEST_TMP_DIR/protected-whitelist.txt"
     cat > "$wl_file" <<'EOF'

@@ -208,7 +208,7 @@ persist_machine_name() {
 prepare_openpath_config_dir() {
     mkdir -p "$ETC_CONFIG_DIR"
     chown root:root "$ETC_CONFIG_DIR" 2>/dev/null || true
-    chmod 750 "$ETC_CONFIG_DIR" 2>/dev/null || true
+    chmod 755 "$ETC_CONFIG_DIR" 2>/dev/null || true
 }
 
 write_openpath_config_file() {
@@ -237,7 +237,7 @@ persist_openpath_whitelist_url() {
         return 1
     fi
 
-    write_openpath_config_file "$WHITELIST_URL_CONF" "$whitelist_url" 640
+    write_openpath_config_file "$WHITELIST_URL_CONF" "$whitelist_url" 644
 }
 
 persist_openpath_health_api_config() {
@@ -266,7 +266,7 @@ persist_openpath_classroom_runtime_config() {
         return 1
     fi
 
-    if ! write_openpath_config_file "$ETC_CONFIG_DIR/api-url.conf" "$api_url" 640; then
+    if ! write_openpath_config_file "$ETC_CONFIG_DIR/api-url.conf" "$api_url" 644; then
         return 1
     fi
 
