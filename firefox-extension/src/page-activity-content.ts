@@ -163,9 +163,13 @@ interface OpenPathContentGlobal {
   const notify = (url, kind) => {
     if (!url) return;
     try {
+      const payload = { source: SOURCE, url: String(url), kind };
       state.notifications[kind] = (state.notifications[kind] || 0) + 1;
-      state.lastNotification = { kind, url: String(url) };
-      window.postMessage({ source: SOURCE, url: String(url), kind }, '*');
+      state.lastNotification = { kind, url: payload.url };
+      window.postMessage(payload, '*');
+      if (typeof CustomEvent === 'function' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent(SOURCE, { detail: payload }));
+      }
     } catch (error) {
       recordError(error);
     }
@@ -291,13 +295,8 @@ interface OpenPathContentGlobal {
     notifyPageResourceCandidate(candidate.url, candidate.kind);
   }
 
-  window.addEventListener('message', (event) => {
-    const currentOrigin = getCurrentOrigin();
-    if (!isPageResourceMessageOriginAllowed(event.origin, currentOrigin)) {
-      return;
-    }
-
-    const data = (event.data ?? {}) as { kind?: unknown; source?: unknown; url?: unknown };
+  function relayCandidateData(candidateData: unknown): void {
+    const data = (candidateData ?? {}) as { kind?: unknown; source?: unknown; url?: unknown };
     if (data.source !== source || typeof data.url !== 'string') {
       return;
     }
@@ -313,6 +312,19 @@ interface OpenPathContentGlobal {
         : 'other';
 
     notifyPageResourceCandidate(data.url, kind);
+  }
+
+  window.addEventListener('message', (event) => {
+    const currentOrigin = getCurrentOrigin();
+    if (!isPageResourceMessageOriginAllowed(event.origin, currentOrigin)) {
+      return;
+    }
+
+    relayCandidateData(event.data);
+  });
+
+  window.addEventListener('openpath-page-resource-candidate', (event) => {
+    relayCandidateData((event as CustomEvent).detail);
   });
 
   if (typeof MutationObserver === 'function') {

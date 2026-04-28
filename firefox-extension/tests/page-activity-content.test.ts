@@ -27,6 +27,7 @@ void describe('page activity content script', () => {
     assert.match(source, /openpathPageResourceCandidate/);
     assert.match(source, /openpath-page-resource-candidate/);
     assert.match(source, /window\.addEventListener\('message'/);
+    assert.match(source, /window\.addEventListener\('openpath-page-resource-candidate'/);
   });
 
   void test('installs page-world and DOM observers for dynamic AJAX resources', async () => {
@@ -53,6 +54,7 @@ void describe('page activity content script', () => {
     let messageListener:
       | ((event: { data?: unknown; origin?: string; source?: unknown }) => void)
       | undefined;
+    let candidateListener: ((event: { detail?: unknown }) => void) | undefined;
     let mutationCallback:
       | ((records: { addedNodes: unknown[]; attributeName?: string; target: unknown }[]) => void)
       | undefined;
@@ -102,10 +104,19 @@ void describe('page activity content script', () => {
     const fakeWindow = {
       addEventListener(
         type: string,
-        callback: (event: { data?: unknown; origin?: string; source?: unknown }) => void
+        callback:
+          | ((event: { data?: unknown; origin?: string; source?: unknown }) => void)
+          | ((event: { detail?: unknown }) => void)
       ): void {
         if (type === 'message') {
-          messageListener = callback;
+          messageListener = callback as (event: {
+            data?: unknown;
+            origin?: string;
+            source?: unknown;
+          }) => void;
+        }
+        if (type === 'openpath-page-resource-candidate') {
+          candidateListener = callback as (event: { detail?: unknown }) => void;
         }
       },
       location: { href: 'https://allowed.example/app' },
@@ -156,6 +167,13 @@ void describe('page activity content script', () => {
         origin: 'null',
         source: null,
       });
+      candidateListener?.({
+        detail: {
+          source: 'openpath-page-resource-candidate',
+          kind: 'script',
+          url: 'https://cdn.example/dom-event.js',
+        },
+      });
       mutationCallback?.([
         {
           addedNodes: [
@@ -183,6 +201,12 @@ void describe('page activity content script', () => {
           kind: 'fetch',
           pageUrl: 'https://allowed.example/app',
           resourceUrl: 'https://api.example/data.json',
+        },
+        {
+          action: 'openpathPageResourceCandidate',
+          kind: 'script',
+          pageUrl: 'https://allowed.example/app',
+          resourceUrl: 'https://cdn.example/dom-event.js',
         },
         {
           action: 'openpathPageResourceCandidate',

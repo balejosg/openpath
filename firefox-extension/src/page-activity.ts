@@ -14,7 +14,12 @@ interface RuntimeGlobal {
   chrome?: { runtime?: Partial<PageActivityRuntime> };
   addEventListener?: (
     type: string,
-    listener: (event: { data?: unknown; origin?: string; source?: unknown }) => void,
+    listener: (event: {
+      data?: unknown;
+      detail?: unknown;
+      origin?: string;
+      source?: unknown;
+    }) => void,
     options?: unknown
   ) => void;
   document?: {
@@ -146,9 +151,13 @@ export function buildPageResourceObserverScript(): string {
   const notify = (url, kind) => {
     if (!url) return;
     try {
+      const payload = { source: SOURCE, url: String(url), kind };
       state.notifications[kind] = (state.notifications[kind] || 0) + 1;
-      state.lastNotification = { kind, url: String(url) };
-      window.postMessage({ source: SOURCE, url: String(url), kind }, '*');
+      state.lastNotification = { kind, url: payload.url };
+      window.postMessage(payload, '*');
+      if (typeof CustomEvent === 'function' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent(SOURCE, { detail: payload }));
+      }
     } catch (error) {
       recordError(error);
     }
@@ -333,13 +342,8 @@ export function installPageResourceObserver(
   runtimeGlobal: RuntimeGlobal = globalThis as unknown as RuntimeGlobal
 ): void {
   const source = 'openpath-page-resource-candidate';
-  runtimeGlobal.addEventListener?.('message', (event) => {
-    const currentOrigin = getCurrentOrigin(runtimeGlobal);
-    if (!isPageResourceMessageOriginAllowed(event.origin, currentOrigin)) {
-      return;
-    }
-
-    const data = (event.data ?? {}) as { kind?: unknown; source?: unknown; url?: unknown };
+  const relayCandidateData = (candidateData: unknown): void => {
+    const data = (candidateData ?? {}) as { kind?: unknown; source?: unknown; url?: unknown };
     if (data.source !== source || typeof data.url !== 'string') {
       return;
     }
@@ -355,6 +359,18 @@ export function installPageResourceObserver(
         : 'other';
 
     notifyPageResourceCandidate(runtime, data.url, kind, getCurrentUrl(runtimeGlobal));
+  };
+
+  runtimeGlobal.addEventListener?.('message', (event) => {
+    const currentOrigin = getCurrentOrigin(runtimeGlobal);
+    if (!isPageResourceMessageOriginAllowed(event.origin, currentOrigin)) {
+      return;
+    }
+
+    relayCandidateData(event.data);
+  });
+  runtimeGlobal.addEventListener?.(source, (event) => {
+    relayCandidateData(event.detail);
   });
   installDomResourceObserver(runtime, runtimeGlobal);
 

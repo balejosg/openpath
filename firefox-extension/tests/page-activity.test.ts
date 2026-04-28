@@ -252,6 +252,63 @@ void describe('page activity content script', () => {
     ]);
   });
 
+  void test('relays page observer DOM events to the background runtime', () => {
+    const sentMessages: unknown[] = [];
+    let candidateListener:
+      | ((event: { detail?: unknown; origin?: string; source?: unknown }) => void)
+      | undefined;
+    const runtime: PageActivityRuntime = {
+      sendMessage: (message): void => {
+        sentMessages.push(message);
+      },
+    };
+    const runtimeGlobal = {
+      addEventListener(
+        type: string,
+        callback: (event: { detail?: unknown; origin?: string; source?: unknown }) => void
+      ): void {
+        if (type === 'openpath-page-resource-candidate') {
+          candidateListener = callback;
+        }
+      },
+      document: {
+        createElement(): { remove(): void; textContent: string } {
+          return {
+            textContent: '',
+            remove(): void {
+              // The injected page-world script is intentionally short-lived.
+            },
+          };
+        },
+        documentElement: {
+          appendChild(): void {
+            // Test only needs the event bridge.
+          },
+        },
+      },
+      location: { href: 'https://allowed.example/app' },
+      window: {},
+    };
+
+    installPageResourceObserver(runtime, runtimeGlobal);
+    candidateListener?.({
+      detail: {
+        source: 'openpath-page-resource-candidate',
+        kind: 'script',
+        url: 'https://cdn.example/app.js',
+      },
+    });
+
+    assert.deepEqual(sentMessages, [
+      {
+        action: 'openpathPageResourceCandidate',
+        kind: 'script',
+        pageUrl: 'https://allowed.example/app',
+        resourceUrl: 'https://cdn.example/app.js',
+      },
+    ]);
+  });
+
   void test('relays page observer messages when Firefox omits postMessage source', () => {
     const sentMessages: unknown[] = [];
     let appendCalls = 0;
@@ -606,7 +663,11 @@ void describe('page activity content script', () => {
     installPageResourceObserver(runtime, runtimeGlobal);
     assert.equal(appendCalls, 1);
     assert.equal(removeCalls, 1);
-    assert.deepEqual(ignoredEvents, ['message', 'DOMContentLoaded']);
+    assert.deepEqual(ignoredEvents, [
+      'message',
+      'openpath-page-resource-candidate',
+      'DOMContentLoaded',
+    ]);
     mutationCallback?.([
       {
         addedNodes: [
