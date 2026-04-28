@@ -73,6 +73,12 @@ function buildAutoAllowCorrelationId(
   return `auto-${tabId.toString()}-${normalizedHost}-${requestType}-${timestamp.toString()}`;
 }
 
+function hasReusableAutoAllowStatus(status: DomainStatus | undefined): boolean {
+  return (
+    status?.state === 'pending' || status?.state === 'autoApproved' || status?.state === 'duplicate'
+  );
+}
+
 export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
   autoAllowBlockedDomain: (
     tabId: number,
@@ -101,6 +107,10 @@ export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
     requestType: string,
     targetUrl?: string
   ): Promise<void> {
+    if (hasReusableAutoAllowStatus(deps.getStoredDomainStatus(tabId, hostname))) {
+      return;
+    }
+
     const requestKey = `${tabId.toString()}:${hostname}:${origin ?? 'unknown'}`;
     if (deps.inFlightAutoRequests.has(requestKey)) {
       return;

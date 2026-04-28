@@ -236,6 +236,48 @@ await describe('auto allow workflow', async () => {
     await Promise.all([firstRequest, secondRequest]);
   });
 
+  await test('does not repeat API calls for a host that was already auto-approved in the same tab', async () => {
+    const requestBodies: unknown[] = [];
+    const updatedHosts: string[] = [];
+    const { fixture, statuses, workflow } = createWorkflowFixture({
+      fetchImpl: (_url, init) => {
+        const body = typeof init?.body === 'string' ? init.body : '{}';
+        requestBodies.push(JSON.parse(body));
+        return Promise.resolve(
+          new Response(JSON.stringify({ success: true, status: 'approved' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      },
+      requestLocalWhitelistUpdate: (hostname) => {
+        updatedHosts.push(hostname);
+        fixture.requestLocalWhitelistUpdateCalls += 1;
+        return Promise.resolve(true);
+      },
+    });
+
+    await workflow.autoAllowBlockedDomain(
+      5,
+      'cdn.example.com',
+      'https://portal.school/app',
+      'script',
+      'https://cdn.example.com/asset.js?attempt=1'
+    );
+    await workflow.autoAllowBlockedDomain(
+      5,
+      'cdn.example.com',
+      'https://portal.school/app',
+      'script',
+      'https://cdn.example.com/asset.js?attempt=2'
+    );
+
+    assert.equal(statuses.get('cdn.example.com')?.state, 'autoApproved');
+    assert.equal(requestBodies.length, 1);
+    assert.deepEqual(updatedHosts, ['cdn.example.com']);
+    assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
+  });
+
   await test('keeps pending API responses pending without refreshing the local whitelist', async () => {
     const { fixture, statuses, workflow } = createWorkflowFixture({
       fetchImpl: () =>
