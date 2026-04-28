@@ -1,7 +1,19 @@
 import assert from 'node:assert';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildFixtureUrl, buildScenarioHost, readWhitelistFile } from './student-policy-env';
+import {
+  type LinuxAutoAllowDiagnosticPhase,
+  type LinuxAutoAllowPhaseId,
+  type LinuxAutoAllowProbe,
+  upsertLinuxAutoAllowPhase,
+  writeLinuxAutoAllowBoundaryArtifact,
+} from './linux-auto-allow-diagnostics';
+import {
+  buildFixtureUrl,
+  buildScenarioHost,
+  escapeRegExp,
+  readWhitelistFile,
+} from './student-policy-env';
 import { StudentPolicyServerClient } from './student-policy-client';
 import { StudentPolicyDriver } from './student-policy-driver';
 import type { PolicyMode, StudentScenario } from './student-policy-types';
@@ -347,9 +359,66 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
   targets: StudentPolicyTargets
 ): Promise<void> {
   await client.setAutoApprove(false);
-  const dependencyProbes = [
+  let linuxAutoAllowPhases: LinuxAutoAllowDiagnosticPhase[] = [
+    {
+      id: 'firefox-extension-ready',
+      status: 'passed',
+      message: 'Selenium reached SP-006 with the Firefox extension and native host ready.',
+    },
+  ];
+  const linuxAutoAllowProbes: LinuxAutoAllowProbe[] = [];
+
+  const recordLinuxAutoAllowPhase = (
+    phase: LinuxAutoAllowDiagnosticPhase
+  ): LinuxAutoAllowDiagnosticPhase[] => {
+    linuxAutoAllowPhases = upsertLinuxAutoAllowPhase(linuxAutoAllowPhases, phase);
+    return linuxAutoAllowPhases;
+  };
+
+  const runLinuxDiagnosticPhase = async <T>(
+    id: LinuxAutoAllowPhaseId,
+    callback: () => Promise<T>
+  ): Promise<T> => {
+    try {
+      const result = await callback();
+      recordLinuxAutoAllowPhase({ id, status: 'passed' });
+      return result;
+    } catch (error) {
+      recordLinuxAutoAllowPhase({
+        id,
+        status: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  };
+
+  const writeLinuxArtifact = async (success: boolean): Promise<void> => {
+    try {
+      await writeLinuxAutoAllowBoundaryArtifact({
+        diagnosticsDir: driver.diagnosticsDir,
+        success,
+        phases: linuxAutoAllowPhases,
+        probes: linuxAutoAllowProbes,
+        fetchRemoteWhitelist: () => client.fetchMachineWhitelist(),
+      });
+    } catch (error) {
+      logScenarioStep(
+        `linux auto-allow artifact write error: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  };
+
+  const dependencyProbes: Array<{
+    id: string;
+    diagnosticId?: LinuxAutoAllowProbe['id'];
+    host: string;
+    url: string;
+    run: () => Promise<'ok' | 'blocked'>;
+  }> = [
     {
       id: 'fetch',
+      diagnosticId: 'fetch',
       host: targets.hosts.ajaxDependencyFetch,
       url: targets.ajaxDependencyFetchUrl,
       run: () => driver.runCrossOriginFetchProbe(targets.ajaxDependencyFetchUrl),
@@ -362,18 +431,21 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
     },
     {
       id: 'script',
+      diagnosticId: 'script',
       host: targets.hosts.ajaxDependencyScript,
       url: targets.ajaxDependencyScriptUrl,
       run: () => driver.runCrossOriginElementProbe(targets.ajaxDependencyScriptUrl, 'script'),
     },
     {
       id: 'image',
+      diagnosticId: 'image',
       host: targets.hosts.ajaxDependencyImage,
       url: targets.ajaxDependencyImageUrl,
       run: () => driver.runCrossOriginElementProbe(targets.ajaxDependencyImageUrl, 'image'),
     },
     {
       id: 'stylesheet',
+      diagnosticId: 'stylesheet',
       host: targets.hosts.ajaxDependencyStylesheet,
       url: targets.ajaxDependencyStylesheetUrl,
       run: () =>
@@ -381,41 +453,101 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
     },
   ];
 
-  for (const probe of dependencyProbes) {
-    logScenarioStep(`SP-006 ${probe.id} dependency auto-allow from whitelisted origin`);
+  try {
+    for (const probe of dependencyProbes) {
+      logScenarioStep(`SP-006 ${probe.id} dependency auto-allow from whitelisted origin`);
 
-    await driver.assertWhitelistMissing(probe.host);
-    await driver.assertDnsBlocked(probe.host);
-    await driver.openAndExpectLoaded({
-      url: targets.siteOkUrl,
-      title: 'OpenPath Site Fixture',
-      selector: '#page-status',
-    });
+      const linuxProbe: LinuxAutoAllowProbe | null =
+        probe.diagnosticId === undefined
+          ? null
+          : {
+              id: probe.diagnosticId,
+              host: probe.host,
+              url: probe.url,
+            };
+      if (linuxProbe !== null) {
+        linuxAutoAllowProbes.push(linuxProbe);
+      }
 
-    const firstResult = await probe.run();
-    assert.ok(
-      firstResult === 'blocked' || firstResult === 'ok',
-      `${probe.id} dependency probe should complete before auto-allow convergence`
-    );
+      await driver.assertWhitelistMissing(probe.host);
+      await driver.assertDnsBlocked(probe.host);
+      await runLinuxDiagnosticPhase('origin-page-load', async () => {
+        await driver.openAndExpectLoaded({
+          url: targets.siteOkUrl,
+          title: 'OpenPath Site Fixture',
+          selector: '#page-status',
+        });
+      });
 
-    await settlePolicyChange(
-      driver,
-      mode,
-      async () => {
-        await driver.assertWhitelistContains(probe.host);
-        await driver.assertDnsAllowed(probe.host);
-      },
-      { timeoutMs: 45_000 }
-    );
+      const firstResult = await runLinuxDiagnosticPhase('probe-traffic', async () => {
+        const result = await probe.run();
+        assert.ok(
+          result === 'blocked' || result === 'ok',
+          `${probe.id} dependency probe should complete before auto-allow convergence`
+        );
+        return result;
+      });
+      if (linuxProbe !== null) {
+        linuxProbe.firstResult = firstResult;
+      }
 
-    await driver.restart();
-    await driver.openAndExpectLoaded({
-      url: targets.siteOkUrl,
-      title: 'OpenPath Site Fixture',
-      selector: '#page-status',
-    });
-    const secondResult = await probe.run();
-    assert.strictEqual(secondResult, 'ok', `${probe.id} dependency should load after auto-allow`);
+      await runLinuxDiagnosticPhase('remote-rule-creation', async () => {
+        await driver.waitForConvergence(
+          async () => {
+            assert.match(
+              await client.fetchMachineWhitelist(),
+              new RegExp(`(^|\\n)${escapeRegExp(probe.host)}($|\\n)`)
+            );
+          },
+          { timeoutMs: 45_000, pollMs: 1_000 }
+        );
+      });
+
+      await runLinuxDiagnosticPhase('local-whitelist-apply', async () => {
+        await settlePolicyChange(
+          driver,
+          mode,
+          async () => {
+            await driver.assertWhitelistContains(probe.host);
+          },
+          { timeoutMs: 45_000 }
+        );
+      });
+
+      await runLinuxDiagnosticPhase('dns-policy-apply', async () => {
+        await settlePolicyChange(
+          driver,
+          mode,
+          async () => {
+            await driver.assertDnsAllowed(probe.host);
+          },
+          { timeoutMs: 45_000 }
+        );
+      });
+
+      await driver.restart();
+      await driver.openAndExpectLoaded({
+        url: targets.siteOkUrl,
+        title: 'OpenPath Site Fixture',
+        selector: '#page-status',
+      });
+      const secondResult = await runLinuxDiagnosticPhase('probe-traffic', () => probe.run());
+      assert.strictEqual(secondResult, 'ok', `${probe.id} dependency should load after auto-allow`);
+      if (linuxProbe !== null) {
+        linuxProbe.secondResult = secondResult;
+      }
+    }
+    await writeLinuxArtifact(true);
+  } catch (error) {
+    if (!linuxAutoAllowPhases.some((phase) => phase.status === 'failed')) {
+      recordLinuxAutoAllowPhase({
+        id: 'probe-traffic',
+        status: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+    await writeLinuxArtifact(false);
+    throw error;
   }
 
   logScenarioStep('SP-006 blocked subdomain prevents ajax auto-allow');

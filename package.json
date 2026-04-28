@@ -18,7 +18,7 @@
     "test:dashboard": "npm test --workspace=@openpath/dashboard",
     "test:react-spa": "npm test --workspace=@openpath/react-spa",
     "test:e2e": "npm run test:e2e --workspace=@openpath/react-spa",
-    "test:e2e:helpers": "node --import tsx --test --test-concurrency=1 tests/selenium/firefox-extension-uuid.test.ts tests/selenium/student-policy-flow.test.ts tests/e2e/student-flow/fixture-server.test.ts tests/e2e/student-flow/reconcile-student-scenario.test.ts tests/e2e/student-flow/windows-student-summary.test.ts",
+    "test:e2e:helpers": "node --import tsx --test --test-concurrency=1 tests/selenium/firefox-extension-uuid.test.ts tests/selenium/linux-auto-allow-diagnostics.test.ts tests/selenium/student-policy-flow.test.ts tests/e2e/student-flow/fixture-server.test.ts tests/e2e/student-flow/reconcile-student-scenario.test.ts tests/e2e/student-flow/windows-student-summary.test.ts",
     "test:e2e:smoke": "npm run test:e2e --workspace=@openpath/react-spa -- --grep @smoke",
     "test:installer:linux": "bash tests/e2e/ci/run-linux-installer-contracts.sh",
     "test:installer:apt": "bash tests/e2e/ci/run-linux-apt-contracts.sh",

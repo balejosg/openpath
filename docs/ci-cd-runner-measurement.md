@@ -152,6 +152,12 @@ The latest validated OpenPath controlled Windows baseline is:
 - Windows student-policy diagnostic artifact:
   `windows-student-policy-artifacts-24760799312`, retained, `1123977`
   bytes.
+- Linux student-policy auto-allow diagnostics now write
+  `linux-auto-allow-boundary.json` under
+  `tests/e2e/artifacts/linux-student-policy` when SP-006 runs. The artifact
+  records `failureBoundary`, ordered `diagnosticPhases`, probe hosts/results,
+  remote whitelist, local `/var/lib/openpath/whitelist.txt`, local DNS probes,
+  service status, resolver config, and native-host manifest evidence.
 - Upload symptom cleared: the Windows diagnostics upload finalized in GitHub
   blob storage without `ENOTFOUND`.
 

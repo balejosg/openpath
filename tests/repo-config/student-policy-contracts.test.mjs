@@ -596,6 +596,37 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('Linux student policy SP-006 writes an auto-allow boundary artifact', () => {
+    const scenarios = readText('tests/selenium/student-policy-scenarios.ts');
+    const helper = readText('tests/selenium/linux-auto-allow-diagnostics.ts');
+
+    assert.match(
+      helper,
+      /linux-auto-allow-boundary\.json/,
+      'Linux auto-allow helper should own the diagnostic artifact filename'
+    );
+    assert.match(
+      helper,
+      /firefox-extension-ready[\s\S]*origin-page-load[\s\S]*remote-rule-creation[\s\S]*local-whitelist-apply[\s\S]*dns-policy-apply[\s\S]*probe-traffic[\s\S]*artifact-written/,
+      'Linux auto-allow helper should expose the required phase contract'
+    );
+    assert.match(
+      scenarios,
+      /writeLinuxAutoAllowBoundaryArtifact/,
+      'SP-006 should write the Linux auto-allow boundary artifact from the Selenium harness'
+    );
+    assert.match(
+      scenarios,
+      /fetchMachineWhitelist\(\)/,
+      'SP-006 diagnostics should capture the remote machine whitelist'
+    );
+    assert.match(
+      scenarios,
+      /readWhitelistFile\(\)/,
+      'SP-006 diagnostics should capture the local Linux whitelist file'
+    );
+  });
+
   test('Linux student policy runner highlights readiness failures in GitHub summaries', () => {
     const linuxRunner = readText('tests/e2e/ci/run-linux-student-flow.sh');
 
@@ -628,6 +659,27 @@ describe('repository verification contract', () => {
       linuxRunner,
       /on_error\(\)[\s\S]*publish_github_step_summary "failure"/,
       'Linux student-policy runner should publish the diagnostic summary before exiting on failure'
+    );
+  });
+
+  test('Linux student policy runner surfaces the auto-allow boundary artifact', () => {
+    const linuxRunner = readText('tests/e2e/ci/run-linux-student-flow.sh');
+    const e2eWorkflow = readText('.github/workflows/e2e-tests.yml');
+
+    assert.match(
+      linuxRunner,
+      /linux-auto-allow-boundary\.json/,
+      'Linux student-policy runner should mention the boundary artifact in summaries'
+    );
+    assert.match(
+      linuxRunner,
+      /OPENPATH_STUDENT_ARTIFACTS_DIR/,
+      'Linux student-policy runner should keep honoring an external artifact directory'
+    );
+    assert.match(
+      e2eWorkflow,
+      /Upload Linux student-policy diagnostics[\s\S]*tests\/e2e\/artifacts\/linux-student-policy/,
+      'E2E workflow should upload the Linux student-policy artifact directory'
     );
   });
 

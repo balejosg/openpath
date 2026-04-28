@@ -123,7 +123,7 @@ publish_github_step_summary() {
         echo ""
         echo "Status: $mode"
         echo ""
-        echo "Artifacts: linux-student-policy-timings.json, linux-dns-readiness.err.log, and linux-firefox-readiness.err.log are uploaded with this job when present."
+        echo "Artifacts: linux-student-policy-timings.json, linux-auto-allow-boundary.json, linux-dns-readiness.err.log, and linux-firefox-readiness.err.log are uploaded with this job when present."
         echo ""
         echo "## Linux Student Policy Timing"
         echo ""
@@ -160,6 +160,27 @@ publish_github_step_summary() {
         if [[ "$found_readiness_failure" == false ]]; then
             echo ""
             echo "No readiness failures captured."
+        fi
+
+        echo ""
+        echo "### Auto-allow boundary"
+        if [[ -s "$ARTIFACTS_DIR/linux-auto-allow-boundary.json" ]]; then
+            python3 - "$ARTIFACTS_DIR/linux-auto-allow-boundary.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as fh:
+    artifact = json.load(fh)
+
+boundary = artifact.get('failureBoundary') or {}
+result = 'success' if artifact.get('success') is True else 'failure'
+print(f"- Result: `{result}`")
+print(f"- Boundary: `{boundary.get('id', 'unknown')}`")
+print(f"- Message: {boundary.get('message', 'n/a')}")
+PY
+        else
+            echo ""
+            echo "linux-auto-allow-boundary.json: missing"
         fi
     } >>"$GITHUB_STEP_SUMMARY"
 }
@@ -220,6 +241,9 @@ debug_state() {
     echo ""
     echo "Firefox native host snapshot:"
     docker exec "$CONTAINER_NAME" bash -lc 'ls -l /openpath/firefox-extension/openpath-firefox-extension.xpi /usr/local/lib/openpath/openpath-native-host.py /usr/local/bin/openpath-native-host.py /usr/lib/mozilla/native-messaging-hosts/whitelist_native_host.json /root/.mozilla/native-messaging-hosts/whitelist_native_host.json 2>/dev/null || true' || true
+    echo ""
+    echo "Firefox native host manifest snapshot:"
+    docker exec "$CONTAINER_NAME" bash -lc 'for manifest in /usr/lib/mozilla/native-messaging-hosts/whitelist_native_host.json /root/.mozilla/native-messaging-hosts/whitelist_native_host.json; do echo "== $manifest =="; cat "$manifest" 2>/dev/null || true; done' || true
 }
 
 on_error() {
@@ -227,7 +251,7 @@ on_error() {
     echo ""
     echo "Linux student-policy runner failed (exit code: $rc)"
     finish_timing_phase failure "${BASH_COMMAND:-unknown}" || true
-    debug_state
+    debug_state | tee "$ARTIFACTS_DIR/linux-student-policy-debug-state.log"
     publish_github_step_summary "failure" || true
     exit "$rc"
 }
