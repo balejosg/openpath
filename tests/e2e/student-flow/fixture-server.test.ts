@@ -138,7 +138,7 @@ await describe('student fixture server', async () => {
     assert.deepStrictEqual(JSON.parse(fetchResponse.body), { status: 'ok', kind: 'fetch-private' });
   });
 
-  await test('serves host-routed image and stylesheet probes', async () => {
+  await test('serves host-routed image, stylesheet, and font probes', async () => {
     const suffix = fixtureServer.fixtures.site.replace(/^site\./, '');
 
     const imageResponse = await requestFixture({
@@ -157,6 +157,14 @@ await describe('student fixture server', async () => {
     assert.strictEqual(stylesheetResponse.statusCode, 200);
     assert.match(stylesheetResponse.headers['content-type'] ?? '', /text\/css/);
     assert.match(stylesheetResponse.body, /--openpath-style-probe/);
+
+    const fontResponse = await requestFixture({
+      server: fixtureServer,
+      host: `font.ajax-dependency.${suffix}`,
+      path: '/font.woff2',
+    });
+    assert.strictEqual(fontResponse.statusCode, 200);
+    assert.match(fontResponse.headers['content-type'] ?? '', /font\/woff2/);
   });
 
   await test('returns host-specific 404s for unknown routes or hosts', async () => {

@@ -11,6 +11,8 @@ test('Linux auto-allow diagnostics expose the required ordered phases', () => {
   assert.deepEqual(LINUX_AUTO_ALLOW_DIAGNOSTIC_PHASES, [
     'firefox-extension-ready',
     'origin-page-load',
+    'page-observer',
+    'page-resource-candidates',
     'remote-rule-creation',
     'local-whitelist-apply',
     'dns-policy-apply',
@@ -44,13 +46,17 @@ test('Linux auto-allow artifact preserves probes and diagnostics without changin
     success: true,
     probes: [
       { id: 'fetch', host: 'api.fetch.example.test', url: 'http://api.fetch.example.test/fetch' },
+      { id: 'xhr', host: 'api.xhr.example.test', url: 'http://api.xhr.example.test/xhr' },
       { id: 'image', host: 'image.example.test', url: 'http://image.example.test/pixel.png' },
       { id: 'script', host: 'cdn.example.test', url: 'http://cdn.example.test/asset.js' },
       { id: 'stylesheet', host: 'style.example.test', url: 'http://style.example.test/style.css' },
+      { id: 'font', host: 'font.example.test', url: 'http://font.example.test/font.woff2' },
     ],
     diagnosticPhases: [
       { id: 'firefox-extension-ready', status: 'passed' },
       { id: 'origin-page-load', status: 'passed' },
+      { id: 'page-observer', status: 'passed' },
+      { id: 'page-resource-candidates', status: 'passed' },
       { id: 'remote-rule-creation', status: 'passed' },
       { id: 'local-whitelist-apply', status: 'passed' },
       { id: 'dns-policy-apply', status: 'passed' },
@@ -69,6 +75,10 @@ test('Linux auto-allow artifact preserves probes and diagnostics without changin
   assert.equal(artifact.platform, 'linux');
   assert.equal(artifact.success, true);
   assert.equal(artifact.failureBoundary.id, 'success');
-  assert.equal(artifact.probes.length, 4);
+  assert.equal(artifact.probes.length, 6);
+  assert.deepEqual(
+    artifact.probes.map((probe) => probe.id),
+    ['fetch', 'xhr', 'image', 'script', 'stylesheet', 'font']
+  );
   assert.equal(artifact.diagnostics.resolvConf, 'nameserver 127.0.0.1\n');
 });

@@ -607,13 +607,23 @@ describe('repository verification contract', () => {
     );
     assert.match(
       helper,
-      /firefox-extension-ready[\s\S]*origin-page-load[\s\S]*remote-rule-creation[\s\S]*local-whitelist-apply[\s\S]*dns-policy-apply[\s\S]*probe-traffic[\s\S]*artifact-written/,
+      /firefox-extension-ready[\s\S]*origin-page-load[\s\S]*page-observer[\s\S]*page-resource-candidates[\s\S]*remote-rule-creation[\s\S]*local-whitelist-apply[\s\S]*dns-policy-apply[\s\S]*probe-traffic[\s\S]*artifact-written/,
       'Linux auto-allow helper should expose the required phase contract'
+    );
+    assert.match(
+      helper,
+      /id: 'fetch' \| 'xhr' \| 'image' \| 'script' \| 'stylesheet' \| 'font'/,
+      'Linux auto-allow helper should expose every functional probe in the artifact contract'
     );
     assert.match(
       scenarios,
       /writeLinuxAutoAllowBoundaryArtifact/,
       'SP-006 should write the Linux auto-allow boundary artifact from the Selenium harness'
+    );
+    assert.match(
+      scenarios,
+      /ajaxDependencyFontUrl[\s\S]*font\.woff2[\s\S]*diagnosticId: 'font'/,
+      'SP-006 should cover font subresources in the Linux boundary artifact'
     );
     assert.match(
       scenarios,

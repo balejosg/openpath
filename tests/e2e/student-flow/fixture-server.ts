@@ -104,6 +104,12 @@ function setImageHeaders(res: ServerResponse): void {
   res.setHeader('Cache-Control', 'no-store');
 }
 
+function setFontHeaders(res: ServerResponse): void {
+  res.setHeader('Content-Type', 'font/woff2');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+}
+
 function notFound(res: ServerResponse): void {
   res.statusCode = 404;
   setHtmlHeaders(res);
@@ -416,6 +422,16 @@ function routeStyleHost(pathname: string, res: ServerResponse): void {
   notFound(res);
 }
 
+function routeFontHost(pathname: string, res: ServerResponse): void {
+  if (pathname === '/font.woff2') {
+    setFontHeaders(res);
+    res.end(Buffer.from('d09GMgABAAAAAA==', 'base64'));
+    return;
+  }
+
+  notFound(res);
+}
+
 export function createStudentFixtureRequestHandler(
   fixtures: StudentFixtureHosts = getStudentFixtureHosts()
 ): http.RequestListener {
@@ -462,6 +478,11 @@ export function createStudentFixtureRequestHandler(
 
       if (host.startsWith('style.')) {
         routeStyleHost(pathname, res);
+        return;
+      }
+
+      if (host.startsWith('font.')) {
+        routeFontHost(pathname, res);
         return;
       }
 

@@ -2,7 +2,7 @@ import { buildPopupUrl } from './student-policy-env';
 import type { DomainStatusPayload, RuntimeResponse } from './student-policy-types';
 import type { StudentPolicyDriverState } from './student-policy-driver-state';
 
-export type CrossOriginElementProbeType = 'script' | 'image' | 'stylesheet';
+export type CrossOriginElementProbeType = 'script' | 'image' | 'stylesheet' | 'font';
 
 async function openPopupContext(state: StudentPolicyDriverState): Promise<void> {
   const driver = state.getDriver();
@@ -232,6 +232,19 @@ export async function runCrossOriginElementProbe(
      if (probeType === 'stylesheet') {
        const link = document.createElement('link');
        link.rel = 'stylesheet';
+       link.onload = () => finish('ok');
+       link.onerror = () => finish('blocked');
+       link.href = withCacheBust;
+       document.head.appendChild(link);
+       return;
+     }
+
+     if (probeType === 'font') {
+       const link = document.createElement('link');
+       link.rel = 'preload';
+       link.as = 'font';
+       link.type = 'font/woff2';
+       link.crossOrigin = 'anonymous';
        link.onload = () => finish('ok');
        link.onerror = () => finish('blocked');
        link.href = withCacheBust;

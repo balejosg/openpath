@@ -37,6 +37,7 @@ interface StudentPolicyTargets {
   ajaxDependencyScriptUrl: string;
   ajaxDependencyImageUrl: string;
   ajaxDependencyStylesheetUrl: string;
+  ajaxDependencyFontUrl: string;
   ajaxBlockedSubdomainFetchUrl: string;
   ajaxBlockedPathFetchUrl: string;
   hosts: {
@@ -53,6 +54,7 @@ interface StudentPolicyTargets {
     ajaxDependencyScript: string;
     ajaxDependencyImage: string;
     ajaxDependencyStylesheet: string;
+    ajaxDependencyFont: string;
     ajaxBlockedSubdomain: string;
     ajaxBlockedPath: string;
   };
@@ -90,6 +92,7 @@ function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
     scenario,
     'ajax-dependency-stylesheet'
   )}`;
+  const ajaxDependencyFontHost = `font.${buildScenarioHost(scenario, 'ajax-dependency-font')}`;
   const ajaxBlockedSubdomainHost = `api.${buildScenarioHost(scenario, 'ajax-blocked-subdomain')}`;
   const ajaxBlockedPathHost = `api.${buildScenarioHost(scenario, 'ajax-blocked-path')}`;
 
@@ -112,6 +115,7 @@ function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
     ajaxDependencyScriptUrl: buildFixtureUrl(ajaxDependencyScriptHost, '/asset.js'),
     ajaxDependencyImageUrl: buildFixtureUrl(ajaxDependencyImageHost, '/pixel.png'),
     ajaxDependencyStylesheetUrl: buildFixtureUrl(ajaxDependencyStylesheetHost, '/style.css'),
+    ajaxDependencyFontUrl: buildFixtureUrl(ajaxDependencyFontHost, '/font.woff2'),
     ajaxBlockedSubdomainFetchUrl: buildFixtureUrl(ajaxBlockedSubdomainHost, '/fetch/private.json'),
     ajaxBlockedPathFetchUrl: buildFixtureUrl(ajaxBlockedPathHost, '/fetch/private.json'),
     hosts: {
@@ -128,6 +132,7 @@ function buildTargets(scenario: StudentScenario): StudentPolicyTargets {
       ajaxDependencyScript: ajaxDependencyScriptHost,
       ajaxDependencyImage: ajaxDependencyImageHost,
       ajaxDependencyStylesheet: ajaxDependencyStylesheetHost,
+      ajaxDependencyFont: ajaxDependencyFontHost,
       ajaxBlockedSubdomain: ajaxBlockedSubdomainHost,
       ajaxBlockedPath: ajaxBlockedPathHost,
     },
@@ -425,6 +430,7 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
     },
     {
       id: 'xhr',
+      diagnosticId: 'xhr',
       host: targets.hosts.ajaxDependencyXhr,
       url: targets.ajaxDependencyXhrUrl,
       run: () => driver.runCrossOriginXhrProbe(targets.ajaxDependencyXhrUrl),
@@ -450,6 +456,13 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
       url: targets.ajaxDependencyStylesheetUrl,
       run: () =>
         driver.runCrossOriginElementProbe(targets.ajaxDependencyStylesheetUrl, 'stylesheet'),
+    },
+    {
+      id: 'font',
+      diagnosticId: 'font',
+      host: targets.hosts.ajaxDependencyFont,
+      url: targets.ajaxDependencyFontUrl,
+      run: () => driver.runCrossOriginElementProbe(targets.ajaxDependencyFontUrl, 'font'),
     },
   ];
 
@@ -478,6 +491,12 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
           selector: '#page-status',
         });
       });
+      await runLinuxDiagnosticPhase('page-observer', async () => {
+        const installed = await driver
+          .getDriver()
+          .executeScript('return window.__openpathPageResourceObserverInstalled === true;');
+        assert.strictEqual(installed, true, 'page resource observer should be installed');
+      });
 
       const firstResult = await runLinuxDiagnosticPhase('probe-traffic', async () => {
         const result = await probe.run();
@@ -490,6 +509,12 @@ async function runAllowedOriginAjaxAutoAllowScenarios(
       if (linuxProbe !== null) {
         linuxProbe.firstResult = firstResult;
       }
+      await runLinuxDiagnosticPhase('page-resource-candidates', async () => {
+        assert.ok(
+          firstResult === 'blocked' || firstResult === 'ok',
+          `${probe.id} dependency should produce a candidate probe outcome`
+        );
+      });
 
       await runLinuxDiagnosticPhase('remote-rule-creation', async () => {
         await driver.waitForConvergence(

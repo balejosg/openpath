@@ -13,6 +13,8 @@ export const LINUX_AUTO_ALLOW_BOUNDARY_ARTIFACT = 'linux-auto-allow-boundary.jso
 export const LINUX_AUTO_ALLOW_DIAGNOSTIC_PHASES = [
   'firefox-extension-ready',
   'origin-page-load',
+  'page-observer',
+  'page-resource-candidates',
   'remote-rule-creation',
   'local-whitelist-apply',
   'dns-policy-apply',
@@ -31,7 +33,7 @@ export interface LinuxAutoAllowDiagnosticPhase {
 }
 
 export interface LinuxAutoAllowProbe {
-  id: 'fetch' | 'xhr' | 'image' | 'script' | 'stylesheet';
+  id: 'fetch' | 'xhr' | 'image' | 'script' | 'stylesheet' | 'font';
   host: string;
   url: string;
   firstResult?: 'ok' | 'blocked';
@@ -73,6 +75,10 @@ const NEXT_ACTION_BY_PHASE: Record<LinuxAutoAllowPhaseId | 'unknown' | 'success'
     'Inspect Firefox extension install, native-host manifest, and Selenium browser readiness before changing auto-allow logic.',
   'origin-page-load':
     'Inspect fixture DNS/page load evidence before changing extension or native-host behavior.',
+  'page-observer':
+    'Inspect extension content-script injection and the page observer registration path.',
+  'page-resource-candidates':
+    'Inspect extension page-resource detection, candidate matching, and browser console evidence.',
   'remote-rule-creation':
     'Inspect auto-allow API responses and remote whitelist publication before changing endpoint behavior.',
   'local-whitelist-apply':
