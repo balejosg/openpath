@@ -1537,3 +1537,30 @@ Description: DNS Whitelist System for Educational Environments
   - Health monitoring
   - Captive portal detection
 
+Package: openpath-dnsmasq
+Version: 0.0.20260428232717-1
+Architecture: all
+Maintainer: Las Encinas IT <it@lasencinas.edu>
+Depends: dnsmasq, iptables, ipset, iproute2, curl, libcap2-bin, dnsutils, conntrack, python3
+Recommends: firefox-esr, unattended-upgrades
+Filename: pool/unstable/main/openpath-dnsmasq_0.0.20260428232717-1_amd64.deb
+Size: 1240842
+MD5sum: eb04fda6d9de3a3b8d1d0ca5f47ead14
+SHA1: 612797e0ab2a1bceb27785a8f584aa0ce48f0959
+SHA256: 358df71f83fa152344cccd8c1d71fdd4abcfc8a118964db60aba08958857e7cc
+Section: net
+Priority: optional
+Homepage: https://github.com/balejosg/openpath
+Description: DNS Whitelist System for Educational Environments
+ A multi-layer internet access control system using DNS sinkhole,
+ iptables firewall, and browser policies. Blocks all domains by
+ default, allowing only whitelisted domains.
+ .
+ Features:
+  - DNS sinkhole (dnsmasq)
+  - Firewall rules (iptables)
+  - Browser policies (Firefox/Chromium)
+  - Automatic whitelist updates
+  - Health monitoring
+  - Captive portal detection
+
