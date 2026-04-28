@@ -7,7 +7,11 @@ import {
   type PublicRequestResult,
   submitMachineRequest,
 } from '../services/public-request.service.js';
-import { parseAutoRequestPayload, parseSubmitRequestPayload } from '../lib/public-request-input.js';
+import {
+  normalizeDiagnosticContext,
+  parseAutoRequestPayload,
+  parseSubmitRequestPayload,
+} from '../lib/public-request-input.js';
 import { createAsyncRouteHandler, sendJsonInternalError } from './route-helpers.js';
 
 function sendRequestServiceError(res: Response, error: { code: string; message: string }): void {
@@ -49,6 +53,7 @@ export function registerPublicRequestRoutes(app: Express): void {
             originPage: body.originPageRaw.slice(0, 2048) || undefined,
             targetUrl: body.targetUrlRaw.slice(0, 2048) || undefined,
             reason: body.reasonRaw.slice(0, 200) || undefined,
+            diagnosticContext: normalizeDiagnosticContext(body.diagnosticContextRaw),
           });
 
         if (!result.ok) {

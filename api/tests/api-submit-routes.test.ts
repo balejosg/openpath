@@ -235,6 +235,12 @@ void describe('Request API tests - public submit routes', async () => {
           origin_page: `https://${originDomain}/r/openpath`,
           target_url: `https://${domain}/s/inter/v12/font.woff2`,
           reason: 'auto-allow page-resource (font)',
+          diagnostic_context: {
+            correlation_id: `corr-${suffix}`,
+            probe_id: 'font-subresource',
+            request_type: 'font',
+            target_hostname: domain,
+          },
         }),
       });
 
@@ -257,6 +263,19 @@ void describe('Request API tests - public submit routes', async () => {
       assert.strictEqual(data.source, 'auto_extension');
       assert.strictEqual(data.duplicate, false);
 
+      const diagnosticRuleRows = getRows<{ id: string; comment: string | null }>(
+        await db.execute(
+          sql.raw(
+            `SELECT id, comment FROM whitelist_rules WHERE group_id='${groupId}' AND type='whitelist' AND value='${domain}'`
+          )
+        )
+      );
+      assert.strictEqual(
+        diagnosticRuleRows[0]?.comment?.includes(
+          `diagnostic (correlation_id=corr-${suffix}; probe_id=font-subresource; request_type=font; target_hostname=${domain})`
+        ),
+        true
+      );
       assert.strictEqual(
         getRows(
           await db.execute(

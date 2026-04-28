@@ -278,7 +278,7 @@ export async function handleAutoMachineRequest(
   input: Pick<
     CreateMachineRequestInput,
     'domainRaw' | 'hostnameRaw' | 'originPage' | 'reason' | 'targetUrl' | 'token'
-  >
+  > & { diagnosticContext?: string | undefined }
 ): Promise<PublicRequestResult<AutoMachineRequestOutcome>> {
   const context = await resolveMachineRequestContext({
     ...input,
@@ -316,9 +316,12 @@ export async function handleAutoMachineRequest(
   }
 
   const reasonText = input.reason ?? '';
+  const diagnosticText = input.diagnosticContext
+    ? ` - diagnostic (${input.diagnosticContext})`
+    : '';
   const sourceComment = input.originPage
-    ? `Auto-approved via Firefox extension (${input.originPage.slice(0, 300)})${reasonText ? ` - ${reasonText}` : ''}`
-    : `Auto-approved via Firefox extension${reasonText ? ` - ${reasonText}` : ''}`;
+    ? `Auto-approved via Firefox extension (${input.originPage.slice(0, 300)})${reasonText ? ` - ${reasonText}` : ''}${diagnosticText}`
+    : `Auto-approved via Firefox extension${reasonText ? ` - ${reasonText}` : ''}${diagnosticText}`;
 
   try {
     const created: CreateRuleResult = await DomainEventsService.withDbTransactionEvents(

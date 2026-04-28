@@ -59,6 +59,20 @@ export function resolveAutoAllowState(payload: AutoAllowStateResolutionInput): D
   return payload.duplicate ? 'duplicate' : 'autoApproved';
 }
 
+function buildAutoAllowCorrelationId(
+  tabId: number,
+  hostname: string,
+  requestType: string,
+  timestamp: number
+): string {
+  const normalizedHost = hostname
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return `auto-${tabId.toString()}-${normalizedHost}-${requestType}-${timestamp.toString()}`;
+}
+
 export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
   autoAllowBlockedDomain: (
     tabId: number,
@@ -163,6 +177,11 @@ export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
             token: tokenResponse.token,
             hostname: hostnameResponse.hostname,
             reason: `auto-allow page-resource (${requestType})`,
+            diagnostic_context: {
+              correlation_id: buildAutoAllowCorrelationId(tabId, hostname, requestType, now()),
+              request_type: requestType,
+              target_hostname: hostname,
+            },
           }),
         },
         requestConfig.requestTimeout,

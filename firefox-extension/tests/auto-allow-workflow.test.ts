@@ -174,6 +174,11 @@ await describe('auto allow workflow', async () => {
         origin_page: 'https://portal.school/app',
         reason: 'auto-allow page-resource (xmlhttprequest)',
         target_url: 'https://example.com/data.json',
+        diagnostic_context: {
+          correlation_id: 'auto-5-example-com-xmlhttprequest-1234567890',
+          request_type: 'xmlhttprequest',
+          target_hostname: 'example.com',
+        },
         token: 'machine-token',
       },
     ]);

@@ -265,16 +265,27 @@ void test('background runtime passes auto-allowed hostnames to native whitelist 
     await waitForAsyncRuntime();
 
     assert.deepEqual(harness.responses, [{ success: true }]);
-    assert.deepEqual(harness.fetchBodies, [
-      {
-        domain: 'api.portal-cdn.example',
-        hostname: 'lab-pc-01',
-        origin_page: 'http://portal.example/app',
-        reason: 'auto-allow page-resource (xmlhttprequest)',
-        target_url: 'http://api.portal-cdn.example/data.json',
-        token: 'machine-token',
+    assert.equal(harness.fetchBodies.length, 1);
+    const fetchBody = harness.fetchBodies[0] as {
+      diagnostic_context: { correlation_id?: string };
+    };
+    assert.deepEqual(fetchBody, {
+      domain: 'api.portal-cdn.example',
+      hostname: 'lab-pc-01',
+      origin_page: 'http://portal.example/app',
+      reason: 'auto-allow page-resource (xmlhttprequest)',
+      target_url: 'http://api.portal-cdn.example/data.json',
+      diagnostic_context: {
+        correlation_id: fetchBody.diagnostic_context.correlation_id,
+        request_type: 'xmlhttprequest',
+        target_hostname: 'api.portal-cdn.example',
       },
-    ]);
+      token: 'machine-token',
+    });
+    assert.match(
+      fetchBody.diagnostic_context.correlation_id ?? '',
+      /^auto-5-api-portal-cdn-example-xmlhttprequest-/
+    );
     assert.ok(
       harness.nativeMessages.some(
         (message) =>

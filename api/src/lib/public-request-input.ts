@@ -7,6 +7,7 @@ export interface AutoRequestInput {
   originPageRaw: string;
   targetUrlRaw: string;
   reasonRaw: string;
+  diagnosticContextRaw: unknown;
 }
 
 export interface SubmitRequestInput {
@@ -46,6 +47,51 @@ function getFirstStringField(rec: Record<string, unknown>, keys: string[]): stri
   return '';
 }
 
+function getFirstField(rec: Record<string, unknown>, keys: string[]): unknown {
+  for (const key of keys) {
+    if (key in rec) {
+      return rec[key];
+    }
+  }
+  return undefined;
+}
+
+const DIAGNOSTIC_CONTEXT_KEYS = [
+  ['correlation_id', 'correlationId'],
+  ['probe_id', 'probeId'],
+  ['request_type', 'requestType'],
+  ['target_hostname', 'targetHostname'],
+] as const;
+
+function sanitizeDiagnosticValue(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value
+    .trim()
+    .replace(/[;\r\n=]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .slice(0, 80);
+}
+
+export function normalizeDiagnosticContext(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const sanitized = sanitizeDiagnosticValue(value).slice(0, 300);
+    return sanitized || undefined;
+  }
+  if (value === null || value === undefined || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const rec = value as Record<string, unknown>;
+  const parts = DIAGNOSTIC_CONTEXT_KEYS.flatMap(([snakeKey, camelKey]) => {
+    const sanitized = sanitizeDiagnosticValue(rec[snakeKey] ?? rec[camelKey]);
+    return sanitized ? [`${snakeKey}=${sanitized}`] : [];
+  });
+  const serialized = parts.join('; ').slice(0, 300);
+  return serialized || undefined;
+}
+
 export function parseAutoRequestPayload(body: unknown): AutoRequestInput {
   const rec = asRecord(body);
 
@@ -56,6 +102,7 @@ export function parseAutoRequestPayload(body: unknown): AutoRequestInput {
     originPageRaw: getFirstStringField(rec, ['origin_page', 'originPage']),
     targetUrlRaw: getFirstStringField(rec, ['target_url', 'targetUrl']),
     reasonRaw: getStringField(rec, 'reason').trim(),
+    diagnosticContextRaw: getFirstField(rec, ['diagnostic_context', 'diagnosticContext']),
   };
 }
 
