@@ -40,6 +40,17 @@ else
     exit 1
 fi
 
+if [ -f "$INSTALL_DIR/lib/sse-update-coalescer.sh" ]; then
+    # shellcheck source=/usr/local/lib/openpath/lib/sse-update-coalescer.sh
+    source "$INSTALL_DIR/lib/sse-update-coalescer.sh"
+elif [ -f "$SCRIPT_DIR/../../lib/sse-update-coalescer.sh" ]; then
+    # shellcheck source=../../lib/sse-update-coalescer.sh
+    source "$SCRIPT_DIR/../../lib/sse-update-coalescer.sh"
+else
+    echo "ERROR: sse-update-coalescer.sh not found" >&2
+    exit 1
+fi
+
 # =============================================================================
 # Configuration
 # =============================================================================
@@ -47,8 +58,6 @@ fi
 OPENPATH_ETC="${OPENPATH_ETC:-/etc/openpath}"
 OPENPATH_RUN="${OPENPATH_RUN:-/run/openpath}"
 PID_FILE="${OPENPATH_RUN}/sse-listener.pid"
-LAST_UPDATE_FILE="${OPENPATH_RUN}/sse-last-update"
-PENDING_UPDATE_FILE="${OPENPATH_RUN}/sse-pending-update"
 UPDATE_SCRIPT="/usr/local/bin/openpath-update.sh"
 
 # Read machine token from the whitelist URL configuration
@@ -98,67 +107,8 @@ get_sse_url() {
     echo "${base_url}/api/machines/events"
 }
 
-# =============================================================================
-# Update Trigger (with debounce)
-# =============================================================================
-
-run_update_now() {
-    local now
-    now="${1:-$(date +%s)}"
-
-    mkdir -p "$OPENPATH_RUN"
-    rm -f "$PENDING_UPDATE_FILE"
-
-    log "⚡ SSE: Whitelist change detected — triggering immediate update"
-    echo "$now" > "$LAST_UPDATE_FILE"
-
-    # Run update in background so we don't block the SSE listener
-    if [ -x "$UPDATE_SCRIPT" ]; then
-        "$UPDATE_SCRIPT" &
-    else
-        log "⚠ SSE: Update script not found at $UPDATE_SCRIPT"
-    fi
-}
-
-schedule_deferred_update() {
-    local delay="$1"
-
-    if [ -f "$PENDING_UPDATE_FILE" ]; then
-        log "↳ SSE: Deferred update already scheduled"
-        return 0
-    fi
-
-    mkdir -p "$OPENPATH_RUN"
-    date +%s > "$PENDING_UPDATE_FILE"
-    log "↳ SSE: Scheduling deferred update in ${delay}s"
-
-    (
-        sleep "$delay"
-        rm -f "$PENDING_UPDATE_FILE"
-        trigger_update
-    ) &
-}
-
 trigger_update() {
-    local now
-    now=$(date +%s)
-    local cooldown="${SSE_UPDATE_COOLDOWN:-10}"
-
-    # Debounce: skip if we updated recently
-    if [ -f "$LAST_UPDATE_FILE" ]; then
-        local last_update
-        last_update=$(cat "$LAST_UPDATE_FILE" 2>/dev/null || echo "0")
-        local elapsed=$((now - last_update))
-
-        if [ "$elapsed" -lt "$cooldown" ]; then
-            local remaining=$((cooldown - elapsed))
-            log "↳ SSE: Deferring update (last update ${elapsed}s ago, cooldown ${cooldown}s)"
-            schedule_deferred_update "$remaining"
-            return 0
-        fi
-    fi
-
-    run_update_now "$now"
+    sse_trigger_update "$UPDATE_SCRIPT"
 }
 
 # =============================================================================
