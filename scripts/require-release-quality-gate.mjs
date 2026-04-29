@@ -151,12 +151,6 @@ async function waitForRequirement({ repo, sha, workflowName, jobName, timeoutAt,
       continue;
     }
 
-    if (details.conclusion !== 'success') {
-      throw new Error(
-        `${workflowName} completed with conclusion "${details.conclusion}" for ${sha}: ${details.url}`
-      );
-    }
-
     const job = details.jobs?.find((candidate) => candidate.name === jobName);
     if (!job) {
       throw new Error(`${workflowName} did not publish required summary job "${jobName}".`);

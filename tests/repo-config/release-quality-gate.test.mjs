@@ -78,3 +78,97 @@ process.exit(2);
 
   assert.match(output, /Release gate satisfied: E2E Tests \/ E2E Summary/);
 });
+
+test('release quality gate ignores a newer cancelled dispatch when the required summary job succeeded', () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), 'openpath-gh-cancelled-dispatch-'));
+  const fakeGh = path.join(tempDir, 'gh');
+  const matchingSha = 'e88ccd5e7931de41d2d789e81b9b98f32ba2a164';
+
+  writeFileSync(
+    fakeGh,
+    `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === 'run' && args[1] === 'list') {
+  console.log(JSON.stringify([
+    {
+      databaseId: 25104214917,
+      status: 'completed',
+      conclusion: 'cancelled',
+      headSha: '${matchingSha}',
+      createdAt: '2026-04-29T10:39:31Z',
+      url: 'https://example.invalid/runs/25104214917',
+      workflowName: 'CI'
+    },
+    {
+      databaseId: 25098824685,
+      status: 'completed',
+      conclusion: 'success',
+      headSha: '${matchingSha}',
+      createdAt: '2026-04-29T08:31:48Z',
+      url: 'https://example.invalid/runs/25098824685',
+      workflowName: 'CI'
+    }
+  ]));
+  process.exit(0);
+}
+if (args[0] === 'run' && args[1] === 'view') {
+  const runId = args[2];
+  if (runId === '25104214917') {
+    console.log(JSON.stringify({
+      status: 'completed',
+      conclusion: 'cancelled',
+      headSha: '${matchingSha}',
+      url: 'https://example.invalid/runs/25104214917',
+      workflowName: 'CI',
+      jobs: [{ name: 'CI Success', conclusion: 'success' }]
+    }));
+    process.exit(0);
+  }
+
+  if (runId === '25098824685') {
+    console.log(JSON.stringify({
+      status: 'completed',
+      conclusion: 'success',
+      headSha: '${matchingSha}',
+      url: 'https://example.invalid/runs/25098824685',
+      workflowName: 'CI',
+      jobs: [{ name: 'CI Success', conclusion: 'success' }]
+    }));
+    process.exit(0);
+  }
+}
+console.error('unexpected gh call: ' + args.join(' '));
+process.exit(2);
+`,
+    'utf8'
+  );
+  chmodSync(fakeGh, 0o755);
+
+  const output = execFileSync(
+    process.execPath,
+    [
+      'scripts/require-release-quality-gate.mjs',
+      '--repo',
+      'balejosg/Openpath',
+      '--sha',
+      matchingSha,
+      '--require',
+      'CI::CI Success',
+      '--timeout-minutes',
+      '1',
+      '--poll-seconds',
+      '1',
+    ],
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${tempDir}${path.delimiter}${process.env.PATH ?? ''}`,
+      },
+    }
+  );
+
+  assert.match(output, /Release gate satisfied: CI \/ CI Success/);
+  assert.match(output, /25104214917/);
+});
