@@ -86,7 +86,7 @@
   "license": "AGPL-3.0-or-later",
   "dependencies": {
     "@openpath/shared": "file:../shared",
-    "@trpc/server": "^11.8.1",
+    "@trpc/server": "^11.13.4",
     "bcrypt": "^6.0.0",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
