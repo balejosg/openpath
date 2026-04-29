@@ -219,6 +219,7 @@ linux/lib/common-connectivity.sh|tests/install.bats,tests/captive-portal.bats
 linux/lib/common-registration.sh|tests/install.bats,tests/openpath-update.bats
 linux/lib/openpath-update-whitelist.sh|tests/openpath-update.bats,tests/linux-e2e.bats
 linux/lib/openpath-update-runtime.sh|tests/openpath-update.bats,tests/linux-e2e.bats
+linux/lib/sse-update-coalescer.sh|tests/openpath-update.bats,tests/linux-e2e.bats
 linux/lib/openpath-self-update-metadata.sh|tests/linux-e2e.bats
 linux/lib/openpath-self-update-package.sh|tests/linux-e2e.bats
 linux/scripts/runtime/openpath-update.sh|tests/openpath-update.bats,tests/linux-e2e.bats
