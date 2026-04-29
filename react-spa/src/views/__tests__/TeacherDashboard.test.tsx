@@ -59,13 +59,30 @@ vi.mock('../../lib/reportError', () => ({
 vi.mock('../../components/ScheduleFormModal', () => ({
   default: ({
     schedule,
+    error,
+    onSave,
     onClose,
   }: {
     schedule: ScheduleWithPermissions | null;
+    error?: string;
+    onSave: (data: {
+      dayOfWeek: number;
+      startTime: string;
+      endTime: string;
+      groupId: string;
+    }) => void;
     onClose: () => void;
   }) => (
     <div data-testid="schedule-form-modal">
       Horario semanal:{schedule?.id ?? 'nuevo'}
+      {error ? <p>{error}</p> : null}
+      <button
+        onClick={() =>
+          onSave({ dayOfWeek: 4, startTime: '10:00', endTime: '11:00', groupId: 'group-2' })
+        }
+      >
+        Guardar horario semanal
+      </button>
       <button onClick={onClose}>Cerrar horario semanal</button>
     </div>
   ),
@@ -74,13 +91,29 @@ vi.mock('../../components/ScheduleFormModal', () => ({
 vi.mock('../../components/OneOffScheduleFormModal', () => ({
   default: ({
     schedule,
+    error,
+    onSave,
     onClose,
   }: {
     schedule: OneOffScheduleWithPermissions | null;
+    error?: string;
+    onSave: (data: { startAt: string; endAt: string; groupId: string }) => void;
     onClose: () => void;
   }) => (
     <div data-testid="one-off-schedule-form-modal">
       Horario puntual:{schedule?.id ?? 'nuevo'}
+      {error ? <p>{error}</p> : null}
+      <button
+        onClick={() =>
+          onSave({
+            startAt: '2026-04-30T10:15:00',
+            endAt: '2026-04-30T11:00:00',
+            groupId: 'group-1',
+          })
+        }
+      >
+        Guardar horario puntual
+      </button>
       <button onClick={onClose}>Cerrar horario puntual</button>
     </div>
   ),
@@ -93,24 +126,80 @@ function renderTeacherDashboard(props?: React.ComponentProps<typeof TeacherDashb
 }
 
 async function renderTeacherDashboardReady(props?: React.ComponentProps<typeof TeacherDashboard>) {
-  return renderTeacherDashboard(props);
+  const rendered = renderTeacherDashboard(props);
+  await Promise.resolve();
+  return rendered;
 }
 
 function mockNow(isoString: string) {
   const fixed = new RealDate(isoString);
 
+  type MockDateArgs =
+    | []
+    | [value: string | number | Date]
+    | [year: number, monthIndex: number]
+    | [year: number, monthIndex: number, date: number]
+    | [year: number, monthIndex: number, date: number, hours: number]
+    | [year: number, monthIndex: number, date: number, hours: number, minutes: number]
+    | [
+        year: number,
+        monthIndex: number,
+        date: number,
+        hours: number,
+        minutes: number,
+        seconds: number,
+      ]
+    | [
+        year: number,
+        monthIndex: number,
+        date: number,
+        hours: number,
+        minutes: number,
+        seconds: number,
+        ms: number,
+      ];
+
   class MockDate extends RealDate {
-    constructor(...args: any[]) {
+    constructor(...args: MockDateArgs) {
       if (args.length === 0) {
         super(fixed.valueOf());
         return;
       }
 
-      const [value] = args;
-      super(value);
+      if (args.length === 1) {
+        super(args[0]);
+        return;
+      }
+
+      if (args.length === 2) {
+        super(args[0], args[1]);
+        return;
+      }
+
+      if (args.length === 3) {
+        super(args[0], args[1], args[2]);
+        return;
+      }
+
+      if (args.length === 4) {
+        super(args[0], args[1], args[2], args[3]);
+        return;
+      }
+
+      if (args.length === 5) {
+        super(args[0], args[1], args[2], args[3], args[4]);
+        return;
+      }
+
+      if (args.length === 6) {
+        super(args[0], args[1], args[2], args[3], args[4], args[5]);
+        return;
+      }
+
+      super(args[0], args[1], args[2], args[3], args[4], args[5], args[6]);
     }
 
-    static now() {
+    static now(): number {
       return fixed.valueOf();
     }
 
@@ -256,6 +345,9 @@ describe('TeacherDashboard', () => {
 
   it('renders the daily focus panel before the weekly calendar and shows the current class label', async () => {
     await renderTeacherDashboardReady();
+    await waitFor(() => {
+      expect(mockGetByClassroomQuery).toHaveBeenCalledTimes(2);
+    });
 
     await waitFor(() => {
       expect(screen.getByText('Tu horario de hoy')).toBeInTheDocument();
@@ -265,13 +357,16 @@ describe('TeacherDashboard', () => {
     });
     expect(screen.getAllByText('Investigacion - Lab A').length).toBeGreaterThan(0);
 
-    const renderedText = document.body.textContent ?? '';
-    expect(renderedText.indexOf('Tu horario de hoy')).toBeLessThan(renderedText.indexOf('Semana'));
+    const headings = screen.getAllByRole('heading').map((heading) => heading.textContent);
+    expect(headings.indexOf('Tu horario de hoy')).toBeLessThan(headings.indexOf('Semana'));
   });
 
   it('shows the next class when no entry is active', async () => {
     mockNow('2026-04-29T10:30:00');
     await renderTeacherDashboardReady();
+    await waitFor(() => {
+      expect(mockGetByClassroomQuery).toHaveBeenCalledTimes(2);
+    });
 
     expect(await screen.findByText('Siguiente clase')).toBeInTheDocument();
     expect(screen.getAllByText('Examen - Lab B').length).toBeGreaterThan(0);
@@ -279,6 +374,9 @@ describe('TeacherDashboard', () => {
 
   it('resets the selected week when pressing Hoy', async () => {
     await renderTeacherDashboardReady();
+    await waitFor(() => {
+      expect(mockGetByClassroomQuery).toHaveBeenCalledTimes(2);
+    });
 
     await screen.findByRole('button', { name: 'Ver detalles Investigacion - Lab A 09:00-10:00' });
 
@@ -297,6 +395,9 @@ describe('TeacherDashboard', () => {
 
   it('opens the detail panel when selecting a calendar block', async () => {
     await renderTeacherDashboardReady();
+    await waitFor(() => {
+      expect(mockGetByClassroomQuery).toHaveBeenCalledTimes(2);
+    });
 
     const block = await screen.findByRole('button', {
       name: 'Ver detalles Investigacion - Lab A 09:00-10:00',
@@ -311,6 +412,9 @@ describe('TeacherDashboard', () => {
   it('routes classroom actions from the detail panel and opens the expected edit and delete flows', async () => {
     const onNavigateToRules = vi.fn();
     await renderTeacherDashboardReady({ onNavigateToRules });
+    await waitFor(() => {
+      expect(mockGetByClassroomQuery).toHaveBeenCalledTimes(2);
+    });
 
     const block = await screen.findByRole('button', {
       name: 'Ver detalles Investigacion - Lab A 09:00-10:00',
@@ -371,6 +475,242 @@ describe('TeacherDashboard', () => {
     expect(confirmDialog).toHaveTextContent('Investigacion - Lab A');
     expect(confirmDialog).toHaveTextContent('Semanal');
     expect(confirmDialog).toHaveTextContent('09:00 - 10:00');
+  });
+
+  it('saves edited weekly and one-off schedules and refreshes dashboard data', async () => {
+    await renderTeacherDashboardReady();
+    await waitFor(() => {
+      expect(mockGetByClassroomQuery).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Ver detalles Investigacion - Lab A 09:00-10:00',
+      })
+    );
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Detalle del horario' })).getByRole(
+        'button',
+        { name: 'Editar horario' }
+      )
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Guardar horario semanal' }));
+
+    await waitFor(() => {
+      expect(mockSchedulesUpdate).toHaveBeenCalledWith({
+        id: 'weekly-1',
+        dayOfWeek: 4,
+        startTime: '10:00',
+        endTime: '11:00',
+        groupId: 'group-2',
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('schedule-form-modal')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Ver detalles Examen - Lab B 12:00-13:00',
+      })
+    );
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Detalle del horario' })).getByRole(
+        'button',
+        { name: 'Editar horario' }
+      )
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Guardar horario puntual' }));
+
+    await waitFor(() => {
+      expect(mockSchedulesUpdateOneOff).toHaveBeenCalledWith({
+        id: 'one-off-1',
+        startAt: '2026-04-30T10:15:00',
+        endAt: '2026-04-30T11:00:00',
+        groupId: 'group-1',
+      });
+    });
+    await waitFor(() => {
+      expect(screen.queryByTestId('one-off-schedule-form-modal')).not.toBeInTheDocument();
+    });
+    expect(mockClassroomsListQuery).toHaveBeenCalledTimes(3);
+  });
+
+  it('deletes a selected schedule and closes both detail and confirm dialogs', async () => {
+    await renderTeacherDashboardReady();
+    await waitFor(() => {
+      expect(mockGetByClassroomQuery).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Ver detalles Investigacion - Lab A 09:00-10:00',
+      })
+    );
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Detalle del horario' })).getByRole(
+        'button',
+        { name: 'Eliminar horario' }
+      )
+    );
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Eliminar horario' })).getByRole('button', {
+        name: 'Eliminar',
+      })
+    );
+
+    await waitFor(() => {
+      expect(mockSchedulesDelete).toHaveBeenCalledWith({ id: 'weekly-1' });
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Eliminar horario' })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole('dialog', { name: 'Detalle del horario' })).not.toBeInTheDocument();
+  });
+
+  it('shows schedule mutation errors and reports the failed operation', async () => {
+    mockSetActiveGroup.mockRejectedValueOnce(new Error('cannot control'));
+    await renderTeacherDashboardReady();
+    await waitFor(() => {
+      expect(mockGetByClassroomQuery).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Ver detalles Investigacion - Lab A 09:00-10:00',
+      })
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Detalle del horario' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tomar control' }));
+
+    expect(await screen.findByText('Error al aplicar el grupo al aula')).toBeInTheDocument();
+    expect(mockReportError).toHaveBeenCalledWith(
+      'Failed to apply active group:',
+      expect.any(Error)
+    );
+
+    mockSchedulesUpdate.mockRejectedValueOnce(new Error('Ese tramo horario ya está reservado'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Editar horario' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Guardar horario semanal' }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Ese tramo horario ya está reservado').length).toBeGreaterThan(0);
+    });
+    expect(mockReportError).toHaveBeenCalledWith('Failed to save schedule:', expect.any(Error));
+  });
+
+  it('keeps schedule dialogs open when release, one-off save, or delete attempts fail', async () => {
+    mockSetActiveGroup.mockRejectedValueOnce(new Error('cannot release'));
+    mockSchedulesUpdateOneOff.mockRejectedValueOnce(new Error('one-off conflict'));
+    mockSchedulesDelete.mockRejectedValueOnce(new Error('cannot delete'));
+
+    await renderTeacherDashboardReady();
+    await waitFor(() => {
+      expect(mockGetByClassroomQuery).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Ver detalles Investigacion - Lab A 09:00-10:00',
+      })
+    );
+    const weeklyDialog = await screen.findByRole('dialog', { name: 'Detalle del horario' });
+
+    fireEvent.click(within(weeklyDialog).getByRole('button', { name: 'Liberar aula' }));
+    expect(await screen.findByText('Error al aplicar el grupo al aula')).toBeInTheDocument();
+    expect(mockReportError).toHaveBeenCalledWith('Failed to release classroom:', expect.any(Error));
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Ver detalles Examen - Lab B 12:00-13:00',
+      })
+    );
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Detalle del horario' })).getByRole(
+        'button',
+        { name: 'Editar horario' }
+      )
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Guardar horario puntual' }));
+
+    await waitFor(() => {
+      expect(mockSchedulesUpdateOneOff).toHaveBeenCalledWith({
+        id: 'one-off-1',
+        startAt: '2026-04-30T10:15:00',
+        endAt: '2026-04-30T11:00:00',
+        groupId: 'group-1',
+      });
+    });
+    expect(screen.getByTestId('one-off-schedule-form-modal')).toBeInTheDocument();
+    expect(mockReportError).toHaveBeenCalledWith(
+      'Failed to save one-off schedule:',
+      expect.any(Error)
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar horario puntual' }));
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Ver detalles Investigacion - Lab A 09:00-10:00',
+      })
+    );
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Detalle del horario' })).getByRole(
+        'button',
+        { name: 'Eliminar horario' }
+      )
+    );
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Eliminar horario' })).getByRole('button', {
+        name: 'Eliminar',
+      })
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('cannot delete').length).toBeGreaterThan(0);
+    });
+    expect(screen.getByRole('dialog', { name: 'Eliminar horario' })).toBeInTheDocument();
+    expect(mockReportError).toHaveBeenCalledWith('Failed to delete schedule:', expect.any(Error));
+  });
+
+  it('confirms manual control replacement before applying it', async () => {
+    const onNavigateToRules = vi.fn();
+    primeDashboardData({
+      classrooms: [
+        makeClassroom({
+          activeGroupId: 'group-2',
+          currentGroupId: 'group-2',
+          currentGroupDisplayName: 'Examen',
+          currentGroupSource: 'manual',
+        }),
+      ],
+      schedulesByClassroom: {
+        'classroom-1': {
+          schedules: [makeWeeklySchedule()],
+          oneOffSchedules: [],
+        },
+      },
+    });
+
+    await renderTeacherDashboardReady({ onNavigateToRules });
+    const [classroomSelect, groupSelect] = await screen.findAllByRole('combobox');
+
+    fireEvent.change(classroomSelect, { target: { value: 'classroom-1' } });
+    fireEvent.change(groupSelect, { target: { value: 'group-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Gestionar reglas de esta política' }));
+    expect(onNavigateToRules).toHaveBeenCalledWith({ id: 'group-1', name: 'research' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar Política' }));
+
+    const confirmDialog = await screen.findByRole('dialog', { name: 'Confirmar cambio' });
+    expect(confirmDialog).toHaveTextContent('Examen');
+    expect(confirmDialog).toHaveTextContent('Investigacion');
+    expect(mockSetActiveGroup).not.toHaveBeenCalled();
+
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Reemplazar' }));
+
+    await waitFor(() => {
+      expect(mockSetActiveGroup).toHaveBeenCalledWith({ id: 'classroom-1', groupId: 'group-1' });
+    });
   });
 
   it('shows the legacy and feature-flag hints in the classroom control card', async () => {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import process from 'node:process';
 import { test } from 'node:test';
 
 import { projectRoot } from './support.mjs';

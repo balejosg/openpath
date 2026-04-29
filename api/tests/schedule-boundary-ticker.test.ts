@@ -1,4 +1,3 @@
-import type { PoolClient } from 'pg';
 import { describe, test, beforeEach } from 'node:test';
 import assert from 'node:assert';
 import { resetDb, TEST_RUN_ID } from './test-utils.js';
@@ -21,7 +20,7 @@ function snapshotTickerEnv(): Record<string, string | undefined> {
 function restoreTickerEnv(snapshot: Record<string, string | undefined>): void {
   for (const [key, value] of Object.entries(snapshot)) {
     if (value === undefined) {
-      delete process.env[key];
+      Reflect.deleteProperty(process.env, key);
       continue;
     }
 
@@ -214,10 +213,10 @@ await describe('Schedule Boundary Ticker', async () => {
     });
 
     try {
-      Date.now = () => 120_000;
-      logger.info = () => undefined;
-      logger.warn = () => undefined;
-      logger.debug = () => undefined;
+      Date.now = (): number => 120_000;
+      logger.info = (): void => undefined;
+      logger.warn = (): void => undefined;
+      logger.debug = (): void => undefined;
 
       const firstStart = ticker.ensureStarted();
       const secondStart = ticker.ensureStarted();
@@ -255,9 +254,9 @@ await describe('Schedule Boundary Ticker', async () => {
     });
 
     try {
-      logger.info = () => undefined;
-      logger.warn = () => undefined;
-      logger.debug = () => undefined;
+      logger.info = (): void => undefined;
+      logger.warn = (): void => undefined;
+      logger.debug = (): void => undefined;
 
       await leader.ensureStarted();
       await follower.ensureStarted();
@@ -286,14 +285,12 @@ await describe('Schedule Boundary Ticker', async () => {
     process.env.OPENPATH_SCHEDULE_TICKER_FORCE = '1';
     process.env.OPENPATH_SCHEDULE_TICKER_LOCK_NAME = lockName;
 
-    pool.connect = (async (): Promise<PoolClient> => {
-      throw new Error('connect failed');
-    }) as typeof pool.connect;
-    logger.warn = (message) => {
+    pool.connect = (() => Promise.reject(new Error('connect failed'))) as typeof pool.connect;
+    logger.warn = ((message: string): void => {
       warnings.push(message);
-    };
-    logger.info = () => undefined;
-    logger.debug = () => undefined;
+    }) as typeof logger.warn;
+    logger.info = (): void => undefined;
+    logger.debug = (): void => undefined;
 
     const ticker = createScheduleBoundaryTicker({
       emitClassroomChanged: () => undefined,

@@ -123,17 +123,15 @@ export function getTeacherScheduleFocus(
     .slice()
     .sort(compareEntries);
 
-  const currentEntry =
-    todayEntries
-      .filter(
-        (entry) => entry.startAt.getTime() <= now.getTime() && now.getTime() < entry.endAt.getTime()
-      )
-      .sort((a, b) => a.endAt.getTime() - b.endAt.getTime() || compareEntries(a, b))[0] ?? null;
+  const [currentEntry = null] = todayEntries
+    .filter(
+      (entry) => entry.startAt.getTime() <= now.getTime() && now.getTime() < entry.endAt.getTime()
+    )
+    .sort((a, b) => a.endAt.getTime() - b.endAt.getTime() || compareEntries(a, b));
 
-  const nextEntry =
-    currentEntry === null
-      ? (todayEntries.find((entry) => entry.startAt.getTime() > now.getTime()) ?? null)
-      : null;
+  const nextEntry: TeacherScheduleEntry | null = currentEntry
+    ? null
+    : (todayEntries.find((entry) => entry.startAt.getTime() > now.getTime()) ?? null);
 
   return {
     currentEntry,

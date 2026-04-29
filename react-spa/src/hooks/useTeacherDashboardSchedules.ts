@@ -29,6 +29,7 @@ export function useTeacherDashboardSchedules(
   const oneOffSchedules = scheduleQueries.flatMap((query) =>
     (query.data?.oneOffSchedules ?? []).filter((schedule) => schedule.isMine)
   );
+
   const loading = scheduleQueries.some((query) => query.isPending);
   const error = scheduleQueries.some((query) => query.error)
     ? 'No se pudieron cargar tus horarios'
