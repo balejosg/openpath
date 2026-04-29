@@ -289,11 +289,12 @@ downloads.example/blocked
                     }
                 } -ModuleName Common
 
-                Mock Update-AcrylicHost { $true }
-                Mock Restart-AcrylicService { $true }
-                Mock Get-AcrylicPath { 'C:\OpenPath\Acrylic DNS Proxy' }
-                Mock Set-OpenPathFirewall { $true }
-                Mock Set-LocalDNS { }
+                Mock Update-AcrylicHost { $true } -ModuleName Common
+                Mock Restart-AcrylicService { $true } -ModuleName Common
+                Mock Get-AcrylicPath { 'C:\OpenPath\Acrylic DNS Proxy' } -ModuleName Common
+                Mock Set-OpenPathFirewall { $true } -ModuleName Common
+                Mock Set-LocalDNS { } -ModuleName Common
+                Mock Enable-OpenPathFirewall { $true } -ModuleName Common
 
                 $config = [PSCustomObject]@{
                     enableFirewall = $true
@@ -309,6 +310,13 @@ downloads.example/blocked
                 $restoredContent = Get-Content $targetWhitelistPath -Raw
                 $restoredContent.Contains('google.com') | Should -BeTrue
                 $restoredContent.Contains('example.org') | Should -BeTrue
+
+                Should -Invoke Update-AcrylicHost -ModuleName Common -Times 1 -Exactly
+                Should -Invoke Restart-AcrylicService -ModuleName Common -Times 1 -Exactly
+                Should -Invoke Get-AcrylicPath -ModuleName Common -Times 1 -Exactly
+                Should -Invoke Set-OpenPathFirewall -ModuleName Common -Times 1 -Exactly
+                Should -Invoke Set-LocalDNS -ModuleName Common -Times 1 -Exactly
+                Should -Invoke Enable-OpenPathFirewall -ModuleName Common -Times 0 -Exactly
             }
             finally {
                 Remove-Item $tempDir -Recurse -Force -ErrorAction SilentlyContinue
