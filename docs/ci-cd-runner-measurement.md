@@ -59,9 +59,10 @@ Use the smallest layer that proves the risk:
   student-policy lanes for packaging, service, DNS, firewall, and browser-policy
   risks.
 - Windows agent changes should keep Pester as the fast contract layer and use
-  Windows Student Policy as the required target-platform proof. Do not promote
-  hosted Windows advisory results to required gates until repeated samples show
-  stable runner teardown behavior.
+  Windows Student Policy as the required target-platform proof. Hosted Windows
+  Pester is now a second required gate after repeated samples showed stable
+  runner teardown behavior, but it does not replace self-hosted target-platform
+  coverage.
 
 When selecting a first hypothesis-check lane from the shared Linux workspace,
 prefer `../scripts/validate-hypothesis.sh openpath windows-direct` over GitHub
@@ -190,18 +191,18 @@ the host has no spare RAM. That would increase contention on the current
 constraint and can corrupt target-platform evidence because the Windows lanes
 modify DNS, services, scheduled tasks, browser policy, and client install state.
 
-`test-windows` remains the required `CI Success` input and stays pinned to the
-self-hosted OpenPath Windows runner. `test-windows-hosted-advisory` samples
-GitHub-hosted `windows-2025` capacity with the same isolated Pester helper only
-on manual `workflow_dispatch` runs; it uses `continue-on-error: true`, a short
-`6m` job timeout, and is intentionally outside `CI Success`. The first automatic
-sample on run `24910078474` completed the Pester and summary steps, then
-remained `in_progress` during hosted runner finalization until cancellation. A
-second sample on run `24922725203` showed the same post-step finalization stall
-even with the shorter timeout. Treat this as hosted teardown evidence, not as a
-reason to put hosted Windows on the automatic push path. Promote hosted Windows
-from advisory to required only after repeated manual samples show stable green
-execution and no teardown or timeout pattern.
+`test-windows` remains a required `CI Success` input and stays pinned to the
+self-hosted OpenPath Windows runner. `test-windows-hosted` is also required and
+runs the same isolated Pester helper on GitHub-hosted `windows-2025`, with a
+distinct `windows-hosted-results.xml` result path and a short `6m` job timeout.
+The earlier hosted advisory samples on runs `24910078474` and `24922725203`
+completed Pester and summary steps but stalled during hosted runner
+finalization. After the checkpoint restore test stopped leaking real
+DNS/firewall/Acrylic side effects, three manual samples on the same workflow
+shape and commit `c6e8a98d` reported hosted Pester success without teardown
+cancellation: `25110580058`, `25110581352`, and `25110643484`. Hosted Windows is
+therefore promoted as an additional required signal, not as a replacement for
+self-hosted target-platform coverage.
 
 Windows Student Policy keeps full target-platform evidence on the self-hosted
 runner, but only the SSE pass runs the full Selenium matrix. The fallback pass
@@ -230,16 +231,16 @@ Selenium changes still route to the full relevant platform lanes.
 - Treat endpoint install, DNS, policy, or self-update failures as product or
   client evidence unless runner health checks show the runner itself failed.
 - Keep self-hosted runner usage restricted to trusted repository workflows.
-- Treat hosted Windows advisory failures as capacity evidence unless the Pester
-  assertions themselves fail; they do not reduce the current release quality
-  gate.
-- Promote a hosted advisory lane only with repeated green samples from the same
-  workflow shape. A single fast hosted sample is not enough evidence to remove
-  target-platform self-hosted coverage.
+- Treat hosted Windows cancellation after successful Pester output as runner
+  infrastructure evidence. Because hosted is now required, `CI Success` must
+  fail on that cancellation instead of accepting the Pester assertions alone.
+- Do not remove self-hosted Windows coverage from `CI Success` based on hosted
+  success. Hosted proves portable Windows capacity; self-hosted proves the
+  pinned target platform.
 
 ## Remaining Optimization Questions
 
-- Measure sustained queue pressure with the hosted advisory lane before adding
+- Measure sustained queue pressure with the hosted Windows gate before adding
   paid Windows capacity.
 - Split `windows-student-policy` into parallel SSE and fallback jobs only if the
   reduced fallback profile still leaves this lane as the workflow bottleneck.

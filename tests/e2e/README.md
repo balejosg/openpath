@@ -38,8 +38,10 @@ npm run test:student-policy:windows
 
 ## Windows CI Runner Note
 
-Windows lanes in GitHub Actions target the pinned OpenPath self-hosted Windows runner.
+Required Windows Pester coverage uses both the pinned OpenPath self-hosted
+Windows runner and GitHub-hosted `windows-2025`. Destructive installer and
+student-policy Windows lanes still target the pinned self-hosted runner.
 
-The older GitHub-hosted Windows runner could cancel the Pester lane after `Run Windows Unit Tests` and `Complete job` had both succeeded. Keep that as historical context for old runs rather than evidence of a client regression.
+Older GitHub-hosted Windows samples could cancel the Pester lane after `Run Windows Unit Tests` and `Complete job` had both succeeded. Keep that as historical context for old runs rather than evidence of a client regression.
 
 Do not reintroduce descendant process cleanup, WMI process killing, success marker recovery, or timeout-sentinel logic without new upstream runner evidence and maintainer approval.

@@ -226,18 +226,18 @@ jobs:
           pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/reset-self-hosted-windows-runner.ps1
 
   # ============================================
-  # Job 2b: Hosted Windows advisory sample
+  # Job 2b: Hosted Windows required gate
   # ============================================
-  # This samples GitHub-hosted Windows capacity without replacing the required
-  # self-hosted lane. It must stay outside the CI Success gate until repeated
-  # evidence shows hosted teardown behavior is stable for this suite.
-  test-windows-hosted-advisory:
-    name: Windows Agent Tests (Pester, hosted advisory)
+  # This runs the same isolated Pester suite on GitHub-hosted Windows capacity
+  # without replacing the pinned self-hosted target-platform lane.
+  test-windows-hosted:
+    name: Windows Agent Tests (Pester, hosted)
     runs-on: windows-2025
     timeout-minutes: 6
     needs: detect-relevant-changes
-    if: github.event_name == 'workflow_dispatch' && needs.detect-relevant-changes.outputs.windows_bound == 'true'
-    continue-on-error: true
+    if: needs.detect-relevant-changes.outputs.windows_bound == 'true'
+    outputs:
+      tests_passed: ${{ steps.job-status.outputs.tests_passed }}
 
     steps:
       - name: Checkout code
@@ -251,21 +251,30 @@ jobs:
         run: |
           pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/run-windows-pester-isolated.ps1 `
             -RepoRoot (Get-Location).Path `
-            -ResultsPath windows-hosted-advisory-results.xml `
+            -ResultsPath windows-hosted-results.xml `
             -TimeoutSeconds 180
 
-      - name: Report hosted Windows advisory context
+      - name: Report hosted Windows context
         if: always()
         env:
           RUNNER_ENVIRONMENT: ${{ runner.environment }}
         shell: pwsh
         run: |
-          "## Hosted Windows advisory sample" >> $env:GITHUB_STEP_SUMMARY
+          "## Hosted Windows Pester gate" >> $env:GITHUB_STEP_SUMMARY
           "" >> $env:GITHUB_STEP_SUMMARY
           "- Runner name: $env:RUNNER_NAME" >> $env:GITHUB_STEP_SUMMARY
           "- Runner environment: $env:RUNNER_ENVIRONMENT" >> $env:GITHUB_STEP_SUMMARY
           "- Runner OS: $env:RUNNER_OS" >> $env:GITHUB_STEP_SUMMARY
           "- Pester outcome: ${{ steps.run-windows-unit-tests.outcome }}" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Record hosted Windows lane outcome
+        id: job-status
+        if: always()
+        env:
+          TESTS_PASSED: ${{ steps.run-windows-unit-tests.outcome == 'success' && 'true' || 'false' }}
+        shell: pwsh
+        run: |
+          "tests_passed=$env:TESTS_PASSED" >> $env:GITHUB_OUTPUT
 
   # ============================================
   # Job 3: Firefox Delivery Contracts
@@ -405,7 +414,14 @@ jobs:
   ci-success:
     name: CI Success
     runs-on: ubuntu-latest
-    needs: [detect-relevant-changes, test-linux-dnsmasq, test-windows, test-delivery-contracts]
+    needs:
+      [
+        detect-relevant-changes,
+        test-linux-dnsmasq,
+        test-windows,
+        test-windows-hosted,
+        test-delivery-contracts,
+      ]
     if: always()
 
     steps:
@@ -427,6 +443,20 @@ jobs:
               exit 1
             else
               echo "Windows Agent Tests (Pester) failed before reporting successful Pester output"
+              exit 1
+            fi
+          fi
+
+          if [[ "${{ needs.test-windows-hosted.result }}" != "skipped" ]]; then
+            if [[ "${{ needs.test-windows-hosted.result }}" == "success" ]] && \
+               [[ "${{ needs.test-windows-hosted.outputs.tests_passed }}" == "true" ]]; then
+              echo "Hosted Windows Agent Tests (Pester) passed"
+            elif [[ "${{ needs.test-windows-hosted.outputs.tests_passed }}" == "true" ]]; then
+              echo "Hosted Windows Agent Tests (Pester) tests passed, but the hosted Windows job ended as ${{ needs.test-windows-hosted.result }}."
+              echo "Treat this as hosted runner teardown or infrastructure failure."
+              exit 1
+            else
+              echo "Hosted Windows Agent Tests (Pester) failed before reporting successful Pester output"
               exit 1
             fi
           fi

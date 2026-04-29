@@ -319,10 +319,7 @@ test('required Windows CI runs Pester in an untracked child host without success
   const ciWorkflow = readText('.github/workflows/ci.yml');
   const linuxJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-linux-dnsmasq');
   const windowsJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-windows');
-  const windowsHostedAdvisoryJobBlock = extractWorkflowJobBlock(
-    ciWorkflow,
-    'test-windows-hosted-advisory'
-  );
+  const windowsHostedJobBlock = extractWorkflowJobBlock(ciWorkflow, 'test-windows-hosted');
   const windowsProcessReporter = readText('tests/e2e/ci/report-windows-processes.ps1');
   const windowsPesterRunnerPath = 'tests/e2e/ci/run-windows-pester-isolated.ps1';
   const windowsRunnerResetPath = 'tests/e2e/ci/reset-self-hosted-windows-runner.ps1';
@@ -441,47 +438,70 @@ test('required Windows CI runs Pester in an untracked child host without success
     'ci.yml should run Windows Pester through the isolated helper'
   );
   assert.ok(
-    windowsHostedAdvisoryJobBlock.includes('runs-on: windows-2025'),
-    'ci.yml should run the advisory Windows Pester sample on GitHub-hosted Windows capacity'
+    windowsHostedJobBlock.includes('runs-on: windows-2025'),
+    'ci.yml should run the hosted Windows Pester gate on GitHub-hosted Windows capacity'
   );
   assert.ok(
-    windowsHostedAdvisoryJobBlock.includes('continue-on-error: true'),
-    'ci.yml should keep the hosted Windows Pester sample advisory until repeated evidence proves it can protect the gate'
+    !windowsHostedJobBlock.includes('continue-on-error: true'),
+    'ci.yml should fail the required hosted Windows Pester gate instead of treating it as advisory'
   );
   assert.ok(
-    windowsHostedAdvisoryJobBlock.includes('timeout-minutes: 6'),
-    'ci.yml should keep the hosted Windows advisory sample from becoming a new workflow bottleneck when hosted teardown stalls'
+    windowsHostedJobBlock.includes('timeout-minutes: 6'),
+    'ci.yml should keep the hosted Windows gate bounded so hosted teardown stalls fail quickly'
   );
   assert.ok(
-    windowsHostedAdvisoryJobBlock.includes(
-      "if: github.event_name == 'workflow_dispatch' && needs.detect-relevant-changes.outputs.windows_bound == 'true'"
+    windowsHostedJobBlock.includes(
+      "if: needs.detect-relevant-changes.outputs.windows_bound == 'true'"
     ),
-    'ci.yml should keep the hosted Windows sample manual-only while still honoring Windows-bound change detection'
+    'ci.yml should run the hosted Windows gate automatically for Windows-bound changes'
   );
   assert.ok(
-    windowsHostedAdvisoryJobBlock.includes('tests/e2e/ci/run-windows-pester-isolated.ps1') &&
-      windowsHostedAdvisoryJobBlock.includes('-ResultsPath windows-hosted-advisory-results.xml') &&
-      windowsHostedAdvisoryJobBlock.includes('-TimeoutSeconds 180'),
-    'ci.yml should run the same isolated Pester helper in hosted advisory mode with a distinct result path'
+    !windowsHostedJobBlock.includes("github.event_name == 'workflow_dispatch'"),
+    'ci.yml should not leave the hosted Windows gate manual-only after promotion'
   );
   assert.ok(
-    !windowsHostedAdvisoryJobBlock.includes('reset-self-hosted-windows-runner.ps1') &&
-      !windowsHostedAdvisoryJobBlock.includes('Prepare self-hosted Windows runner state') &&
-      !windowsHostedAdvisoryJobBlock.includes('Restore self-hosted Windows runner state'),
-    'ci.yml should not run persistent self-hosted cleanup against the ephemeral hosted advisory runner'
+    windowsHostedJobBlock.includes('outputs:') &&
+      windowsHostedJobBlock.includes('tests_passed: ${{ steps.job-status.outputs.tests_passed }}'),
+    'ci.yml should publish the hosted Windows Pester outcome for CI Success'
   );
   assert.ok(
-    windowsHostedAdvisoryJobBlock.includes('name: Report hosted Windows advisory context') &&
-      windowsHostedAdvisoryJobBlock.includes('GITHUB_STEP_SUMMARY') &&
-      windowsHostedAdvisoryJobBlock.includes('RUNNER_NAME') &&
-      windowsHostedAdvisoryJobBlock.includes('RUNNER_ENVIRONMENT'),
-    'ci.yml should emit runner context for hosted Windows advisory timing samples'
+    windowsHostedJobBlock.includes('tests/e2e/ci/run-windows-pester-isolated.ps1') &&
+      windowsHostedJobBlock.includes('-ResultsPath windows-hosted-results.xml') &&
+      windowsHostedJobBlock.includes('-TimeoutSeconds 180'),
+    'ci.yml should run the same isolated Pester helper in hosted mode with a distinct result path'
+  );
+  assert.ok(
+    windowsHostedJobBlock.includes(
+      "TESTS_PASSED: ${{ steps.run-windows-unit-tests.outcome == 'success' && 'true' || 'false' }}"
+    ) && windowsHostedJobBlock.includes('"tests_passed=$env:TESTS_PASSED" >> $env:GITHUB_OUTPUT'),
+    'ci.yml should derive and emit the hosted Windows Pester outcome through a stable output'
+  );
+  assert.ok(
+    !windowsHostedJobBlock.includes('reset-self-hosted-windows-runner.ps1') &&
+      !windowsHostedJobBlock.includes('Prepare self-hosted Windows runner state') &&
+      !windowsHostedJobBlock.includes('Restore self-hosted Windows runner state'),
+    'ci.yml should not run persistent self-hosted cleanup against the ephemeral hosted runner'
+  );
+  assert.ok(
+    windowsHostedJobBlock.includes('name: Report hosted Windows context') &&
+      windowsHostedJobBlock.includes('GITHUB_STEP_SUMMARY') &&
+      windowsHostedJobBlock.includes('RUNNER_NAME') &&
+      windowsHostedJobBlock.includes('RUNNER_ENVIRONMENT'),
+    'ci.yml should emit runner context for hosted Windows timing samples'
   );
   const ciSuccessBlock = ciWorkflow.slice(ciWorkflow.indexOf('  ci-success:\n'));
   assert.ok(
     ciSuccessBlock.startsWith('  ci-success:\n') &&
-      !ciSuccessBlock.includes('test-windows-hosted-advisory'),
-    'CI Success should not require the hosted advisory Windows sample'
+      /needs:\s*\[\s*detect-relevant-changes,\s*test-linux-dnsmasq,\s*test-windows,\s*test-windows-hosted,\s*test-delivery-contracts,\s*\]/.test(
+        ciSuccessBlock
+      ),
+    'CI Success should require both self-hosted and hosted Windows Pester gates'
+  );
+  assert.ok(
+    ciSuccessBlock.includes('needs.test-windows-hosted.result') &&
+      ciSuccessBlock.includes('needs.test-windows-hosted.outputs.tests_passed') &&
+      ciSuccessBlock.includes('Hosted Windows Agent Tests (Pester)'),
+    'CI Success should fail when the hosted Windows Pester gate fails, cancels, or does not report passing tests'
   );
   assert.ok(
     windowsJobBlock.includes('name: Prepare self-hosted Windows runner state') &&
@@ -767,7 +787,7 @@ test('required Windows CI runs Pester in an untracked child host without success
   }
 });
 
-test('documents historical hosted Windows Pester teardown cancellation without treating it as the active runner path', () => {
+test('documents hosted Windows Pester teardown history without repo-side cleanup hacks', () => {
   const agentInstructions = readText('AGENTS.md');
   const e2eReadme = readText('tests/e2e/README.md');
   const windowsPesterRunner = readText('tests/e2e/ci/run-windows-pester-isolated.ps1');
@@ -780,14 +800,19 @@ test('documents historical hosted Windows Pester teardown cancellation without t
   );
   assert.match(
     agentInstructions,
-    /The required Windows Pester lane now runs on the pinned self-hosted OpenPath\s+Windows runner\./,
-    'AGENTS.md should document that the active Windows Pester lane is self-hosted'
+    /The required Windows Pester coverage now uses two gates: the pinned self-hosted\s+OpenPath Windows runner and a GitHub-hosted `windows-2025` runner\./,
+    'AGENTS.md should document the active double Windows Pester gate'
   );
   assert.ok(
     e2eReadme.includes(
-      'Windows lanes in GitHub Actions target the pinned OpenPath self-hosted Windows runner.'
+      'Required Windows Pester coverage uses both the pinned OpenPath self-hosted'
     ),
-    'tests/e2e/README.md should document that the active Windows lanes are self-hosted'
+    'tests/e2e/README.md should document that required Windows Pester coverage uses both hosted and self-hosted runners'
+  );
+  assert.match(
+    e2eReadme,
+    /Destructive installer and\s+student-policy Windows lanes still target the pinned self-hosted runner\./,
+    'tests/e2e/README.md should document that destructive Windows lanes stay self-hosted'
   );
   assert.ok(
     e2eReadme.includes(

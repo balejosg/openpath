@@ -24,18 +24,19 @@ These rules have no exceptions for agent work:
 
 If a hook fails, fix the issue and retry. Do not bypass the workflow.
 
-## Historical Hosted Windows Pester Teardown Defect
+## Hosted Windows Pester Teardown History
 
-The required Windows Pester lane now runs on the pinned self-hosted OpenPath
-Windows runner. Before that migration, the GitHub-hosted Windows runner could
-cancel the job after `Run Windows Unit Tests`, `Record Windows lane outcome`,
-and `Complete job` had all succeeded. That cancellation is documented as a
-hosted-runner teardown defect, not an OpenPath Windows client regression.
+The required Windows Pester coverage now uses two gates: the pinned self-hosted
+OpenPath Windows runner and a GitHub-hosted `windows-2025` runner. Before the
+hosted gate was promoted, older hosted samples could cancel after `Run Windows
+Unit Tests`, `Record Windows lane outcome`, and `Complete job` had all
+succeeded. That cancellation is documented as hosted-runner teardown evidence,
+not an OpenPath Windows client regression.
 
 Do not add descendant process cleanup, WMI process killing, success marker
-recovery, or timeout-sentinel logic to the required Windows Pester lane as a
-repo-side fix if the lane ever returns to hosted Windows. Changing this stance
-requires new upstream runner evidence and maintainer approval.
+recovery, or timeout-sentinel logic to the Windows Pester lanes as a repo-side
+hosted-runner fix. Changing this stance requires new upstream runner evidence
+and maintainer approval.
 
 ## CI/CD Runner Measurement
 
