@@ -12,6 +12,7 @@ const DEFAULT_TIMEOUT_SECONDS = '900';
 const DEFAULT_RESULTS_RELATIVE_PATH = 'windows-test-results.xml';
 const DEFAULT_RESULTS_ARTIFACT_NAME = 'windows-test-results.xml';
 const DEFAULT_ARTIFACT_LOG_NAME = 'windows-runner-direct.log';
+const DEFAULT_RUNNER_ROOT_GLOB = 'C:\\actions-runner*';
 const DRY_RUN = process.env.OPENPATH_WINDOWS_DIRECT_DRY_RUN === '1';
 
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -27,6 +28,7 @@ Options:
   --vmid <id>                 Windows runner VMID (default: ${DEFAULT_WINDOWS_RUNNER_VMID})
   --timeout-seconds <secs>    Timeout passed to the isolated Pester helper (default: ${DEFAULT_TIMEOUT_SECONDS})
   --results-path <path>       Result file path on the Windows runner relative to the repo root (default: ${DEFAULT_RESULTS_RELATIVE_PATH})
+  --runner-repo-root <path>   Explicit OpenPath checkout root on the Windows runner (default: auto-detect under ${DEFAULT_RUNNER_ROOT_GLOB})
   --artifact-dir <path>       Local artifact directory (default: .opencode/tmp/openpath-windows-direct/<timestamp>)
   --help                      Show this message
 `);
@@ -41,6 +43,7 @@ function parseArgs(argv) {
     vmid: process.env.WINDOWS_RUNNER_VMID ?? DEFAULT_WINDOWS_RUNNER_VMID,
     timeoutSeconds: process.env.OPENPATH_WINDOWS_DIRECT_TIMEOUT_SECONDS ?? DEFAULT_TIMEOUT_SECONDS,
     resultsPath: process.env.OPENPATH_WINDOWS_DIRECT_RESULTS_PATH ?? DEFAULT_RESULTS_RELATIVE_PATH,
+    runnerRepoRoot: process.env.OPENPATH_WINDOWS_DIRECT_RUNNER_REPO_ROOT ?? '',
     artifactDir: '',
   };
 
@@ -63,6 +66,8 @@ function parseArgs(argv) {
       options.timeoutSeconds = next();
     } else if (arg === '--results-path') {
       options.resultsPath = next();
+    } else if (arg === '--runner-repo-root') {
+      options.runnerRepoRoot = next();
     } else if (arg === '--artifact-dir') {
       options.artifactDir = resolve(projectRoot, next());
     } else if (arg === '--help' || arg === '-h') {
@@ -156,7 +161,89 @@ function runGuestPowerShell(options, script, { timeoutSeconds = 600 } = {}) {
   ]);
 }
 
-function ensureWindowsRunnerBaseline(options) {
+function buildRunnerRepoRootScript() {
+  return String.raw`
+$candidateRoots = @()
+if (${JSON.stringify(DEFAULT_RUNNER_ROOT_GLOB)}) {
+  $candidateRoots += Get-ChildItem -Path ${JSON.stringify(DEFAULT_RUNNER_ROOT_GLOB)} -Directory -Force -ErrorAction SilentlyContinue |
+    ForEach-Object { Join-Path $_.FullName '_work' }
+}
+
+$candidateRoots += 'C:\\actions-runner\\_work'
+
+$repoRoots = $candidateRoots |
+  Where-Object { $_ -and (Test-Path -LiteralPath $_) } |
+  ForEach-Object {
+    Get-ChildItem -Path $_ -Directory -Force -ErrorAction SilentlyContinue |
+      ForEach-Object { Join-Path $_.FullName $_.Name }
+  }
+
+$repoRoots = @(
+  $repoRoots |
+  Where-Object {
+    Test-Path -LiteralPath (Join-Path $_ 'tests\\e2e\\ci\\run-windows-pester-isolated.ps1')
+  } |
+  Sort-Object -Unique
+)
+
+ConvertTo-Json -InputObject $repoRoots -Compress
+`;
+}
+
+function parseRunnerRepoRootCandidates(output) {
+  const trimmed = output.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const parsed = JSON.parse(trimmed);
+  return Array.isArray(parsed) ? parsed : [parsed];
+}
+
+function getRunnerRepoRootPriority(repoRoot) {
+  if (/^C:\\actions-runner-openpath\\/i.test(repoRoot)) {
+    return 0;
+  }
+
+  if (/^C:\\actions-runner\\/i.test(repoRoot)) {
+    return 1;
+  }
+
+  return 2;
+}
+
+function selectPreferredRunnerRepoRoot(candidateRepoRoots) {
+  const repoRoots = [
+    ...new Set(candidateRepoRoots.map((value) => String(value).trim()).filter(Boolean)),
+  ];
+
+  if (repoRoots.length === 0) {
+    throw new Error('Unable to auto-detect the OpenPath checkout root on the Windows runner.');
+  }
+
+  repoRoots.sort((left, right) => {
+    const priorityDifference = getRunnerRepoRootPriority(left) - getRunnerRepoRootPriority(right);
+    return priorityDifference !== 0 ? priorityDifference : left.localeCompare(right);
+  });
+
+  return repoRoots[0];
+}
+
+function resolveWindowsRunnerRepoRoot(options) {
+  if (options.runnerRepoRoot) {
+    return options.runnerRepoRoot;
+  }
+
+  const candidateRepoRoots = parseRunnerRepoRootCandidates(
+    runGuestPowerShell(options, buildRunnerRepoRootScript(), {
+      timeoutSeconds: 120,
+    })
+  );
+
+  return selectPreferredRunnerRepoRoot(candidateRepoRoots);
+}
+
+function ensureWindowsRunnerBaseline(options, runnerRepoRoot) {
   const script = `
 $ErrorActionPreference = 'Stop'
 hostname
@@ -165,16 +252,15 @@ $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
 if (-not $pwsh) {
   throw 'pwsh is required on the Windows runner.'
 }
-if (-not (Test-Path 'C:\\actions-runner\\_work\\Openpath\\Openpath')) {
+if (-not (Test-Path ${JSON.stringify(runnerRepoRoot)})) {
   throw 'Expected OpenPath checkout root is missing on the Windows runner.'
 }
 `;
   runGuestPowerShell(options, script, { timeoutSeconds: 120 });
 }
 
-function resetWindowsRunner(options) {
-  const resetScriptPath =
-    'C:\\actions-runner\\_work\\Openpath\\Openpath\\tests\\e2e\\ci\\reset-self-hosted-windows-runner.ps1';
+function resetWindowsRunner(options, runnerRepoRoot) {
+  const resetScriptPath = `${runnerRepoRoot}\\tests\\e2e\\ci\\reset-self-hosted-windows-runner.ps1`;
   const script = `
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path ${JSON.stringify(resetScriptPath)})) {
@@ -188,10 +274,9 @@ if ($LASTEXITCODE -ne 0) {
   runGuestPowerShell(options, script, { timeoutSeconds: 300 });
 }
 
-function runDirectPester(options) {
-  const isolatedRunnerPath =
-    'C:\\actions-runner\\_work\\Openpath\\Openpath\\tests\\e2e\\ci\\run-windows-pester-isolated.ps1';
-  const repoRoot = 'C:\\actions-runner\\_work\\Openpath\\Openpath';
+function runDirectPester(options, runnerRepoRoot) {
+  const isolatedRunnerPath = `${runnerRepoRoot}\\tests\\e2e\\ci\\run-windows-pester-isolated.ps1`;
+  const repoRoot = runnerRepoRoot;
   const resultsPath = options.resultsPath.replace(/\//g, '\\\\');
   const script = `
 $ErrorActionPreference = 'Stop'
@@ -229,8 +314,7 @@ if ($content.Length -gt ${maxChars}) {
   return runGuestPowerShell(options, script, { timeoutSeconds: 120 });
 }
 
-function collectArtifacts(options, artifactDir) {
-  const runnerRoot = 'C:\\actions-runner\\_work\\Openpath\\Openpath';
+function collectArtifacts(options, artifactDir, runnerRoot) {
   const resultsContent = readGuestFile(
     options,
     `${runnerRoot}\\${options.resultsPath.replace(/\//g, '\\')}`
@@ -271,25 +355,36 @@ function main() {
   console.log(
     `proxmox_guest_agent=ssh ${options.proxmoxHost} qm guest exec ${options.vmid} -- powershell.exe`
   );
+  console.log(`runner_repo_root=${options.runnerRepoRoot || '<auto-detect-on-runner>'}`);
 
   if (!DRY_RUN) {
     mkdirSync(artifactDir, { recursive: true });
   }
 
-  ensureWindowsRunnerBaseline(options);
-  resetWindowsRunner(options);
-  runDirectPester(options);
+  const runnerRepoRoot = DRY_RUN
+    ? options.runnerRepoRoot || ''
+    : resolveWindowsRunnerRepoRoot(options);
+
+  ensureWindowsRunnerBaseline(options, runnerRepoRoot || options.runnerRepoRoot);
+  resetWindowsRunner(options, runnerRepoRoot || options.runnerRepoRoot);
+  runDirectPester(options, runnerRepoRoot || options.runnerRepoRoot);
 
   if (!DRY_RUN) {
-    collectArtifacts(options, artifactDir);
+    collectArtifacts(options, artifactDir, runnerRepoRoot);
   }
 
   console.log(`direct OpenPath Windows runner diagnostic complete: ${artifactDir}`);
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+const isDirectExecution = process.argv[1] ? resolve(process.argv[1]) === currentFilePath : false;
+
+if (isDirectExecution) {
+  try {
+    main();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 }
+
+export { parseRunnerRepoRootCandidates, selectPreferredRunnerRepoRoot };

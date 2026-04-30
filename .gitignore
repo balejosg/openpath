@@ -49,6 +49,7 @@ auto-reinstall.sh
 .usb-config
 usb-package/
 .claude/
+.opencode/
 .worktrees/
 
 # Playwright test artifacts
