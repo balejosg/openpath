@@ -48,14 +48,15 @@ function runNativeHostAsync(env: NodeJS.ProcessEnv, payload: unknown): Promise<u
     child.on('close', (code) => {
       const stderr = Buffer.concat(stderrChunks).toString('utf8');
       if (code !== 0) {
-        reject(new Error(stderr || `native host exited with code ${code ?? -1}`));
+        const exitCode = code === null ? 'unknown' : String(code);
+        reject(new Error(stderr || `native host exited with code ${exitCode}`));
         return;
       }
 
       try {
         resolve(decodeNativeMessage(Buffer.concat(stdoutChunks)));
       } catch (error) {
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
 
@@ -260,6 +261,7 @@ void test('native host update-whitelist waits until requested domains reach the 
       OPENPATH_NATIVE_HOST_UPDATE_TIMEOUT_MS: '4000',
       OPENPATH_UPDATE_MARKER: markerPath,
       OPENPATH_WHITELIST_FILE: whitelistPath,
+      OPENPATH_NATIVE_HOST_UPDATE_LOCK: lockPath,
       XDG_DATA_HOME: runtimeDir,
     },
     { action: 'update-whitelist', domains: ['cdn.redditstatic.com'] }
