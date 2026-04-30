@@ -102,16 +102,6 @@ EOF
         # Step 6: Give capabilities to dnsmasq
         setcap 'cap_net_bind_service,cap_net_admin=+ep' /usr/sbin/dnsmasq 2>/dev/null || true
         
-        # Step 7: Install Firefox extension only after request setup exists.
-        echo "  Validando configuración de solicitudes del navegador..."
-        if is_openpath_request_setup_complete; then
-            echo "  Ejecutando configuración estricta Firefox..."
-            /usr/local/bin/openpath-browser-setup.sh
-        else
-            echo "  Skipping managed browser request integration until OpenPath setup is complete"
-            echo "  Missing: $(describe_openpath_request_setup_missing)"
-        fi
-        
         # Step 9: Create logrotate and tmpfiles config
         create_logrotate_config
         create_tmpfiles_config
@@ -148,6 +138,24 @@ EOF
             echo "ERROR: dnsmasq no arrancó"
             journalctl -u dnsmasq -n 10 --no-pager
             exit 1
+        fi
+
+        # Step 11b: Install Firefox extension only after local DNS is active.
+        echo "  Validando configuración de solicitudes del navegador..."
+        if is_openpath_request_setup_complete; then
+            if detect_firefox_dir >/dev/null 2>&1; then
+                echo "  Ejecutando configuración estricta Firefox..."
+                if ! /usr/local/bin/openpath-browser-setup.sh; then
+                    echo "  ⚠ Firefox browser setup failed; package configuration will continue"
+                    echo "    Reintente con: sudo /usr/local/bin/openpath-browser-setup.sh"
+                fi
+            else
+                echo "  Skipping Firefox browser setup until Firefox is installed"
+                echo "    Reintente con: sudo /usr/local/bin/openpath-browser-setup.sh"
+            fi
+        else
+            echo "  Skipping managed browser request integration until OpenPath setup is complete"
+            echo "  Missing: $(describe_openpath_request_setup_missing)"
         fi
 
         # Step 12: Run initial whitelist update

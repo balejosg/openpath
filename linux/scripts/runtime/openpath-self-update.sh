@@ -32,6 +32,17 @@ else
     exit 1
 fi
 
+if [ -f "$INSTALL_DIR/lib/apt.sh" ]; then
+    # shellcheck source=/usr/local/lib/openpath/lib/apt.sh
+    source "$INSTALL_DIR/lib/apt.sh"
+elif [ -f "$SCRIPT_DIR/../../lib/apt.sh" ]; then
+    # shellcheck source=../../lib/apt.sh
+    source "$SCRIPT_DIR/../../lib/apt.sh"
+else
+    echo "ERROR: apt.sh not found" >&2
+    exit 1
+fi
+
 if [ -f "$INSTALL_DIR/lib/openpath-self-update-metadata.sh" ]; then
     # shellcheck source=/usr/local/lib/openpath/lib/openpath-self-update-metadata.sh
     source "$INSTALL_DIR/lib/openpath-self-update-metadata.sh"

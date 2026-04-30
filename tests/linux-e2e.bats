@@ -192,6 +192,29 @@ EOF
     [ "$status" -eq 0 ]
 }
 
+@test "linux self-update package repair has apt retry helper loaded" {
+    run env PROJECT_DIR="$PROJECT_DIR" bash -lc '
+        set -euo pipefail
+
+        tmpdir=$(mktemp -d)
+        trap "rm -rf \"$tmpdir\"" EXIT
+
+        export INSTALL_DIR="$tmpdir/install"
+        export ETC_CONFIG_DIR="$tmpdir/etc"
+        export VAR_STATE_DIR="$tmpdir/var"
+        export LOG_FILE="$tmpdir/openpath.log"
+        mkdir -p "$INSTALL_DIR/lib" "$ETC_CONFIG_DIR" "$VAR_STATE_DIR"
+        cp "$PROJECT_DIR/linux/lib/"*.sh "$INSTALL_DIR/lib/"
+
+        export OPENPATH_SELF_UPDATE_SOURCE_ONLY=1
+        # shellcheck source=/dev/null
+        source "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
+
+        declare -F apt_install_with_retry >/dev/null
+    '
+    [ "$status" -eq 0 ]
+}
+
 @test "linux self-update preserves request setup files and validates them after package updates" {
     run grep -nF '"/etc/openpath/api-url.conf"' "$PROJECT_DIR/linux/scripts/runtime/openpath-self-update.sh"
     [ "$status" -eq 0 ]
@@ -201,6 +224,38 @@ EOF
 
     run grep -nF 'require_openpath_request_setup_complete "post-update verification"' \
         "$PROJECT_DIR/linux/lib/openpath-self-update-package.sh"
+    [ "$status" -eq 0 ]
+}
+
+@test "debian postinst runs strict Firefox setup only after dnsmasq is active" {
+    run awk '
+        /systemctl is-active --quiet dnsmasq/ { dnsmasq_active = NR }
+        /openpath-browser-setup\.sh/ { browser_setup = NR }
+        END {
+            if (dnsmasq_active > 0 && browser_setup > dnsmasq_active) {
+                exit 0
+            }
+            exit 1
+        }
+    ' "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
+    [ "$status" -eq 0 ]
+}
+
+@test "debian postinst keeps package configuration best-effort for Firefox setup" {
+    run grep -nF 'detect_firefox_dir >/dev/null 2>&1' \
+        "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Skipping Firefox browser setup until Firefox is installed' \
+        "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'Firefox browser setup failed; package configuration will continue' \
+        "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
+    [ "$status" -eq 0 ]
+
+    run grep -nF 'sudo /usr/local/bin/openpath-browser-setup.sh' \
+        "$PROJECT_DIR/linux/debian-package/DEBIAN/postinst"
     [ "$status" -eq 0 ]
 }
 
