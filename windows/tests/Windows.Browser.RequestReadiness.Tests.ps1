@@ -28,7 +28,8 @@ Describe "Browser Module - Request Readiness" {
         $result.Platform | Should -Be "windows"
         $result.Ready | Should -BeTrue
         $result.Facts.request_setup | Should -Be "ready"
-        $result.Facts.firefox_policy | Should -Be "ready"
+        $result.Facts.firefox_managed_extension | Should -Be "ready"
+        $result.Facts.PSObject.Properties.Name | Should -Not -Contain "firefox_policy"
         $result.Facts.firefox_native_host | Should -Be "ready"
         @($result.FailureReasons).Count | Should -Be 0
     }
@@ -45,8 +46,8 @@ Describe "Browser Module - Request Readiness" {
             -NativeHostStatePresent $true
 
         $result.Ready | Should -BeFalse
-        $result.Facts.firefox_policy | Should -Be "missing"
-        @($result.FailureReasons) | Should -Contain "firefox_policy_missing"
+        $result.Facts.firefox_managed_extension | Should -Be "missing"
+        @($result.FailureReasons) | Should -Contain "firefox_managed_extension_missing"
     }
 
     It "Fails readiness when native host registration proof is missing" {

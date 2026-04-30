@@ -49,7 +49,7 @@ Initialize-OpenPathScriptSession `
     'Test-FirewallActive',
     'Get-AcrylicPath',
     'Set-OpenPathFirewall',
-    'Set-FirefoxPolicy',
+    'Sync-OpenPathFirefoxManagedExtensionPolicy',
     'Set-LocalDNS',
     'Start-AcrylicService',
     'Restart-AcrylicService',

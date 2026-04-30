@@ -290,6 +290,25 @@ Describe "Browser Module - Native Host" {
             )
         }
 
+        It "Returns blocked subdomains from the native whitelist mirror" {
+            $nativeStatePath = Join-Path $PSScriptRoot ".." "lib" "internal" "NativeHost.State.ps1"
+            $nativeActionsPath = Join-Path $PSScriptRoot ".." "lib" "internal" "NativeHost.Actions.ps1"
+            $stateContent = Get-Content $nativeStatePath -Raw
+            $actionsContent = Get-Content $nativeActionsPath -Raw
+
+            Assert-ContentContainsAll -Content $stateContent -Needles @(
+                'BlockedSubdomains = @()',
+                '''BLOCKED-SUBDOMAINS'' { $result.BlockedSubdomains += $trimmed }'
+            )
+            Assert-ContentContainsAll -Content $actionsContent -Needles @(
+                'function Get-NativeHostBlockedSubdomainResponse',
+                '$subdomains = @($Sections.BlockedSubdomains)',
+                "action = 'get-blocked-subdomains'",
+                'subdomains = $subdomains',
+                "'get-blocked-subdomains' {"
+            )
+        }
+
         It "Logs native action evidence without depending on downstream wrappers" {
             $nativeHostActionsPath = Join-Path $PSScriptRoot ".." "lib" "internal" "NativeHost.Actions.ps1"
             $nativeHostActionsContent = Get-Content $nativeHostActionsPath -Raw

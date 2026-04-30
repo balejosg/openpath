@@ -12,9 +12,10 @@ Describe "Browser Module - Firefox Policy" {
         Import-Module (Join-Path $modulePath "Browser.FirefoxPolicy.psm1") -Force -Global -ErrorAction Stop
     }
 
-    Context "Set-FirefoxPolicy" {
+    Context "Sync-OpenPathFirefoxManagedExtensionPolicy" {
         It "Returns a boolean value" {
-            $result = Set-FirefoxPolicy -BlockedPaths @()
+            Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
+            $result = Sync-OpenPathFirefoxManagedExtensionPolicy
             $result | Should -BeOfType [bool]
         }
 
@@ -38,12 +39,9 @@ Describe "Browser Module - Firefox Policy" {
             } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
-            $result = Set-FirefoxPolicy -BlockedPaths @()
-            $result | Should -BeTrue
-            $script:capturedFirefoxPolicyJson | Should -Not -BeNullOrEmpty
-
-            $policy = $script:capturedFirefoxPolicyJson | ConvertFrom-Json
-            $policy.policies.PSObject.Properties.Name | Should -Not -Contain 'ExtensionSettings'
+            $result = Sync-OpenPathFirefoxManagedExtensionPolicy
+            $result | Should -BeFalse
+            $script:capturedFirefoxPolicyJson | Should -BeNullOrEmpty
         }
 
         It "Uses explicit signed Firefox extension config when available" {
@@ -71,10 +69,11 @@ Describe "Browser Module - Firefox Policy" {
             } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
-            $result = Set-FirefoxPolicy -BlockedPaths @()
+            $result = Sync-OpenPathFirefoxManagedExtensionPolicy
             $result | Should -BeTrue
 
             $policy = $script:capturedFirefoxPolicyJson | ConvertFrom-Json
+            $policy.policies.PSObject.Properties.Name | Should -Be @('ExtensionSettings')
             $policy.policies.ExtensionSettings.($contract.extensionId).installation_mode | Should -Be 'force_installed'
             $policy.policies.ExtensionSettings.($contract.extensionId).install_url | Should -Be $contract.configuredInstallUrl
         }
@@ -86,16 +85,23 @@ Describe "Browser Module - Firefox Policy" {
             Mock Test-Path {
                 param([string]$Path)
                 if ($Path -like '*firefox.exe') { return $true }
-                if ($Path -like '*browser-extension\firefox-release\metadata.json') { return $true }
-                if ($Path -like '*browser-extension\firefox-release\openpath-firefox-extension.xpi') { return $true }
+                if ($Path -like '*metadata.json') { return $true }
+                if ($Path -like '*openpath-firefox-extension.xpi') { return $true }
                 return $false
             } -ModuleName Browser.FirefoxPolicy
 
             Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
             Mock Get-OpenPathConfig { [PSCustomObject]@{ apiUrl = 'https://school.example/' } } -ModuleName Browser.FirefoxPolicy
+            Mock Get-OpenPathFirefoxManagedExtensionPolicy {
+                [PSCustomObject]@{
+                    ExtensionId = $contract.extensionId
+                    InstallUrl = $contract.managedApiInstallUrl
+                    Source = 'managed-api'
+                }
+            } -ModuleName Browser.FirefoxPolicy
             Mock Get-Content {
                 param([string]$Path, [switch]$Raw)
-                if ($Path -like '*browser-extension\firefox-release\metadata.json') {
+                if ($Path -like '*metadata.json') {
                     return '{"extensionId":"monitor-bloqueos@openpath","version":"2.0.0"}'
                 }
 
@@ -109,7 +115,7 @@ Describe "Browser Module - Firefox Policy" {
             } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
-            $result = Set-FirefoxPolicy -BlockedPaths @()
+            $result = Sync-OpenPathFirefoxManagedExtensionPolicy
             $result | Should -BeTrue
 
             $policy = $script:capturedFirefoxPolicyJson | ConvertFrom-Json
@@ -123,18 +129,25 @@ Describe "Browser Module - Firefox Policy" {
             Mock Test-Path {
                 param([string]$Path)
                 if ($Path -like '*firefox.exe') { return $true }
-                if ($Path -like '*browser-extension\firefox-release\metadata.json') { return $true }
-                if ($Path -like '*browser-extension\firefox-release\openpath-firefox-extension.xpi') { return $true }
+                if ($Path -like '*metadata.json') { return $true }
+                if ($Path -like '*openpath-firefox-extension.xpi') { return $true }
                 return $false
             } -ModuleName Browser.FirefoxPolicy
 
             Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
             Mock Get-OpenPathConfig { [PSCustomObject]@{} } -ModuleName Browser.FirefoxPolicy
+            Mock Get-OpenPathFirefoxManagedExtensionPolicy {
+                [PSCustomObject]@{
+                    ExtensionId = $contract.extensionId
+                    InstallUrl = $contract.stagedReleaseInstallUrl
+                    Source = 'staged-release'
+                }
+            } -ModuleName Browser.FirefoxPolicy
             Mock Resolve-Path { $null } -ModuleName Browser.FirefoxPolicy
             Mock ConvertTo-OpenPathFileUrl { $contract.stagedReleaseInstallUrl } -ModuleName Browser.FirefoxPolicy
             Mock Get-Content {
                 param([string]$Path, [switch]$Raw)
-                if ($Path -like '*browser-extension\firefox-release\metadata.json') {
+                if ($Path -like '*metadata.json') {
                     return "{`"extensionId`":`"$($contract.extensionId)`",`"version`":`"2.0.0`",`"installUrl`":`"$($contract.metadataInstallUrl)`"}"
                 }
 
@@ -148,7 +161,7 @@ Describe "Browser Module - Firefox Policy" {
             } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
-            $result = Set-FirefoxPolicy -BlockedPaths @()
+            $result = Sync-OpenPathFirefoxManagedExtensionPolicy
             $result | Should -BeTrue
 
             $policy = $script:capturedFirefoxPolicyJson | ConvertFrom-Json
@@ -163,19 +176,26 @@ Describe "Browser Module - Firefox Policy" {
                 param([string]$Path)
                 switch ($Path) {
                     { $_ -like '*firefox.exe' } { return $true }
-                    'C:\OpenPath\browser-extension\firefox-release\metadata.json' { return $true }
-                    'C:\OpenPath\browser-extension\firefox-release\openpath-firefox-extension.xpi' { return $true }
+                    { $_ -like '*metadata.json' } { return $true }
+                    { $_ -like '*openpath-firefox-extension.xpi' } { return $true }
                     default { return $false }
                 }
             } -ModuleName Browser.FirefoxPolicy
 
             Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
             Mock Get-OpenPathConfig { [PSCustomObject]@{} } -ModuleName Browser.FirefoxPolicy
+            Mock Get-OpenPathFirefoxManagedExtensionPolicy {
+                [PSCustomObject]@{
+                    ExtensionId = $contract.extensionId
+                    InstallUrl = $contract.stagedReleaseInstallUrl
+                    Source = 'staged-release'
+                }
+            } -ModuleName Browser.FirefoxPolicy
             Mock Resolve-Path { $null } -ModuleName Browser.FirefoxPolicy
             Mock ConvertTo-OpenPathFileUrl { $contract.stagedReleaseInstallUrl } -ModuleName Browser.FirefoxPolicy
             Mock Get-Content {
                 param([string]$Path, [switch]$Raw)
-                if ($Path -eq 'C:\OpenPath\browser-extension\firefox-release\metadata.json') {
+                if ($Path -like '*metadata.json') {
                     return "{`"extensionId`":`"$($contract.extensionId)`",`"version`":`"2.0.0`"}"
                 }
 
@@ -189,7 +209,7 @@ Describe "Browser Module - Firefox Policy" {
             } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
-            $result = Set-FirefoxPolicy -BlockedPaths @()
+            $result = Sync-OpenPathFirefoxManagedExtensionPolicy
             $result | Should -BeTrue
 
             $policy = $script:capturedFirefoxPolicyJson | ConvertFrom-Json
@@ -233,8 +253,9 @@ Describe "Browser Module - Firefox Policy" {
             $content | Should -Match 'Write-OpenPathUtf8NoBomFile -Path \$policiesPath -Value \$policiesJson'
         }
 
-        It "Writes DNSOverHTTPS disabled and locked" {
+        It "Does not write Firefox enforcement policy keys" {
             $script:capturedFirefoxPolicyJson = $null
+            $contract = Get-ContractFixtureJson -FileName 'browser-firefox-managed-extension.json'
 
             Mock Test-Path {
                 param([string]$Path)
@@ -243,6 +264,12 @@ Describe "Browser Module - Firefox Policy" {
             } -ModuleName Browser.FirefoxPolicy
 
             Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    firefoxExtensionId = $contract.extensionId
+                    firefoxExtensionInstallUrl = $contract.configuredInstallUrl
+                }
+            } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathUtf8NoBomFile {
                 param([string]$Path, [string]$Value)
                 if ($Path -like '*policies.json') {
@@ -251,12 +278,15 @@ Describe "Browser Module - Firefox Policy" {
             } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
-            $result = Set-FirefoxPolicy -BlockedPaths @()
+            $result = Sync-OpenPathFirefoxManagedExtensionPolicy
             $result | Should -BeTrue
 
             $policy = $script:capturedFirefoxPolicyJson | ConvertFrom-Json
-            $policy.policies.DNSOverHTTPS.Enabled | Should -BeFalse
-            $policy.policies.DNSOverHTTPS.Locked | Should -BeTrue
+            $policy.policies.PSObject.Properties.Name | Should -Not -Contain 'WebsiteFilter'
+            $policy.policies.PSObject.Properties.Name | Should -Not -Contain 'SearchEngines'
+            $policy.policies.PSObject.Properties.Name | Should -Not -Contain 'DNSOverHTTPS'
+            $policy.policies.PSObject.Properties.Name | Should -Not -Contain 'DisableTelemetry'
+            $policy.policies.PSObject.Properties.Name | Should -Not -Contain 'OverrideFirstRunPage'
         }
     }
 }

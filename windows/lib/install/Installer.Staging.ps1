@@ -212,7 +212,7 @@ function Copy-OpenPathInstallerRuntime {
     }
     elseif (-not ($FirefoxExtensionId -and $FirefoxExtensionInstallUrl)) {
         Write-Host "  ADVERTENCIA: Firefox Release extension auto-install requires a signed XPI distribution (AMO, HTTPS URL, or staged signed artifact)." -ForegroundColor Yellow
-        Write-Host "  Firefox browser policies will be applied without extension auto-install until a signed distribution is configured." -ForegroundColor Yellow
+        Write-Host "  Firefox browser policies will not be written until a signed extension distribution is configured." -ForegroundColor Yellow
     }
 
     $chromiumManagedCandidates = @(

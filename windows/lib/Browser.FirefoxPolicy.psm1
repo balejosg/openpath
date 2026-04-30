@@ -1,4 +1,4 @@
-# OpenPath Firefox policy helpers for Windows
+# OpenPath Firefox managed extension policy helpers for Windows
 
 $script:OpenPathRoot = "C:\OpenPath"
 Import-Module "$PSScriptRoot\Common.psm1" -Force -ErrorAction Stop
@@ -145,17 +145,15 @@ function Get-OpenPathFirefoxManagedExtensionPolicy {
     }
 }
 
-function Set-FirefoxPolicy {
+function Sync-OpenPathFirefoxManagedExtensionPolicy {
     [CmdletBinding(SupportsShouldProcess)]
-    param(
-        [string[]]$BlockedPaths = @()
-    )
+    param()
 
-    if (-not $PSCmdlet.ShouldProcess("Firefox", "Configure browser policies")) {
+    if (-not $PSCmdlet.ShouldProcess("Firefox", "Configure managed extension policy")) {
         return $false
     }
 
-    Write-OpenPathLog "Configuring Firefox policies..."
+    Write-OpenPathLog "Configuring Firefox managed extension policy..."
 
     $firefoxPaths = @(
         "$env:ProgramFiles\Mozilla Firefox\distribution",
@@ -163,11 +161,9 @@ function Set-FirefoxPolicy {
     )
 
     $policiesSet = $false
-    $unsignedExtensionManifest = Join-Path (Get-OpenPathFirefoxExtensionRoot) 'manifest.json'
+    $unsignedExtensionManifest = "$(Get-OpenPathFirefoxExtensionRoot)\manifest.json"
     $managedExtensionPolicy = Get-OpenPathFirefoxManagedExtensionPolicy
     $signedExtensionWarningWritten = $false
-    $policySpec = Get-OpenPathBrowserPolicySpec
-    $firefoxSpec = $policySpec.firefox
 
     foreach ($firefoxPath in $firefoxPaths) {
         $firefoxExe = Split-Path $firefoxPath -Parent
@@ -179,68 +175,49 @@ function Set-FirefoxPolicy {
             New-Item -ItemType Directory -Path $firefoxPath -Force | Out-Null
         }
 
-        $blockedUrls = @()
-        foreach ($path in $BlockedPaths) {
-            if ($path) {
-                if ($path -notmatch "^\*://") {
-                    $blockedUrls += "*://*$path*"
+        if ($managedExtensionPolicy) {
+            $policies = @{
+                policies = @{
+                    ExtensionSettings = @{
+                        $managedExtensionPolicy.ExtensionId = @{
+                            installation_mode = 'force_installed'
+                            install_url = $managedExtensionPolicy.InstallUrl
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            $policiesPath = "$firefoxPath\policies.json"
+            if (Test-Path $policiesPath) {
+                Remove-Item $policiesPath -Force -ErrorAction SilentlyContinue
+                Write-OpenPathLog "Removed stale Firefox policies from: $policiesPath"
+            }
+
+            if (-not $signedExtensionWarningWritten) {
+                if (Test-Path $unsignedExtensionManifest) {
+                    Write-OpenPathLog 'Unsigned Firefox extension bundle detected, but Firefox Release requires a signed XPI distribution; removing Firefox policies until signed extension config is available' -Level WARN
                 }
                 else {
-                    $blockedUrls += $path
+                    Write-OpenPathLog 'No signed Firefox extension distribution configured; removing Firefox policies until extension auto-install is available' -Level WARN
                 }
-            }
-        }
 
-        $blockedUrls += @($firefoxSpec.googleSearchBlocks)
-
-        $policies = @{
-            policies = @{
-                SearchEngines = @{
-                    Remove = @($firefoxSpec.searchEngines.remove)
-                    Default = [string]$firefoxSpec.searchEngines.default
-                    Add = @($firefoxSpec.searchEngines.add)
-                }
-                WebsiteFilter = @{
-                    Block = $blockedUrls
-                }
-                DNSOverHTTPS = @{
-                    Enabled = [bool]$firefoxSpec.dnsOverHttps.Enabled
-                    Locked = [bool]$firefoxSpec.dnsOverHttps.Locked
-                }
-                DisableTelemetry = [bool]$firefoxSpec.disableTelemetry
-                OverrideFirstRunPage = [string]$firefoxSpec.overrideFirstRunPage
-            }
-        }
-
-        if ($managedExtensionPolicy) {
-            $policies.policies.ExtensionSettings = @{
-                $managedExtensionPolicy.ExtensionId = @{
-                    installation_mode = 'force_installed'
-                    install_url = $managedExtensionPolicy.InstallUrl
-                }
-            }
-        }
-        elseif (-not $signedExtensionWarningWritten) {
-            if (Test-Path $unsignedExtensionManifest) {
-                Write-OpenPathLog 'Unsigned Firefox extension bundle detected, but Firefox Release requires a signed XPI distribution; skipping extension auto-install' -Level WARN
-            }
-            else {
-                Write-OpenPathLog 'No signed Firefox extension distribution configured; applying Firefox policies without extension auto-install' -Level WARN
+                $signedExtensionWarningWritten = $true
             }
 
-            $signedExtensionWarningWritten = $true
+            continue
         }
 
         $policiesPath = "$firefoxPath\policies.json"
         $policiesJson = $policies | ConvertTo-Json -Depth 10
         Write-OpenPathUtf8NoBomFile -Path $policiesPath -Value $policiesJson
 
-        Write-OpenPathLog "Firefox policies written to: $policiesPath"
+        Write-OpenPathLog "Firefox managed extension policy written to: $policiesPath"
         $policiesSet = $true
     }
 
     if (-not $policiesSet) {
-        Write-OpenPathLog "Firefox not found, skipping policies" -Level WARN
+        Write-OpenPathLog "Firefox not found or managed extension unavailable, skipping Firefox managed extension policy" -Level WARN
     }
 
     return $policiesSet
@@ -251,5 +228,5 @@ Export-ModuleMember -Function @(
     'Get-OpenPathFirefoxReleaseMetadataPath',
     'Get-OpenPathFirefoxReleaseXpiPath',
     'Get-OpenPathFirefoxManagedExtensionPolicy',
-    'Set-FirefoxPolicy'
+    'Sync-OpenPathFirefoxManagedExtensionPolicy'
 )

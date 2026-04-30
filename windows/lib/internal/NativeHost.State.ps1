@@ -15,6 +15,7 @@ function Read-NativeState {
 function Get-WhitelistSections {
     $result = [ordered]@{
         Whitelist = @()
+        BlockedSubdomains = @()
         BlockedPaths = @()
     }
 
@@ -42,6 +43,7 @@ function Get-WhitelistSections {
 
         switch ($section) {
             'WHITELIST' { $result.Whitelist += $trimmed }
+            'BLOCKED-SUBDOMAINS' { $result.BlockedSubdomains += $trimmed }
             'BLOCKED-PATHS' { $result.BlockedPaths += $trimmed }
         }
     }

@@ -296,6 +296,42 @@ function Get-NativeHostBlockedPathResponse {
     }
 }
 
+function Get-NativeHostBlockedSubdomainResponse {
+    param(
+        [Parameter(Mandatory = $true)]
+        [PSCustomObject]$Sections
+    )
+
+    $subdomains = @($Sections.BlockedSubdomains)
+    $digest = ''
+    if ($subdomains.Count -gt 0) {
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes(($subdomains -join "`n"))
+            $digest = ([System.BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant()
+        }
+        finally {
+            $sha.Dispose()
+        }
+    }
+
+    $mtime = 0
+    if (Test-Path $script:WhitelistPath) {
+        $whitelistItem = Get-Item $script:WhitelistPath
+        $mtime = [int]([DateTimeOffset]$whitelistItem.LastWriteTimeUtc).ToUnixTimeSeconds()
+    }
+
+    return @{
+        success = $true
+        action = 'get-blocked-subdomains'
+        subdomains = $subdomains
+        count = $subdomains.Count
+        hash = $digest
+        mtime = $mtime
+        source = $script:WhitelistPath
+    }
+}
+
 function Invoke-NativeHostCheckAction {
     param(
         [Parameter(Mandatory = $true)]
@@ -407,6 +443,10 @@ function Invoke-NativeHostMessageAction {
 
         'get-blocked-paths' {
             return (Get-NativeHostBlockedPathResponse -Sections $sections)
+        }
+
+        'get-blocked-subdomains' {
+            return (Get-NativeHostBlockedSubdomainResponse -Sections $sections)
         }
 
         'check' {

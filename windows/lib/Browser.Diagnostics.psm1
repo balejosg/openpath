@@ -352,7 +352,7 @@ function Get-OpenPathBrowserDoctorReport {
         -NativeHostStatePresent $nativeHostStateReadable
     $browserRequestReadinessFacts = @(
         "request_setup=$($browserRequestReadiness.Facts.request_setup)"
-        "firefox_policy=$($browserRequestReadiness.Facts.firefox_policy)"
+        "firefox_managed_extension=$($browserRequestReadiness.Facts.firefox_managed_extension)"
         "firefox_native_host=$($browserRequestReadiness.Facts.firefox_native_host)"
     ) -join '; '
     $browserRequestReadinessFailures = if (@($browserRequestReadiness.FailureReasons).Count -gt 0) {

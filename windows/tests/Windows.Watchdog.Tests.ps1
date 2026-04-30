@@ -11,24 +11,22 @@ Describe "Watchdog Script" {
                 '-DependentModules @(''DNS'', ''Firewall'', ''Browser'', ''CaptivePortal'')',
                 '-RequiredCommands @(',
                 '-ScriptName ''Test-DNSHealth.ps1''',
-                '''Set-FirefoxPolicy''',
+                '''Sync-OpenPathFirefoxManagedExtensionPolicy''',
                 '''Get-OpenPathWhitelistSectionsFromFile'''
             )
         }
     }
 
-    Context "Firefox policy refresh" {
-        It "Reapplies Firefox policies from the local whitelist so later Firefox installs become managed automatically" {
+    Context "Firefox managed extension refresh" {
+        It "Refreshes only the Firefox managed extension policy without reading local blocked paths" {
             $helperPath = Join-Path $PSScriptRoot ".." "lib" "internal" "Watchdog.Runtime.ps1"
             $content = Get-Content $helperPath -Raw
 
             Assert-ContentContainsAll -Content $content -Needles @(
-                "$localWhitelistPath = Join-Path `$OpenPathRoot 'data\whitelist.txt'",
-                '$localWhitelistSections = Get-OpenPathWhitelistSectionsFromFile -Path $localWhitelistPath',
-                'Watchdog: skipped Firefox policy refresh because local whitelist is disabled',
-                'Set-FirefoxPolicy -BlockedPaths $localWhitelistSections.BlockedPaths',
-                'Watchdog: refreshed Firefox policies from local whitelist state'
+                'Sync-OpenPathFirefoxManagedExtensionPolicy',
+                'Watchdog: refreshed Firefox managed extension policy'
             )
+            $content | Should -Not -Match 'Set-FirefoxPolicy -BlockedPaths'
         }
     }
 

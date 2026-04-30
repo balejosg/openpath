@@ -105,13 +105,11 @@ function Get-OpenPathBrowserRequestReadiness {
     Browser.RequestReadiness\Get-OpenPathBrowserRequestReadiness -Config $Config
 }
 
-function Set-FirefoxPolicy {
+function Sync-OpenPathFirefoxManagedExtensionPolicy {
     [CmdletBinding(SupportsShouldProcess)]
-    param(
-        [string[]]$BlockedPaths = @()
-    )
+    param()
 
-    Browser.FirefoxPolicy\Set-FirefoxPolicy -BlockedPaths $BlockedPaths
+    Browser.FirefoxPolicy\Sync-OpenPathFirefoxManagedExtensionPolicy
 }
 
 function Set-ChromePolicy {
@@ -226,7 +224,7 @@ function Set-AllBrowserPolicy {
         return
     }
 
-    Set-FirefoxPolicy -BlockedPaths $BlockedPaths
+    Sync-OpenPathFirefoxManagedExtensionPolicy
     Set-ChromePolicy -BlockedPaths $BlockedPaths
 }
 
@@ -237,7 +235,7 @@ Export-ModuleMember -Function @(
     'Sync-OpenPathFirefoxNativeHostArtifacts',
     'Sync-OpenPathFirefoxNativeHostState',
     'Unregister-OpenPathFirefoxNativeHost',
-    'Set-FirefoxPolicy',
+    'Sync-OpenPathFirefoxManagedExtensionPolicy',
     'Set-ChromePolicy',
     'Remove-BrowserPolicy',
     'Set-AllBrowserPolicy'

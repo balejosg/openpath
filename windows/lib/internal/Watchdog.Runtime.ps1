@@ -219,18 +219,12 @@ function Invoke-OpenPathWatchdogChecks {
     }
 
     try {
-        if (-not $localWhitelistSections) {
-            $localWhitelistSections = Get-OpenPathWhitelistSectionsFromFile -Path $localWhitelistPath
-        }
-        if ($localWhitelistSections.IsDisabled) {
-            Write-OpenPathLog "Watchdog: skipped Firefox policy refresh because local whitelist is disabled" -Level WARN
-        }
-        elseif (Set-FirefoxPolicy -BlockedPaths $localWhitelistSections.BlockedPaths) {
-            Write-OpenPathLog "Watchdog: refreshed Firefox policies from local whitelist state"
+        if (Sync-OpenPathFirefoxManagedExtensionPolicy) {
+            Write-OpenPathLog "Watchdog: refreshed Firefox managed extension policy"
         }
     }
     catch {
-        Write-OpenPathLog "Watchdog: Firefox policy refresh failed: $_" -Level WARN
+        Write-OpenPathLog "Watchdog: Firefox managed extension policy refresh failed: $_" -Level WARN
     }
 
     return [PSCustomObject]@{

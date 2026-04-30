@@ -113,11 +113,11 @@ function Get-OpenPathBrowserRequestReadiness {
     }
 
     if ($ManagedExtensionPolicy -and $ManagedExtensionPolicy.ExtensionId -and $ManagedExtensionPolicy.InstallUrl) {
-        $facts.firefox_policy = 'ready'
+        $facts.firefox_managed_extension = 'ready'
     }
     else {
-        $facts.firefox_policy = 'missing'
-        $failureReasons.Add('firefox_policy_missing')
+        $facts.firefox_managed_extension = 'missing'
+        $failureReasons.Add('firefox_managed_extension_missing')
     }
 
     if ([bool]$NativeHostRegistered -and [bool]$NativeHostStatePresent) {
