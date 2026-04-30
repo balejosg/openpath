@@ -174,7 +174,11 @@ async function settlePolicyChange(
   driver: StudentPolicyDriver,
   mode: PolicyMode,
   assertion: () => Promise<void>,
-  options: { refreshBlockedPaths?: boolean; timeoutMs?: number } = {}
+  options: {
+    refreshBlockedPaths?: boolean;
+    refreshBlockedSubdomains?: boolean;
+    timeoutMs?: number;
+  } = {}
 ): Promise<void> {
   const runAssertion = async (): Promise<void> => {
     await driver.waitForConvergence(assertion, { timeoutMs: options.timeoutMs });
@@ -184,6 +188,9 @@ async function settlePolicyChange(
     await driver.forceLocalUpdate();
     if (options.refreshBlockedPaths === true) {
       await driver.refreshBlockedPathRules();
+    }
+    if (options.refreshBlockedSubdomains === true) {
+      await driver.refreshBlockedSubdomainRules();
     }
   };
 
@@ -689,33 +696,43 @@ async function runBlockedSubdomainScenarios(
     'Block CDN subdomain for Selenium policy test'
   );
 
-  await settlePolicyChange(driver, mode, async () => {
-    await driver.assertDnsAllowed(targets.hosts.baseOnly);
-    await driver.assertDnsBlocked(blockedSubdomainHost);
-    await driver.openAndExpectLoaded({
-      url: targets.baseOnlyUrl,
-      title: 'OpenPath Site Fixture',
-      selector: '#page-status',
-    });
-    await driver.rerunPortalSubdomainProbe();
-    await driver.waitForDomStatus('#subdomain-status', 'blocked');
-    await driver.openAndExpectBlocked({
-      url: targets.baseOnlyCdnAssetUrl,
-      forbiddenText: '__openpathPortalAssetLoaded',
-    });
-  });
+  await settlePolicyChange(
+    driver,
+    mode,
+    async () => {
+      await driver.assertDnsAllowed(targets.hosts.baseOnly);
+      await driver.assertDnsBlocked(blockedSubdomainHost);
+      await driver.openAndExpectLoaded({
+        url: targets.baseOnlyUrl,
+        title: 'OpenPath Site Fixture',
+        selector: '#page-status',
+      });
+      await driver.rerunPortalSubdomainProbe();
+      await driver.waitForDomStatus('#subdomain-status', 'blocked');
+      await driver.openAndExpectBlocked({
+        url: targets.baseOnlyCdnAssetUrl,
+        forbiddenText: '__openpathPortalAssetLoaded',
+      });
+    },
+    { refreshBlockedSubdomains: true }
+  );
 
   await client.deleteGroupRule(rule.id, driver.scenario.groups.restricted.id);
-  await settlePolicyChange(driver, mode, async () => {
-    await driver.assertDnsAllowed(blockedSubdomainHost);
-    await driver.openAndExpectLoaded({
-      url: targets.baseOnlyUrl,
-      title: 'OpenPath Site Fixture',
-      selector: '#page-status',
-    });
-    await driver.rerunPortalSubdomainProbe();
-    await driver.waitForDomStatus('#subdomain-status', 'ok');
-  });
+  await settlePolicyChange(
+    driver,
+    mode,
+    async () => {
+      await driver.assertDnsAllowed(blockedSubdomainHost);
+      await driver.openAndExpectLoaded({
+        url: targets.baseOnlyUrl,
+        title: 'OpenPath Site Fixture',
+        selector: '#page-status',
+      });
+      await driver.rerunPortalSubdomainProbe();
+      await driver.waitForDomStatus('#subdomain-status', 'ok');
+    },
+    { refreshBlockedSubdomains: true }
+  );
 }
 
 async function runBlockedPathScenarios(

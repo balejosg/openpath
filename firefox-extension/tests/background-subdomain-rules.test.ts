@@ -73,10 +73,10 @@ void describe('background subdomain rules controller', () => {
     globalThis.setInterval = ((handler: TimerHandler) => {
       intervals.push(handler as () => void);
       return intervals.length as never;
-    }) as typeof setInterval;
+    }) as unknown as typeof setInterval;
     globalThis.clearInterval = ((timer: unknown) => {
       cleared.push(timer);
-    }) as typeof clearInterval;
+    }) as unknown as typeof clearInterval;
 
     try {
       const controller = createBackgroundSubdomainRulesController({

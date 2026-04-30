@@ -38,6 +38,30 @@ export async function refreshBlockedPathRules(state: StudentPolicyDriverState): 
   }
 }
 
+export async function refreshBlockedSubdomainRules(state: StudentPolicyDriverState): Promise<void> {
+  const driver = state.getDriver();
+  await openPopupContext(state);
+  const result: { ok: boolean; value?: { success?: boolean; error?: string }; error?: string } =
+    await driver.executeAsyncScript(
+      `const done = arguments[arguments.length - 1];
+       Promise.resolve(browser.runtime.sendMessage({ action: 'refreshBlockedSubdomainRules', tabId: 0 }))
+         .then((value) => done({ ok: true, value }))
+         .catch((error) => done({ ok: false, error: String(error) }));`
+    );
+
+  if (!result.ok) {
+    throw new Error(
+      `Failed to refresh blocked-subdomain rules: ${result.error ?? 'unknown error'}`
+    );
+  }
+
+  if (result.value?.success !== true) {
+    throw new Error(
+      `Blocked-subdomain refresh was rejected: ${result.value?.error ?? 'unknown runtime error'}`
+    );
+  }
+}
+
 export async function sendRuntimeMessage<T>(
   state: StudentPolicyDriverState,
   message: Record<string, unknown>

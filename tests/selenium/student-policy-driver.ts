@@ -45,6 +45,7 @@ import {
   getBlockedPathRulesDebug,
   getDomainStatuses,
   getNativeBlockedPathsDebug,
+  refreshBlockedSubdomainRules,
   refreshBlockedPathRules,
   runCrossOriginElementProbe,
   rerunFetchProbe,
@@ -292,6 +293,10 @@ export class StudentPolicyDriver implements StudentPolicyDriverState {
 
   public async refreshBlockedPathRules(): Promise<void> {
     await refreshBlockedPathRules(this);
+  }
+
+  public async refreshBlockedSubdomainRules(): Promise<void> {
+    await refreshBlockedSubdomainRules(this);
   }
 
   public async forceLocalUpdate(): Promise<void> {

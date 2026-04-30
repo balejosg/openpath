@@ -206,6 +206,26 @@ test('student policy scenario group defaults to full and accepts narrow groups',
   }
 });
 
+test('StudentPolicyDriver refreshes blocked subdomain rules through runtime message', async () => {
+  const executedScripts: string[] = [];
+  const driver = new StudentPolicyDriver(createScenario(), {
+    diagnosticsDir: os.tmpdir(),
+    headless: true,
+  });
+  (driver as unknown as { driver: unknown; extensionUuid: string }).driver = {
+    async get(_url: string) {},
+    async executeAsyncScript(script: string) {
+      executedScripts.push(script);
+      return { ok: true, value: { success: true } };
+    },
+  };
+  (driver as unknown as { extensionUuid: string }).extensionUuid = 'extension-id';
+
+  await driver.refreshBlockedSubdomainRules();
+
+  assert.match(executedScripts.join('\n'), /refreshBlockedSubdomainRules/);
+});
+
 test('student policy scenario groups select narrow Selenium suites without weakening full coverage', () => {
   assert.deepStrictEqual(
     getStudentPolicyPhasePlan('sse', 'full', 'full').map(({ suite }) => suite),
