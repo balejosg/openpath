@@ -23,12 +23,14 @@ Describe "Browser Module - Request Readiness" {
                 Source = "managed-api"
             }) `
             -NativeHostRegistered $true `
-            -NativeHostStatePresent $true
+            -NativeHostStatePresent $true `
+            -FirefoxMachinePolicyApplied $true
 
         $result.Platform | Should -Be "windows"
         $result.Ready | Should -BeTrue
         $result.Facts.request_setup | Should -Be "ready"
         $result.Facts.firefox_managed_extension | Should -Be "ready"
+        $result.Facts.firefox_machine_policy | Should -Be "ready"
         $result.Facts.PSObject.Properties.Name | Should -Not -Contain "firefox_policy"
         $result.Facts.firefox_native_host | Should -Be "ready"
         @($result.FailureReasons).Count | Should -Be 0
@@ -43,11 +45,14 @@ Describe "Browser Module - Request Readiness" {
             }) `
             -ManagedExtensionPolicy $null `
             -NativeHostRegistered $true `
-            -NativeHostStatePresent $true
+            -NativeHostStatePresent $true `
+            -FirefoxMachinePolicyApplied $false
 
         $result.Ready | Should -BeFalse
         $result.Facts.firefox_managed_extension | Should -Be "missing"
+        $result.Facts.firefox_machine_policy | Should -Be "missing"
         @($result.FailureReasons) | Should -Contain "firefox_managed_extension_missing"
+        @($result.FailureReasons) | Should -Contain "firefox_machine_policy_missing"
     }
 
     It "Fails readiness when native host registration proof is missing" {
@@ -63,7 +68,8 @@ Describe "Browser Module - Request Readiness" {
                 Source = "managed-api"
             }) `
             -NativeHostRegistered $false `
-            -NativeHostStatePresent $true
+            -NativeHostStatePresent $true `
+            -FirefoxMachinePolicyApplied $true
 
         $result.Ready | Should -BeFalse
         $result.Facts.firefox_native_host | Should -Be "missing"
@@ -83,10 +89,32 @@ Describe "Browser Module - Request Readiness" {
                 Source = "managed-api"
             }) `
             -NativeHostRegistered $true `
-            -NativeHostStatePresent $true
+            -NativeHostStatePresent $true `
+            -FirefoxMachinePolicyApplied $true
 
         $result.Ready | Should -BeFalse
         $result.Facts.request_setup | Should -Be "missing"
         @($result.FailureReasons) | Should -Contain "request_setup_incomplete"
+    }
+
+    It "Fails readiness when Firefox machine policy is missing" {
+        $result = Get-OpenPathBrowserRequestReadiness `
+            -Config ([PSCustomObject]@{
+                apiUrl = "https://school.example"
+                whitelistUrl = "https://school.example/w/machine-token-123/whitelist.txt"
+                classroomId = "classroom-123"
+            }) `
+            -ManagedExtensionPolicy ([PSCustomObject]@{
+                ExtensionId = "monitor-bloqueos@openpath"
+                InstallUrl = "https://school.example/api/extensions/firefox/openpath.xpi"
+                Source = "managed-api"
+            }) `
+            -NativeHostRegistered $true `
+            -NativeHostStatePresent $true `
+            -FirefoxMachinePolicyApplied $false
+
+        $result.Ready | Should -BeFalse
+        $result.Facts.firefox_machine_policy | Should -Be "missing"
+        @($result.FailureReasons) | Should -Contain "firefox_machine_policy_missing"
     }
 }

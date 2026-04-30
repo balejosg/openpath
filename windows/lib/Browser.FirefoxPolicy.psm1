@@ -16,6 +16,65 @@ function Get-OpenPathFirefoxReleaseXpiPath {
     return "$script:OpenPathRoot\browser-extension\firefox-release\openpath-firefox-extension.xpi"
 }
 
+function Get-OpenPathDefaultFirefoxExtensionId {
+    return 'monitor-bloqueos@openpath'
+}
+
+function Get-OpenPathFirefoxMachinePolicyRegistryPath {
+    return 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox'
+}
+
+function ConvertFrom-OpenPathFirefoxMachineExtensionSettings {
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    $settings = [ordered]@{}
+    foreach ($entry in @($Value)) {
+        if (-not $entry) {
+            continue
+        }
+
+        try {
+            $parsed = [string]$entry | ConvertFrom-Json -ErrorAction Stop
+            foreach ($property in @($parsed.PSObject.Properties)) {
+                $settings[$property.Name] = $property.Value
+            }
+        }
+        catch {
+            Write-OpenPathLog "Failed to parse Firefox machine ExtensionSettings registry value: $_" -Level WARN
+        }
+    }
+
+    return $settings
+}
+
+function Get-OpenPathFirefoxMachineExtensionSettings {
+    $registryPath = Get-OpenPathFirefoxMachinePolicyRegistryPath
+    try {
+        $registryValue = Get-ItemProperty -Path $registryPath -Name 'ExtensionSettings' -ErrorAction Stop
+        return ConvertFrom-OpenPathFirefoxMachineExtensionSettings -Value $registryValue.ExtensionSettings
+    }
+    catch {
+        return [ordered]@{}
+    }
+}
+
+function ConvertTo-OpenPathFirefoxMachineExtensionSettingsValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Collections.IDictionary]$Settings
+    )
+
+    $root = [ordered]@{}
+    foreach ($key in $Settings.Keys) {
+        $root[[string]$key] = $Settings[$key]
+    }
+
+    return @($root | ConvertTo-Json -Depth 10 -Compress)
+}
+
 function Get-OpenPathConfiguredFirefoxManagedExtensionPolicy {
     param(
         [AllowNull()]
@@ -145,6 +204,113 @@ function Get-OpenPathFirefoxManagedExtensionPolicy {
     }
 }
 
+function Set-OpenPathFirefoxMachineExtensionPolicy {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$ManagedExtensionPolicy
+    )
+
+    if (-not $ManagedExtensionPolicy.ExtensionId -or -not $ManagedExtensionPolicy.InstallUrl) {
+        return $false
+    }
+
+    try {
+        $registryPath = Get-OpenPathFirefoxMachinePolicyRegistryPath
+        if (-not (Test-Path $registryPath)) {
+            New-Item -Path $registryPath -Force -ErrorAction Stop | Out-Null
+        }
+
+        $settings = Get-OpenPathFirefoxMachineExtensionSettings
+        $settings[[string]$ManagedExtensionPolicy.ExtensionId] = [ordered]@{
+            installation_mode = 'force_installed'
+            install_url = [string]$ManagedExtensionPolicy.InstallUrl
+        }
+
+        $value = ConvertTo-OpenPathFirefoxMachineExtensionSettingsValue -Settings $settings
+        New-ItemProperty -Path $registryPath -Name 'ExtensionSettings' -Value $value -PropertyType MultiString -Force -ErrorAction Stop | Out-Null
+        Write-OpenPathLog "Firefox machine ExtensionSettings policy written to: $registryPath"
+        return $true
+    }
+    catch {
+        Write-OpenPathLog "Failed to set Firefox machine ExtensionSettings policy: $_" -Level WARN
+        return $false
+    }
+}
+
+function Test-OpenPathFirefoxMachineExtensionPolicy {
+    param(
+        [AllowNull()]
+        [object]$ManagedExtensionPolicy = $null
+    )
+
+    if (-not $ManagedExtensionPolicy) {
+        $ManagedExtensionPolicy = Get-OpenPathFirefoxManagedExtensionPolicy
+    }
+
+    if (-not $ManagedExtensionPolicy -or -not $ManagedExtensionPolicy.ExtensionId -or -not $ManagedExtensionPolicy.InstallUrl) {
+        return $false
+    }
+
+    $settings = Get-OpenPathFirefoxMachineExtensionSettings
+    if (-not $settings.Contains([string]$ManagedExtensionPolicy.ExtensionId)) {
+        return $false
+    }
+
+    $entry = $settings[[string]$ManagedExtensionPolicy.ExtensionId]
+    if (-not $entry) {
+        return $false
+    }
+
+    $installMode = if ($entry.PSObject.Properties['installation_mode']) { [string]$entry.installation_mode } else { '' }
+    $installUrl = if ($entry.PSObject.Properties['install_url']) { [string]$entry.install_url } else { '' }
+
+    return ($installMode -eq 'force_installed' -and $installUrl -eq [string]$ManagedExtensionPolicy.InstallUrl)
+}
+
+function Remove-OpenPathFirefoxMachineExtensionPolicy {
+    [CmdletBinding()]
+    param(
+        [AllowNull()]
+        [object]$ManagedExtensionPolicy = $null
+    )
+
+    if (-not $ManagedExtensionPolicy) {
+        $ManagedExtensionPolicy = Get-OpenPathFirefoxManagedExtensionPolicy
+    }
+
+    try {
+        $registryPath = Get-OpenPathFirefoxMachinePolicyRegistryPath
+        $settings = Get-OpenPathFirefoxMachineExtensionSettings
+        $extensionId = if ($ManagedExtensionPolicy -and $ManagedExtensionPolicy.ExtensionId) {
+            [string]$ManagedExtensionPolicy.ExtensionId
+        }
+        else {
+            Get-OpenPathDefaultFirefoxExtensionId
+        }
+
+        if (-not $settings.Contains($extensionId)) {
+            return $false
+        }
+
+        $settings.Remove($extensionId)
+        if ($settings.Count -eq 0) {
+            Remove-ItemProperty -Path $registryPath -Name 'ExtensionSettings' -ErrorAction SilentlyContinue
+        }
+        else {
+            $value = ConvertTo-OpenPathFirefoxMachineExtensionSettingsValue -Settings $settings
+            New-ItemProperty -Path $registryPath -Name 'ExtensionSettings' -Value $value -PropertyType MultiString -Force -ErrorAction Stop | Out-Null
+        }
+
+        Write-OpenPathLog "Firefox machine ExtensionSettings OpenPath entry removed from: $registryPath"
+        return $true
+    }
+    catch {
+        Write-OpenPathLog "Failed to remove Firefox machine ExtensionSettings policy: $_" -Level WARN
+        return $false
+    }
+}
+
 function Sync-OpenPathFirefoxManagedExtensionPolicy {
     [CmdletBinding(SupportsShouldProcess)]
     param()
@@ -164,6 +330,15 @@ function Sync-OpenPathFirefoxManagedExtensionPolicy {
     $unsignedExtensionManifest = "$(Get-OpenPathFirefoxExtensionRoot)\manifest.json"
     $managedExtensionPolicy = Get-OpenPathFirefoxManagedExtensionPolicy
     $signedExtensionWarningWritten = $false
+
+    if ($managedExtensionPolicy) {
+        if (Set-OpenPathFirefoxMachineExtensionPolicy -ManagedExtensionPolicy $managedExtensionPolicy) {
+            $policiesSet = $true
+        }
+    }
+    else {
+        Remove-OpenPathFirefoxMachineExtensionPolicy | Out-Null
+    }
 
     foreach ($firefoxPath in $firefoxPaths) {
         $firefoxExe = Split-Path $firefoxPath -Parent
@@ -228,5 +403,9 @@ Export-ModuleMember -Function @(
     'Get-OpenPathFirefoxReleaseMetadataPath',
     'Get-OpenPathFirefoxReleaseXpiPath',
     'Get-OpenPathFirefoxManagedExtensionPolicy',
+    'Get-OpenPathFirefoxMachineExtensionSettings',
+    'Set-OpenPathFirefoxMachineExtensionPolicy',
+    'Test-OpenPathFirefoxMachineExtensionPolicy',
+    'Remove-OpenPathFirefoxMachineExtensionPolicy',
     'Sync-OpenPathFirefoxManagedExtensionPolicy'
 )

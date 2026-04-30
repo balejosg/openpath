@@ -46,6 +46,8 @@ Describe "Browser Module - Firefox Policy" {
 
         It "Uses explicit signed Firefox extension config when available" {
             $script:capturedFirefoxPolicyJson = $null
+            $script:capturedMachinePolicyPath = $null
+            $script:capturedMachinePolicyValue = $null
             $contract = Get-ContractFixtureJson -FileName 'browser-firefox-managed-extension.json'
 
             Mock Test-Path {
@@ -67,6 +69,13 @@ Describe "Browser Module - Firefox Policy" {
                     $script:capturedFirefoxPolicyJson = $Value
                 }
             } -ModuleName Browser.FirefoxPolicy
+            Mock New-ItemProperty {
+                param([string]$Path, [string]$Name, [object]$Value, [object]$PropertyType)
+                if ($Name -eq 'ExtensionSettings') {
+                    $script:capturedMachinePolicyPath = $Path
+                    $script:capturedMachinePolicyValue = @($Value)
+                }
+            } -ModuleName Browser.FirefoxPolicy
             Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
 
             $result = Sync-OpenPathFirefoxManagedExtensionPolicy
@@ -76,6 +85,142 @@ Describe "Browser Module - Firefox Policy" {
             $policy.policies.PSObject.Properties.Name | Should -Be @('ExtensionSettings')
             $policy.policies.ExtensionSettings.($contract.extensionId).installation_mode | Should -Be 'force_installed'
             $policy.policies.ExtensionSettings.($contract.extensionId).install_url | Should -Be $contract.configuredInstallUrl
+
+            $script:capturedMachinePolicyPath | Should -Be 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox'
+            $script:capturedMachinePolicyValue.Count | Should -Be 1
+            $machinePolicy = $script:capturedMachinePolicyValue[0] | ConvertFrom-Json
+            $machinePolicy.($contract.extensionId).installation_mode | Should -Be 'force_installed'
+            $machinePolicy.($contract.extensionId).install_url | Should -Be $contract.configuredInstallUrl
+        }
+
+        It "Writes machine Firefox policy even when firefox.exe is not installed" {
+            $script:capturedFirefoxPolicyJson = $null
+            $script:capturedMachinePolicyValue = $null
+            $contract = Get-ContractFixtureJson -FileName 'browser-firefox-managed-extension.json'
+
+            Mock Test-Path { return $false } -ModuleName Browser.FirefoxPolicy
+            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    firefoxExtensionId = $contract.extensionId
+                    firefoxExtensionInstallUrl = $contract.configuredInstallUrl
+                }
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Write-OpenPathUtf8NoBomFile {
+                param([string]$Path, [string]$Value)
+                if ($Path -like '*policies.json') {
+                    $script:capturedFirefoxPolicyJson = $Value
+                }
+            } -ModuleName Browser.FirefoxPolicy
+            Mock New-ItemProperty {
+                param([string]$Path, [string]$Name, [object]$Value, [object]$PropertyType)
+                if ($Name -eq 'ExtensionSettings') {
+                    $script:capturedMachinePolicyValue = @($Value)
+                }
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
+
+            $result = Sync-OpenPathFirefoxManagedExtensionPolicy
+            $result | Should -BeTrue
+            $script:capturedFirefoxPolicyJson | Should -BeNullOrEmpty
+
+            $machinePolicy = $script:capturedMachinePolicyValue[0] | ConvertFrom-Json
+            $machinePolicy.($contract.extensionId).installation_mode | Should -Be 'force_installed'
+            $machinePolicy.($contract.extensionId).install_url | Should -Be $contract.configuredInstallUrl
+        }
+
+        It "Preserves existing machine Firefox ExtensionSettings entries" {
+            $script:capturedMachinePolicyValue = $null
+            $contract = Get-ContractFixtureJson -FileName 'browser-firefox-managed-extension.json'
+
+            Mock Test-Path { return $false } -ModuleName Browser.FirefoxPolicy
+            Mock New-Item { [PSCustomObject]@{ FullName = 'mock-path' } } -ModuleName Browser.FirefoxPolicy
+            Mock Get-ItemProperty {
+                [PSCustomObject]@{
+                    ExtensionSettings = @(
+                        '{"other@example.com":{"installation_mode":"allowed"}}'
+                    )
+                }
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    firefoxExtensionId = $contract.extensionId
+                    firefoxExtensionInstallUrl = $contract.configuredInstallUrl
+                }
+            } -ModuleName Browser.FirefoxPolicy
+            Mock New-ItemProperty {
+                param([string]$Path, [string]$Name, [object]$Value, [object]$PropertyType)
+                if ($Name -eq 'ExtensionSettings') {
+                    $script:capturedMachinePolicyValue = @($Value)
+                }
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
+
+            $result = Sync-OpenPathFirefoxManagedExtensionPolicy
+            $result | Should -BeTrue
+
+            $machinePolicy = $script:capturedMachinePolicyValue[0] | ConvertFrom-Json
+            $machinePolicy.'other@example.com'.installation_mode | Should -Be 'allowed'
+            $machinePolicy.($contract.extensionId).installation_mode | Should -Be 'force_installed'
+        }
+
+        It "Removes only OpenPath entry from machine Firefox ExtensionSettings cleanup" {
+            $script:capturedMachinePolicyValue = $null
+            $contract = Get-ContractFixtureJson -FileName 'browser-firefox-managed-extension.json'
+
+            Mock Test-Path { return $true } -ModuleName Browser.FirefoxPolicy
+            Mock Get-OpenPathConfig {
+                [PSCustomObject]@{
+                    firefoxExtensionId = $contract.extensionId
+                    firefoxExtensionInstallUrl = $contract.configuredInstallUrl
+                }
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Get-ItemProperty {
+                [PSCustomObject]@{
+                    ExtensionSettings = @(
+                        "{`"$($contract.extensionId)`":{`"installation_mode`":`"force_installed`"},`"other@example.com`":{`"installation_mode`":`"allowed`"}}"
+                    )
+                }
+            } -ModuleName Browser.FirefoxPolicy
+            Mock New-ItemProperty {
+                param([string]$Path, [string]$Name, [object]$Value, [object]$PropertyType)
+                if ($Name -eq 'ExtensionSettings') {
+                    $script:capturedMachinePolicyValue = @($Value)
+                }
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Remove-ItemProperty { throw 'Should not remove non-empty ExtensionSettings' } -ModuleName Browser.FirefoxPolicy
+            Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
+
+            Remove-OpenPathFirefoxMachineExtensionPolicy
+
+            $machinePolicy = $script:capturedMachinePolicyValue[0] | ConvertFrom-Json
+            $machinePolicy.PSObject.Properties.Name | Should -Contain 'other@example.com'
+            $machinePolicy.PSObject.Properties.Name | Should -Not -Contain $contract.extensionId
+        }
+
+        It "Removes OpenPath machine policy entry even when signed config is unavailable" {
+            $script:removedMachinePolicyValue = $false
+            $contract = Get-ContractFixtureJson -FileName 'browser-firefox-managed-extension.json'
+
+            Mock Get-OpenPathConfig { [PSCustomObject]@{} } -ModuleName Browser.FirefoxPolicy
+            Mock Test-Path { return $false } -ModuleName Browser.FirefoxPolicy
+            Mock Get-ItemProperty {
+                [PSCustomObject]@{
+                    ExtensionSettings = @(
+                        "{`"$($contract.extensionId)`":{`"installation_mode`":`"force_installed`"}}"
+                    )
+                }
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Remove-ItemProperty {
+                param([string]$Path, [string]$Name)
+                if ($Name -eq 'ExtensionSettings') {
+                    $script:removedMachinePolicyValue = $true
+                }
+            } -ModuleName Browser.FirefoxPolicy
+            Mock Write-OpenPathLog { } -ModuleName Browser.FirefoxPolicy
+
+            Remove-OpenPathFirefoxMachineExtensionPolicy | Should -BeTrue
+            $script:removedMachinePolicyValue | Should -BeTrue
         }
 
         It "Uses the managed OpenPath API for Firefox release updates when apiUrl is configured" {

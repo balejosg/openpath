@@ -77,7 +77,10 @@ function Get-OpenPathBrowserRequestReadiness {
         [object]$NativeHostRegistered = $null,
 
         [AllowNull()]
-        [object]$NativeHostStatePresent = $null
+        [object]$NativeHostStatePresent = $null,
+
+        [AllowNull()]
+        [object]$FirefoxMachinePolicyApplied = $null
     )
 
     if (-not $PSBoundParameters.ContainsKey('Config') -or -not $Config) {
@@ -101,6 +104,10 @@ function Get-OpenPathBrowserRequestReadiness {
         $NativeHostStatePresent = Test-Path (Get-OpenPathFirefoxNativeStatePath)
     }
 
+    if (-not $PSBoundParameters.ContainsKey('FirefoxMachinePolicyApplied')) {
+        $FirefoxMachinePolicyApplied = Test-OpenPathFirefoxMachineExtensionPolicy -ManagedExtensionPolicy $ManagedExtensionPolicy
+    }
+
     $facts = [ordered]@{}
     $failureReasons = New-Object System.Collections.Generic.List[string]
 
@@ -118,6 +125,14 @@ function Get-OpenPathBrowserRequestReadiness {
     else {
         $facts.firefox_managed_extension = 'missing'
         $failureReasons.Add('firefox_managed_extension_missing')
+    }
+
+    if ([bool]$FirefoxMachinePolicyApplied) {
+        $facts.firefox_machine_policy = 'ready'
+    }
+    else {
+        $facts.firefox_machine_policy = 'missing'
+        $failureReasons.Add('firefox_machine_policy_missing')
     }
 
     if ([bool]$NativeHostRegistered -and [bool]$NativeHostStatePresent) {

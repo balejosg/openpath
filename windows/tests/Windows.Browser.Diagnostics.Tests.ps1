@@ -20,6 +20,8 @@ Describe "Browser Module - Diagnostics" {
                 'Firefox metadata path:',
                 'Firefox XPI ACL summary:',
                 'Resolved install_url:',
+                'Machine Firefox policy:',
+                'Machine Firefox policy install_url:',
                 'Policy JSON parse:'
             )
         }
@@ -60,7 +62,8 @@ Describe "Browser Module - Diagnostics" {
                 'Native host update task user access:',
                 'Browser request readiness:',
                 'Browser request readiness facts:',
-                'Browser request readiness failures:'
+                'Browser request readiness failures:',
+                'firefox_machine_policy='
             )
         }
 

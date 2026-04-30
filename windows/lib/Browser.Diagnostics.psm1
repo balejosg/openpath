@@ -157,6 +157,8 @@ function Get-OpenPathBrowserDoctorReport {
     $policyEncoding = 'missing'
     $policyInstallMode = '(missing)'
     $policyInstallUrl = '(missing)'
+    $machineFirefoxPolicy = 'missing'
+    $machineFirefoxPolicyInstallUrl = '(missing)'
     $extensionId = '(missing)'
     $extensionVersion = '(missing)'
     $metadataSha256 = '(missing)'
@@ -339,6 +341,22 @@ function Get-OpenPathBrowserDoctorReport {
     else {
         '(unresolved)'
     }
+    $machineFirefoxPolicyApplied = Test-OpenPathFirefoxMachineExtensionPolicy -ManagedExtensionPolicy $managedExtensionPolicy
+    $machineFirefoxPolicy = if ($machineFirefoxPolicyApplied) { 'ready' } else { 'missing' }
+    if ($managedExtensionPolicy -and $managedExtensionPolicy.ExtensionId) {
+        try {
+            $machineSettings = Get-OpenPathFirefoxMachineExtensionSettings
+            if ($machineSettings.Contains([string]$managedExtensionPolicy.ExtensionId)) {
+                $machineEntry = $machineSettings[[string]$managedExtensionPolicy.ExtensionId]
+                if ($machineEntry.PSObject.Properties['install_url']) {
+                    $machineFirefoxPolicyInstallUrl = [string]$machineEntry.install_url
+                }
+            }
+        }
+        catch {
+            $machineFirefoxPolicyInstallUrl = "error: $($_.Exception.Message)"
+        }
+    }
     $nativeHostRegistered = [bool](
         $nativeHostManifestParse -eq 'ok' -and
         $nativeHostWrapperPresent -and
@@ -349,10 +367,12 @@ function Get-OpenPathBrowserDoctorReport {
         -Config $requestSetupState `
         -ManagedExtensionPolicy $managedExtensionPolicy `
         -NativeHostRegistered $nativeHostRegistered `
-        -NativeHostStatePresent $nativeHostStateReadable
+        -NativeHostStatePresent $nativeHostStateReadable `
+        -FirefoxMachinePolicyApplied $machineFirefoxPolicyApplied
     $browserRequestReadinessFacts = @(
         "request_setup=$($browserRequestReadiness.Facts.request_setup)"
         "firefox_managed_extension=$($browserRequestReadiness.Facts.firefox_managed_extension)"
+        "firefox_machine_policy=$($browserRequestReadiness.Facts.firefox_machine_policy)"
         "firefox_native_host=$($browserRequestReadiness.Facts.firefox_native_host)"
     ) -join '; '
     $browserRequestReadinessFailures = if (@($browserRequestReadiness.FailureReasons).Count -gt 0) {
@@ -430,6 +450,8 @@ function Get-OpenPathBrowserDoctorReport {
         "Browser request readiness facts: $browserRequestReadinessFacts"
         "Browser request readiness failures: $browserRequestReadinessFailures"
         "Resolved install_url: $resolvedInstallUrl"
+        "Machine Firefox policy: $machineFirefoxPolicy"
+        "Machine Firefox policy install_url: $machineFirefoxPolicyInstallUrl"
         "Policy file path: $policyPath"
         "Policy file present: $(Test-Path $policyPath)"
         "Policy encoding: $policyEncoding"

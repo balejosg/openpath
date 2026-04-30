@@ -197,6 +197,7 @@ function Remove-BrowserPolicy {
             Remove-Item $path -Force -ErrorAction SilentlyContinue
         }
     }
+    Browser.FirefoxPolicy\Remove-OpenPathFirefoxMachineExtensionPolicy | Out-Null
 
     $regPaths = @(
         "HKLM:\SOFTWARE\Policies\Google\Chrome\URLBlocklist",
