@@ -48,6 +48,6 @@ void describe('Firefox subdomain blocking', () => {
       { extensionOrigin: 'moz-extension://unit-test/' }
     );
     assert.ok(mainFrameOutcome?.redirectUrl);
-    assert.strictEqual(mainFrameOutcome?.reason, 'BLOCKED_SUBDOMAIN_POLICY:ads.example.org');
+    assert.strictEqual(mainFrameOutcome.reason, 'BLOCKED_SUBDOMAIN_POLICY:ads.example.org');
   });
 });

@@ -6,11 +6,12 @@ void describe('background subdomain blocking flow', () => {
   void test('blocks requests whose hostname matches a blocked subdomain rule', async () => {
     const controller = createBackgroundSubdomainRulesController({
       extensionOrigin: 'moz-extension://unit-test/',
-      getBlockedSubdomains: async () => ({
-        success: true,
-        subdomains: ['ads.example.org'],
-        hash: 'v1',
-      }),
+      getBlockedSubdomains: () =>
+        Promise.resolve({
+          success: true,
+          subdomains: ['ads.example.org'],
+          hash: 'v1',
+        }),
     });
 
     await controller.init();
