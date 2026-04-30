@@ -57,6 +57,31 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('Windows student-policy runner validates SSE group and uploads scenario timings', () => {
+    const windowsRunner = readText('tests/e2e/ci/run-windows-student-flow.ps1');
+
+    assert.match(
+      windowsRunner,
+      /OPENPATH_WINDOWS_STUDENT_SSE_GROUP/,
+      'Windows student-policy runner should read the selected SSE scenario group from the workflow environment'
+    );
+    assert.match(
+      windowsRunner,
+      /ValidateSet\('full', 'request-lifecycle', 'ajax-auto-allow', 'path-blocking', 'exemptions'\)/,
+      'Windows student-policy runner should reject unknown SSE scenario groups'
+    );
+    assert.match(
+      windowsRunner,
+      /OPENPATH_STUDENT_DIAGNOSTICS_DIR/,
+      'Windows student-policy runner should write Selenium scenario timings into the uploaded artifact directory'
+    );
+    assert.match(
+      windowsRunner,
+      /Run Selenium student suite \(sse, \$windowsStudentSseGroup\)/,
+      'Windows student-policy timings should include the selected SSE group'
+    );
+  });
+
   test('student policy selenium sources stay compatible with their ts-node target', () => {
     const seleniumSources = [
       'tests/selenium/student-policy-client.ts',
@@ -534,7 +559,6 @@ describe('repository verification contract', () => {
       'Start fixture server',
       'Package Firefox extension',
       'Ensure Firefox and geckodriver',
-      'Run Selenium student suite (sse, full)',
       'Run Selenium student suite (fallback, fallback-propagation)',
     ]) {
       assert.ok(
@@ -542,6 +566,11 @@ describe('repository verification contract', () => {
         `Windows student-policy runner should time phase: ${phase}`
       );
     }
+    assert.match(
+      windowsRunner,
+      /Invoke-TimedStep -Name "Run Selenium student suite \(sse, \$windowsStudentSseGroup\)"/,
+      'Windows student-policy runner should time the selected SSE group'
+    );
   });
 
   test('windows student policy runner keeps full SSE coverage and narrows fallback to propagation proof', () => {
@@ -556,8 +585,8 @@ describe('repository verification contract', () => {
     );
     assert.match(
       windowsRunner,
-      /Run Selenium student suite \(sse, full\)[\s\S]*Invoke-SeleniumStudentSuite[\s\S]*-Mode 'sse'[\s\S]*-CoverageProfile 'full'/s,
-      'Windows student-policy runner should keep the SSE pass on the full Selenium matrix'
+      /Run Selenium student suite \(sse, \$windowsStudentSseGroup\)[\s\S]*Invoke-SeleniumStudentSuite[\s\S]*-Mode 'sse'[\s\S]*-CoverageProfile 'full'[\s\S]*-ScenarioGroup \$windowsStudentSseGroup/s,
+      'Windows student-policy runner should keep full coverage available while allowing a selected SSE scenario group'
     );
     assert.match(
       windowsRunner,

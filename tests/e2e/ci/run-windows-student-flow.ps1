@@ -26,6 +26,14 @@ $script:PrimaryFailure = $null
 $script:RunSucceeded = $false
 $script:Timings = @()
 
+function Resolve-WindowsStudentSseGroup {
+    param(
+        [ValidateSet('full', 'request-lifecycle', 'ajax-auto-allow', 'path-blocking', 'exemptions')][string]$ScenarioGroup = 'full'
+    )
+
+    return $ScenarioGroup
+}
+
 function Write-Step {
     param(
         [Parameter(Mandatory = $true)][string]$Message
@@ -1152,9 +1160,11 @@ function Invoke-SeleniumStudentSuite {
         $originalFirefoxBinary = $env:OPENPATH_FIREFOX_BINARY
         $originalCoverageProfile = $env:OPENPATH_STUDENT_COVERAGE_PROFILE
         $originalScenarioGroup = $env:OPENPATH_STUDENT_SCENARIO_GROUP
+        $originalDiagnosticsDir = $env:OPENPATH_STUDENT_DIAGNOSTICS_DIR
         $env:OPENPATH_STUDENT_SCENARIO_FILE = $ScenarioPath
         $env:OPENPATH_FIXTURE_PORT = [string]$script:FixturePort
         $env:OPENPATH_EXTENSION_PATH = $ExtensionArchivePath
+        $env:OPENPATH_STUDENT_DIAGNOSTICS_DIR = $script:ArtifactsRoot
         $env:OPENPATH_WHITELIST_PATH = 'C:\OpenPath\data\whitelist.txt'
         $env:OPENPATH_FORCE_UPDATE_COMMAND = 'powershell -NoLogo -File "C:\OpenPath\scripts\Update-OpenPath.ps1"'
         $env:OPENPATH_DISABLE_SSE_COMMAND = 'powershell -NoLogo -Command "Disable-ScheduledTask -TaskName ''OpenPath-SSE'' -ErrorAction SilentlyContinue; Stop-ScheduledTask -TaskName ''OpenPath-SSE'' -ErrorAction SilentlyContinue"'
@@ -1245,6 +1255,12 @@ function Invoke-SeleniumStudentSuite {
         }
         else {
             Remove-Item Env:\OPENPATH_FIREFOX_BINARY -ErrorAction SilentlyContinue
+        }
+        if ($null -ne $originalDiagnosticsDir) {
+            $env:OPENPATH_STUDENT_DIAGNOSTICS_DIR = $originalDiagnosticsDir
+        }
+        else {
+            Remove-Item Env:\OPENPATH_STUDENT_DIAGNOSTICS_DIR -ErrorAction SilentlyContinue
         }
         Pop-Location
     }
@@ -1460,7 +1476,13 @@ try {
     Invoke-TimedStep -Name 'Ensure Firefox and geckodriver' -ScriptBlock { Ensure-FirefoxAndGeckodriver }
     Invoke-TimedStep -Name 'Enable Firefox unsigned addon support' -ScriptBlock { Enable-FirefoxUnsignedAddonSupport }
     Invoke-TimedStep -Name 'Install and enroll client (sse)' -ScriptBlock { Install-AndEnrollClient -Scenario $scenario -InstallClient $true }
-    Invoke-TimedStep -Name 'Run Selenium student suite (sse, full)' -ScriptBlock { Invoke-SeleniumStudentSuite -ScenarioPath $scenarioPath -ExtensionArchivePath $extensionArchivePath -Mode 'sse' -CoverageProfile 'full' }
+    $windowsStudentSseGroup = if ([string]::IsNullOrWhiteSpace($env:OPENPATH_WINDOWS_STUDENT_SSE_GROUP)) {
+        Resolve-WindowsStudentSseGroup
+    }
+    else {
+        Resolve-WindowsStudentSseGroup -ScenarioGroup $env:OPENPATH_WINDOWS_STUDENT_SSE_GROUP
+    }
+    Invoke-TimedStep -Name "Run Selenium student suite (sse, $windowsStudentSseGroup)" -ScriptBlock { Invoke-SeleniumStudentSuite -ScenarioPath $scenarioPath -ExtensionArchivePath $extensionArchivePath -Mode 'sse' -CoverageProfile 'full' -ScenarioGroup $windowsStudentSseGroup }
     $scenario = Invoke-TimedStep -Name 'Bootstrap scenario (fallback)' -ScriptBlock { Invoke-BackendHarnessBootstrap -ScenarioName 'Windows Student Policy Fallback' }
     Invoke-TimedStep -Name 'Install and enroll client (fallback)' -ScriptBlock { Install-AndEnrollClient -Scenario $scenario -InstallClient $false }
     Invoke-TimedStep -Name 'Run Selenium student suite (fallback, fallback-propagation)' -ScriptBlock { Invoke-SeleniumStudentSuite -ScenarioPath $scenarioPath -ExtensionArchivePath $extensionArchivePath -Mode 'fallback' -CoverageProfile 'fallback-propagation' }

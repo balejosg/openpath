@@ -212,6 +212,17 @@ propagation, and blocked-path enforcement in the installed Windows client. This
 exploits the current constraint by removing duplicate browser-matrix work while
 preserving a required Windows gate.
 
+After run `25130519857`, the constraint stayed inside `Windows Student Policy`:
+the job took about `9m26s`, and `windows-student-policy-timings.json` showed
+`Run Selenium student suite (sse, full)` at `356.985s` while the already reduced
+fallback proof was `46.919s`. The next optimization therefore narrows the SSE
+matrix only for high-confidence single-family diffs. `Detect Relevant Changes`
+publishes `windows_student_policy_sse_group`, resolved by
+`scripts/select-windows-student-policy-sse-group.mjs`; the Windows runner reads
+that value through `OPENPATH_WINDOWS_STUDENT_SSE_GROUP` and still defaults to
+`full` for mixed, broad, unknown, runner, workflow, lockfile, shared, runtime, or
+Windows-client changes.
+
 Release-infrastructure-only diffs now stay on the `E2E Summary` evidence path
 without consuming destructive target-platform runners. The `Detect Relevant
 Changes` job publishes `release_infra_only=true` only when the diff is limited

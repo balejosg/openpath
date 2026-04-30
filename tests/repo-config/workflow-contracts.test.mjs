@@ -112,6 +112,40 @@ test('prerelease deb publish keys off the CI Success summary job instead of the 
   );
 });
 
+test('Firefox release signing workflows are resilient to AMO throttling and reruns', () => {
+  const buildDebWorkflow = readText('.github/workflows/build-deb.yml');
+  const prereleaseWorkflow = readText('.github/workflows/prerelease-deb.yml');
+
+  for (const [name, workflow] of [
+    ['build-deb.yml', buildDebWorkflow],
+    ['prerelease-deb.yml', prereleaseWorkflow],
+  ]) {
+    assert.ok(
+      workflow.includes('WEB_EXT_SIGN_MAX_THROTTLE_WAIT_SECONDS: "2700"') ||
+        workflow.includes("WEB_EXT_SIGN_MAX_THROTTLE_WAIT_SECONDS: '2700'"),
+      `${name} should allow long AMO throttle waits in CI`
+    );
+    assert.ok(
+      workflow.includes('WEB_EXT_SIGN_RETRY_BUFFER_SECONDS: "30"') ||
+        workflow.includes("WEB_EXT_SIGN_RETRY_BUFFER_SECONDS: '30'"),
+      `${name} should add a buffer before retrying AMO signing`
+    );
+    assert.ok(
+      workflow.includes('WEB_EXT_SIGN_MAX_RETRIES: "2"') ||
+        workflow.includes("WEB_EXT_SIGN_MAX_RETRIES: '2'"),
+      `${name} should retry enough times to survive repeated AMO throttles`
+    );
+    assert.ok(
+      workflow.includes('2.0.${{ github.run_number }}.${{ github.run_attempt }}'),
+      `${name} should include github.run_attempt in the AMO version so reruns avoid Version already exists`
+    );
+    assert.ok(
+      !workflow.includes('2.0.${{ github.run_number }}"'),
+      `${name} should not reuse the same AMO version across reruns`
+    );
+  }
+});
+
 test('self-hosted Linux runner smoke workflow is manual and pinned to the OpenPath runner', () => {
   const smokeWorkflow = readText('.github/workflows/self-hosted-linux-runner-smoke.yml');
 
@@ -896,6 +930,11 @@ test('E2E workflow gates expensive platform lanes on targeted changed paths', ()
     /workflow_dispatch:[\s\S]*suite:\s*\n[\s\S]*default: student-policy[\s\S]*options:\s*\n\s+- all\s*\n\s+- e2e\s*\n\s+- student-policy/,
     'manual E2E diagnostics should expose a suite selector defaulting to student-policy'
   );
+  assert.match(
+    e2eWorkflow,
+    /workflow_dispatch:[\s\S]*student_policy_sse_group:\s*\n[\s\S]*default: auto[\s\S]*options:\s*\n\s+- auto\s*\n\s+- full\s*\n\s+- request-lifecycle\s*\n\s+- ajax-auto-allow\s*\n\s+- path-blocking\s*\n\s+- exemptions/,
+    'manual Windows student-policy diagnostics should expose an SSE scenario group selector defaulting to auto'
+  );
   assert.ok(
     e2eWorkflow.includes('manual_platform="${{ github.event.inputs.platform || \'windows\' }}"') &&
       e2eWorkflow.includes('manual_suite="${{ github.event.inputs.suite || \'student-policy\' }}"'),
@@ -935,9 +974,9 @@ test('E2E workflow gates expensive platform lanes on targeted changed paths', ()
   );
   assert.ok(
     e2eWorkflow.includes(
-      '^(.github/workflows/(installer-contracts|prerelease-deb|release-extension|release-scripts)\\.yml|scripts/require-release-quality-gate\\.mjs|tests/repo-config/)'
+      '^(.github/workflows/(installer-contracts|prerelease-deb|release-extension|release-scripts)\\.yml|scripts/(require-release-quality-gate|select-windows-student-policy-sse-group)\\.mjs|tests/repo-config/)'
     ),
-    'release-infrastructure-only classification should stay limited to release workflows, release gate helper, and repo-config contracts'
+    'release-infrastructure-only classification should stay limited to release workflows, release gate helpers, route selector, and repo-config contracts'
   );
   assert.ok(
     e2eWorkflow.includes('[ "$release_infra_only" != "true" ] && echo "$changed_files" | grep -Eq'),
@@ -992,6 +1031,22 @@ test('E2E workflow gates expensive platform lanes on targeted changed paths', ()
       "needs.detect-relevant-changes.outputs.windows_student_policy == 'true'"
     ),
     'windows-student-policy should run only for Windows student-policy relevant changes'
+  );
+  assert.ok(
+    e2eWorkflow.includes(
+      'windows_student_policy_sse_group: ${{ steps.filter.outputs.windows_student_policy_sse_group }}'
+    ),
+    'e2e-tests.yml should expose the selected Windows student-policy SSE group'
+  );
+  assert.ok(
+    e2eWorkflow.includes('scripts/select-windows-student-policy-sse-group.mjs'),
+    'changed-path detection should use the maintained Windows student-policy SSE selector'
+  );
+  assert.ok(
+    windowsStudentPolicyBlock.includes(
+      'OPENPATH_WINDOWS_STUDENT_SSE_GROUP: ${{ needs.detect-relevant-changes.outputs.windows_student_policy_sse_group }}'
+    ),
+    'windows-student-policy should pass the selected SSE group to the runner'
   );
   assert.ok(
     windowsStudentPolicyBlock.includes('runs-on: [self-hosted, Windows, X64, proxmox, openpath]'),

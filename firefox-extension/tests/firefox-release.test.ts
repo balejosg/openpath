@@ -275,6 +275,78 @@ void describe('Firefox release signing helpers', () => {
     assert.match(stderrChunks[0] ?? '', /Request was throttled/);
   });
 
+  void test('runWebExtSignWithRetry accepts CI throttle waits up to the configured ceiling', () => {
+    const waits: number[] = [];
+    let attempts = 0;
+    const spawnSyncImpl = (): SpawnSyncReturns<string> => {
+      attempts += 1;
+      if (attempts === 1) {
+        return {
+          status: 1,
+          signal: null,
+          output: [],
+          pid: 123,
+          stdout: '',
+          stderr:
+            'WebExtError: Submission failed (2): Unknown Error\n' +
+            '{ "detail": "Request was throttled. Expected available in 1502 seconds." }\n',
+        };
+      }
+
+      return {
+        status: 0,
+        signal: null,
+        output: [],
+        pid: 124,
+        stdout: '',
+        stderr: '',
+      };
+    };
+
+    const result = runWebExtSignWithRetry({
+      args: ['--yes', 'web-ext', 'sign'],
+      cwd: extensionRoot,
+      env: {
+        WEB_EXT_SIGN_MAX_RETRIES: '2',
+        WEB_EXT_SIGN_RETRY_BUFFER_SECONDS: '30',
+        WEB_EXT_SIGN_MAX_THROTTLE_WAIT_SECONDS: '2700',
+      },
+      spawnSyncImpl,
+      sleepSyncImpl: (milliseconds) => waits.push(milliseconds),
+    });
+
+    assert.equal(result.status, 0);
+    assert.equal(attempts, 2);
+    assert.deepEqual(waits, [1_532_000]);
+  });
+
+  void test('runWebExtSignWithRetry leaves Version already exists recoverable by rerun versioning', () => {
+    const spawnSyncImpl = (): SpawnSyncReturns<string> => ({
+      status: 1,
+      signal: null,
+      output: [],
+      pid: 123,
+      stdout: '',
+      stderr: 'WebExtError: Version already exists.\n',
+    });
+
+    const result = runWebExtSignWithRetry({
+      args: ['--yes', 'web-ext', 'sign'],
+      cwd: extensionRoot,
+      env: {
+        WEB_EXT_SIGN_MAX_RETRIES: '2',
+        WEB_EXT_SIGN_RETRY_BUFFER_SECONDS: '30',
+        WEB_EXT_SIGN_MAX_THROTTLE_WAIT_SECONDS: '2700',
+      },
+      spawnSyncImpl,
+      sleepSyncImpl: () => {
+        throw new Error('Version already exists should not sleep/retry in-process');
+      },
+    });
+
+    assert.equal(result.status, 1);
+  });
+
   void test('prepareSigningSourceDir can override the manifest version in a temporary copy', () => {
     const signingSource = prepareSigningSourceDir({
       sourceDir: extensionRoot,

@@ -19,6 +19,7 @@ on:
       - 'package-lock.json'
       - 'docker-compose.test.yml'
       - 'scripts/require-release-quality-gate.mjs'
+      - 'scripts/select-windows-student-policy-sse-group.mjs'
       - '.github/actions/setup-node/**'
       - '.github/actions/build-workspaces/**'
       - '.github/workflows/e2e-tests.yml'
@@ -48,6 +49,18 @@ on:
           - all
           - e2e
           - student-policy
+      student_policy_sse_group:
+        description: Windows student-policy SSE scenario group.
+        default: auto
+        required: false
+        type: choice
+        options:
+          - auto
+          - full
+          - request-lifecycle
+          - ajax-auto-allow
+          - path-blocking
+          - exemptions
 
 concurrency:
   group: e2e-tests-${{ github.ref }}
@@ -63,6 +76,7 @@ jobs:
       windows_e2e: ${{ steps.filter.outputs.windows_e2e }}
       linux_student_policy: ${{ steps.filter.outputs.linux_student_policy }}
       windows_student_policy: ${{ steps.filter.outputs.windows_student_policy }}
+      windows_student_policy_sse_group: ${{ steps.filter.outputs.windows_student_policy_sse_group }}
 
     steps:
       - name: Checkout code
@@ -80,10 +94,12 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             manual_platform="${{ github.event.inputs.platform || 'windows' }}"
             manual_suite="${{ github.event.inputs.suite || 'student-policy' }}"
+            manual_sse_group="${{ github.event.inputs.student_policy_sse_group || 'auto' }}"
             linux_e2e=false
             windows_e2e=false
             linux_student_policy=false
             windows_student_policy=false
+            windows_student_policy_sse_group="$(node scripts/select-windows-student-policy-sse-group.mjs --override "$manual_sse_group")"
 
             if { [ "$manual_platform" = "all" ] || [ "$manual_platform" = "linux" ]; } &&
                { [ "$manual_suite" = "all" ] || [ "$manual_suite" = "e2e" ]; }; then
@@ -107,6 +123,7 @@ jobs:
             echo "windows_e2e=$windows_e2e" >> "$GITHUB_OUTPUT"
             echo "linux_student_policy=$linux_student_policy" >> "$GITHUB_OUTPUT"
             echo "windows_student_policy=$windows_student_policy" >> "$GITHUB_OUTPUT"
+            echo "windows_student_policy_sse_group=$windows_student_policy_sse_group" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -134,12 +151,13 @@ jobs:
           windows_e2e=false
           linux_student_policy=false
           windows_student_policy=false
+          windows_student_policy_sse_group=full
           release_infra_only=false
 
-          if [ -n "$changed_files" ] && echo "$changed_files" | grep -Eq '^(.github/workflows/(installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml|scripts/require-release-quality-gate\.mjs|tests/repo-config/)'; then
+          if [ -n "$changed_files" ] && echo "$changed_files" | grep -Eq '^(.github/workflows/(installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml|scripts/(require-release-quality-gate|select-windows-student-policy-sse-group)\.mjs|tests/repo-config/)'; then
             non_release_infra_files="$(
               echo "$changed_files" |
-                grep -Ev '^(.github/workflows/(installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml|scripts/require-release-quality-gate\.mjs|tests/repo-config/)' || true
+                grep -Ev '^(.github/workflows/(installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml|scripts/(require-release-quality-gate|select-windows-student-policy-sse-group)\.mjs|tests/repo-config/)' || true
             )"
             if [ -z "$non_release_infra_files" ]; then
               release_infra_only=true
@@ -160,6 +178,7 @@ jobs:
 
           if [ "$release_infra_only" != "true" ] && echo "$changed_files" | grep -Eq '^(api/|shared/|windows/|runtime/|firefox-extension/|tests/e2e/(ci/run-windows-student-flow\.ps1|student-flow/|validation/)|tests/selenium/|package\.json$|package-lock\.json$|scripts/require-release-quality-gate\.mjs$|\.github/actions/setup-node/|\.github/workflows/(e2e-tests|installer-contracts|prerelease-deb|release-extension|release-scripts)\.yml$)'; then
             windows_student_policy=true
+            windows_student_policy_sse_group="$(printf '%s\n' "$changed_files" | node scripts/select-windows-student-policy-sse-group.mjs --from-stdin)"
           fi
 
           echo "release_infra_only=$release_infra_only" >> "$GITHUB_OUTPUT"
@@ -167,6 +186,7 @@ jobs:
           echo "windows_e2e=$windows_e2e" >> "$GITHUB_OUTPUT"
           echo "linux_student_policy=$linux_student_policy" >> "$GITHUB_OUTPUT"
           echo "windows_student_policy=$windows_student_policy" >> "$GITHUB_OUTPUT"
+          echo "windows_student_policy_sse_group=$windows_student_policy_sse_group" >> "$GITHUB_OUTPUT"
 
   # ============================================
   # Linux E2E Tests (Docker-based for full DNS control)
@@ -302,6 +322,8 @@ jobs:
 
       - name: Run Windows student-policy flow
         shell: pwsh
+        env:
+          OPENPATH_WINDOWS_STUDENT_SSE_GROUP: ${{ needs.detect-relevant-changes.outputs.windows_student_policy_sse_group }}
         run: |
           pwsh -NoProfile -ExecutionPolicy Bypass -File tests/e2e/ci/run-windows-student-flow.ps1
 

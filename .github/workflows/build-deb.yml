@@ -93,8 +93,11 @@ jobs:
         env:
           WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
           WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
+          WEB_EXT_SIGN_MAX_RETRIES: '2'
+          WEB_EXT_SIGN_RETRY_BUFFER_SECONDS: '30'
+          WEB_EXT_SIGN_MAX_THROTTLE_WAIT_SECONDS: '2700'
         run: |
-          npm run sign:firefox-release --workspace=@openpath/firefox-extension -- --version "2.0.${{ github.run_number }}"
+          npm run sign:firefox-release --workspace=@openpath/firefox-extension -- --version "2.0.${{ github.run_number }}.${{ github.run_attempt }}"
 
       - name: Build Debian package
         env:
