@@ -122,29 +122,14 @@ get_policies_hash() {
     if [ -f "$FIREFOX_POLICIES" ]; then
         hash="${hash}$(sha256sum "$FIREFOX_POLICIES" 2>/dev/null | cut -d' ' -f1)"
     fi
-    hash="${hash}$(echo "${BLOCKED_PATHS[*]}" | sha256sum | cut -d' ' -f1)"
+    if [ -z "$hash" ]; then
+        hash="$(printf '' | sha256sum | cut -d' ' -f1)"
+    fi
     echo "$hash"
-}
-
-generate_firefox_policies() {
-    log "Generating Firefox policies..."
-    mutate_firefox_policies "set_dynamic_website_filter"
-    log "✓ Firefox policies generated"
-}
-
-apply_search_engine_policies() {
-    log "Applying search engine policies..."
-    mutate_firefox_policies "apply_dynamic_defaults"
-    log "✓ Search engines configured"
 }
 
 cleanup_browser_policies() {
     log "Cleaning up browser policies..."
-
-    if [ -f "$FIREFOX_POLICIES" ]; then
-        mutate_firefox_policies "clear_dynamic_restrictions"
-        log "✓ Firefox policies cleaned"
-    fi
 
     local dirs=(
         "$CHROMIUM_POLICIES_BASE"

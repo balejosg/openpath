@@ -37,14 +37,23 @@ function normalizeRecentBlockedDomainKey(domain: unknown): string | null {
 export interface BackgroundMessageHandlerDeps {
   clearBlockedDomains: (tabId: number) => void;
   evaluateBlockedPathDebug: (input: { type: string; url: string }) => unknown;
+  evaluateBlockedSubdomainDebug: (input: { type: string; url: string }) => unknown;
   forceBlockedPathRulesRefresh: () => Promise<{ success: boolean; error?: string }>;
+  forceBlockedSubdomainRulesRefresh: () => Promise<{ success: boolean; error?: string }>;
   getBlockedDomainsForTab: (tabId: number) => Record<string, unknown>;
   getDomainStatusesForTab: (tabId: number) => Record<string, unknown>;
   getErrorMessage: (error: unknown) => string;
   getMachineToken: () => Promise<unknown>;
   getNativeBlockedPathsDebug: () => Promise<unknown>;
+  getNativeBlockedSubdomainsDebug: () => Promise<unknown>;
   getPathRulesDebug: () => {
     compiledPatterns: string[];
+    count: number;
+    rawRules: string[];
+    success: true;
+    version: string;
+  };
+  getSubdomainRulesDebug: () => {
     count: number;
     rawRules: string[];
     success: true;
@@ -140,9 +149,22 @@ export function createBackgroundMessageHandler(
       case 'getBlockedPathRulesDebug':
         return deps.getPathRulesDebug();
 
+      case 'getBlockedSubdomainRulesDebug':
+        return deps.getSubdomainRulesDebug();
+
       case 'getNativeBlockedPathsDebug':
         try {
           return await deps.getNativeBlockedPathsDebug();
+        } catch (error) {
+          return {
+            success: false,
+            error: deps.getErrorMessage(error),
+          };
+        }
+
+      case 'getNativeBlockedSubdomainsDebug':
+        try {
+          return await deps.getNativeBlockedSubdomainsDebug();
         } catch (error) {
           return {
             success: false,
@@ -164,6 +186,15 @@ export function createBackgroundMessageHandler(
         return {
           success: true,
           outcome: deps.evaluateBlockedPathDebug({
+            type: msg.type ?? '',
+            url: msg.url ?? '',
+          }),
+        };
+
+      case 'evaluateBlockedSubdomainDebug':
+        return {
+          success: true,
+          outcome: deps.evaluateBlockedSubdomainDebug({
             type: msg.type ?? '',
             url: msg.url ?? '',
           }),
@@ -241,6 +272,9 @@ export function createBackgroundMessageHandler(
 
       case 'refreshBlockedPathRules':
         return deps.forceBlockedPathRulesRefresh();
+
+      case 'refreshBlockedSubdomainRules':
+        return deps.forceBlockedSubdomainRulesRefresh();
 
       case 'retryLocalUpdate':
         if (!msg.hostname) {

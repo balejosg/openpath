@@ -172,7 +172,6 @@ def cmd_mutate_firefox_policies(args: argparse.Namespace) -> int:
     ext_id = (args.extension_id or "").strip()
     install_entry = (args.install_entry or "").strip()
     install_url = (args.install_url or "").strip()
-    blocked_paths = env_blocked_paths()
 
     policies = load_json_file(
         policies_file,
@@ -184,37 +183,7 @@ def cmd_mutate_firefox_policies(args: argparse.Namespace) -> int:
         policy_root = {}
         policies["policies"] = policy_root
 
-    if action == "set_dynamic_website_filter":
-        normalized_paths = [normalize_firefox_path(path) for path in blocked_paths]
-        policy_root["WebsiteFilter"] = {"Block": normalized_paths}
-        print(f"Firefox: {len(normalized_paths)} paths bloqueados")
-    elif action == "apply_dynamic_defaults":
-        browser_policy_spec = load_browser_policy_spec()
-        firefox_spec = browser_policy_spec["firefox"]
-        policy_root["SearchEngines"] = {
-            "Remove": list(firefox_spec["searchEngines"]["remove"]),
-            "Default": firefox_spec["searchEngines"]["default"],
-            "Add": list(firefox_spec["searchEngines"]["add"]),
-        }
-
-        website_filter = policy_root.setdefault("WebsiteFilter", {"Block": []})
-        block_list = website_filter.setdefault("Block", [])
-        google_blocks = list(firefox_spec["googleSearchBlocks"])
-        for block in google_blocks:
-            if block not in block_list:
-                block_list.append(block)
-
-        policy_root["DNSOverHTTPS"] = {
-            "Enabled": bool(firefox_spec["dnsOverHttps"]["Enabled"]),
-            "Locked": bool(firefox_spec["dnsOverHttps"]["Locked"]),
-        }
-        policy_root["DisableTelemetry"] = bool(firefox_spec.get("disableTelemetry", True))
-        policy_root["OverrideFirstRunPage"] = str(firefox_spec.get("overrideFirstRunPage", ""))
-        print("DoH bloqueado, SearchEngines y bloqueos de Google aplicados")
-    elif action == "clear_dynamic_restrictions":
-        for key in ("WebsiteFilter", "SearchEngines", "DNSOverHTTPS"):
-            policy_root.pop(key, None)
-    elif action == "ensure_managed_extension":
+    if action == "ensure_managed_extension":
         if not ext_id or not install_url:
             return 1
 

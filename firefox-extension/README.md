@@ -6,6 +6,7 @@
 > Source of truth: `firefox-extension/README.md`
 
 This package contains the OpenPath browser-extension assets used to detect blocked resources and support managed browser rollout workflows.
+Firefox blocked-path and blocked-subdomain enforcement lives in this extension runtime. The Linux client still owns DNS/firewall enforcement, while Firefox path/subdomain decisions are loaded from the native host and applied through `webRequest`/`webNavigation` before auto-allow request handling runs.
 
 ## Current Extension Shape
 
@@ -53,3 +54,4 @@ These flows prepare the artifacts consumed by the Windows rollout paths and the 
 ## Optional Native Host
 
 Native host files live under [`native/`](native/) and support optional local verification workflows. Installers and compatibility details are documented in [`AMO.md`](AMO.md) and [`PRIVACY.md`](PRIVACY.md).
+The native host exposes `get-blocked-paths` and `get-blocked-subdomains` from the local whitelist file so the background runtime can refresh enforcement rules without relying on Firefox `WebsiteFilter`, search-engine, or DoH policies.

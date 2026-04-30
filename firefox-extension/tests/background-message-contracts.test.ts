@@ -1,6 +1,10 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert';
 import { compileBlockedPathRules, evaluatePathBlocking } from '../src/lib/path-blocking.js';
+import {
+  compileBlockedSubdomainRules,
+  evaluateSubdomainBlocking,
+} from '../src/lib/subdomain-blocking.js';
 
 function mapNativeCheckResult(result: {
   domain: string;
@@ -135,6 +139,45 @@ void describe('background message contract compatibility', () => {
     });
   });
 
+  void test('exposes blocked-subdomain debug payload shapes', () => {
+    const rules = compileBlockedSubdomainRules(['ads.example.org']);
+    assert.deepStrictEqual(
+      {
+        success: true,
+        version: 'debug-version',
+        count: rules.length,
+        rawRules: rules.map((rule) => rule.rawRule),
+      },
+      {
+        success: true,
+        version: 'debug-version',
+        count: 1,
+        rawRules: ['ads.example.org'],
+      }
+    );
+
+    assert.deepStrictEqual(
+      {
+        success: true,
+        action: 'get-blocked-subdomains',
+        subdomains: ['ads.example.org'],
+        count: 1,
+        hash: 'abc123',
+        mtime: 123,
+        source: '/var/lib/openpath/whitelist.txt',
+      },
+      {
+        success: true,
+        action: 'get-blocked-subdomains',
+        subdomains: ['ads.example.org'],
+        count: 1,
+        hash: 'abc123',
+        mtime: 123,
+        source: '/var/lib/openpath/whitelist.txt',
+      }
+    );
+  });
+
   void test('exposes blocked-path evaluation payload shape', () => {
     const rules = compileBlockedPathRules(['example.com/private']);
     const outcome = evaluatePathBlocking(
@@ -157,6 +200,33 @@ void describe('background message contract compatibility', () => {
         outcome: {
           cancel: true,
           reason: 'BLOCKED_PATH_POLICY:example.com/private',
+        },
+      }
+    );
+  });
+
+  void test('exposes blocked-subdomain evaluation payload shape', () => {
+    const rules = compileBlockedSubdomainRules(['ads.example.org']);
+    const outcome = evaluateSubdomainBlocking(
+      {
+        type: 'xmlhttprequest',
+        url: 'https://img.ads.example.org/pixel',
+        originUrl: 'https://allowed.example/app',
+      },
+      rules,
+      { extensionOrigin: 'moz-extension://unit-test-id/' }
+    );
+
+    assert.deepStrictEqual(
+      {
+        success: true,
+        outcome,
+      },
+      {
+        success: true,
+        outcome: {
+          cancel: true,
+          reason: 'BLOCKED_SUBDOMAIN_POLICY:ads.example.org',
         },
       }
     );

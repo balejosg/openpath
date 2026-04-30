@@ -113,10 +113,6 @@ EOF
                 --firefox-best-effort \
                 --chromium-best-effort \
                 --native-host-best-effort
-
-            # Step 8: Apply browser policies
-            echo "  Aplicando políticas de navegadores..."
-            apply_search_engine_policies
         else
             echo "  Skipping managed browser request integration until OpenPath setup is complete"
             echo "  Missing: $(describe_openpath_request_setup_missing)"

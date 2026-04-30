@@ -6,7 +6,7 @@
     [ -n "$output" ]
 }
 
-@test "get_policies_hash changes with different BLOCKED_PATHS" {
+@test "get_policies_hash ignores blocked paths now enforced by Firefox extension runtime" {
     source "$PROJECT_DIR/linux/lib/browser.sh"
 
     BLOCKED_PATHS=()
@@ -15,7 +15,7 @@
     BLOCKED_PATHS=("example.com/ads")
     hash2=$(get_policies_hash)
 
-    [ "$hash1" != "$hash2" ]
+    [ "$hash1" = "$hash2" ]
 }
 
 @test "get_policies_hash includes Firefox policies hash" {
@@ -26,67 +26,6 @@
     run get_policies_hash
     [ "$status" -eq 0 ]
     [ -n "$output" ]
-}
-
-@test "generate_firefox_policies creates directory if not exists" {
-    rm -rf "$(dirname "$FIREFOX_POLICIES")"
-
-    BLOCKED_PATHS=()
-
-    source "$PROJECT_DIR/linux/lib/browser.sh"
-
-    run generate_firefox_policies
-    [ "$status" -eq 0 ]
-    [ -d "$(dirname "$FIREFOX_POLICIES")" ]
-}
-
-@test "generate_firefox_policies exposes canonical policy file through Firefox distribution path" {
-    local firefox_dir="$TEST_TMP_DIR/usr/lib/firefox"
-    mkdir -p "$firefox_dir"
-    : > "$firefox_dir/firefox"
-
-    BLOCKED_PATHS=()
-
-    source "$PROJECT_DIR/linux/lib/browser.sh"
-    detect_firefox_dir() { echo "$TEST_TMP_DIR/usr/lib/firefox"; }
-
-    generate_firefox_policies
-    [ -L "$firefox_dir/distribution/policies.json" ]
-    [ "$(readlink "$firefox_dir/distribution/policies.json")" = "$FIREFOX_POLICIES" ]
-}
-
-@test "generate_firefox_policies creates valid JSON" {
-    BLOCKED_PATHS=("example.com/ads" "test.org/tracking")
-
-    source "$PROJECT_DIR/linux/lib/browser.sh"
-
-    run generate_firefox_policies
-    [ "$status" -eq 0 ]
-
-    python3 -c "import json; json.load(open('$FIREFOX_POLICIES'))"
-    [ $? -eq 0 ]
-}
-
-@test "generate_firefox_policies includes WebsiteFilter" {
-    BLOCKED_PATHS=("example.com/ads")
-
-    source "$PROJECT_DIR/linux/lib/browser.sh"
-
-    run generate_firefox_policies
-    [ "$status" -eq 0 ]
-
-    grep -q "WebsiteFilter" "$FIREFOX_POLICIES"
-}
-
-@test "cleanup_browser_policies cleans Firefox" {
-    echo '{"policies": {"WebsiteFilter": {"Block": ["test"]}}}' > "$FIREFOX_POLICIES"
-
-    source "$PROJECT_DIR/linux/lib/browser.sh"
-
-    run cleanup_browser_policies
-    [ "$status" -eq 0 ]
-
-    grep -q '"policies": {}' "$FIREFOX_POLICIES"
 }
 
 @test "cleanup_browser_policies removes Chromium files" {
@@ -100,7 +39,7 @@
     [ ! -f "$CHROMIUM_POLICIES_BASE/openpath.json" ]
 }
 
-@test "cleanup_browser_policies preserves Firefox managed extension installation" {
+@test "cleanup_browser_policies leaves Firefox managed extension policy untouched" {
     source "$PROJECT_DIR/linux/lib/browser.sh"
 
     run add_extension_to_policies "monitor-bloqueos@openpath" "$TEST_TMP_DIR/extensions/monitor-bloqueos@openpath"
@@ -109,12 +48,6 @@
     BLOCKED_PATHS=("example.com/ads")
 
     run cleanup_browser_policies
-    [ "$status" -eq 0 ]
-
-    run generate_firefox_policies
-    [ "$status" -eq 0 ]
-
-    run apply_search_engine_policies
     [ "$status" -eq 0 ]
 
     python3 - <<PYEOF
@@ -127,57 +60,6 @@ extension_settings = policies["policies"].get("ExtensionSettings", {})
 assert "monitor-bloqueos@openpath" in extension_settings, extension_settings
 assert "Extensions" in policies["policies"], policies["policies"]
 assert "monitor-bloqueos@openpath" in policies["policies"]["Extensions"].get("Locked", [])
-PYEOF
-}
-
-@test "apply_search_engine_policies adds SearchEngines" {
-    source "$PROJECT_DIR/linux/lib/browser.sh"
-
-    run apply_search_engine_policies
-    [ "$status" -eq 0 ]
-
-    grep -q "SearchEngines" "$FIREFOX_POLICIES"
-}
-
-@test "apply_search_engine_policies configures DuckDuckGo" {
-    source "$PROJECT_DIR/linux/lib/browser.sh"
-
-    run apply_search_engine_policies
-    [ "$status" -eq 0 ]
-
-    grep -q "DuckDuckGo" "$FIREFOX_POLICIES"
-}
-
-@test "apply_search_engine_policies blocks Google search" {
-    source "$PROJECT_DIR/linux/lib/browser.sh"
-
-    run apply_search_engine_policies
-    [ "$status" -eq 0 ]
-
-    grep -q "google.com/search" "$FIREFOX_POLICIES"
-}
-
-@test "apply_search_engine_policies can be driven by an overridden browser policy spec" {
-    local spec_path="$TEST_TMP_DIR/browser-policy-spec.json"
-    export OPENPATH_BROWSER_POLICY_SPEC="$spec_path"
-    write_browser_policy_spec_fixture "$spec_path"
-
-    source "$PROJECT_DIR/linux/lib/browser.sh"
-
-    run apply_search_engine_policies
-    [ "$status" -eq 0 ]
-
-    python3 - <<PYEOF
-import json
-
-with open("$FIREFOX_POLICIES", "r", encoding="utf-8") as fh:
-    policies = json.load(fh)
-
-policy_root = policies["policies"]
-assert policy_root["SearchEngines"]["Default"] == "Startpage", policy_root["SearchEngines"]
-added_names = [engine["Name"] for engine in policy_root["SearchEngines"]["Add"]]
-assert "Startpage" in added_names, added_names
-assert "*://search.example.test/*" in policy_root["WebsiteFilter"]["Block"], policy_root["WebsiteFilter"]["Block"]
 PYEOF
 }
 
@@ -257,16 +139,13 @@ assert policies["policies"]["ExtensionSettings"]["monitor-bloqueos@openpath"]["i
 PYEOF
 }
 
-@test "remove_firefox_extension removes managed install entry without clearing dynamic policies" {
+@test "remove_firefox_extension removes managed install entry" {
     source "$PROJECT_DIR/linux/lib/browser.sh"
 
     run add_extension_to_policies \
         "monitor-bloqueos@openpath" \
         "$TEST_TMP_DIR/openpath.xpi" \
         "https://downloads.example/openpath-managed.xpi"
-    [ "$status" -eq 0 ]
-
-    run apply_search_engine_policies
     [ "$status" -eq 0 ]
 
     run remove_firefox_extension
@@ -282,15 +161,21 @@ policy_root = policies["policies"]
 assert "monitor-bloqueos@openpath" not in policy_root.get("ExtensionSettings", {})
 assert "https://downloads.example/openpath-managed.xpi" not in policy_root.get("Extensions", {}).get("Install", [])
 assert "monitor-bloqueos@openpath" not in policy_root.get("Extensions", {}).get("Locked", [])
-assert "SearchEngines" in policy_root
-assert "DNSOverHTTPS" in policy_root
 PYEOF
 }
 
-@test "linux browser helpers delegate JSON mutation to the shared browser-json helper" {
+@test "linux browser helpers keep Firefox dynamic policy helpers removed" {
+    run grep -nF 'generate_firefox_policies' "$PROJECT_DIR/linux/lib/firefox-policy.sh"
+    [ "$status" -ne 0 ]
+
+    run grep -nF 'apply_search_engine_policies' "$PROJECT_DIR/linux/lib/firefox-policy.sh"
+    [ "$status" -ne 0 ]
+
     run grep -nF 'browser-json.py mutate-firefox-policies' "$PROJECT_DIR/linux/lib/firefox-policy.sh"
     [ "$status" -eq 0 ]
+}
 
+@test "linux Chromium helpers delegate JSON mutation to the shared browser-json helper" {
     run grep -nF 'browser-json.py write-chromium-policy' "$PROJECT_DIR/linux/lib/chromium-managed-extension.sh"
     [ "$status" -eq 0 ]
 

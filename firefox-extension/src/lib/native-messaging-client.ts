@@ -9,6 +9,16 @@ export interface NativeResponse {
   [key: string]: unknown;
 }
 
+export interface NativeBlockedSubdomainsResponse extends NativeResponse {
+  action?: 'get-blocked-subdomains';
+  subdomains?: string[];
+  count?: number;
+  hash?: string;
+  mtime?: number;
+  source?: string;
+  error?: string;
+}
+
 export interface NativeCheckResult {
   domain: string;
   in_whitelist: boolean;

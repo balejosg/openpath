@@ -18,6 +18,9 @@ interface ConfirmBlockedScreenContext extends BlockedScreenContext {
 type WebRequestErrorListener = (details: WebRequest.OnErrorOccurredDetailsType) => void;
 type WebRequestBeforeListener = (details: WebRequest.OnBeforeRequestDetailsType) => unknown;
 type EvaluateBlockedPath = Parameters<typeof registerBackgroundListeners>[0]['evaluateBlockedPath'];
+type EvaluateBlockedSubdomain = Parameters<
+  typeof registerBackgroundListeners
+>[0]['evaluateBlockedSubdomain'];
 type WebNavigationBeforeListener = (details: {
   frameId: number;
   tabId: number;
@@ -49,6 +52,7 @@ function createListenerHarness(
     confirmBlockedScreenNavigation?: (context: ConfirmBlockedScreenContext) => Promise<boolean>;
     currentTabUrl?: string | null;
     evaluateBlockedPath?: EvaluateBlockedPath;
+    evaluateBlockedSubdomain?: EvaluateBlockedSubdomain;
     handleRuntimeMessage?: (message: unknown, sender: unknown) => unknown;
   } = {}
 ): {
@@ -152,6 +156,8 @@ function createListenerHarness(
     disposeTab: () => undefined,
     evaluateBlockedPath:
       options.evaluateBlockedPath ?? ((): ReturnType<EvaluateBlockedPath> => null),
+    evaluateBlockedSubdomain:
+      options.evaluateBlockedSubdomain ?? ((): ReturnType<EvaluateBlockedSubdomain> => null),
     handleRuntimeMessage:
       options.handleRuntimeMessage ?? ((): Promise<undefined> => Promise.resolve(undefined)),
     redirectToBlockedScreen: (context: BlockedScreenContext) => {
@@ -323,6 +329,34 @@ void describe('background listeners blocked-screen routing', () => {
     assert.deepEqual(harness.beforeRequestFilters, [
       {
         urls: ['<all_urls>'],
+      },
+    ]);
+  });
+
+  void test('does not auto-allow requests cancelled by blocked subdomain policy', () => {
+    const harness = createListenerHarness({
+      evaluateBlockedSubdomain: () => ({
+        cancel: true,
+        reason: 'BLOCKED_SUBDOMAIN_POLICY:ads.example.org',
+      }),
+    });
+    assert.ok(harness.webRequestBefore);
+
+    const result = harness.webRequestBefore({
+      type: 'xmlhttprequest',
+      tabId: 1,
+      url: 'https://ads.example.org/pixel',
+      originUrl: 'https://allowed.example/app',
+    } as WebRequest.OnBeforeRequestDetailsType);
+
+    assert.deepEqual(result, { cancel: true });
+    assert.deepEqual(harness.autoAllowCalls, []);
+    assert.deepEqual(harness.addedBlocks, [
+      {
+        tabId: 1,
+        hostname: 'ads.example.org',
+        error: 'BLOCKED_SUBDOMAIN_POLICY:ads.example.org',
+        origin: 'https://allowed.example/app',
       },
     ]);
   });

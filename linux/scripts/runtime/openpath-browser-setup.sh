@@ -524,11 +524,6 @@ main() {
         exit 1
     fi
 
-    if ! apply_search_engine_policies; then
-        log_error "Failed to apply browser policies"
-        exit 1
-    fi
-
     if ! verify_firefox_setup; then
         exit 1
     fi

@@ -183,7 +183,7 @@ EOF
     grep -q "dport 1194" "$rules_file"
 }
 
-@test "Firefox policies.json has required structure" {
+@test "Firefox managed extension policy has required structure" {
     local policies_file="$TEST_TMP_DIR/policies.json"
     cat > "$policies_file" << 'EOF'
 {
@@ -192,16 +192,13 @@ EOF
       "monitor-bloqueos@openpath": {
         "installation_mode": "force_installed"
       }
-    },
-    "WebsiteFilter": {
-      "Block": []
     }
   }
 }
 EOF
     
     grep -q "ExtensionSettings" "$policies_file"
-    grep -q "WebsiteFilter" "$policies_file"
+    ! grep -q "WebsiteFilter" "$policies_file"
 }
 
 @test "Chromium policies have URLBlocklist" {

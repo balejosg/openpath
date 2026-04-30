@@ -462,6 +462,51 @@ def get_blocked_paths():
         return {"success": False, "action": "get-blocked-paths", "error": str(e)}
 
 
+def get_blocked_subdomains():
+    """Obtiene reglas de ## BLOCKED-SUBDOMAINS del whitelist local"""
+    whitelist_file = get_whitelist_file_path()
+    if whitelist_file is None:
+        return {
+            "success": False,
+            "action": "get-blocked-subdomains",
+            "error": "Whitelist file not found",
+        }
+
+    blocked_subdomains = []
+    section = ""
+
+    try:
+        with open(whitelist_file, "r", encoding="utf-8", errors="ignore") as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                line_upper = line.upper()
+
+                if line_upper == "## BLOCKED-SUBDOMAINS":
+                    section = "blocked_sub"
+                    continue
+                if line_upper in ("## WHITELIST", "## BLOCKED-PATHS"):
+                    section = "other"
+                    continue
+                if not line or line.startswith("#"):
+                    continue
+                if section == "blocked_sub":
+                    blocked_subdomains.append(line)
+
+        digest = hashlib.sha256("\n".join(blocked_subdomains).encode("utf-8")).hexdigest()
+        return {
+            "success": True,
+            "action": "get-blocked-subdomains",
+            "subdomains": blocked_subdomains,
+            "count": len(blocked_subdomains),
+            "hash": digest,
+            "mtime": int(whitelist_file.stat().st_mtime),
+            "source": str(whitelist_file),
+        }
+    except Exception as e:
+        log_debug(f"Error getting blocked subdomains: {e}")
+        return {"success": False, "action": "get-blocked-subdomains", "error": str(e)}
+
+
 def handle_message(message):
     """Procesa un mensaje y devuelve la respuesta"""
 
@@ -534,6 +579,9 @@ def handle_message(message):
 
     elif action == "get-blocked-paths":
         return get_blocked_paths()
+
+    elif action == "get-blocked-subdomains":
+        return get_blocked_subdomains()
 
     else:
         return {"success": False, "error": f"Unknown action: {action}"}

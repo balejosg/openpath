@@ -213,7 +213,7 @@ main() {
     run_installer_step 8 "$INSTALLER_STEP_TOTAL" "Configurando DNS" step_configure_dns
     run_installer_step 9 "$INSTALLER_STEP_TOTAL" "Configurando dnsmasq" step_configure_dnsmasq
     run_installer_step 10 "$INSTALLER_STEP_TOTAL" "Instalando Firefox" step_install_firefox
-    run_installer_step 11 "$INSTALLER_STEP_TOTAL" "Aplicando politicas de navegadores" step_apply_policies
+    run_installer_step 11 "$INSTALLER_STEP_TOTAL" "Verificando integraciones de navegadores" step_apply_policies
     run_installer_step 12 "$INSTALLER_STEP_TOTAL" "Instalando extensiones del navegador" step_install_extension
     run_installer_step 13 "$INSTALLER_STEP_TOTAL" "Habilitando servicios" step_enable_services
     run_installer_step 14 "$INSTALLER_STEP_TOTAL" "Ejecutando smoke tests" run_smoke_tests

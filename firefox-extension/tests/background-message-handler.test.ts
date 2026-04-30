@@ -13,18 +13,31 @@ function createHandlerFixture(
   return createBackgroundMessageHandler({
     clearBlockedDomains: () => undefined,
     evaluateBlockedPathDebug: ({ type, url }) => ({ cancel: type === 'fetch', url }),
+    evaluateBlockedSubdomainDebug: ({ type, url }) => ({
+      cancel: type === 'xmlhttprequest',
+      url,
+    }),
     forceBlockedPathRulesRefresh: () => Promise.resolve({ success: true }),
+    forceBlockedSubdomainRulesRefresh: () => Promise.resolve({ success: true }),
     getBlockedDomainsForTab: (tabId) => ({ [`tab-${tabId.toString()}`]: { errors: [] } }),
     getDomainStatusesForTab: (tabId) => ({ [`tab-${tabId.toString()}`]: { state: 'detected' } }),
     getErrorMessage: (error) => (error instanceof Error ? error.message : String(error)),
     getMachineToken: () => Promise.resolve({ success: true, token: 'machine-token' }),
     getNativeBlockedPathsDebug: () => Promise.resolve({ success: true, paths: ['example.com/*'] }),
+    getNativeBlockedSubdomainsDebug: () =>
+      Promise.resolve({ success: true, subdomains: ['ads.example.org'] }),
     getPathRulesDebug: () => ({
       success: true,
       version: 'v1',
       count: 1,
       rawRules: ['example.com/*'],
       compiledPatterns: ['*://example.com/*'],
+    }),
+    getSubdomainRulesDebug: () => ({
+      success: true,
+      version: 'v1',
+      count: 1,
+      rawRules: ['ads.example.org'],
     }),
     getOpenPathDiagnostics: (domains) =>
       Promise.resolve({
@@ -47,6 +60,12 @@ function createHandlerFixture(
           count: 1,
           rawRules: ['example.com/*'],
           compiledPatterns: ['*://example.com/*'],
+        },
+        subdomainRules: {
+          success: true,
+          version: 'v1',
+          count: 1,
+          rawRules: ['ads.example.org'],
         },
       }),
     getSystemHostname: () => Promise.resolve({ success: true, hostname: 'lab-pc-01' }),
@@ -99,6 +118,19 @@ await describe('background message handler', async () => {
       count: 1,
       rawRules: ['example.com/*'],
       compiledPatterns: ['*://example.com/*'],
+    });
+  });
+
+  await test('returns subdomain-rule debug payloads through the injected provider', async () => {
+    const handler = createHandlerFixture();
+
+    const response = await handler({ action: 'getBlockedSubdomainRulesDebug', tabId: 1 }, {});
+
+    assert.deepEqual(response, {
+      success: true,
+      version: 'v1',
+      count: 1,
+      rawRules: ['ads.example.org'],
     });
   });
 
@@ -166,6 +198,28 @@ await describe('background message handler', async () => {
     });
   });
 
+  await test('maps blocked-subdomain evaluation requests through the injected evaluator', async () => {
+    const handler = createHandlerFixture();
+
+    const response = await handler(
+      {
+        action: 'evaluateBlockedSubdomainDebug',
+        tabId: 1,
+        type: 'xmlhttprequest',
+        url: 'https://ads.example.org/pixel',
+      },
+      {}
+    );
+
+    assert.deepEqual(response, {
+      success: true,
+      outcome: {
+        cancel: true,
+        url: 'https://ads.example.org/pixel',
+      },
+    });
+  });
+
   await test('returns extension diagnostics for canary boundary checks', async () => {
     const handler = createHandlerFixture();
 
@@ -200,6 +254,12 @@ await describe('background message handler', async () => {
         count: 1,
         rawRules: ['example.com/*'],
         compiledPatterns: ['*://example.com/*'],
+      },
+      subdomainRules: {
+        success: true,
+        version: 'v1',
+        count: 1,
+        rawRules: ['ads.example.org'],
       },
     });
   });
@@ -510,6 +570,9 @@ await describe('background message handler', async () => {
       error: 'update failed',
     });
     assert.deepEqual(await handler({ action: 'refreshBlockedPathRules', tabId: 1 }, {}), {
+      success: true,
+    });
+    assert.deepEqual(await handler({ action: 'refreshBlockedSubdomainRules', tabId: 1 }, {}), {
       success: true,
     });
   });

@@ -157,9 +157,7 @@ check_firewall_status() { echo "inactive"; }
 save_checkpoint() { :; }
 generate_dnsmasq_config() { :; }
 require_openpath_request_setup_complete() { :; }
-generate_firefox_policies() { :; }
 generate_chromium_policies() { :; }
-apply_search_engine_policies() { :; }
 get_policies_hash() { echo "policies-hash"; }
 has_config_changed() { return 0; }
 restart_dnsmasq() { return 0; }
@@ -239,9 +237,7 @@ parse_whitelist_sections() { :; }
 check_firewall_status() { echo "active"; }
 save_checkpoint() { :; }
 generate_dnsmasq_config() { :; }
-generate_firefox_policies() { :; }
 generate_chromium_policies() { :; }
-apply_search_engine_policies() { :; }
 sync_firefox_managed_extension_policy() { :; }
 get_policies_hash() { echo "policies-hash"; }
 has_config_changed() { return 0; }
@@ -323,10 +319,6 @@ source "$cleanup_script"
 
 cleanup_system
 
-BLOCKED_PATHS=("example.com/ads")
-generate_firefox_policies
-apply_search_engine_policies
-
 python3 - <<PYEOF
 import json
 
@@ -337,9 +329,9 @@ policy_root = policies["policies"]
 assert "monitor-bloqueos@openpath" in policy_root.get("ExtensionSettings", {})
 assert "https://downloads.example/openpath-managed.xpi" in policy_root.get("Extensions", {}).get("Install", [])
 assert "monitor-bloqueos@openpath" in policy_root.get("Extensions", {}).get("Locked", [])
-assert "WebsiteFilter" in policy_root
-assert "SearchEngines" in policy_root
-assert "DNSOverHTTPS" in policy_root
+assert "WebsiteFilter" not in policy_root
+assert "SearchEngines" not in policy_root
+assert "DNSOverHTTPS" not in policy_root
 PYEOF
 EOF
     chmod +x "$helper_script"
@@ -405,9 +397,7 @@ record_call() {
     CALLS+=("$1")
 }
 
-generate_firefox_policies() { record_call "generate_firefox_policies"; }
 generate_chromium_policies() { record_call "generate_chromium_policies"; }
-apply_search_engine_policies() { record_call "apply_search_engine_policies"; }
 sync_firefox_managed_extension_policy() {
     record_call "sync_firefox_managed_extension_policy:$1"
 }
@@ -426,10 +416,8 @@ EOF
 
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "require_openpath_request_setup_complete:runtime browser integration" ]
-    [ "${lines[1]}" = "generate_firefox_policies" ]
-    [ "${lines[2]}" = "generate_chromium_policies" ]
-    [ "${lines[3]}" = "apply_search_engine_policies" ]
-    [ "${lines[4]}" = "sync_firefox_managed_extension_policy:/usr/share/openpath/firefox-release" ]
+    [ "${lines[1]}" = "generate_chromium_policies" ]
+    [ "${lines[2]}" = "sync_firefox_managed_extension_policy:/usr/share/openpath/firefox-release" ]
 }
 
 @test "sync_runtime_browser_integrations aborts before policy writes when request setup is incomplete" {
@@ -451,9 +439,7 @@ record_call() {
     CALLS+=("$1")
 }
 
-generate_firefox_policies() { record_call "generate_firefox_policies"; }
 generate_chromium_policies() { record_call "generate_chromium_policies"; }
-apply_search_engine_policies() { record_call "apply_search_engine_policies"; }
 sync_firefox_managed_extension_policy() { record_call "sync_firefox_managed_extension_policy:$1"; }
 require_openpath_request_setup_complete() {
     record_call "require_openpath_request_setup_complete:$1"

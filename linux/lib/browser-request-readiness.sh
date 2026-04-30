@@ -176,14 +176,6 @@ collect_openpath_browser_request_readiness() {
         failure_reasons+=("failure_reason=request_setup_incomplete")
     fi
 
-    if verify_firefox_policy_contract; then
-        facts+=("fact.firefox_policy=ready")
-    else
-        ready=false
-        facts+=("fact.firefox_policy=missing")
-        failure_reasons+=("failure_reason=firefox_policy_missing")
-    fi
-
     if verify_firefox_extension_payload; then
         facts+=("fact.firefox_payload=ready")
     else

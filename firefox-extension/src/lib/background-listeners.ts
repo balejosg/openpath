@@ -7,6 +7,7 @@ import {
   extractHostname,
   isExtensionUrl,
 } from './path-blocking.js';
+import { BLOCKED_SUBDOMAIN_REASON } from './subdomain-blocking.js';
 import { isPageResourceCandidateMessage } from './auto-allow-observation.js';
 import {
   buildAutoAllowCandidateFromMessage,
@@ -60,6 +61,9 @@ interface BackgroundListenersOptions {
   clearTabRuntimeState: (tabId: number) => void;
   disposeTab: (tabId: number) => void;
   evaluateBlockedPath: (
+    details: WebRequest.OnBeforeRequestDetailsType
+  ) => { cancel?: boolean; redirectUrl?: string; reason?: string } | null;
+  evaluateBlockedSubdomain: (
     details: WebRequest.OnBeforeRequestDetailsType
   ) => { cancel?: boolean; redirectUrl?: string; reason?: string } | null;
   confirmBlockedScreenNavigation?: (context: ConfirmBlockedScreenContext) => Promise<boolean>;
@@ -384,7 +388,8 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
 
   options.browser.webRequest.onBeforeRequest.addListener(
     (details: WebRequest.OnBeforeRequestDetailsType) => {
-      const result = options.evaluateBlockedPath(details);
+      const result =
+        options.evaluateBlockedPath(details) ?? options.evaluateBlockedSubdomain(details);
       if (!result) {
         triggerAutoAllowForEligibleRequest(details);
         return;
@@ -392,7 +397,11 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
 
       const hostname = extractHostname(details.url) ?? 'dominio desconocido';
       if (details.tabId >= 0) {
-        const reason = result.reason ?? `${ROUTE_BLOCK_REASON}:unknown`;
+        const fallbackReason =
+          result.reason?.startsWith(BLOCKED_SUBDOMAIN_REASON) === true
+            ? `${BLOCKED_SUBDOMAIN_REASON}:unknown`
+            : `${ROUTE_BLOCK_REASON}:unknown`;
+        const reason = result.reason ?? fallbackReason;
         options.addBlockedDomain(
           details.tabId,
           hostname,

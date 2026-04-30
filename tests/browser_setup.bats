@@ -371,7 +371,7 @@ JSON
     run collect_openpath_browser_request_readiness
     [ "$status" -eq 1 ]
     [[ "$output" == *"ready=false"* ]]
-    [[ "$output" == *"fact.firefox_policy=ready"* ]]
+    [[ "$output" != *"fact.firefox_policy=ready"* ]]
     [[ "$output" == *"fact.firefox_registration=missing"* ]]
     [[ "$output" == *"failure_reason=firefox_registration_missing"* ]]
 }
@@ -422,7 +422,7 @@ JSON
     [[ "$output" == *"failure_reason=firefox_native_host_missing"* ]]
 }
 
-@test "openpath-browser-setup installs firefox integrations and policies" {
+@test "openpath-browser-setup installs firefox integrations without applying Firefox browser policies" {
     local fake_install="$TEST_TMP_DIR/install"
     local fake_scripts="$TEST_TMP_DIR/scripts"
     local firefox_dir="$TEST_TMP_DIR/usr/lib/firefox-esr"
@@ -463,7 +463,12 @@ JSON
     [[ "$output" == *"--firefox-required"* ]]
     [[ "$output" == *"--chromium-best-effort"* ]]
     [[ "$output" == *"--native-host-required"* ]]
-    [[ "$output" == *"apply_search_engine_policies"* ]]
+    [[ "$output" != *"apply_search_engine_policies"* ]]
+}
+
+@test "source installer no longer labels a browser policy application step" {
+    run grep -nF 'Aplicando politicas de navegadores' "$PROJECT_DIR/linux/install.sh"
+    [ "$status" -ne 0 ]
 }
 
 @test "openpath-browser-setup fails before installing integrations when request setup is incomplete" {

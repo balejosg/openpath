@@ -17,7 +17,7 @@ Use DNS sinkhole technology with dnsmasq as the core filtering mechanism:
 1. **Default deny**: All domains return NXDOMAIN by default (`address=/#/`)
 2. **Explicit allow**: Whitelisted domains forward to upstream DNS (`server=/domain.com/8.8.8.8`)
 3. **Firewall enforcement**: Block external DNS (port 53/853) to prevent bypass
-4. **Browser policies**: Additional layer via WebsiteFilter for path-level blocking
+4. **Browser extension runtime**: Additional Firefox layer for path-level and blocked-subdomain enforcement through the managed extension/native-host flow
 
 ```
 # dnsmasq config order (CRITICAL)
@@ -37,9 +37,9 @@ server=/github.com/8.8.8.8          # Allow specific domains
 
 ### Negative
 
-- **Domain-level only**: Cannot filter specific URLs/paths (mitigated by browser policies)
+- **Domain-level network layer**: DNS itself cannot filter specific URLs/paths; Firefox path and blocked-subdomain handling is owned by the extension runtime
 - **No content inspection**: Cannot block based on page content
-- **DNS-over-HTTPS risk**: Modern browsers may bypass (mitigated by browser policies disabling DoH)
+- **DNS-over-HTTPS risk**: Modern browsers may bypass network DNS controls if platform/browser hardening is absent
 
 ### Neutral
 

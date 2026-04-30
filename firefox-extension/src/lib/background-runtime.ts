@@ -3,6 +3,7 @@ import { createAutoAllowWorkflow } from './auto-allow-workflow.js';
 import { registerBackgroundListeners } from './background-listeners.js';
 import { createBackgroundMessageHandler } from './background-message-handler.js';
 import { createBackgroundPathRulesController } from './background-path-rules.js';
+import { createBackgroundSubdomainRulesController } from './background-subdomain-rules.js';
 import { logger, getErrorMessage } from './logger.js';
 import { getRequestApiEndpoints, loadRequestConfig } from './config-storage.js';
 import { buildBlockedDomainSubmitBody } from './blocked-request.js';
@@ -22,6 +23,7 @@ import {
   extractHostname,
   type NativeBlockedPathsResponse,
 } from './path-blocking.js';
+import type { NativeBlockedSubdomainsResponse } from './subdomain-blocking.js';
 
 interface BlockedScreenContext {
   tabId: number;
@@ -88,6 +90,13 @@ export function createBackgroundRuntime(
         action: 'get-blocked-paths',
       })) as NativeBlockedPathsResponse,
   });
+  const blockedSubdomainRulesController = createBackgroundSubdomainRulesController({
+    extensionOrigin,
+    getBlockedSubdomains: async () =>
+      (await nativeMessagingClient.sendMessage({
+        action: 'get-blocked-subdomains',
+      })) as NativeBlockedSubdomainsResponse,
+  });
 
   async function redirectToBlockedScreen(context: BlockedScreenContext): Promise<void> {
     try {
@@ -142,19 +151,23 @@ export function createBackgroundRuntime(
     const requestedDomains = domains
       .map((domain) => domain.trim().toLowerCase())
       .filter((domain) => domain.length > 0);
-    const [nativeAvailable, nativeCheck, nativeBlockedPaths] = await Promise.all([
-      isNativeHostAvailable().catch(() => false),
-      requestedDomains.length > 0
-        ? checkDomainsWithNative(requestedDomains).catch((error: unknown) => ({
-            success: false,
-            results: [],
-            error: getErrorMessage(error),
-          }))
-        : Promise.resolve({ success: true, results: [] }),
-      nativeMessagingClient
-        .sendMessage({ action: 'get-blocked-paths' })
-        .catch((error: unknown) => ({ success: false, error: getErrorMessage(error) })),
-    ]);
+    const [nativeAvailable, nativeCheck, nativeBlockedPaths, nativeBlockedSubdomains] =
+      await Promise.all([
+        isNativeHostAvailable().catch(() => false),
+        requestedDomains.length > 0
+          ? checkDomainsWithNative(requestedDomains).catch((error: unknown) => ({
+              success: false,
+              results: [],
+              error: getErrorMessage(error),
+            }))
+          : Promise.resolve({ success: true, results: [] }),
+        nativeMessagingClient
+          .sendMessage({ action: 'get-blocked-paths' })
+          .catch((error: unknown) => ({ success: false, error: getErrorMessage(error) })),
+        nativeMessagingClient
+          .sendMessage({ action: 'get-blocked-subdomains' })
+          .catch((error: unknown) => ({ success: false, error: getErrorMessage(error) })),
+      ]);
 
     return {
       success: true,
@@ -163,7 +176,9 @@ export function createBackgroundRuntime(
       nativeAvailable,
       nativeCheck,
       nativeBlockedPaths,
+      nativeBlockedSubdomains,
       pathRules: blockedPathRulesController.getDebugState(),
+      subdomainRules: blockedSubdomainRulesController.getDebugState(),
     };
   }
 
@@ -195,19 +210,32 @@ export function createBackgroundRuntime(
     getStoredDomainStatus: (tabId, hostname) => domainStatuses[tabId]?.get(hostname),
     inFlightAutoRequests,
     loadRequestConfig,
-    refreshBlockedPathRules: () => blockedPathRulesController.refresh(true),
+    refreshBlockedPathRules: async () => {
+      const [pathRefresh, subdomainRefresh] = await Promise.all([
+        blockedPathRulesController.refresh(true),
+        blockedSubdomainRulesController.refresh(true),
+      ]);
+      return pathRefresh && subdomainRefresh;
+    },
     requestLocalWhitelistUpdate: (hostname) =>
       nativeMessagingClient.requestLocalWhitelistUpdate([hostname]),
     sendNativeMessage: (message) => nativeMessagingClient.sendMessage(message),
     setDomainStatus,
   });
   const forceBlockedPathRulesRefresh = blockedPathRulesController.forceRefresh;
+  const forceBlockedSubdomainRulesRefresh = blockedSubdomainRulesController.forceRefresh;
 
   const handleRuntimeMessage = createBackgroundMessageHandler({
     clearBlockedDomains,
     evaluateBlockedPathDebug: (input) =>
       blockedPathRulesController.evaluateRequest({ type: input.type, url: input.url } as never),
+    evaluateBlockedSubdomainDebug: (input) =>
+      blockedSubdomainRulesController.evaluateRequest({
+        type: input.type,
+        url: input.url,
+      } as never),
     forceBlockedPathRulesRefresh,
+    forceBlockedSubdomainRulesRefresh,
     getBlockedDomainsForTab,
     getDomainStatusesForTab,
     getErrorMessage,
@@ -216,8 +244,13 @@ export function createBackgroundRuntime(
       (await nativeMessagingClient.sendMessage({
         action: 'get-blocked-paths',
       })) as NativeBlockedPathsResponse,
+    getNativeBlockedSubdomainsDebug: async () =>
+      (await nativeMessagingClient.sendMessage({
+        action: 'get-blocked-subdomains',
+      })) as NativeBlockedSubdomainsResponse,
     getOpenPathDiagnostics,
     getPathRulesDebug: blockedPathRulesController.getDebugState,
+    getSubdomainRulesDebug: blockedSubdomainRulesController.getDebugState,
     getSystemHostname: () => nativeMessagingClient.sendMessage({ action: 'get-hostname' }),
     isNativeHostAvailable,
     retryLocalUpdate,
@@ -227,7 +260,10 @@ export function createBackgroundRuntime(
         action: 'update-whitelist',
       })) as NativeResponse;
       if (response.success) {
-        await blockedPathRulesController.refresh(true);
+        await Promise.all([
+          blockedPathRulesController.refresh(true),
+          blockedSubdomainRulesController.refresh(true),
+        ]);
       }
       return response;
     },
@@ -244,12 +280,15 @@ export function createBackgroundRuntime(
       clearTabRuntimeState,
       disposeTab,
       evaluateBlockedPath: blockedPathRulesController.evaluateRequest,
+      evaluateBlockedSubdomain: blockedSubdomainRulesController.evaluateRequest,
       confirmBlockedScreenNavigation,
       handleRuntimeMessage,
       redirectToBlockedScreen,
     });
     await blockedPathRulesController.init();
+    await blockedSubdomainRulesController.init();
     blockedPathRulesController.startRefreshLoop();
+    blockedSubdomainRulesController.startRefreshLoop();
     logger.info('[Monitor de Bloqueos] Background script v2.0.0 (MV3) cargado');
   }
 

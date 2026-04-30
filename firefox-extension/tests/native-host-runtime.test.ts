@@ -19,15 +19,19 @@ function decodeNativeMessage(output: Buffer): unknown {
   return JSON.parse(body);
 }
 
-function runNativeHostCheck(env: NodeJS.ProcessEnv, domains: string[]): unknown {
+function runNativeHostOnce(env: NodeJS.ProcessEnv, payload: unknown): unknown {
   const scriptPath = new URL('../native/openpath-native-host.py', import.meta.url);
   const result = spawnSync('python3', [scriptPath.pathname], {
     env,
-    input: encodeNativeMessage({ action: 'check', domains }),
+    input: encodeNativeMessage(payload),
   });
 
   assert.equal(result.status, 0, result.stderr.toString('utf8'));
   return decodeNativeMessage(result.stdout);
+}
+
+function runNativeHostCheck(env: NodeJS.ProcessEnv, domains: string[]): unknown {
+  return runNativeHostOnce(env, { action: 'check', domains });
 }
 
 void test('native host confirms local DNS blocks when OpenPath CLI is unavailable', () => {
@@ -119,4 +123,44 @@ void test('native host treats CLI sinkhole responses as blocked', () => {
       resolved_ip: '192.0.2.1',
     },
   ]);
+});
+
+void test('native host returns blocked subdomains from the local whitelist file', () => {
+  const runtimeDir = mkdtempSync(join(tmpdir(), 'openpath-native-host-'));
+  const whitelistPath = join(runtimeDir, 'whitelist.txt');
+  writeFileSync(
+    whitelistPath,
+    [
+      '## WHITELIST',
+      'allowed.example',
+      '## BLOCKED-SUBDOMAINS',
+      'ads.example.org',
+      'cdn.example.org',
+      '## BLOCKED-PATHS',
+      'example.org/private',
+      '',
+    ].join('\n'),
+    'utf8'
+  );
+
+  const response = runNativeHostOnce(
+    {
+      ...process.env,
+      OPENPATH_WHITELIST_FILE: whitelistPath,
+      XDG_DATA_HOME: runtimeDir,
+    },
+    { action: 'get-blocked-subdomains' }
+  ) as {
+    success?: boolean;
+    subdomains?: string[];
+    action?: string;
+    count?: number;
+    hash?: string;
+  };
+
+  assert.equal(response.success, true);
+  assert.equal(response.action, 'get-blocked-subdomains');
+  assert.deepEqual(response.subdomains, ['ads.example.org', 'cdn.example.org']);
+  assert.equal(response.count, 2);
+  assert.equal(typeof response.hash, 'string');
 });

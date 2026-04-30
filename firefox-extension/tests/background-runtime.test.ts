@@ -24,6 +24,7 @@ function createRuntimeHarness(): {
   fetchBodies: unknown[];
   nativeMessages: unknown[];
   pathRuleRefreshes: number;
+  subdomainRuleRefreshes: number;
   responses: unknown[];
   restoreGlobals: () => void;
   runtimeMessage: RuntimeMessageListener | null;
@@ -33,6 +34,7 @@ function createRuntimeHarness(): {
   const responses: unknown[] = [];
   let runtimeMessage: RuntimeMessageListener | null = null;
   let pathRuleRefreshes = 0;
+  let subdomainRuleRefreshes = 0;
   const originalBrowser = (globalThis as { browser?: Browser }).browser;
   const originalFetch = globalThis.fetch;
   const originalSetInterval = globalThis.setInterval;
@@ -74,6 +76,16 @@ function createRuntimeHarness(): {
             count: 0,
             hash: '',
             mtime: pathRuleRefreshes,
+          });
+        }
+        if (action === 'get-blocked-subdomains') {
+          subdomainRuleRefreshes += 1;
+          return Promise.resolve({
+            success: true,
+            subdomains: [],
+            count: 0,
+            hash: '',
+            mtime: subdomainRuleRefreshes,
           });
         }
         if (action === 'get-hostname') {
@@ -158,6 +170,9 @@ function createRuntimeHarness(): {
     nativeMessages,
     get pathRuleRefreshes(): number {
       return pathRuleRefreshes;
+    },
+    get subdomainRuleRefreshes(): number {
+      return subdomainRuleRefreshes;
     },
     responses,
     restoreGlobals: (): void => {
@@ -294,6 +309,7 @@ void test('background runtime passes auto-allowed hostnames to native whitelist 
       )
     );
     assert.equal(harness.pathRuleRefreshes >= 2, true);
+    assert.equal(harness.subdomainRuleRefreshes >= 2, true);
   } finally {
     harness.restoreGlobals();
   }
@@ -323,8 +339,10 @@ void test('background runtime exposes native diagnostics through runtime message
       manifestVersion?: string;
       nativeAvailable?: boolean;
       nativeBlockedPaths?: { success?: boolean };
+      nativeBlockedSubdomains?: { success?: boolean };
       nativeCheck?: { results?: { domain?: string; resolves?: boolean }[] };
       pathRules?: { count?: number; success?: boolean };
+      subdomainRules?: { count?: number; success?: boolean };
       success?: boolean;
     };
     assert.equal(diagnostics.success, true);
@@ -340,8 +358,11 @@ void test('background runtime exposes native diagnostics through runtime message
       },
     ]);
     assert.equal(diagnostics.nativeBlockedPaths?.success, true);
+    assert.equal(diagnostics.nativeBlockedSubdomains?.success, true);
     assert.equal(diagnostics.pathRules?.success, true);
     assert.equal(diagnostics.pathRules.count, 0);
+    assert.equal(diagnostics.subdomainRules?.success, true);
+    assert.equal(diagnostics.subdomainRules.count, 0);
   } finally {
     harness.restoreGlobals();
   }
@@ -366,6 +387,7 @@ void test('background runtime refreshes path rules after manual native whitelist
       )
     );
     assert.equal(harness.pathRuleRefreshes >= 2, true);
+    assert.equal(harness.subdomainRuleRefreshes >= 2, true);
   } finally {
     harness.restoreGlobals();
   }

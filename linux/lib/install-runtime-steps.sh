@@ -22,10 +22,9 @@ step_install_firefox() {
 
 step_apply_policies() {
     echo ""
-    echo "[11/13] Aplicando políticas de navegadores..."
+    echo "[11/13] Verificando integraciones de navegadores..."
 
-    apply_search_engine_policies
-    echo "✓ Políticas aplicadas"
+    echo "✓ Integraciones preparadas"
 }
 
 step_install_extension() {

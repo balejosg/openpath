@@ -1,3 +1,26 @@
+#!/usr/bin/env bats
+################################################################################
+# browser_firefox_extension.bats - Firefox extension installation tests
+################################################################################
+
+load 'test_helper'
+source "$BATS_TEST_DIRNAME/browser_support.bash"
+
+@test "Firefox extension manifest owns path and subdomain request blocking" {
+    python3 - <<PYEOF
+import json
+
+with open("$PROJECT_DIR/firefox-extension/manifest.json", "r", encoding="utf-8") as fh:
+    manifest = json.load(fh)
+
+permissions = manifest.get("permissions", [])
+assert "webRequest" in permissions
+assert "webRequestBlocking" in permissions
+assert "nativeMessaging" in permissions
+assert manifest.get("host_permissions") == ["<all_urls>"]
+PYEOF
+}
+
 @test "detect_firefox_dir returns valid directory if exists" {
     mkdir -p "$TEST_TMP_DIR/usr/lib/firefox-esr"
     touch "$TEST_TMP_DIR/usr/lib/firefox-esr/firefox"
@@ -312,10 +335,3 @@ EOF
     [ "$status" -eq 0 ]
     [ "$(cat "$TEST_TMP_DIR/unpacked-source")" = "$TEST_TMP_DIR/firefox-extension" ]
 }
-#!/usr/bin/env bats
-################################################################################
-# browser_firefox_extension.bats - Firefox extension installation tests
-################################################################################
-
-load 'test_helper'
-source "$BATS_TEST_DIRNAME/browser_support.bash"
