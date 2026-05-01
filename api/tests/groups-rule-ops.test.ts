@@ -190,8 +190,10 @@ await describe(
         const { data: autoRules } = (await parseTRPC(listResp)) as { data?: Rule[] };
         assert.ok(autoRules);
         assert.strictEqual(autoRules.length, 1);
-        assert.strictEqual(autoRules[0].id, autoResult.id);
-        assert.strictEqual(autoRules[0].source, 'auto_extension');
+        const autoRule = autoRules[0];
+        assert.ok(autoRule);
+        assert.strictEqual(autoRule.id, autoResult.id);
+        assert.strictEqual(autoRule.source, 'auto_extension');
 
         const paginatedResp = await getHarness().trpcQuery(
           'groups.listRulesPaginated',
@@ -210,7 +212,9 @@ await describe(
         };
         assert.ok(paginated);
         assert.strictEqual(paginated.total, 1);
-        assert.strictEqual(paginated.rules[0].value, 'cdn.auto.example.com');
+        const paginatedRule = paginated.rules[0];
+        assert.ok(paginatedRule);
+        assert.strictEqual(paginatedRule.value, 'cdn.auto.example.com');
 
         const groupedResp = await getHarness().trpcQuery(
           'groups.listRulesGrouped',
@@ -229,7 +233,11 @@ await describe(
         };
         assert.ok(grouped);
         assert.strictEqual(grouped.totalRules, 1);
-        assert.strictEqual(grouped.groups[0].rules[0].source, 'auto_extension');
+        const groupedRuleGroup = grouped.groups[0];
+        assert.ok(groupedRuleGroup);
+        const groupedRule = groupedRuleGroup.rules[0];
+        assert.ok(groupedRule);
+        assert.strictEqual(groupedRule.source, 'auto_extension');
 
         const teacher = await getHarness().createTeacherSession([group.id]);
         const revokeResp = await getHarness().trpcMutate(
@@ -275,8 +283,10 @@ await describe(
         const { data: blockedRules } = (await parseTRPC(blockedResp)) as { data?: Rule[] };
         assert.ok(blockedRules);
         assert.strictEqual(blockedRules.length, 1);
-        assert.strictEqual(blockedRules[0].value, 'cdn.auto.example.com');
-        assert.match(blockedRules[0].comment ?? '', /Revoked automatic approval by/);
+        const blockedRule = blockedRules[0];
+        assert.ok(blockedRule);
+        assert.strictEqual(blockedRule.value, 'cdn.auto.example.com');
+        assert.match(blockedRule.comment ?? '', /Revoked automatic approval by/);
       });
     });
 
