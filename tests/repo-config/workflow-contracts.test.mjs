@@ -136,6 +136,11 @@ test('Firefox release signing workflows are resilient to AMO throttling and reru
       `${name} should retry enough times to survive repeated AMO throttles`
     );
     assert.ok(
+      workflow.includes('WEB_EXT_SIGN_APPROVAL_TIMEOUT_SECONDS: "7200"') ||
+        workflow.includes("WEB_EXT_SIGN_APPROVAL_TIMEOUT_SECONDS: '7200'"),
+      `${name} should allow slow AMO approval before failing release package publication`
+    );
+    assert.ok(
       workflow.includes('2.0.${{ github.run_number }}.${{ github.run_attempt }}'),
       `${name} should include github.run_attempt in the AMO version so reruns avoid Version already exists`
     );
