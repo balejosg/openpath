@@ -283,6 +283,7 @@ describe('repository verification contract', () => {
     const installCoreSteps = readText('linux/lib/install-core-steps.sh');
     const browserFirefox = readText('linux/lib/browser-firefox.sh');
     const browserSetup = readText('linux/scripts/runtime/openpath-browser-setup.sh');
+    const firefoxActivationPlan = readText('linux/lib/firefox-activation-plan.sh');
     const watchdog = readText('linux/scripts/runtime/dnsmasq-watchdog.sh');
     const selfUpdatePackage = readText('linux/lib/openpath-self-update-package.sh');
     const e2eDockerfile = readText('tests/e2e/Dockerfile');
@@ -328,6 +329,16 @@ describe('repository verification contract', () => {
     assert.ok(
       browserSetup.includes('load_libraries'),
       'linux/scripts/runtime/openpath-browser-setup.sh should load the common runtime library set before installing Firefox'
+    );
+    assert.ok(
+      browserSetup.includes('firefox-activation-plan.sh'),
+      'linux/scripts/runtime/openpath-browser-setup.sh should source the Firefox activation plan module'
+    );
+    assert.ok(
+      firefoxActivationPlan.includes('enumerate_firefox_activation_targets') &&
+        firefoxActivationPlan.includes('run_firefox_activation_probe') &&
+        firefoxActivationPlan.includes('detect_firefox_extension_registration_in_profile'),
+      'linux/lib/firefox-activation-plan.sh should own Firefox activation target and registration behavior'
     );
     assert.ok(
       browserSetup.includes('$INSTALL_DIR/firefox-extension') &&

@@ -240,6 +240,7 @@ linux/lib/progress.sh|tests/install.bats
 linux/lib/rollback.sh|tests/install.bats,tests/linux-e2e.bats
 linux/lib/runtime-cli-commands.sh|tests/install.bats,tests/openpath-update.bats
 linux/lib/services.sh|tests/install.bats,tests/linux-e2e.bats
+linux/lib/firefox-activation-plan.sh|tests/browser_setup.bats,tests/repo-config/runtime-contracts.test.mjs
 linux/quick-install.sh|tests/install.bats,tests/linux-e2e.bats
 linux/scripts/build/apt-bootstrap.sh|tests/install.bats,tests/linux-e2e.bats
 linux/scripts/build/apt-setup.sh|tests/install.bats,tests/linux-e2e.bats

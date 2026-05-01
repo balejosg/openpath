@@ -160,6 +160,80 @@ require_openpath_request_setup_complete() {
 EOF
 }
 
+@test "firefox activation plan enumerates existing normal and snap profiles" {
+    local passwd_file="$TEST_TMP_DIR/passwd"
+    local alice_home="$TEST_TMP_DIR/home/alice"
+    local bob_home="$TEST_TMP_DIR/home/bob"
+
+    mkdir -p "$alice_home/.mozilla/firefox/first.default" "$alice_home/.mozilla/firefox/second.default"
+    mkdir -p "$bob_home/snap/firefox/common/.mozilla/firefox/snap.default"
+    cat > "$alice_home/.mozilla/firefox/profiles.ini" <<'EOF'
+[Profile0]
+Name=first
+IsRelative=1
+Path=first.default
+
+[Profile1]
+Name=second
+IsRelative=1
+Path=second.default
+EOF
+    cat > "$bob_home/snap/firefox/common/.mozilla/firefox/profiles.ini" <<'EOF'
+[Profile0]
+Name=snap
+IsRelative=1
+Path=snap.default
+EOF
+    printf 'alice:x:1001:1001::%s:/bin/bash\nbob:x:1002:1002::%s:/bin/bash\n' "$alice_home" "$bob_home" > "$passwd_file"
+
+    run env OPENPATH_PASSWD_FILE="$passwd_file" bash -c \
+        'source "$1"; enumerate_firefox_activation_targets' bash "$PROJECT_DIR/linux/lib/firefox-activation-plan.sh"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *$'alice\t'"$alice_home"$'\t'"$alice_home/.mozilla/firefox/first.default"* ]]
+    [[ "$output" == *$'alice\t'"$alice_home"$'\t'"$alice_home/.mozilla/firefox/second.default"* ]]
+    [[ "$output" == *$'bob\t'"$bob_home"$'\t'"$bob_home/snap/firefox/common/.mozilla/firefox/snap.default"* ]]
+}
+
+@test "firefox activation plan creates fallback profile only for interactive users" {
+    local passwd_file="$TEST_TMP_DIR/passwd"
+    local alice_home="$TEST_TMP_DIR/home/alice"
+    local daemon_home="$TEST_TMP_DIR/home/daemon"
+    local service_home="$TEST_TMP_DIR/home/service"
+
+    mkdir -p "$alice_home" "$daemon_home" "$service_home"
+    printf 'root:x:0:0::/root:/bin/bash\ndaemon:x:1:1::%s:/usr/sbin/nologin\nservice:x:999:999::%s:/bin/bash\nalice:x:1001:1001::%s:/bin/bash\n' \
+        "$daemon_home" "$service_home" "$alice_home" > "$passwd_file"
+
+    run env OPENPATH_PASSWD_FILE="$passwd_file" bash -c \
+        'source "$1"; enumerate_firefox_activation_targets' bash "$PROJECT_DIR/linux/lib/firefox-activation-plan.sh"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == $'alice\t'"$alice_home"$'\t'"$alice_home/.mozilla/firefox/openpath.default" ]]
+    [[ "$output" != *"daemon"* ]]
+    [[ "$output" != *"service"* ]]
+    [[ "$output" != *$'root\t'* ]]
+}
+
+@test "firefox activation plan profile override limits target verification" {
+    local passwd_file="$TEST_TMP_DIR/passwd"
+    local home_dir="$TEST_TMP_DIR/home/alice"
+    local override_profile="$TEST_TMP_DIR/custom/profile"
+
+    mkdir -p "$home_dir"
+    printf 'alice:x:1001:1001::%s:/bin/bash\n' "$home_dir" > "$passwd_file"
+
+    run env \
+        OPENPATH_PASSWD_FILE="$passwd_file" \
+        OPENPATH_FIREFOX_PROFILE_USER="alice" \
+        OPENPATH_FIREFOX_PROFILE_HOME="$home_dir" \
+        OPENPATH_FIREFOX_PROFILE_DIR="$override_profile" \
+        bash -c 'source "$1"; enumerate_firefox_activation_targets' bash "$PROJECT_DIR/linux/lib/firefox-activation-plan.sh"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == $'alice\t'"$home_dir"$'\t'"$override_profile" ]]
+}
+
 write_fake_browser_sh() {
     local target="$1"
     local calls_file="$2"
