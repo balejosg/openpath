@@ -642,8 +642,26 @@ async function runAjaxAutoAllowScenarioSet(
         title: 'OpenPath Site Fixture',
         selector: '#page-status',
       });
-      const secondResult = await runLinuxDiagnosticPhase('probe-traffic', () => probe.run());
-      assert.strictEqual(secondResult, 'ok', `${probe.id} dependency should load after auto-allow`);
+      let secondResult: 'ok' | 'blocked' = 'blocked';
+      await runLinuxDiagnosticPhase('probe-traffic', async () => {
+        await driver.waitForConvergence(
+          async () => {
+            await driver.openAndExpectLoaded({
+              url: targets.siteOkUrl,
+              title: 'OpenPath Site Fixture',
+              selector: '#page-status',
+            });
+            secondResult = await probe.run();
+            assert.strictEqual(
+              secondResult,
+              'ok',
+              `${probe.id} dependency should load after auto-allow`
+            );
+          },
+          { timeoutMs: 45_000, pollMs: 2_000 }
+        );
+        return secondResult;
+      });
       if (linuxProbe !== null) {
         linuxProbe.secondResult = secondResult;
       }
