@@ -72,6 +72,7 @@ install_firefox_esr() {
 
     if [ "$os_id" = "ubuntu" ]; then
         if ! command -v add-apt-repository &>/dev/null 2>&1; then
+            apt_update_with_retry >/dev/null 2>&1 || true
             DEBIAN_FRONTEND=noninteractive apt_install_with_retry "software-properties-common" \
                 apt-get install -y software-properties-common >/dev/null 2>&1 || true
         fi

@@ -345,6 +345,11 @@ describe('repository verification contract', () => {
         browserSetup.includes('/usr/share/openpath/firefox-extension'),
       'linux/scripts/runtime/openpath-browser-setup.sh should support both install.sh-staged and deb-packaged Firefox bundles'
     );
+    assert.match(
+      browserFirefox,
+      /if ! command -v add-apt-repository[\s\S]*apt_update_with_retry[\s\S]*apt_install_with_retry "software-properties-common"/,
+      'linux/lib/browser-firefox.sh should refresh package indexes before installing add-apt-repository on minimal Ubuntu images'
+    );
 
     for (const [name, content] of [
       ['tests/e2e/Dockerfile', e2eDockerfile],
