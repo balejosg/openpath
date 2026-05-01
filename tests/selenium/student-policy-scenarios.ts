@@ -637,7 +637,6 @@ async function runAjaxAutoAllowScenarioSet(
         );
       });
 
-      await driver.restart();
       await driver.openAndExpectLoaded({
         url: targets.siteOkUrl,
         title: 'OpenPath Site Fixture',
