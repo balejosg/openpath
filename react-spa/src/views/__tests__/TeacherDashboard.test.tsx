@@ -393,6 +393,43 @@ describe('TeacherDashboard', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows prior-week entries when pressing previous week', async () => {
+    primeDashboardData({
+      schedulesByClassroom: {
+        'classroom-1': {
+          schedules: [
+            makeWeeklySchedule({
+              dayOfWeek: 3,
+              startTime: '08:00',
+              endTime: '09:00',
+            }),
+          ],
+          oneOffSchedules: [],
+        },
+        'classroom-2': {
+          schedules: [],
+          oneOffSchedules: [
+            makeOneOffSchedule({
+              startAt: '2026-04-22T12:00:00',
+              endAt: '2026-04-22T13:00:00',
+            }),
+          ],
+        },
+      },
+    });
+
+    await renderTeacherDashboardReady();
+    await waitFor(() => {
+      expect(mockGetByClassroomQuery).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Semana anterior' }));
+
+    expect(
+      await screen.findByRole('button', { name: 'Ver detalles Examen - Lab B 12:00-13:00' })
+    ).toBeInTheDocument();
+  });
+
   it('opens the detail panel when selecting a calendar block', async () => {
     await renderTeacherDashboardReady();
     await waitFor(() => {
@@ -711,6 +748,69 @@ describe('TeacherDashboard', () => {
     await waitFor(() => {
       expect(mockSetActiveGroup).toHaveBeenCalledWith({ id: 'classroom-1', groupId: 'group-1' });
     });
+  });
+
+  it('closes the manual replacement dialog without applying the change', async () => {
+    primeDashboardData({
+      classrooms: [
+        makeClassroom({
+          activeGroupId: 'group-2',
+          currentGroupId: 'group-2',
+          currentGroupDisplayName: 'Examen',
+          currentGroupSource: 'manual',
+        }),
+      ],
+      schedulesByClassroom: {
+        'classroom-1': {
+          schedules: [makeWeeklySchedule()],
+          oneOffSchedules: [],
+        },
+      },
+    });
+
+    await renderTeacherDashboardReady();
+    const [classroomSelect, groupSelect] = await screen.findAllByRole('combobox');
+
+    fireEvent.change(classroomSelect, { target: { value: 'classroom-1' } });
+    fireEvent.change(groupSelect, { target: { value: 'group-1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar Política' }));
+
+    const confirmDialog = await screen.findByRole('dialog', { name: 'Confirmar cambio' });
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Cancelar' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Confirmar cambio' })).not.toBeInTheDocument();
+    });
+    expect(mockSetActiveGroup).not.toHaveBeenCalled();
+  });
+
+  it('shows and closes a one-off delete confirmation', async () => {
+    await renderTeacherDashboardReady();
+    await waitFor(() => {
+      expect(mockGetByClassroomQuery).toHaveBeenCalledTimes(2);
+    });
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Ver detalles Examen - Lab B 12:00-13:00',
+      })
+    );
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Detalle del horario' })).getByRole(
+        'button',
+        { name: 'Eliminar horario' }
+      )
+    );
+
+    const confirmDialog = await screen.findByRole('dialog', { name: 'Eliminar horario' });
+    expect(confirmDialog).toHaveTextContent('Tipo: Puntual');
+
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Cancelar' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Eliminar horario' })).not.toBeInTheDocument();
+    });
+    expect(mockSchedulesDelete).not.toHaveBeenCalled();
   });
 
   it('shows the legacy and feature-flag hints in the classroom control card', async () => {

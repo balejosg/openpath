@@ -12,30 +12,15 @@ import {
   buildTeacherScheduleEntries,
   getTeacherScheduleFocus,
   getWeekMonday,
-  type TeacherScheduleEntry,
 } from '../components/teacher/teacher-schedule-model';
 import { DangerConfirmDialog, ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { resolveTrpcErrorMessage } from '../lib/error-utils';
-import { reportError } from '../lib/reportError';
-import { trpc } from '../lib/trpc';
 import type { GroupLike } from '../components/groups/GroupLabel';
 import type { OneOffScheduleWithPermissions, ScheduleWithPermissions } from '../types';
 import { useTeacherDashboardViewModel } from '../hooks/useTeacherDashboardViewModel';
+import { useTeacherScheduleCommands } from '../hooks/useTeacherScheduleCommands';
 
 interface TeacherDashboardProps {
   onNavigateToRules?: (group: { id: string; name: string }) => void;
-}
-
-function formatScheduleError(err: unknown, fallback: string): string {
-  const raw = err instanceof Error ? err.message : '';
-  return resolveTrpcErrorMessage(err, {
-    conflict: 'Ese tramo horario ya está reservado',
-    fallback: raw || fallback,
-  });
-}
-
-function resolveGroupName(entry: TeacherScheduleEntry): string {
-  return entry.schedule.groupDisplayName ?? entry.groupName;
 }
 
 function toEditableGroups(groups: readonly GroupLike[]): GroupLike[] {
@@ -48,11 +33,6 @@ function toEditableGroups(groups: readonly GroupLike[]): GroupLike[] {
 const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }) => {
   const viewModel = useTeacherDashboardViewModel();
   const [weekMonday, setWeekMonday] = useState(() => getWeekMonday(new Date()));
-  const [selectedEntry, setSelectedEntry] = useState<TeacherScheduleEntry | null>(null);
-  const [editingEntry, setEditingEntry] = useState<TeacherScheduleEntry | null>(null);
-  const [deleteEntry, setDeleteEntry] = useState<TeacherScheduleEntry | null>(null);
-  const [scheduleSaving, setScheduleSaving] = useState(false);
-  const [scheduleError, setScheduleError] = useState('');
 
   const entries = useMemo(
     () =>
@@ -73,159 +53,19 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
   );
   const focus = useMemo(() => getTeacherScheduleFocus(entries, new Date()), [entries]);
   const editableGroups = useMemo(() => toEditableGroups(viewModel.groups), [viewModel.groups]);
-
-  const clearTransientState = () => {
-    setScheduleError('');
-  };
-
-  const refreshDashboard = async () => {
-    await Promise.all([viewModel.refetchClassrooms(), viewModel.refetchMySchedules()]);
-  };
-
-  const handleOpenRules = (entry: TeacherScheduleEntry) => {
-    onNavigateToRules?.({
-      id: entry.schedule.groupId,
-      name: resolveGroupName(entry),
-    });
-  };
-
-  const handleOpenClassroom = (entry: TeacherScheduleEntry) => {
-    setSelectedEntry(entry);
-  };
-
-  const handleTakeControl = async (entry: TeacherScheduleEntry) => {
-    setScheduleSaving(true);
-    setScheduleError('');
-    try {
-      await trpc.classrooms.setActiveGroup.mutate({
-        id: entry.classroomId,
-        groupId: entry.schedule.groupId,
-      });
-      await refreshDashboard();
-    } catch (err) {
-      reportError('Failed to apply active group:', err);
-      setScheduleError('Error al aplicar el grupo al aula');
-    } finally {
-      setScheduleSaving(false);
-    }
-  };
-
-  const handleReleaseClassroom = async (entry: TeacherScheduleEntry) => {
-    setScheduleSaving(true);
-    setScheduleError('');
-    try {
-      await trpc.classrooms.setActiveGroup.mutate({
-        id: entry.classroomId,
-        groupId: null,
-      });
-      await refreshDashboard();
-    } catch (err) {
-      reportError('Failed to release classroom:', err);
-      setScheduleError('Error al aplicar el grupo al aula');
-    } finally {
-      setScheduleSaving(false);
-    }
-  };
-
-  const handleEditSchedule = (entry: TeacherScheduleEntry) => {
-    clearTransientState();
-    setEditingEntry(entry);
-  };
-
-  const handleDeleteSchedule = (entry: TeacherScheduleEntry) => {
-    clearTransientState();
-    setDeleteEntry(entry);
-  };
-
-  const closeEditSchedule = () => {
-    if (scheduleSaving) return;
-    setEditingEntry(null);
-    setScheduleError('');
-  };
-
-  const closeDeleteSchedule = () => {
-    if (scheduleSaving) return;
-    setDeleteEntry(null);
-    setScheduleError('');
-  };
-
-  const handleSaveWeeklySchedule = async (data: {
-    dayOfWeek: number;
-    startTime: string;
-    endTime: string;
-    groupId: string;
-  }) => {
-    if (editingEntry?.kind !== 'weekly') return;
-
-    setScheduleSaving(true);
-    setScheduleError('');
-    try {
-      await trpc.schedules.update.mutate({
-        id: editingEntry.schedule.id,
-        dayOfWeek: data.dayOfWeek,
-        startTime: data.startTime,
-        endTime: data.endTime,
-        groupId: data.groupId,
-      });
-      await refreshDashboard();
-      setEditingEntry(null);
-    } catch (err) {
-      reportError('Failed to save schedule:', err);
-      setScheduleError(formatScheduleError(err, 'Error al guardar horario'));
-    } finally {
-      setScheduleSaving(false);
-    }
-  };
-
-  const handleSaveOneOffSchedule = async (data: {
-    startAt: string;
-    endAt: string;
-    groupId: string;
-  }) => {
-    if (editingEntry?.kind !== 'one_off') return;
-
-    setScheduleSaving(true);
-    setScheduleError('');
-    try {
-      await trpc.schedules.updateOneOff.mutate({
-        id: editingEntry.schedule.id,
-        startAt: data.startAt,
-        endAt: data.endAt,
-        groupId: data.groupId,
-      });
-      await refreshDashboard();
-      setEditingEntry(null);
-    } catch (err) {
-      reportError('Failed to save one-off schedule:', err);
-      setScheduleError(formatScheduleError(err, 'Error al guardar horario'));
-    } finally {
-      setScheduleSaving(false);
-    }
-  };
-
-  const handleConfirmDeleteSchedule = async () => {
-    if (!deleteEntry) return;
-
-    setScheduleSaving(true);
-    setScheduleError('');
-    try {
-      await trpc.schedules.delete.mutate({ id: deleteEntry.schedule.id });
-      await refreshDashboard();
-      setDeleteEntry(null);
-      setSelectedEntry(null);
-    } catch (err) {
-      reportError('Failed to delete schedule:', err);
-      setScheduleError(formatScheduleError(err, 'Error al eliminar horario'));
-    } finally {
-      setScheduleSaving(false);
-    }
-  };
+  const scheduleCommands = useTeacherScheduleCommands({
+    refetchClassrooms: viewModel.refetchClassrooms,
+    refetchMySchedules: viewModel.refetchMySchedules,
+    onNavigateToRules,
+  });
 
   const currentWeeklySchedule =
-    editingEntry?.kind === 'weekly' ? (editingEntry.schedule as ScheduleWithPermissions) : null;
+    scheduleCommands.editingEntry?.kind === 'weekly'
+      ? (scheduleCommands.editingEntry.schedule as ScheduleWithPermissions)
+      : null;
   const currentOneOffSchedule =
-    editingEntry?.kind === 'one_off'
-      ? (editingEntry.schedule as OneOffScheduleWithPermissions)
+    scheduleCommands.editingEntry?.kind === 'one_off'
+      ? (scheduleCommands.editingEntry.schedule as OneOffScheduleWithPermissions)
       : null;
 
   return (
@@ -242,11 +82,11 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
         loading={viewModel.schedulesLoading}
         error={viewModel.schedulesError}
         onRetry={() => void viewModel.refetchMySchedules()}
-        onOpenClassroom={handleOpenClassroom}
-        onOpenRules={handleOpenRules}
-        onTakeControl={(entry) => void handleTakeControl(entry)}
-        onReleaseClassroom={(entry) => void handleReleaseClassroom(entry)}
-        onSelectEntry={setSelectedEntry}
+        onOpenClassroom={scheduleCommands.handleOpenClassroom}
+        onOpenRules={scheduleCommands.handleOpenRules}
+        onTakeControl={(entry) => void scheduleCommands.handleTakeControl(entry)}
+        onReleaseClassroom={(entry) => void scheduleCommands.handleReleaseClassroom(entry)}
+        onSelectEntry={scheduleCommands.setSelectedEntry}
       />
 
       <TeacherDashboardCalendar
@@ -270,7 +110,7 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
         }
         onToday={() => setWeekMonday(getWeekMonday(new Date()))}
         onRetry={() => void viewModel.refetchMySchedules()}
-        onSelectEntry={setSelectedEntry}
+        onSelectEntry={scheduleCommands.setSelectedEntry}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -279,19 +119,16 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
       </div>
 
       <TeacherScheduleDetailPanel
-        entry={selectedEntry}
-        isSaving={scheduleSaving}
-        error={scheduleError}
-        onClose={() => {
-          setSelectedEntry(null);
-          setScheduleError('');
-        }}
-        onOpenClassroom={handleOpenClassroom}
-        onOpenRules={handleOpenRules}
-        onTakeControl={(entry) => void handleTakeControl(entry)}
-        onReleaseClassroom={(entry) => void handleReleaseClassroom(entry)}
-        onEditSchedule={handleEditSchedule}
-        onDeleteSchedule={handleDeleteSchedule}
+        entry={scheduleCommands.selectedEntry}
+        isSaving={scheduleCommands.scheduleSaving}
+        error={scheduleCommands.scheduleError}
+        onClose={scheduleCommands.closeDetailPanel}
+        onOpenClassroom={scheduleCommands.handleOpenClassroom}
+        onOpenRules={scheduleCommands.handleOpenRules}
+        onTakeControl={(entry) => void scheduleCommands.handleTakeControl(entry)}
+        onReleaseClassroom={(entry) => void scheduleCommands.handleReleaseClassroom(entry)}
+        onEditSchedule={scheduleCommands.handleEditSchedule}
+        onDeleteSchedule={scheduleCommands.handleDeleteSchedule}
       />
 
       <ConfirmDialog
@@ -330,10 +167,10 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
           key={currentWeeklySchedule.id}
           schedule={currentWeeklySchedule}
           groups={editableGroups}
-          saving={scheduleSaving}
-          error={scheduleError}
-          onSave={(data) => void handleSaveWeeklySchedule(data)}
-          onClose={closeEditSchedule}
+          saving={scheduleCommands.scheduleSaving}
+          error={scheduleCommands.scheduleError}
+          onSave={(data) => void scheduleCommands.handleSaveWeeklySchedule(data)}
+          onClose={scheduleCommands.closeEditSchedule}
         />
       ) : null}
 
@@ -342,31 +179,32 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ onNavigateToRules }
           key={currentOneOffSchedule.id}
           schedule={currentOneOffSchedule}
           groups={editableGroups}
-          saving={scheduleSaving}
-          error={scheduleError}
-          onSave={(data) => void handleSaveOneOffSchedule(data)}
-          onClose={closeEditSchedule}
+          saving={scheduleCommands.scheduleSaving}
+          error={scheduleCommands.scheduleError}
+          onSave={(data) => void scheduleCommands.handleSaveOneOffSchedule(data)}
+          onClose={scheduleCommands.closeEditSchedule}
         />
       ) : null}
 
-      {deleteEntry ? (
+      {scheduleCommands.deleteEntry ? (
         <DangerConfirmDialog
           isOpen
           title="Eliminar horario"
           confirmLabel="Eliminar"
           cancelLabel="Cancelar"
-          isLoading={scheduleSaving}
-          errorMessage={scheduleError || undefined}
-          onClose={closeDeleteSchedule}
-          onConfirm={() => void handleConfirmDeleteSchedule()}
+          isLoading={scheduleCommands.scheduleSaving}
+          errorMessage={scheduleCommands.scheduleError || undefined}
+          onClose={scheduleCommands.closeDeleteSchedule}
+          onConfirm={() => void scheduleCommands.handleConfirmDeleteSchedule()}
         >
           <div className="space-y-2 text-sm text-slate-600">
             <p>
-              ¿Eliminar <strong>{deleteEntry.label}</strong>?
+              ¿Eliminar <strong>{scheduleCommands.deleteEntry.label}</strong>?
             </p>
-            <p>Tipo: {deleteEntry.kind === 'one_off' ? 'Puntual' : 'Semanal'}</p>
+            <p>Tipo: {scheduleCommands.deleteEntry.kind === 'one_off' ? 'Puntual' : 'Semanal'}</p>
             <p>
-              Horario: {deleteEntry.startTime} - {deleteEntry.endTime}
+              Horario: {scheduleCommands.deleteEntry.startTime} -{' '}
+              {scheduleCommands.deleteEntry.endTime}
             </p>
           </div>
         </DangerConfirmDialog>
