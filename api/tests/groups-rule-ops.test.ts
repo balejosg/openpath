@@ -188,9 +188,10 @@ await describe(
         );
         assertStatus(listResp, 200);
         const { data: autoRules } = (await parseTRPC(listResp)) as { data?: Rule[] };
-        assert.strictEqual(autoRules?.length, 1);
-        assert.strictEqual(autoRules?.[0]?.id, autoResult.id);
-        assert.strictEqual(autoRules?.[0]?.source, 'auto_extension');
+        assert.ok(autoRules);
+        assert.strictEqual(autoRules.length, 1);
+        assert.strictEqual(autoRules[0].id, autoResult.id);
+        assert.strictEqual(autoRules[0].source, 'auto_extension');
 
         const paginatedResp = await getHarness().trpcQuery(
           'groups.listRulesPaginated',
@@ -207,8 +208,9 @@ await describe(
         const { data: paginated } = (await parseTRPC(paginatedResp)) as {
           data?: { rules: Rule[]; total: number };
         };
-        assert.strictEqual(paginated?.total, 1);
-        assert.strictEqual(paginated?.rules[0]?.value, 'cdn.auto.example.com');
+        assert.ok(paginated);
+        assert.strictEqual(paginated.total, 1);
+        assert.strictEqual(paginated.rules[0].value, 'cdn.auto.example.com');
 
         const groupedResp = await getHarness().trpcQuery(
           'groups.listRulesGrouped',
@@ -225,8 +227,9 @@ await describe(
         const { data: grouped } = (await parseTRPC(groupedResp)) as {
           data?: { groups: { root: string; rules: Rule[] }[]; totalRules: number };
         };
-        assert.strictEqual(grouped?.totalRules, 1);
-        assert.strictEqual(grouped?.groups[0]?.rules[0]?.source, 'auto_extension');
+        assert.ok(grouped);
+        assert.strictEqual(grouped.totalRules, 1);
+        assert.strictEqual(grouped.groups[0].rules[0].source, 'auto_extension');
 
         const teacher = await getHarness().createTeacherSession([group.id]);
         const revokeResp = await getHarness().trpcMutate(
@@ -241,8 +244,9 @@ await describe(
         const { data: revokeData } = (await parseTRPC(revokeResp)) as {
           data?: { revoked: boolean; blockedRuleId: string | null };
         };
-        assert.strictEqual(revokeData?.revoked, true);
-        assert.ok(revokeData?.blockedRuleId);
+        assert.ok(revokeData);
+        assert.strictEqual(revokeData.revoked, true);
+        assert.ok(revokeData.blockedRuleId);
 
         const remainingAutoResp = await getHarness().trpcQuery(
           'groups.listRules',
@@ -269,9 +273,10 @@ await describe(
         );
         assertStatus(blockedResp, 200);
         const { data: blockedRules } = (await parseTRPC(blockedResp)) as { data?: Rule[] };
-        assert.strictEqual(blockedRules?.length, 1);
-        assert.strictEqual(blockedRules?.[0]?.value, 'cdn.auto.example.com');
-        assert.match(blockedRules?.[0]?.comment ?? '', /Revoked automatic approval by/);
+        assert.ok(blockedRules);
+        assert.strictEqual(blockedRules.length, 1);
+        assert.strictEqual(blockedRules[0].value, 'cdn.auto.example.com');
+        assert.match(blockedRules[0].comment ?? '', /Revoked automatic approval by/);
       });
     });
 
