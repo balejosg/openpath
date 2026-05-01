@@ -66,7 +66,7 @@ export function createBackgroundRuntime(
   browser: Browser,
   options: BackgroundRuntimeOptions = {}
 ): BackgroundRuntime {
-  const inFlightAutoRequests = new Set<string>();
+  const inFlightAutoRequests = new Map<string, Promise<void>>();
   const blockedMonitorState = createBlockedMonitorState(
     {
       setBadgeText: (options) => browser.action.setBadgeText(options),
@@ -217,8 +217,8 @@ export function createBackgroundRuntime(
       ]);
       return pathRefresh && subdomainRefresh;
     },
-    requestLocalWhitelistUpdate: (hostname) =>
-      nativeMessagingClient.requestLocalWhitelistUpdate([hostname]),
+    requestLocalWhitelistUpdate: (hostnames) =>
+      nativeMessagingClient.requestLocalWhitelistUpdate(hostnames),
     sendNativeMessage: (message) => nativeMessagingClient.sendMessage(message),
     setDomainStatus,
   });

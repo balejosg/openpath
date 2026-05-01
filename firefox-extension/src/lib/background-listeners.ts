@@ -31,6 +31,7 @@ const NATIVE_CONFIRMED_BLOCKED_SCREEN_ERRORS = new Set([
 ]);
 const NATIVE_POLICY_BLOCKED_ERROR = 'OPENPATH_NATIVE_POLICY_BLOCKED';
 const DUPLICATE_BLOCKED_SCREEN_REDIRECT_WINDOW_MS = 60_000;
+const AUTO_ALLOW_BEFORE_REQUEST_TIMEOUT_MS = 10_000;
 
 interface BlockedScreenContext {
   tabId: number;
@@ -358,31 +359,58 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
     }
   }
 
-  function triggerAutoAllowForEligibleRequest(details: {
+  async function triggerAutoAllowForEligibleRequest(details: {
+    documentUrl?: string;
+    originUrl?: string;
+    tabId: number;
+    type?: WebRequest.ResourceType;
+    url: string;
+  }): Promise<void> {
+    const result = await buildAutoAllowCandidateFromWebRequest(details, {
+      getTabUrl: async (tabId) => {
+        const tab = await options.browser.tabs.get(tabId);
+        return tab.url;
+      },
+    });
+    if (!result.ok) {
+      return;
+    }
+
+    const { candidate } = result;
+    await options.autoAllowBlockedDomain(
+      candidate.tabId,
+      candidate.hostname,
+      candidate.originPage,
+      candidate.requestType,
+      candidate.targetUrl
+    );
+  }
+
+  function triggerAutoAllowForEligibleRequestInBackground(details: {
     documentUrl?: string;
     originUrl?: string;
     tabId: number;
     type?: WebRequest.ResourceType;
     url: string;
   }): void {
-    void buildAutoAllowCandidateFromWebRequest(details, {
-      getTabUrl: async (tabId) => {
-        const tab = await options.browser.tabs.get(tabId);
-        return tab.url;
-      },
-    }).then((result) => {
-      if (!result.ok) {
-        return;
-      }
+    void triggerAutoAllowForEligibleRequest(details);
+  }
 
-      const { candidate } = result;
-      return options.autoAllowBlockedDomain(
-        candidate.tabId,
-        candidate.hostname,
-        candidate.originPage,
-        candidate.requestType,
-        candidate.targetUrl
-      );
+  function waitForAutoAllowBeforeRequest(details: {
+    documentUrl?: string;
+    originUrl?: string;
+    tabId: number;
+    type?: WebRequest.ResourceType;
+    url: string;
+  }): Promise<WebRequest.BlockingResponse> {
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        resolve({});
+      }, AUTO_ALLOW_BEFORE_REQUEST_TIMEOUT_MS);
+      void triggerAutoAllowForEligibleRequest(details).finally(() => {
+        clearTimeout(timeout);
+        resolve({});
+      });
     });
   }
 
@@ -391,8 +419,7 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
       const result =
         options.evaluateBlockedPath(details) ?? options.evaluateBlockedSubdomain(details);
       if (!result) {
-        triggerAutoAllowForEligibleRequest(details);
-        return;
+        return waitForAutoAllowBeforeRequest(details);
       }
 
       const hostname = extractHostname(details.url) ?? 'dominio desconocido';
@@ -434,7 +461,7 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
         });
       }
 
-      triggerAutoAllowForEligibleRequest(details);
+      triggerAutoAllowForEligibleRequestInBackground(details);
     },
     { urls: ['<all_urls>'] }
   );

@@ -18,11 +18,12 @@ export interface AutoAllowWorkflowDeps {
   getErrorMessage: (error: unknown) => string;
   getRequestApiEndpoints: (config: RequestApiRuntimeConfig) => string[];
   getStoredDomainStatus: (tabId: number, hostname: string) => DomainStatus | undefined;
-  inFlightAutoRequests: Set<string>;
+  inFlightAutoRequests: Map<string, Promise<void>>;
+  localWhitelistUpdateDebounceMs?: number;
   loadRequestConfig: () => Promise<RequestApiRuntimeConfig>;
   now?: () => number;
   refreshBlockedPathRules: () => Promise<boolean>;
-  requestLocalWhitelistUpdate: (hostname: string) => Promise<boolean>;
+  requestLocalWhitelistUpdate: (hostnames: string[]) => Promise<boolean>;
   sendNativeMessage: (message: unknown) => Promise<unknown>;
   setDomainStatus: (tabId: number, hostname: string, status: DomainStatus) => void;
 }
@@ -90,14 +91,65 @@ export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
   retryLocalUpdate: (tabId: number, hostname: string) => Promise<{ success: boolean }>;
 } {
   const now = deps.now ?? ((): number => Date.now());
+  const localWhitelistUpdateDebounceMs = deps.localWhitelistUpdateDebounceMs ?? 50;
+  let pendingLocalWhitelistHosts = new Set<string>();
+  let pendingLocalWhitelistResolvers: ((success: boolean) => void)[] = [];
+  let pendingLocalWhitelistTimer: ReturnType<typeof setTimeout> | null = null;
 
   async function triggerLocalWhitelistUpdate(hostname: string): Promise<boolean> {
-    const success = await deps.requestLocalWhitelistUpdate(hostname);
-    if (success) {
-      await deps.refreshBlockedPathRules();
-    }
+    return await enqueueLocalWhitelistUpdate(hostname);
+  }
 
-    return success;
+  function flushLocalWhitelistUpdateBatch(): void {
+    const hostnames = Array.from(pendingLocalWhitelistHosts);
+    const resolvers = pendingLocalWhitelistResolvers;
+    pendingLocalWhitelistHosts = new Set<string>();
+    pendingLocalWhitelistResolvers = [];
+    pendingLocalWhitelistTimer = null;
+
+    void deps.requestLocalWhitelistUpdate(hostnames).then(
+      (success) => {
+        if (!success) {
+          resolvers.forEach((resolve) => {
+            resolve(false);
+          });
+          return;
+        }
+
+        void deps.refreshBlockedPathRules().then(
+          (refreshSuccess) => {
+            resolvers.forEach((resolve) => {
+              resolve(refreshSuccess);
+            });
+          },
+          () => {
+            resolvers.forEach((resolve) => {
+              resolve(false);
+            });
+          }
+        );
+      },
+      () => {
+        resolvers.forEach((resolve) => {
+          resolve(false);
+        });
+      }
+    );
+  }
+
+  function enqueueLocalWhitelistUpdate(hostname: string): Promise<boolean> {
+    pendingLocalWhitelistHosts.add(hostname);
+
+    const promise = new Promise<boolean>((resolve) => {
+      pendingLocalWhitelistResolvers.push(resolve);
+    });
+
+    pendingLocalWhitelistTimer ??= setTimeout(
+      flushLocalWhitelistUpdateBatch,
+      localWhitelistUpdateDebounceMs
+    );
+
+    return promise;
   }
 
   async function autoAllowBlockedDomain(
@@ -112,19 +164,20 @@ export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
     }
 
     const requestKey = `${tabId.toString()}:${hostname}:${origin ?? 'unknown'}`;
-    if (deps.inFlightAutoRequests.has(requestKey)) {
+    const inFlight = deps.inFlightAutoRequests.get(requestKey);
+    if (inFlight) {
+      await inFlight;
       return;
     }
 
-    deps.inFlightAutoRequests.add(requestKey);
-    deps.setDomainStatus(tabId, hostname, {
-      state: 'pending',
-      updatedAt: now(),
-      message: 'Enviando auto-aprobacion',
-      requestType,
-    });
+    const requestPromise = (async (): Promise<void> => {
+      deps.setDomainStatus(tabId, hostname, {
+        state: 'pending',
+        updatedAt: now(),
+        message: 'Enviando auto-aprobacion',
+        requestType,
+      });
 
-    try {
       const requestConfig = await deps.loadRequestConfig();
       const endpoints = deps.getRequestApiEndpoints(requestConfig);
 
@@ -238,6 +291,12 @@ export function createAutoAllowWorkflow(deps: AutoAllowWorkflowDeps): {
               : 'Regla creada; fallo actualizacion local',
         requestType,
       });
+    })();
+
+    deps.inFlightAutoRequests.set(requestKey, requestPromise);
+
+    try {
+      await requestPromise;
     } catch (error) {
       deps.setDomainStatus(tabId, hostname, {
         state: 'apiError',

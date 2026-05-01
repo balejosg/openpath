@@ -41,7 +41,7 @@ export function createBlockedMonitorState(
   badgeApi: BadgeApi,
   options: {
     extractHostname: (url: string) => string | null;
-    inFlightAutoRequests?: Set<string>;
+    inFlightAutoRequests?: Map<string, Promise<void>>;
     now?: () => number;
   }
 ): BlockedMonitorState {
@@ -99,7 +99,7 @@ export function createBlockedMonitorState(
     }
 
     const prefix = `${tabId.toString()}:`;
-    Array.from(options.inFlightAutoRequests).forEach((key) => {
+    Array.from(options.inFlightAutoRequests.keys()).forEach((key) => {
       if (key.startsWith(prefix)) {
         options.inFlightAutoRequests?.delete(key);
       }

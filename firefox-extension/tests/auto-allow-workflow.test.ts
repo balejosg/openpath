@@ -33,7 +33,7 @@ function createWorkflowFixture(
   overrides: Partial<Parameters<typeof createAutoAllowWorkflow>[0]> = {}
 ): {
   fixture: {
-    inFlightAutoRequests: Set<string>;
+    inFlightAutoRequests: Map<string, Promise<void>>;
     refreshBlockedPathRulesCalls: number;
     requestLocalWhitelistUpdateCalls: number;
     sentMessages: unknown[];
@@ -45,7 +45,7 @@ function createWorkflowFixture(
   const now = 1234567890;
 
   const fixture = {
-    inFlightAutoRequests: new Set<string>(),
+    inFlightAutoRequests: new Map<string, Promise<void>>(),
     refreshBlockedPathRulesCalls: 0,
     requestLocalWhitelistUpdateCalls: 0,
     sentMessages: [] as unknown[],
@@ -69,6 +69,7 @@ function createWorkflowFixture(
       fixture.refreshBlockedPathRulesCalls += 1;
       return Promise.resolve(true);
     },
+    localWhitelistUpdateDebounceMs: 0,
     requestLocalWhitelistUpdate: () => {
       fixture.requestLocalWhitelistUpdateCalls += 1;
       return Promise.resolve(true);
@@ -134,7 +135,7 @@ await describe('auto allow workflow', async () => {
 
   await test('marks a domain autoApproved after API and local update succeed', async () => {
     const requestBodies: unknown[] = [];
-    const updatedHosts: string[] = [];
+    const updatedHosts: string[][] = [];
     const { fixture, statuses, workflow } = createWorkflowFixture({
       fetchImpl: (_url, init) => {
         const body = typeof init?.body === 'string' ? init.body : '{}';
@@ -146,8 +147,8 @@ await describe('auto allow workflow', async () => {
           })
         );
       },
-      requestLocalWhitelistUpdate: (hostname) => {
-        updatedHosts.push(hostname);
+      requestLocalWhitelistUpdate: (hostnames) => {
+        updatedHosts.push(hostnames);
         fixture.requestLocalWhitelistUpdateCalls += 1;
         return Promise.resolve(true);
       },
@@ -182,7 +183,7 @@ await describe('auto allow workflow', async () => {
         token: 'machine-token',
       },
     ]);
-    assert.deepEqual(updatedHosts, ['example.com']);
+    assert.deepEqual(updatedHosts, [['example.com']]);
     assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
     assert.equal(fixture.refreshBlockedPathRulesCalls, 1);
   });
@@ -190,7 +191,7 @@ await describe('auto allow workflow', async () => {
   await test('deduplicates concurrent auto-allow requests by page origin and hostname', async () => {
     let resolveLocalUpdate: ((value: boolean) => void) | undefined;
     const requestBodies: unknown[] = [];
-    const updatedHosts: string[] = [];
+    const updatedHosts: string[][] = [];
     const { fixture, workflow } = createWorkflowFixture({
       fetchImpl: (_url, init) => {
         const body = typeof init?.body === 'string' ? init.body : '{}';
@@ -202,8 +203,8 @@ await describe('auto allow workflow', async () => {
           })
         );
       },
-      requestLocalWhitelistUpdate: (hostname) => {
-        updatedHosts.push(hostname);
+      requestLocalWhitelistUpdate: (hostnames) => {
+        updatedHosts.push(hostnames);
         fixture.requestLocalWhitelistUpdateCalls += 1;
         return new Promise<boolean>((resolve) => {
           resolveLocalUpdate = resolve;
@@ -226,10 +227,10 @@ await describe('auto allow workflow', async () => {
       'https://cdn.example.com/asset.js?attempt=2'
     );
 
-    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setTimeout(resolve, 5));
 
     assert.equal(requestBodies.length, 1);
-    assert.deepEqual(updatedHosts, ['cdn.example.com']);
+    assert.deepEqual(updatedHosts, [['cdn.example.com']]);
     assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
 
     resolveLocalUpdate?.(true);
@@ -238,7 +239,7 @@ await describe('auto allow workflow', async () => {
 
   await test('does not repeat API calls for a host that was already auto-approved in the same tab', async () => {
     const requestBodies: unknown[] = [];
-    const updatedHosts: string[] = [];
+    const updatedHosts: string[][] = [];
     const { fixture, statuses, workflow } = createWorkflowFixture({
       fetchImpl: (_url, init) => {
         const body = typeof init?.body === 'string' ? init.body : '{}';
@@ -250,8 +251,8 @@ await describe('auto allow workflow', async () => {
           })
         );
       },
-      requestLocalWhitelistUpdate: (hostname) => {
-        updatedHosts.push(hostname);
+      requestLocalWhitelistUpdate: (hostnames) => {
+        updatedHosts.push(hostnames);
         fixture.requestLocalWhitelistUpdateCalls += 1;
         return Promise.resolve(true);
       },
@@ -274,7 +275,7 @@ await describe('auto allow workflow', async () => {
 
     assert.equal(statuses.get('cdn.example.com')?.state, 'autoApproved');
     assert.equal(requestBodies.length, 1);
-    assert.deepEqual(updatedHosts, ['cdn.example.com']);
+    assert.deepEqual(updatedHosts, [['cdn.example.com']]);
     assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
   });
 
@@ -305,6 +306,46 @@ await describe('auto allow workflow', async () => {
     });
     assert.equal(fixture.requestLocalWhitelistUpdateCalls, 0);
     assert.equal(fixture.refreshBlockedPathRulesCalls, 0);
+  });
+
+  await test('batches local whitelist update for concurrent approved hosts', async () => {
+    const updatedHosts: string[][] = [];
+    const { fixture, workflow } = createWorkflowFixture({
+      fetchImpl: (_url, _init) =>
+        Promise.resolve(
+          new Response(JSON.stringify({ success: true, status: 'approved' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        ),
+      requestLocalWhitelistUpdate: (hostnames) => {
+        updatedHosts.push(hostnames);
+        fixture.requestLocalWhitelistUpdateCalls += 1;
+        return Promise.resolve(true);
+      },
+      localWhitelistUpdateDebounceMs: 10,
+    });
+
+    await Promise.all([
+      workflow.autoAllowBlockedDomain(
+        5,
+        'a.example.com',
+        'https://portal.school/app',
+        'script',
+        'https://a.example.com/asset.js'
+      ),
+      workflow.autoAllowBlockedDomain(
+        5,
+        'b.example.com',
+        'https://portal.school/app',
+        'image',
+        'https://b.example.com/pixel.png'
+      ),
+    ]);
+
+    assert.deepEqual(updatedHosts, [['a.example.com', 'b.example.com']]);
+    assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
+    assert.equal(fixture.refreshBlockedPathRulesCalls, 1);
   });
 
   await test('marks duplicate when the API reports an existing rule', async () => {
@@ -360,10 +401,10 @@ await describe('auto allow workflow', async () => {
   });
 
   await test('retries local updates preserving the prior request type', async () => {
-    const updatedHosts: string[] = [];
+    const updatedHosts: string[][] = [];
     const { statuses, workflow } = createWorkflowFixture({
-      requestLocalWhitelistUpdate: (hostname) => {
-        updatedHosts.push(hostname);
+      requestLocalWhitelistUpdate: (hostnames) => {
+        updatedHosts.push(hostnames);
         return Promise.resolve(true);
       },
     });
@@ -382,6 +423,6 @@ await describe('auto allow workflow', async () => {
       state: 'autoApproved',
       updatedAt: 1234567890,
     });
-    assert.deepEqual(updatedHosts, ['example.com']);
+    assert.deepEqual(updatedHosts, [['example.com']]);
   });
 });

@@ -19,6 +19,12 @@ function waitForAsyncRuntime(): Promise<void> {
   });
 }
 
+function waitForAutoAllowBatch(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 150);
+  });
+}
+
 function createRuntimeHarness(): {
   browser: Browser;
   fetchBodies: unknown[];
@@ -277,7 +283,7 @@ void test('background runtime passes auto-allowed hostnames to native whitelist 
         harness.responses.push(response);
       }
     );
-    await waitForAsyncRuntime();
+    await waitForAutoAllowBatch();
 
     assert.deepEqual(harness.responses, [{ success: true }]);
     assert.equal(harness.fetchBodies.length, 1);

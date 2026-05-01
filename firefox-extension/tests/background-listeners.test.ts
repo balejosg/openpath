@@ -54,6 +54,13 @@ function createListenerHarness(
     evaluateBlockedPath?: EvaluateBlockedPath;
     evaluateBlockedSubdomain?: EvaluateBlockedSubdomain;
     handleRuntimeMessage?: (message: unknown, sender: unknown) => unknown;
+    autoAllowBlockedDomain?: (
+      tabId: number,
+      hostname: string,
+      origin: string | null,
+      requestType: WebRequest.ResourceType,
+      targetUrl: string
+    ) => Promise<void>;
   } = {}
 ): {
   addedBlocks: BlockedScreenContext[];
@@ -141,16 +148,18 @@ function createListenerHarness(
         origin: origin ?? null,
       });
     },
-    autoAllowBlockedDomain: (
-      tabId: number,
-      hostname: string,
-      origin: string | null,
-      requestType: WebRequest.ResourceType,
-      targetUrl: string
-    ) => {
-      autoAllowCalls.push({ tabId, hostname, origin, requestType, targetUrl });
-      return Promise.resolve();
-    },
+    autoAllowBlockedDomain:
+      options.autoAllowBlockedDomain ??
+      ((
+        tabId: number,
+        hostname: string,
+        origin: string | null,
+        requestType: WebRequest.ResourceType,
+        targetUrl: string
+      ): Promise<void> => {
+        autoAllowCalls.push({ tabId, hostname, origin, requestType, targetUrl });
+        return Promise.resolve();
+      }),
     browser,
     clearTabRuntimeState: () => undefined,
     disposeTab: () => undefined,
@@ -331,6 +340,48 @@ void describe('background listeners blocked-screen routing', () => {
         urls: ['<all_urls>'],
       },
     ]);
+  });
+
+  void test('waits for ajax auto-allow before releasing eligible page resources', async () => {
+    let releaseAutoAllow: (() => void) | undefined;
+    const harness = createListenerHarness({
+      currentTabUrl: 'https://allowed.example/app',
+      autoAllowBlockedDomain: (tabId, hostname, origin, requestType, targetUrl) => {
+        harness.autoAllowCalls.push({ tabId, hostname, origin, requestType, targetUrl });
+        return new Promise<void>((resolve) => {
+          releaseAutoAllow = resolve;
+        });
+      },
+    });
+    assert.ok(harness.webRequestBefore);
+
+    const result = harness.webRequestBefore({
+      type: 'xmlhttprequest',
+      tabId: 3,
+      url: 'https://cdn.example/data.json',
+      originUrl: 'https://allowed.example/app',
+    } as WebRequest.OnBeforeRequestDetailsType);
+
+    assert.ok(result instanceof Promise);
+    let completed = false;
+    void result.then(() => {
+      completed = true;
+    });
+    await waitForAsyncListeners();
+    assert.equal(completed, false);
+    assert.deepEqual(harness.autoAllowCalls, [
+      {
+        tabId: 3,
+        hostname: 'cdn.example',
+        origin: 'https://allowed.example/app',
+        requestType: 'xmlhttprequest',
+        targetUrl: 'https://cdn.example/data.json',
+      },
+    ]);
+
+    releaseAutoAllow?.();
+    await result;
+    assert.equal(completed, true);
   });
 
   void test('does not auto-allow requests cancelled by blocked subdomain policy', () => {
@@ -699,7 +750,8 @@ void describe('background listeners blocked-screen routing', () => {
 
       await waitForAsyncListeners();
 
-      assert.equal(result, undefined);
+      assert.ok(result instanceof Promise);
+      await result;
       assert.deepEqual(harness.confirmCalls, []);
       assert.deepEqual(harness.redirects, []);
       assert.deepEqual(harness.autoAllowCalls, [
@@ -730,7 +782,8 @@ void describe('background listeners blocked-screen routing', () => {
 
     await waitForAsyncListeners();
 
-    assert.equal(result, undefined);
+    assert.ok(result instanceof Promise);
+    await result;
     assert.deepEqual(harness.confirmCalls, []);
     assert.deepEqual(harness.redirects, []);
     assert.deepEqual(harness.autoAllowCalls, [
@@ -759,7 +812,8 @@ void describe('background listeners blocked-screen routing', () => {
 
     await waitForAsyncListeners();
 
-    assert.equal(result, undefined);
+    assert.ok(result instanceof Promise);
+    await result;
     assert.deepEqual(harness.confirmCalls, []);
     assert.deepEqual(harness.redirects, []);
     assert.deepEqual(harness.autoAllowCalls, [
@@ -787,7 +841,8 @@ void describe('background listeners blocked-screen routing', () => {
 
     await waitForAsyncListeners();
 
-    assert.equal(result, undefined);
+    assert.ok(result instanceof Promise);
+    await result;
     assert.deepEqual(harness.confirmCalls, []);
     assert.deepEqual(harness.redirects, []);
     assert.deepEqual(harness.autoAllowCalls, [
@@ -928,7 +983,8 @@ void describe('background listeners blocked-screen routing', () => {
 
     await waitForAsyncListeners();
 
-    assert.equal(result, undefined);
+    assert.ok(result instanceof Promise);
+    await result;
     assert.deepEqual(harness.confirmCalls, []);
     assert.deepEqual(harness.redirects, []);
     assert.deepEqual(harness.autoAllowCalls, [
