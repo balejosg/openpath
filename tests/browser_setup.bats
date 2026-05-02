@@ -344,6 +344,11 @@ JSON
                 ;;
         esac
         ;;
+    disabled-extension)
+        cat > "\$profile_root/extensions.json" <<'JSON'
+{"addons":[{"id":"monitor-bloqueos@openpath","active":false,"userDisabled":true,"signedState":-1,"location":"app-system-share","rootURI":"moz-extension://openpath-test-uuid/"}]}
+JSON
+        ;;
     install-profile-registration)
         if [ -n "\$selected_install_profile" ] && [ "\$profile_root" = "\$selected_install_profile" ]; then
             cat > "\$profile_root/extensions.json" <<'JSON'
@@ -446,6 +451,24 @@ run_browser_json_helper() {
     python3 "$PROJECT_DIR/linux/libexec/browser-json.py" "\$@"
 }
 EOF
+}
+
+@test "firefox activation plan rejects disabled or unsigned profile registration" {
+    local profile_dir="$TEST_TMP_DIR/profile"
+
+    mkdir -p "$profile_dir"
+    cat > "$profile_dir/extensions.json" <<'JSON'
+{"addons":[{"id":"monitor-bloqueos@openpath","active":false,"userDisabled":true,"signedState":-1,"location":"app-system-share","rootURI":"moz-extension://openpath-test-uuid/"}]}
+JSON
+
+    run bash -c 'source "$1"; detect_firefox_extension_registration_in_profile "$2" "monitor-bloqueos@openpath"' \
+        bash "$PROJECT_DIR/linux/lib/firefox-activation-plan.sh" "$profile_dir"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"extensions.json-disabled"* ]]
+    [[ "$output" == *"active=false"* ]]
+    [[ "$output" == *"userDisabled=true"* ]]
+    [[ "$output" == *"signedState=-1"* ]]
 }
 
 @test "browser request readiness facts reject policy-only firefox setup" {
@@ -780,11 +803,54 @@ JSON
         bash "$PROJECT_DIR/linux/scripts/runtime/openpath-browser-setup.sh"
 
     [ "$status" -eq 1 ]
-    [[ "$output" == *"Firefox did not register managed extension"* ]]
+    [[ "$output" == *"Firefox did not register active managed extension"* ]]
     [[ "$output" == *"probe_attempt=1"* ]]
     [[ "$output" == *"activation_user=$expected_activation_user"* ]]
     [[ "$output" == *"profile_home=$TEST_TMP_DIR/home"* ]]
     [[ "$output" == *"registration_source=missing"* ]]
+}
+
+@test "openpath-browser-setup fails when firefox registers disabled unsigned extension" {
+    local fake_install="$TEST_TMP_DIR/install"
+    local fake_scripts="$TEST_TMP_DIR/scripts"
+    local firefox_dir="$TEST_TMP_DIR/usr/lib/firefox-esr"
+    local ext_root="$TEST_TMP_DIR/share/mozilla/extensions"
+    local policies_file="$TEST_TMP_DIR/etc/firefox/policies/policies.json"
+    local ready_file="$TEST_TMP_DIR/state/firefox-extension-ready"
+    local calls_file="$TEST_TMP_DIR/browser-setup.calls"
+    local bin_dir="$TEST_TMP_DIR/bin"
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
+
+    mkdir -p "$fake_install/lib" "$fake_scripts" "$ext_root" "$bin_dir" "$etc_dir"
+    printf '%s' 'https://control.example' > "$etc_dir/api-url.conf"
+    printf '%s' 'https://control.example/w/token123/whitelist.txt' > "$etc_dir/whitelist-url.conf"
+    printf '%s' 'cls_123' > "$etc_dir/classroom-id.conf"
+    write_mock_id "$bin_dir"
+    write_fake_common_sh "$fake_install/lib/common.sh"
+    write_fake_browser_sh "$fake_install/lib/browser.sh" "$calls_file" "$firefox_dir" "$ext_root" "$policies_file" "managed-api"
+
+    run env \
+        PATH="$bin_dir:$PATH" \
+        HOME="$TEST_TMP_DIR/home" \
+        OPENPATH_FAKE_FIREFOX_MODE="disabled-extension" \
+        OPENPATH_FIREFOX_PROFILE_HOME="$TEST_TMP_DIR/home" \
+        OPENPATH_FIREFOX_EXTENSION_REGISTRATION_TIMEOUT_SECONDS="1" \
+        FIREFOX_EXTENSION_READY_FILE="$ready_file" \
+        INSTALL_DIR="$fake_install" \
+        SCRIPTS_DIR="$fake_scripts" \
+        ETC_CONFIG_DIR="$etc_dir" \
+        FIREFOX_POLICIES="$policies_file" \
+        FIREFOX_EXTENSIONS_ROOT="$ext_root" \
+        bash "$PROJECT_DIR/linux/scripts/runtime/openpath-browser-setup.sh"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Firefox did not register active managed extension"* ]]
+    [[ "$output" == *"extensions.json-disabled"* ]]
+    [[ "$output" == *"active=false"* ]]
+    [[ "$output" == *"userDisabled=true"* ]]
+    [[ "$output" == *"signedState=-1"* ]]
+    grep -F "profile=" "$ready_file"
+    grep -F "|disabled|extensions.json-disabled;active=false;userDisabled=true;signedState=-1;location=app-system-share" "$ready_file"
 }
 
 @test "openpath-browser-setup activates firefox with a persistent profile path" {

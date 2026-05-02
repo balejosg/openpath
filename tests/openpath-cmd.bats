@@ -541,6 +541,104 @@ EOF
     [[ "$output" == *"ISSUES DETECTED"* ]]
 }
 
+@test "health fails in enrolled mode when Firefox marker records disabled unsigned extension" {
+    local whitelist_file="$TEST_TMP_DIR/google-es-whitelist.txt"
+    local helper_script="$TEST_TMP_DIR/run-health-disabled-firefox-extension.sh"
+    local etc_dir="$TEST_TMP_DIR/etc/openpath"
+
+    mkdir -p "$etc_dir"
+    printf '%s' 'https://control.example' > "$etc_dir/api-url.conf"
+    printf '%s' 'https://control.example/w/token123/whitelist.txt' > "$etc_dir/whitelist-url.conf"
+    printf '%s' 'cls_123' > "$etc_dir/classroom-id.conf"
+
+    cat > "$whitelist_file" <<'EOF'
+## WHITELIST
+google.es
+EOF
+
+    cat > "$helper_script" <<'EOF'
+#!/bin/bash
+set -uo pipefail
+
+project_dir="$1"
+state_dir="$2"
+whitelist_file="$3"
+etc_dir="$4"
+extracted_script="$state_dir/cmd-health.sh"
+
+export VERSION="test"
+export SYSTEM_DISABLED_FLAG="$state_dir/system-disabled.flag"
+export WHITELIST_FILE="$whitelist_file"
+export FIREFOX_POLICIES="$state_dir/firefox-policies.json"
+export FIREFOX_EXTENSION_READY_FILE="$state_dir/firefox-extension-ready"
+export ETC_CONFIG_DIR="$etc_dir"
+cat > "$FIREFOX_POLICIES" <<'JSON'
+{"policies":{"ExtensionSettings":{"monitor-bloqueos@openpath":{"installation_mode":"force_installed","install_url":"https://control.example/api/extensions/firefox/openpath.xpi"}}}}
+JSON
+cat > "$FIREFOX_EXTENSION_READY_FILE" <<'EOF_MARKER'
+extension_id=monitor-bloqueos@openpath
+target_count=1
+registered_count=0
+profile=student|/home/student|/home/student/.mozilla/firefox/openpath.default|disabled|extensions.json-disabled;active=false;userDisabled=true;signedState=-1;location=app-system-share
+EOF_MARKER
+
+GREEN=""
+RED=""
+YELLOW=""
+BLUE=""
+NC=""
+
+timeout() {
+    shift
+    "$@"
+}
+
+dig() {
+    case "$2" in
+        google.es)
+            echo "216.58.204.163"
+            ;;
+        facebook.com)
+            echo "0.0.0.0"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+check_firewall_status() { return 0; }
+has_firewall_loopback_rule() { return 0; }
+verify_firewall_rules() { return 0; }
+
+systemctl() {
+    [ "$1" = "is-active" ] && return 0
+    return 1
+}
+
+find() {
+    return 1
+}
+
+source "$project_dir/linux/lib/dns.sh"
+awk '/^cmd_health\(\) \{/,/^}/' \
+    "$project_dir/linux/lib/runtime-cli-system.sh" > "$extracted_script"
+source "$extracted_script"
+
+cmd_health
+EOF
+    chmod +x "$helper_script"
+
+    run "$helper_script" "$PROJECT_DIR" "$TEST_TMP_DIR" "$whitelist_file" "$etc_dir"
+
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Firefox extension: ✗ disabled or unsigned"* ]]
+    [[ "$output" == *"active=false"* ]]
+    [[ "$output" == *"userDisabled=true"* ]]
+    [[ "$output" == *"signedState=-1"* ]]
+    [[ "$output" == *"ISSUES DETECTED"* ]]
+}
+
 @test "health reports issues when firewall verification fails despite DNS rules being present" {
     local helper_script="$TEST_TMP_DIR/run-health-firewall-verification.sh"
     local whitelist_file="$CONFIG_DIR/whitelist.txt"
@@ -827,8 +925,8 @@ dig() {
 }
 
 source "$project_dir/linux/lib/dns.sh"
-awk '/^cmd_check\(\) \{/,/^}/' \
-    "$project_dir/linux/lib/runtime-cli-system.sh" > "$extracted_script"
+awk '/^normalize_check_target\(\) \{/,/^cmd_health\(\) \{/' \
+    "$project_dir/linux/lib/runtime-cli-system.sh" | sed '$d' > "$extracted_script"
 source "$extracted_script"
 
 cmd_check facebook.com
@@ -840,6 +938,72 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"Resuelve: ✗"* ]]
     [[ "$output" != *"→ 0.0.0.0"* ]]
+}
+
+@test "cmd_check separates whitelist from blocked subdomains and paths" {
+    local whitelist_file="$TEST_TMP_DIR/policy-sections.txt"
+    local helper_script="$TEST_TMP_DIR/run-cmd-check-sections.sh"
+
+    cat > "$whitelist_file" <<'EOF'
+## WHITELIST
+allowed.example
+
+## BLOCKED-SUBDOMAINS
+chat.allowed.example
+
+## BLOCKED-PATHS
+lessons.example/games
+EOF
+
+    cat > "$helper_script" <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+project_dir="$1"
+state_dir="$2"
+whitelist_file="$3"
+extracted_script="$state_dir/cmd-check.sh"
+
+export WHITELIST_FILE="$whitelist_file"
+export RED=""
+export GREEN=""
+export YELLOW=""
+export BLUE=""
+export NC=""
+
+log() { :; }
+protect_control_plane_rules() { :; }
+timeout() {
+    shift
+    "$@"
+}
+dig() {
+    echo "0.0.0.0"
+    return 0
+}
+
+source "$project_dir/linux/lib/common.sh"
+source "$project_dir/linux/lib/dns-runtime.sh"
+awk '/^normalize_check_target\(\) \{/,/^cmd_health\(\) \{/' \
+    "$project_dir/linux/lib/runtime-cli-system.sh" | sed '$d' > "$extracted_script"
+source "$extracted_script"
+
+cmd_check allowed.example
+cmd_check chat.allowed.example
+cmd_check lessons.example/games
+EOF
+    chmod +x "$helper_script"
+
+    run "$helper_script" "$PROJECT_DIR" "$TEST_TMP_DIR" "$whitelist_file"
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Verificando: allowed.example"* ]]
+    [[ "$output" == *"En whitelist: ✓ SÍ"* ]]
+    [[ "$output" == *"Verificando: chat.allowed.example"* ]]
+    [[ "$output" == *"Bloqueado por subdominio: ✓ SÍ"* ]]
+    [[ "$output" == *"Verificando: lessons.example/games"* ]]
+    [[ "$output" == *"Bloqueado por ruta: ✓ SÍ"* ]]
+    [ "$(grep -o "En whitelist: ✓ SÍ" <<< "$output" | wc -l)" -eq 1 ]
 }
 
 @test "read-only commands that need protected config auto-elevate through sudoers" {

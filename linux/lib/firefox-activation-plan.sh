@@ -292,21 +292,45 @@ def prefs_has_uuid(path: Path) -> bool:
         return False
     return extension_id in text
 
-def extensions_json_has_addon(path: Path) -> bool:
+def describe_value(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    return str(value)
+
+def extensions_json_addon_state(path: Path):
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return False
+        return None
     addons = payload.get("addons")
     if not isinstance(addons, list):
-        return False
-    return any(isinstance(addon, dict) and addon.get("id") == extension_id for addon in addons)
+        return None
+    for addon in addons:
+        if not isinstance(addon, dict) or addon.get("id") != extension_id:
+            continue
+        reasons = []
+        if addon.get("active") is False:
+            reasons.append("active=false")
+        if addon.get("userDisabled") is True:
+            reasons.append("userDisabled=true")
+        if addon.get("signedState") == -1:
+            reasons.append("signedState=-1")
+        if addon.get("location"):
+            reasons.append(f"location={describe_value(addon.get('location'))}")
+        return reasons
+    return None
 
 if profile.is_dir():
     if prefs_has_uuid(profile / "prefs.js"):
         print(f"prefs.js\t{profile}")
         raise SystemExit(0)
-    if extensions_json_has_addon(profile / "extensions.json"):
+    addon_reasons = extensions_json_addon_state(profile / "extensions.json")
+    if addon_reasons is not None:
+        if any(reason in addon_reasons for reason in ("active=false", "userDisabled=true", "signedState=-1")):
+            print(f"extensions.json-disabled\t{profile}\t{';'.join(addon_reasons)}")
+            raise SystemExit(1)
         print(f"extensions.json\t{profile}")
         raise SystemExit(0)
 
@@ -433,6 +457,8 @@ verify_firefox_extension_registered() {
     local registered_count=0
     local target_lines=()
     local missing_targets=()
+    local disabled_targets=()
+    local last_registration_reason=""
 
     rm -f "$marker_path" 2>/dev/null || true
 
@@ -462,14 +488,22 @@ verify_firefox_extension_registered() {
         activation_attempts=0
         registration_source="missing"
         registration_profile=""
+        last_registration_reason=""
 
         while [ "$SECONDS" -le "$deadline" ] || [ "$activation_attempts" -lt "$FIREFOX_EXTENSION_REGISTRATION_MIN_PROBES" ]; do
             registration_info="$(detect_firefox_extension_registration_in_profile "$profile_dir" "$FIREFOX_EXTENSION_ID" 2>/dev/null || true)"
             if [ -n "$registration_info" ]; then
                 registration_source="${registration_info%%$'\t'*}"
                 registration_profile="${registration_info#*$'\t'}"
-                log_firefox_registration_probe "$activation_attempts" "$activation_user" "$profile_home" 0 "$registration_source" "$registration_profile"
-                break
+                registration_profile="${registration_profile%%$'\t'*}"
+                if [ "$registration_source" = "extensions.json-disabled" ]; then
+                    last_registration_reason="${registration_info#*$'\t'}"
+                    last_registration_reason="${last_registration_reason#*$'\t'}"
+                    log_firefox_registration_probe "$activation_attempts" "$activation_user" "$profile_home" 1 "$registration_source" "$registration_profile reason=$last_registration_reason"
+                else
+                    log_firefox_registration_probe "$activation_attempts" "$activation_user" "$profile_home" 0 "$registration_source" "$registration_profile"
+                    break
+                fi
             fi
 
             activation_attempts=$((activation_attempts + 1))
@@ -485,10 +519,19 @@ verify_firefox_extension_registered() {
             if [ -n "$registration_info" ]; then
                 registration_source="${registration_info%%$'\t'*}"
                 registration_profile="${registration_info#*$'\t'}"
+                registration_profile="${registration_profile%%$'\t'*}"
+                if [ "$registration_source" = "extensions.json-disabled" ]; then
+                    last_registration_reason="${registration_info#*$'\t'}"
+                    last_registration_reason="${last_registration_reason#*$'\t'}"
+                fi
             fi
-            log_firefox_registration_probe "$activation_attempts" "$activation_user" "$profile_home" "$activation_status" "$registration_source" "$profile_dir"
+            if [ "$registration_source" = "extensions.json-disabled" ]; then
+                log_firefox_registration_probe "$activation_attempts" "$activation_user" "$profile_home" 1 "$registration_source" "$profile_dir reason=$last_registration_reason"
+            else
+                log_firefox_registration_probe "$activation_attempts" "$activation_user" "$profile_home" "$activation_status" "$registration_source" "$profile_dir"
+            fi
 
-            if [ "$registration_source" != "missing" ]; then
+            if [ "$registration_source" != "missing" ] && [ "$registration_source" != "extensions.json-disabled" ]; then
                 break
             fi
 
@@ -501,9 +544,12 @@ verify_firefox_extension_registered() {
             sleep 1
         done
 
-        if [ "$registration_source" != "missing" ]; then
+        if [ "$registration_source" != "missing" ] && [ "$registration_source" != "extensions.json-disabled" ]; then
             registered_count=$((registered_count + 1))
             target_lines+=("profile=$activation_user|$profile_home|$profile_dir|registered|$registration_source")
+        elif [ "$registration_source" = "extensions.json-disabled" ]; then
+            target_lines+=("profile=$activation_user|$profile_home|$profile_dir|disabled|$registration_source;$last_registration_reason")
+            disabled_targets+=("$activation_user|$profile_home|$profile_dir|$last_registration_reason")
         else
             target_lines+=("profile=$activation_user|$profile_home|$profile_dir|missing|missing")
             missing_targets+=("$activation_user|$profile_home|$profile_dir")
@@ -517,6 +563,6 @@ verify_firefox_extension_registered() {
     fi
 
     log_error \
-        "Firefox did not register managed extension for all profiles: $FIREFOX_EXTENSION_ID registered=$registered_count target_count=$target_count missing=${missing_targets[*]}"
+        "Firefox did not register active managed extension for all profiles: $FIREFOX_EXTENSION_ID registered=$registered_count target_count=$target_count missing=${missing_targets[*]} disabled=${disabled_targets[*]}"
     return 1
 }

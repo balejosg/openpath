@@ -190,22 +190,86 @@ cmd_domains() {
     fi
 }
 
+normalize_check_target() {
+    local target="$1"
+
+    target="${target#http://}"
+    target="${target#https://}"
+    target="${target%%\?*}"
+    target="${target%%#*}"
+    target="$(printf '%s' "$target" | tr '[:upper:]' '[:lower:]' | tr -d '\r\n' | sed 's/[[:space:]]//g; s#//*#/#g; s#/$##')"
+    target="${target#.}"
+    printf '%s\n' "$target"
+}
+
+check_target_host() {
+    local target="$1"
+    target="${target%%/*}"
+    printf '%s\n' "$target"
+}
+
+array_contains_exact() {
+    local needle="$1"
+    shift
+    local candidate=""
+
+    for candidate in "$@"; do
+        if [ "$(normalize_check_target "$candidate")" = "$needle" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 cmd_check() {
     local domain="$1"
+    local normalized_target=""
+    local normalized_host=""
+    local in_whitelist=false
+    local blocked_subdomain=false
+    local blocked_path=false
+    local result=""
     [ -z "$domain" ] && { echo "Uso: whitelist check <dominio>"; exit 1; }
 
     echo -e "${BLUE}Verificando: $domain${NC}"
     echo ""
 
-    if grep -qi "^${domain}$" "$WHITELIST_FILE" 2>/dev/null; then
+    normalized_target="$(normalize_check_target "$domain")"
+    normalized_host="$(check_target_host "$normalized_target")"
+
+    if [ -f "$WHITELIST_FILE" ]; then
+        parse_whitelist_sections "$WHITELIST_FILE" >/dev/null 2>&1 || true
+    fi
+
+    if array_contains_exact "$normalized_host" "${WHITELIST_DOMAINS[@]}"; then
+        in_whitelist=true
+    fi
+    if array_contains_exact "$normalized_host" "${BLOCKED_SUBDOMAINS[@]}"; then
+        blocked_subdomain=true
+    fi
+    if array_contains_exact "$normalized_target" "${BLOCKED_PATHS[@]}"; then
+        blocked_path=true
+    fi
+
+    if [ "$in_whitelist" = true ]; then
         echo -e "  En whitelist: ${GREEN}✓ SÍ${NC}"
     else
         echo -e "  En whitelist: ${YELLOW}✗ NO${NC}"
     fi
+    if [ "$blocked_subdomain" = true ]; then
+        echo -e "  Bloqueado por subdominio: ${GREEN}✓ SÍ${NC}"
+    else
+        echo -e "  Bloqueado por subdominio: ${YELLOW}✗ NO${NC}"
+    fi
+    if [ "$blocked_path" = true ]; then
+        echo -e "  Bloqueado por ruta: ${GREEN}✓ SÍ${NC}"
+    else
+        echo -e "  Bloqueado por ruta: ${YELLOW}✗ NO${NC}"
+    fi
 
     echo -n "  Resuelve: "
-    local result
-    result=$(resolve_local_dns_probe "$domain")
+    result=$(resolve_local_dns_probe "$normalized_host")
     if dns_probe_result_is_public "$result"; then
         echo -e "${GREEN}✓${NC} → $(printf '%s\n' "$result" | head -1)"
     else
@@ -344,8 +408,14 @@ cmd_health() {
         local firefox_native_script="${OPENPATH_NATIVE_HOST_INSTALL_DIR:-/usr/local/lib/openpath}/${OPENPATH_NATIVE_HOST_SCRIPT_NAME:-openpath-native-host.py}"
 
         if [ -f "$firefox_ready_file" ] \
-            && grep -q "extension_id=monitor-bloqueos@openpath" "$firefox_ready_file" 2>/dev/null; then
+            && grep -q "extension_id=monitor-bloqueos@openpath" "$firefox_ready_file" 2>/dev/null \
+            && ! grep -Eq '\|disabled\||extensions\.json-disabled|active=false|userDisabled=true|signedState=-1' "$firefox_ready_file" 2>/dev/null; then
             echo -e "  Firefox extension: ${GREEN}✓ registered${NC}"
+        elif [ -f "$firefox_ready_file" ] \
+            && grep -Eq '\|disabled\||extensions\.json-disabled|active=false|userDisabled=true|signedState=-1' "$firefox_ready_file" 2>/dev/null; then
+            echo -e "  Firefox extension: ${RED}✗ disabled or unsigned${NC}"
+            grep -E 'profile=.*\|disabled\||extensions\.json-disabled|active=false|userDisabled=true|signedState=-1' "$firefox_ready_file" 2>/dev/null | sed 's/^/    /' || true
+            failed=1
         else
             echo -e "  Firefox extension: ${RED}✗ not registered${NC}"
             failed=1
