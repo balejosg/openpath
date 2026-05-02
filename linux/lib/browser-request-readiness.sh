@@ -81,6 +81,13 @@ read_firefox_policy_install_url() {
         --extension-id "$FIREFOX_EXTENSION_ID"
 }
 
+read_firefox_policy_local_install_entry() {
+    run_browser_json_helper \
+        read-firefox-local-install-entry \
+        --policies-file "$FIREFOX_POLICIES" \
+        --extension-id "$FIREFOX_EXTENSION_ID"
+}
+
 verify_firefox_managed_api_payload() {
     local api_base_url=""
     local install_url=""
@@ -91,6 +98,17 @@ verify_firefox_managed_api_payload() {
     expected_install_url="${api_base_url}/api/extensions/firefox/openpath.xpi"
 
     [ "$install_url" = "$expected_install_url" ]
+}
+
+verify_firefox_local_policy_payload() {
+    local install_entry=""
+
+    install_entry="$(read_firefox_policy_local_install_entry 2>/dev/null || true)"
+    if [ -z "$install_entry" ]; then
+        return 1
+    fi
+
+    [ -d "$install_entry" ] && [ -f "$install_entry/manifest.json" ]
 }
 
 verify_firefox_extension_payload() {
@@ -105,6 +123,10 @@ verify_firefox_extension_payload() {
     fi
 
     if [ -f "$FIREFOX_RELEASE_SOURCE/metadata.json" ]; then
+        return 0
+    fi
+
+    if verify_firefox_local_policy_payload; then
         return 0
     fi
 
