@@ -139,11 +139,15 @@ read_firefox_managed_extension_policy_field() {
 resolve_firefox_managed_extension_policy() {
     local release_source="${1:-$INSTALL_DIR/firefox-release}"
 
+    if get_firefox_managed_api_extension_policy "$release_source"; then
+        return 0
+    fi
+
     if get_firefox_release_extension_policy "$release_source"; then
         return 0
     fi
 
-    get_firefox_managed_api_extension_policy "$release_source"
+    return 1
 }
 
 sync_firefox_managed_extension_policy() {

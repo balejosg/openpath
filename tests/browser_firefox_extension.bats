@@ -262,7 +262,7 @@ EOF
     [ "$status" -eq 1 ]
 }
 
-@test "sync_firefox_managed_extension_policy prefers signed release artifacts over the configured OpenPath API route" {
+@test "sync_firefox_managed_extension_policy prefers configured OpenPath API route over local release artifacts" {
     local release_dir="$TEST_TMP_DIR/firefox-release"
     export ETC_CONFIG_DIR="$TEST_TMP_DIR/etc/openpath"
     mkdir -p "$release_dir" "$ETC_CONFIG_DIR"
@@ -289,8 +289,8 @@ EOF
 
     mapfile -t policy_args < "$TEST_TMP_DIR/policy-args"
     [ "${policy_args[0]}" = "monitor-bloqueos@openpath" ]
-    [ "${policy_args[1]}" = "$release_dir/openpath-firefox-extension.xpi" ]
-    [[ "${policy_args[2]}" == file://* ]]
+    [ "${policy_args[1]}" = "https://school.example/api/extensions/firefox/openpath.xpi" ]
+    [ "${policy_args[2]}" = "https://school.example/api/extensions/firefox/openpath.xpi" ]
 }
 
 @test "resolve_firefox_managed_extension_policy reports managed api source when no signed release artifact exists" {
