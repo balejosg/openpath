@@ -492,6 +492,21 @@ PREFS
     [[ "$output" == *"signedState=-1"* ]]
 }
 
+@test "firefox activation plan rejects prefs-only registration without active addon state" {
+    local profile_dir="$TEST_TMP_DIR/profile"
+
+    mkdir -p "$profile_dir"
+    cat > "$profile_dir/prefs.js" <<'PREFS'
+user_pref("extensions.webextensions.uuids", "{\"monitor-bloqueos@openpath\":\"openpath-test-uuid\"}");
+PREFS
+
+    run bash -c 'source "$1"; detect_firefox_extension_registration_in_profile "$2" "monitor-bloqueos@openpath"' \
+        bash "$PROJECT_DIR/linux/lib/firefox-activation-plan.sh" "$profile_dir"
+
+    [ "$status" -eq 1 ]
+    [ -z "$output" ]
+}
+
 @test "browser request readiness facts reject policy-only firefox setup" {
     local policies_file="$TEST_TMP_DIR/firefox-policies.json"
     local etc_dir="$TEST_TMP_DIR/etc/openpath"

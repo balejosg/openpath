@@ -153,16 +153,16 @@ test('Firefox release signing workflows are resilient to AMO throttling and reru
     'stable Debian publishing should still require signed Firefox release artifacts in the Debian package'
   );
   assert.ok(
-    !prereleaseWorkflow.includes("OPENPATH_REQUIRE_FIREFOX_RELEASE_ARTIFACTS: '1'"),
-    'prerelease publishing should allow the Debian package to fall back to unpacked Firefox assets on AMO cache misses'
+    prereleaseWorkflow.includes("OPENPATH_REQUIRE_FIREFOX_RELEASE_ARTIFACTS: '1'"),
+    'prerelease publishing should require signed Firefox release artifacts for managed Firefox health'
   );
   assert.ok(
-    prereleaseWorkflow.includes("sign-on-cache-miss: 'false'"),
-    'prerelease publishing should not start a synchronous AMO signing wait when signed assets are not cached'
+    !prereleaseWorkflow.includes("sign-on-cache-miss: 'false'"),
+    'prerelease publishing should use the action default and sign through AMO when signed assets are not cached'
   );
   assert.ok(
-    prereleaseWorkflow.includes("require-signed-artifacts: 'false'"),
-    'prerelease publishing should not fail solely because signed Firefox assets are absent from cache'
+    !prereleaseWorkflow.includes("require-signed-artifacts: 'false'"),
+    'prerelease publishing should fail instead of shipping unsigned Firefox assets'
   );
 
   assert.ok(
@@ -1234,6 +1234,10 @@ test('Firefox extension changes exercise platform readiness gates before release
   assert.ok(
     linuxStudentPolicyBlock.includes('run-linux-student-flow.sh'),
     'Linux student-policy workflow should continue using the runner that gates Selenium on DNS and Firefox readiness'
+  );
+  assert.ok(
+    linuxStudentPolicyBlock.includes('uses: ./.github/actions/prepare-firefox-release-artifacts'),
+    'Linux student-policy workflow should prepare signed Firefox release artifacts before managed-extension Selenium coverage'
   );
   assert.ok(
     windowsStudentPolicyBlock.includes('run-windows-student-flow.ps1'),

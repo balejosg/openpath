@@ -2,6 +2,7 @@ export interface FirefoxReleaseMetadata {
   extensionId: string;
   version: string;
   installUrl?: string;
+  payloadHash?: string;
 }
 
 export interface PrepareFirefoxReleaseArtifactsOptions {
@@ -12,6 +13,7 @@ export interface PrepareFirefoxReleaseArtifactsOptions {
   manifestPath?: string;
   extensionId?: string;
   version?: string;
+  payloadHash?: string;
 }
 
 export interface PrepareFirefoxReleaseArtifactsResult {

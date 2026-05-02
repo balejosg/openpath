@@ -277,6 +277,20 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Build Firefox Extension
+        uses: ./.github/actions/build-workspaces
+        with:
+          build-shared: 'false'
+          build-api: 'false'
+          build-extension: 'true'
+
+      - name: Prepare signed Firefox Release artifacts
+        uses: ./.github/actions/prepare-firefox-release-artifacts
+        with:
+          amo-version: 2.0.${{ github.run_number }}.${{ github.run_attempt }}
+          web-ext-api-key: ${{ secrets.WEB_EXT_API_KEY }}
+          web-ext-api-secret: ${{ secrets.WEB_EXT_API_SECRET }}
+
       - name: Run Linux student-policy flow
         shell: bash
         run: |

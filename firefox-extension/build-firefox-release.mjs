@@ -93,6 +93,7 @@ function parseCliArgs(argv) {
     outputDir: defaultOutputDir,
     extensionId: '',
     version: '',
+    payloadHash: '',
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -120,6 +121,10 @@ function parseCliArgs(argv) {
         parsed.version = next;
         index += 1;
         break;
+      case '--payload-hash':
+        parsed.payloadHash = next;
+        index += 1;
+        break;
       case '--help':
       case '-h':
         console.log(`Usage:
@@ -131,6 +136,7 @@ Options:
   --output-dir    Override output directory (default: build/firefox-release)
   --extension-id  Override extension ID (default: manifest gecko id)
   --version       Override version (default: manifest version)
+  --payload-hash  Expected payload hash to store in metadata.json
 `);
         process.exit(0);
         break;

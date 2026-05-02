@@ -475,7 +475,28 @@ prepare_firefox_release_artifacts() {
     local version
     local built_xpi_path
     local release_root="$extension_dir/build/firefox-release"
+    local payload_hash
+    local release_xpi_path="$release_root/openpath-firefox-extension.xpi"
+    local allow_unsigned="${OPENPATH_ALLOW_UNSIGNED_FIREFOX_E2E:-false}"
 
+    payload_hash="$(node "$extension_dir/firefox-release-payload-hash.mjs")"
+    if [[ -s "$release_root/metadata.json" && -s "$release_xpi_path" ]]; then
+        node "$extension_dir/verify-firefox-release-artifacts.mjs" \
+            --release-dir "$release_root" \
+            --payload-hash "$payload_hash"
+        mkdir -p "$ARTIFACTS_DIR"
+        sha256sum "$release_xpi_path" >"$FIREFOX_XPI_HASH_PATH"
+        echo "Using existing signed Firefox release artifact: $release_xpi_path"
+        return 0
+    fi
+
+    if [[ "$allow_unsigned" != "true" ]]; then
+        echo "Signed Firefox release artifacts are required for Linux student-policy managed-extension coverage." >&2
+        echo "Prepare firefox-extension/build/firefox-release with .github/actions/prepare-firefox-release-artifacts or set OPENPATH_ALLOW_UNSIGNED_FIREFOX_E2E=true for local unsigned debugging only." >&2
+        return 1
+    fi
+
+    echo "OPENPATH_ALLOW_UNSIGNED_FIREFOX_E2E=true set; building unsigned Firefox XPI for local debugging only." >&2
     version="$(
         node -e 'const fs = require("node:fs"); const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(manifest.version);' \
             "$manifest_path"
@@ -493,7 +514,8 @@ prepare_firefox_release_artifacts() {
 
     npm run build:firefox-release --workspace=@openpath/firefox-extension -- \
         --signed-xpi "$built_xpi_path" \
-        --install-url "http://host.docker.internal:$API_PORT/api/extensions/firefox/openpath.xpi"
+        --install-url "http://host.docker.internal:$API_PORT/api/extensions/firefox/openpath.xpi" \
+        --payload-hash "$payload_hash"
 
     require_file "$release_root/metadata.json"
     require_file "$release_root/openpath-firefox-extension.xpi"

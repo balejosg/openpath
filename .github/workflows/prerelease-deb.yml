@@ -85,8 +85,6 @@ jobs:
           amo-version: 2.0.${{ github.run_number }}.${{ github.run_attempt }}
           web-ext-api-key: ${{ secrets.WEB_EXT_API_KEY }}
           web-ext-api-secret: ${{ secrets.WEB_EXT_API_SECRET }}
-          sign-on-cache-miss: 'false'
-          require-signed-artifacts: 'false'
 
       - name: Summarize Firefox Release artifact source
         run: |
@@ -99,6 +97,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build Debian package
+        env:
+          OPENPATH_REQUIRE_FIREFOX_RELEASE_ARTIFACTS: '1'
         run: |
           chmod +x linux/scripts/build/build-deb.sh
           ./linux/scripts/build/build-deb.sh ${{ steps.version.outputs.version }} 1

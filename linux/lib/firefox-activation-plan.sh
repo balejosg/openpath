@@ -282,16 +282,6 @@ from pathlib import Path
 profile = Path(sys.argv[1])
 extension_id = sys.argv[2]
 
-def prefs_has_uuid(path: Path) -> bool:
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return False
-    marker = 'user_pref("extensions.webextensions.uuids",'
-    if marker not in text:
-        return False
-    return extension_id in text
-
 def describe_value(value):
     if isinstance(value, bool):
         return "true" if value else "false"
@@ -329,9 +319,6 @@ if profile.is_dir():
             print(f"extensions.json-disabled\t{profile}\t{';'.join(addon_reasons)}")
             raise SystemExit(1)
         print(f"extensions.json\t{profile}")
-        raise SystemExit(0)
-    if prefs_has_uuid(profile / "prefs.js"):
-        print(f"prefs.js\t{profile}")
         raise SystemExit(0)
 
 raise SystemExit(1)
