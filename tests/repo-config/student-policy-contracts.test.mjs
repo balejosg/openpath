@@ -327,6 +327,24 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('linux student policy image uses unsigned-addons-capable Firefox for Selenium', () => {
+    const linuxStudentDockerfile = readText('tests/e2e/Dockerfile.student');
+
+    assert.match(
+      linuxStudentDockerfile,
+      /firefox-devedition-latest-ssl/,
+      'Linux student-policy image should use Firefox Developer Edition because Selenium loads the unsigned E2E XPI when signed release artifacts are unavailable'
+    );
+    assert.ok(
+      !linuxStudentDockerfile.includes('FIREFOX_VERSION='),
+      'Linux student-policy image should not pin Firefox Release/ESR for unsigned extension tests'
+    );
+    assert.ok(
+      !linuxStudentDockerfile.includes('/pub/firefox/releases/'),
+      'Linux student-policy image should not download Firefox Release/ESR builds for unsigned extension tests'
+    );
+  });
+
   test('student policy selenium driver supports overriding the Firefox binary path', () => {
     const studentPolicyDriver = readText('tests/selenium/student-policy-driver.ts');
 

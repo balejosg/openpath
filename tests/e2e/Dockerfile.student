@@ -10,7 +10,6 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV container=docker
-ENV FIREFOX_VERSION=128.10.0esr
 ENV GECKODRIVER_VERSION=0.36.0
 
 COPY --from=node-runtime /usr/local /usr/local
@@ -55,17 +54,17 @@ RUN . /tmp/openpath-apt.sh \
 
 RUN arch="$(dpkg --print-architecture)" \
     && case "$arch" in \
-        amd64) firefox_arch='linux-x86_64'; geckodriver_arch='linux64' ;; \
-        arm64) firefox_arch='linux-aarch64'; geckodriver_arch='linux-aarch64' ;; \
+        amd64) firefox_os='linux64'; geckodriver_arch='linux64' ;; \
+        arm64) firefox_os='linux64-aarch64'; geckodriver_arch='linux-aarch64' ;; \
         *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; \
        esac \
-    && wget -qO /tmp/firefox.tar.bz2 "https://download-installer.cdn.mozilla.net/pub/firefox/releases/${FIREFOX_VERSION}/${firefox_arch}/en-US/firefox-${FIREFOX_VERSION}.tar.bz2" \
-    && tar -xjf /tmp/firefox.tar.bz2 -C /opt \
+    && wget -qO /tmp/firefox.tar.xz "https://download.mozilla.org/?product=firefox-devedition-latest-ssl&os=${firefox_os}&lang=en-US" \
+    && tar -xf /tmp/firefox.tar.xz -C /opt \
     && ln -sf /opt/firefox/firefox /usr/local/bin/firefox \
     && wget -qO /tmp/geckodriver.tar.gz "https://github.com/mozilla/geckodriver/releases/download/v${GECKODRIVER_VERSION}/geckodriver-v${GECKODRIVER_VERSION}-${geckodriver_arch}.tar.gz" \
     && tar -xzf /tmp/geckodriver.tar.gz -C /usr/local/bin \
     && chmod +x /usr/local/bin/geckodriver \
-    && rm -f /tmp/firefox.tar.bz2 /tmp/geckodriver.tar.gz
+    && rm -f /tmp/firefox.tar.xz /tmp/geckodriver.tar.gz
 
 RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
     /etc/systemd/system/*.wants/* \
