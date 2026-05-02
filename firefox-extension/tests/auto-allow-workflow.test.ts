@@ -95,6 +95,23 @@ function createWorkflowFixture(
   };
 }
 
+async function waitForAssertion(assertion: () => void, timeoutMs = 100): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+
+  while (Date.now() <= deadline) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+  }
+
+  throw lastError;
+}
+
 await describe('auto allow workflow', async () => {
   await test('detects request types eligible for auto-allow', () => {
     for (const requestType of AUTO_ALLOW_PAGE_RESOURCE_TYPES) {
@@ -227,11 +244,11 @@ await describe('auto allow workflow', async () => {
       'https://cdn.example.com/asset.js?attempt=2'
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 5));
-
-    assert.equal(requestBodies.length, 1);
-    assert.deepEqual(updatedHosts, [['cdn.example.com']]);
-    assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
+    await waitForAssertion(() => {
+      assert.equal(requestBodies.length, 1);
+      assert.deepEqual(updatedHosts, [['cdn.example.com']]);
+      assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
+    });
 
     resolveLocalUpdate?.(true);
     await Promise.all([firstRequest, secondRequest]);
@@ -263,7 +280,9 @@ await describe('auto allow workflow', async () => {
       'https://cdn.example.com/asset.js?attempt=1'
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await waitForAssertion(() => {
+      assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
+    });
 
     let secondRequestResolved = false;
     const secondRequest = workflow
@@ -278,10 +297,10 @@ await describe('auto allow workflow', async () => {
         secondRequestResolved = true;
       });
 
-    await new Promise((resolve) => setTimeout(resolve, 5));
-
+    await waitForAssertion(() => {
+      assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
+    });
     assert.equal(secondRequestResolved, false);
-    assert.equal(fixture.requestLocalWhitelistUpdateCalls, 1);
 
     resolveLocalUpdate?.(true);
     await Promise.all([firstRequest, secondRequest]);

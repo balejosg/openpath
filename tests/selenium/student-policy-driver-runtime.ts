@@ -14,6 +14,16 @@ async function openPopupContext(state: StudentPolicyDriverState): Promise<void> 
       throw error;
     }
   }
+
+  await driver.wait(async () => {
+    try {
+      return await driver.executeScript<boolean>(
+        `return typeof globalThis.browser?.runtime?.sendMessage === 'function';`
+      );
+    } catch {
+      return false;
+    }
+  }, 5_000);
 }
 
 export async function refreshBlockedPathRules(state: StudentPolicyDriverState): Promise<void> {

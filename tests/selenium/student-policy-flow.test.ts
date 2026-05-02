@@ -12,6 +12,7 @@ import {
   type StudentScenario,
 } from './student-policy-flow.e2e';
 import { openAndExpectBlocked, submitBlockedScreenRequest } from './student-policy-driver-browser';
+import { getBlockedPathRulesDebug } from './student-policy-driver-runtime';
 import { getStudentPolicyPhasePlan } from './student-policy-harness';
 import { buildBaselineWhitelistHosts } from './student-policy-scenarios';
 
@@ -214,9 +215,15 @@ test('StudentPolicyDriver refreshes blocked subdomain rules through runtime mess
   });
   (driver as unknown as { driver: unknown; extensionUuid: string }).driver = {
     async get(_url: string) {},
+    async executeScript() {
+      return true;
+    },
     async executeAsyncScript(script: string) {
       executedScripts.push(script);
       return { ok: true, value: { success: true } };
+    },
+    async wait(condition: (driver: unknown) => Promise<boolean>) {
+      return condition(this);
     },
   };
   (driver as unknown as { extensionUuid: string }).extensionUuid = 'extension-id';
@@ -847,4 +854,53 @@ test('StudentPolicyDriver waits for blocked page when fallback navigation also t
   assert.equal(navigations.length, 2);
   assert.match(navigations[1] ?? '', /^moz-extension:\/\/extension-id\/blocked\/blocked\.html\?/);
   assert.deepEqual(waits, [250, 250, 250]);
+});
+
+test('runtime messages wait until the extension popup exposes browser.runtime', async () => {
+  const navigations: string[] = [];
+  let runtimeReady = false;
+  const state = {
+    getDriver() {
+      return {
+        async get(url: string) {
+          navigations.push(url);
+        },
+        async executeScript() {
+          const ready = runtimeReady;
+          runtimeReady = true;
+          return ready;
+        },
+        async executeAsyncScript(script: string, _message: unknown) {
+          assert.match(script, /browser\.runtime\.sendMessage/);
+          return {
+            ok: true,
+            value: {
+              count: 1,
+              version: 'v1',
+              rawRules: ['https://example.test/*private*'],
+              compiledPatterns: ['^https://example\\.test/.*private.*$'],
+            },
+          };
+        },
+        async wait(condition: (driver: unknown) => Promise<boolean>) {
+          assert.equal(await condition(this), false);
+          assert.equal(await condition(this), true);
+          return true;
+        },
+      };
+    },
+    getExtensionUuid() {
+      return 'extension-id';
+    },
+  };
+
+  const debug = await getBlockedPathRulesDebug(state as never);
+
+  assert.match(navigations[0] ?? '', /^moz-extension:\/\/extension-id\/popup\/popup\.html/);
+  assert.deepEqual(debug, {
+    count: 1,
+    version: 'v1',
+    rawRules: ['https://example.test/*private*'],
+    compiledPatterns: ['^https://example\\.test/.*private.*$'],
+  });
 });
