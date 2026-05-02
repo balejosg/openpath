@@ -117,6 +117,15 @@ test('Firefox release signing workflows are resilient to AMO throttling and reru
   const prereleaseWorkflow = readText('.github/workflows/prerelease-deb.yml');
   const prepareAction = readText('.github/actions/prepare-firefox-release-artifacts/action.yml');
 
+  assert.ok(
+    prereleaseWorkflow.includes('concurrency:'),
+    'prerelease-deb.yml should cancel obsolete prerelease signing waits instead of queueing them'
+  );
+  assert.ok(
+    prereleaseWorkflow.includes('cancel-in-progress: true'),
+    'prerelease-deb.yml should keep only the newest prerelease run active for the branch'
+  );
+
   for (const [name, workflow] of [
     ['build-deb.yml', buildDebWorkflow],
     ['prerelease-deb.yml', prereleaseWorkflow],
@@ -164,20 +173,64 @@ test('Firefox release signing workflows are resilient to AMO throttling and reru
     'cache-aware Firefox release action should still sign through AMO when the cache misses'
   );
   assert.ok(
-    prepareAction.includes("WEB_EXT_SIGN_MAX_THROTTLE_WAIT_SECONDS: '2700'"),
-    'cache-aware Firefox release action should allow long AMO throttle waits in CI'
+    prepareAction.includes('approval-timeout-seconds:'),
+    'cache-aware Firefox release action should expose an approval timeout input'
   );
   assert.ok(
-    prepareAction.includes("WEB_EXT_SIGN_RETRY_BUFFER_SECONDS: '30'"),
-    'cache-aware Firefox release action should add a buffer before retrying AMO signing'
+    prepareAction.includes("default: '7200'"),
+    'cache-aware Firefox release action should keep the long approval timeout as the stable default'
   );
   assert.ok(
-    prepareAction.includes("WEB_EXT_SIGN_MAX_RETRIES: '2'"),
-    'cache-aware Firefox release action should retry enough times to survive repeated AMO throttles'
+    prepareAction.includes("default: '2700'"),
+    'cache-aware Firefox release action should keep the long throttle wait as the stable default'
   );
   assert.ok(
-    prepareAction.includes("WEB_EXT_SIGN_APPROVAL_TIMEOUT_SECONDS: '7200'"),
-    'cache-aware Firefox release action should allow slow AMO approval before failing release package publication'
+    prepareAction.includes("default: '2'"),
+    'cache-aware Firefox release action should keep two AMO retries as the stable default'
+  );
+  assert.ok(
+    prepareAction.includes("default: '30'"),
+    'cache-aware Firefox release action should keep the retry buffer as the stable default'
+  );
+  assert.ok(
+    prereleaseWorkflow.includes('approval-timeout-seconds: 1800'),
+    'prerelease publishing should bound AMO approval waits to 30 minutes'
+  );
+  assert.ok(
+    prereleaseWorkflow.includes('max-throttle-wait-seconds: 900'),
+    'prerelease publishing should not wait through long AMO throttle windows'
+  );
+  assert.ok(
+    prereleaseWorkflow.includes('max-retries: 1'),
+    'prerelease publishing should retry one short AMO throttle window before failing recoverably'
+  );
+  assert.ok(
+    prereleaseWorkflow.includes('retry-buffer-seconds: 30'),
+    'prerelease publishing should retain a small AMO retry buffer'
+  );
+  assert.ok(
+    !buildDebWorkflow.includes('approval-timeout-seconds: 1800'),
+    'stable Debian publishing should keep the long default AMO approval timeout'
+  );
+  assert.ok(
+    prepareAction.includes(
+      'WEB_EXT_SIGN_MAX_THROTTLE_WAIT_SECONDS: ${{ inputs.max-throttle-wait-seconds }}'
+    ),
+    'cache-aware Firefox release action should wire the throttle wait input into signing'
+  );
+  assert.ok(
+    prepareAction.includes('WEB_EXT_SIGN_RETRY_BUFFER_SECONDS: ${{ inputs.retry-buffer-seconds }}'),
+    'cache-aware Firefox release action should wire the retry buffer input into signing'
+  );
+  assert.ok(
+    prepareAction.includes('WEB_EXT_SIGN_MAX_RETRIES: ${{ inputs.max-retries }}'),
+    'cache-aware Firefox release action should wire the retry count input into signing'
+  );
+  assert.ok(
+    prepareAction.includes(
+      'WEB_EXT_SIGN_APPROVAL_TIMEOUT_SECONDS: ${{ inputs.approval-timeout-seconds }}'
+    ),
+    'cache-aware Firefox release action should wire the approval timeout input into signing'
   );
 });
 

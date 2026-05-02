@@ -12,6 +12,10 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: prerelease-deb-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci-success:
     name: Inspect CI Success summary job
@@ -80,6 +84,10 @@ jobs:
           amo-version: 2.0.${{ github.run_number }}.${{ github.run_attempt }}
           web-ext-api-key: ${{ secrets.WEB_EXT_API_KEY }}
           web-ext-api-secret: ${{ secrets.WEB_EXT_API_SECRET }}
+          approval-timeout-seconds: 1800
+          max-throttle-wait-seconds: 900
+          max-retries: 1
+          retry-buffer-seconds: 30
 
       - name: Build Debian package
         env:

@@ -11,6 +11,22 @@ inputs:
   web-ext-api-secret:
     description: AMO web-ext API secret.
     required: true
+  approval-timeout-seconds:
+    description: Maximum time web-ext should wait for AMO approval.
+    required: false
+    default: '7200'
+  max-throttle-wait-seconds:
+    description: Maximum AMO throttle delay that should be retried.
+    required: false
+    default: '2700'
+  max-retries:
+    description: Maximum number of AMO signing retries.
+    required: false
+    default: '2'
+  retry-buffer-seconds:
+    description: Extra buffer before retrying an AMO throttle response.
+    required: false
+    default: '30'
 
 outputs:
   payload-hash:
@@ -52,10 +68,10 @@ runs:
       env:
         WEB_EXT_API_KEY: ${{ inputs.web-ext-api-key }}
         WEB_EXT_API_SECRET: ${{ inputs.web-ext-api-secret }}
-        WEB_EXT_SIGN_MAX_RETRIES: '2'
-        WEB_EXT_SIGN_RETRY_BUFFER_SECONDS: '30'
-        WEB_EXT_SIGN_MAX_THROTTLE_WAIT_SECONDS: '2700'
-        WEB_EXT_SIGN_APPROVAL_TIMEOUT_SECONDS: '7200'
+        WEB_EXT_SIGN_MAX_RETRIES: ${{ inputs.max-retries }}
+        WEB_EXT_SIGN_RETRY_BUFFER_SECONDS: ${{ inputs.retry-buffer-seconds }}
+        WEB_EXT_SIGN_MAX_THROTTLE_WAIT_SECONDS: ${{ inputs.max-throttle-wait-seconds }}
+        WEB_EXT_SIGN_APPROVAL_TIMEOUT_SECONDS: ${{ inputs.approval-timeout-seconds }}
       run: |
         npm run sign:firefox-release --workspace=@openpath/firefox-extension -- --version "${{ inputs.amo-version }}"
 
