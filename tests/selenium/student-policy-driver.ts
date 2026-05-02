@@ -78,6 +78,31 @@ async function discoverFirefoxExtensionUuid(profileDir: string): Promise<string>
   });
 }
 
+export async function waitForFirefoxExtensionRuntimeReady(
+  driver: WebDriver,
+  extensionUuid: string,
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<void> {
+  try {
+    await driver.get(buildPopupUrl(extensionUuid));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes('Navigation timed out')) {
+      throw error;
+    }
+  }
+
+  await driver.wait(async () => {
+    try {
+      return await driver.executeScript<boolean>(
+        `return typeof globalThis.browser?.runtime?.sendMessage === 'function';`
+      );
+    } catch {
+      return false;
+    }
+  }, timeoutMs);
+}
+
 function isBlockedNavigationError(message: string): boolean {
   return (
     message.includes('blockedByPolicy') ||
@@ -177,6 +202,7 @@ export class StudentPolicyDriver implements StudentPolicyDriverState {
     const profileDir = capabilities.get('moz:profile') as string | undefined;
     if (profileDir !== undefined && profileDir !== '') {
       this.extensionUuid = await discoverFirefoxExtensionUuid(profileDir);
+      await waitForFirefoxExtensionRuntimeReady(this.driver, this.extensionUuid);
     }
   }
 

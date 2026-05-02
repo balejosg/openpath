@@ -9,6 +9,7 @@ import {
   buildWindowsBlockedDnsCommand,
   getStudentPolicyScenarioGroup,
   StudentPolicyDriver,
+  waitForFirefoxExtensionRuntimeReady,
   type StudentScenario,
 } from './student-policy-flow.e2e';
 import { openAndExpectBlocked, submitBlockedScreenRequest } from './student-policy-driver-browser';
@@ -903,4 +904,28 @@ test('runtime messages wait until the extension popup exposes browser.runtime', 
     rawRules: ['https://example.test/*private*'],
     compiledPatterns: ['^https://example\\.test/.*private.*$'],
   });
+});
+
+test('Firefox setup primes extension runtime before fixture navigation', async () => {
+  const calls: string[] = [];
+  const driver = {
+    async get(url: string) {
+      calls.push(`get:${url}`);
+    },
+    async executeScript(script: string) {
+      calls.push(`script:${script}`);
+      return true;
+    },
+    async wait(condition: () => Promise<boolean>, timeoutMs: number) {
+      calls.push(`wait:${timeoutMs.toString()}`);
+      assert.equal(await condition(), true);
+      return true;
+    },
+  };
+
+  await waitForFirefoxExtensionRuntimeReady(driver as never, 'extension-id', 12_345);
+
+  assert.equal(calls[0], 'get:moz-extension://extension-id/popup/popup.html');
+  assert.equal(calls[1], 'wait:12345');
+  assert.match(calls[2] ?? '', /browser\?\.runtime\?\.sendMessage/);
 });
