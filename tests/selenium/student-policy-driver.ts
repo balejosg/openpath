@@ -103,6 +103,22 @@ function buildBlockedScreenFallbackUrl(
   return blockedUrl.toString();
 }
 
+async function openBlockedScreenFallback(
+  driver: WebDriver,
+  extensionUuid: string,
+  url: string,
+  expectation: BlockedScreenExpectation
+): Promise<void> {
+  try {
+    await driver.get(buildBlockedScreenFallbackUrl(extensionUuid, url, expectation));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!isNavigationTimeout(message)) {
+      throw error;
+    }
+  }
+}
+
 export class StudentPolicyDriver implements StudentPolicyDriverState {
   public readonly scenario: StudentScenario;
 
@@ -249,7 +265,7 @@ export class StudentPolicyDriver implements StudentPolicyDriverState {
           throw error;
         }
 
-        await driver.get(buildBlockedScreenFallbackUrl(this.getExtensionUuid(), url, expectation));
+        await openBlockedScreenFallback(driver, this.getExtensionUuid(), url, expectation);
         await this.waitForBlockedScreen(expectation);
       }
     });

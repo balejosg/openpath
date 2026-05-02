@@ -772,3 +772,79 @@ test('StudentPolicyDriver opens the extension blocked page when Firefox keeps th
   assert.equal(fallbackUrl.searchParams.get('error'), 'blockedByPolicy');
   assert.deepEqual(waits, [250, 250, 250]);
 });
+
+test('StudentPolicyDriver waits for blocked page when fallback navigation also times out', async () => {
+  const timeoutError = new Error('Navigation timed out after 8000 ms');
+  timeoutError.name = 'TimeoutError';
+  const navigations: string[] = [];
+  const waits: number[] = [];
+  let currentUrl = 'http://site.127.0.0.1.sslip.io:18081/ok';
+  let title = 'OpenPath Site Fixture';
+  const elements = new Map([
+    [
+      '#request-reason',
+      {
+        async clear() {},
+        async sendKeys() {},
+      },
+    ],
+    [
+      '#submit-unblock-request',
+      {
+        async click() {},
+      },
+    ],
+    [
+      '#request-status',
+      {
+        async getText() {
+          return 'Solicitud enviada. Quedara pendiente hasta que la revisen.';
+        },
+      },
+    ],
+  ]);
+  const fakeWebDriver = {
+    async get(url: string) {
+      navigations.push(url);
+      if (navigations.length === 2) {
+        currentUrl = url;
+        title = 'Sitio bloqueado';
+      }
+      throw timeoutError;
+    },
+    async getCurrentUrl() {
+      return currentUrl;
+    },
+    async getTitle() {
+      return title;
+    },
+    async findElement(locator: { value: string }) {
+      const element = elements.get(locator.value);
+      assert.ok(element, `Missing fake element for ${locator.value}`);
+      return element;
+    },
+    async wait(condition: (driver: unknown) => Promise<boolean>, timeoutMs: number) {
+      waits.push(timeoutMs);
+      const result = await condition(this);
+      if (result !== true) {
+        throw new Error(`Wait timed out after ${timeoutMs.toString()}ms`);
+      }
+      return result;
+    },
+  };
+  const driver = new StudentPolicyDriver(createScenario(), {
+    diagnosticsDir: os.tmpdir(),
+    headless: true,
+  });
+  (driver as unknown as { driver: unknown; extensionUuid: string }).driver = fakeWebDriver;
+  (driver as unknown as { extensionUuid: string }).extensionUuid = 'extension-id';
+
+  await driver.openBlockedScreenAndSubmitRequest('http://blocked.test/lesson', {
+    reason: 'Needed for class',
+    timeoutMs: 250,
+  });
+
+  assert.equal(navigations.length, 2);
+  assert.match(navigations[1] ?? '', /^moz-extension:\/\/extension-id\/blocked\/blocked\.html\?/);
+  assert.deepEqual(waits, [250, 250, 250]);
+});
