@@ -370,6 +370,21 @@ describe('repository verification contract', () => {
     );
   });
 
+  test('student policy selenium driver enables unsigned Firefox XPIs for CI profiles', () => {
+    const studentPolicyDriver = readText('tests/selenium/student-policy-driver.ts');
+
+    assert.match(
+      studentPolicyDriver,
+      /options\.setPreference\('xpinstall\.signatures\.required', false\)/,
+      'student-policy-driver.ts should disable Firefox signature enforcement for the unsigned Selenium XPI'
+    );
+    assert.match(
+      studentPolicyDriver,
+      /options\.setPreference\('extensions\.blocklist\.enabled', false\)/,
+      'student-policy-driver.ts should disable the Firefox blocklist for the unsigned Selenium XPI'
+    );
+  });
+
   test('student policy selenium driver disables Firefox DoH for DNS policy assertions', () => {
     const studentPolicyDriver = readText('tests/selenium/student-policy-driver.ts');
 
