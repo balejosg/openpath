@@ -163,7 +163,17 @@ sync_firefox_managed_extension_policy() {
 
 install_firefox_release_extension() {
     local release_source="${1:-$INSTALL_DIR/firefox-release}"
-    if ! sync_firefox_managed_extension_policy "$release_source"; then
+    local release_policy=""
+    local ext_id=""
+    local install_entry=""
+    local install_url=""
+
+    release_policy="$(get_firefox_release_extension_policy "$release_source")" || return 1
+    ext_id="$(read_firefox_managed_extension_policy_field "$release_policy" "extension_id")" || return 1
+    install_entry="$(read_firefox_managed_extension_policy_field "$release_policy" "install_entry")" || return 1
+    install_url="$(read_firefox_managed_extension_policy_field "$release_policy" "install_url")" || return 1
+
+    if ! add_extension_to_policies "$ext_id" "$install_entry" "$install_url"; then
         return 1
     fi
 
@@ -200,5 +210,9 @@ install_firefox_extension() {
         return 0
     fi
 
-    install_firefox_unpacked_extension "$ext_source"
+    if install_firefox_unpacked_extension "$ext_source"; then
+        return 0
+    fi
+
+    sync_firefox_managed_extension_policy "$release_source"
 }

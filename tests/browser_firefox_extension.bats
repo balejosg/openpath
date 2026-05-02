@@ -335,3 +335,32 @@ EOF
     [ "$status" -eq 0 ]
     [ "$(cat "$TEST_TMP_DIR/unpacked-source")" = "$TEST_TMP_DIR/firefox-extension" ]
 }
+
+@test "install_firefox_extension prefers local unpacked bundle over managed api when signed artifacts are absent" {
+    local release_dir="$TEST_TMP_DIR/firefox-release"
+    local ext_dir="$TEST_TMP_DIR/firefox-extension"
+    mkdir -p "$release_dir" "$ext_dir"
+    export ETC_CONFIG_DIR="$TEST_TMP_DIR/etc/openpath"
+    mkdir -p "$ETC_CONFIG_DIR"
+    printf '%s\n' 'https://school.example/' > "$ETC_CONFIG_DIR/api-url.conf"
+
+    source "$PROJECT_DIR/linux/lib/browser.sh"
+
+    curl() {
+        return 0
+    }
+    install_firefox_unpacked_extension() {
+        printf '%s\n' "$1" > "$TEST_TMP_DIR/unpacked-source"
+        return 0
+    }
+    add_extension_to_policies() {
+        printf '%s\n%s\n%s\n' "$1" "$2" "$3" > "$TEST_TMP_DIR/managed-policy-args"
+        return 0
+    }
+    export -f curl install_firefox_unpacked_extension add_extension_to_policies
+
+    run install_firefox_extension "$ext_dir" "$release_dir"
+    [ "$status" -eq 0 ]
+    [ "$(cat "$TEST_TMP_DIR/unpacked-source")" = "$ext_dir" ]
+    [ ! -f "$TEST_TMP_DIR/managed-policy-args" ]
+}
