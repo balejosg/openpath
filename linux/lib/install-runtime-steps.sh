@@ -32,6 +32,18 @@ step_install_extension() {
     echo "[12/13] Instalando extensiones del navegador..."
 
     if [ "$INSTALL_EXTENSION" = true ]; then
+        local staged_ext_dir="$INSTALL_DIR/firefox-extension"
+        local staged_release_dir="$INSTALL_DIR/firefox-release"
+        local firefox_release_source=""
+
+        rm -rf "$staged_ext_dir"
+        rm -rf "$staged_release_dir"
+        stage_firefox_installation_bundle "$INSTALLER_SOURCE_DIR/firefox-extension" "$staged_ext_dir"
+
+        if firefox_release_source="$(stage_firefox_release_artifacts "$INSTALLER_SOURCE_DIR" "$staged_release_dir")"; then
+            echo "  ✓ Artefactos Firefox Release firmados preparados desde $firefox_release_source"
+        fi
+
         if ! is_openpath_request_setup_complete; then
             if [ "$INSTALL_NATIVE_HOST" = true ]; then
                 if ! run_classroom_registration; then
@@ -46,18 +58,6 @@ step_install_extension() {
 
         if [ "$INSTALL_NATIVE_HOST" = true ]; then
             require_openpath_request_setup_complete "source install browser request setup" || return 1
-        fi
-
-        local staged_ext_dir="$INSTALL_DIR/firefox-extension"
-        local staged_release_dir="$INSTALL_DIR/firefox-release"
-        local firefox_release_source=""
-
-        rm -rf "$staged_ext_dir"
-        rm -rf "$staged_release_dir"
-        stage_firefox_installation_bundle "$INSTALLER_SOURCE_DIR/firefox-extension" "$staged_ext_dir"
-
-        if firefox_release_source="$(stage_firefox_release_artifacts "$INSTALLER_SOURCE_DIR" "$staged_release_dir")"; then
-            echo "  ✓ Artefactos Firefox Release firmados preparados desde $firefox_release_source"
         fi
 
         local browser_integration_args=(
