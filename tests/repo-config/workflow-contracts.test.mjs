@@ -1118,6 +1118,10 @@ test('E2E workflow gates expensive platform lanes on targeted changed paths', ()
     'Debian package maintainer script changes should trigger E2E before prerelease package publishing'
   );
   assert.ok(
+    e2eWorkflow.includes("'tests/**'"),
+    'E2E workflow should start for any tests/** change so release quality gates can always find the same-commit E2E Summary required after CI'
+  );
+  assert.ok(
     windowsE2eBlock.includes("needs.detect-relevant-changes.outputs.windows_e2e == 'true'"),
     'windows-e2e should run only for Windows E2E relevant changes'
   );
