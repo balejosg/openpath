@@ -421,6 +421,8 @@ cmd_health() {
             echo -e "  Firefox extension: ${RED}✗ disabled or unsigned${NC}"
             grep -E 'profile=.*\|disabled\||extensions\.json-disabled|active=false|userDisabled=true|signedState=-1' "$firefox_ready_file" 2>/dev/null | sed 's/^/    /' || true
             failed=1
+        elif [ "${OPENPATH_ALLOW_DEFERRED_FIREFOX_REGISTRATION:-0}" = "1" ]; then
+            echo -e "  Firefox extension: ${YELLOW}⚠ registration deferred${NC}"
         else
             echo -e "  Firefox extension: ${RED}✗ not registered${NC}"
             failed=1
