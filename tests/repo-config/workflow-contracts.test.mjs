@@ -153,16 +153,16 @@ test('Firefox release signing workflows are resilient to AMO throttling and reru
     'stable Debian publishing should still require signed Firefox release artifacts in the Debian package'
   );
   assert.ok(
-    prereleaseWorkflow.includes("OPENPATH_REQUIRE_FIREFOX_RELEASE_ARTIFACTS: '1'"),
-    'prerelease publishing should require signed Firefox release artifacts for managed Firefox health'
+    !prereleaseWorkflow.includes("OPENPATH_REQUIRE_FIREFOX_RELEASE_ARTIFACTS: '1'"),
+    'prerelease publishing should not block unstable Linux packages on AMO approval'
   );
   assert.ok(
-    !prereleaseWorkflow.includes("sign-on-cache-miss: 'false'"),
-    'prerelease publishing should use the action default and sign through AMO when signed assets are not cached'
+    prereleaseWorkflow.includes("sign-on-cache-miss: 'false'"),
+    'prerelease publishing should reuse cached signed Firefox assets but avoid new AMO signing waits'
   );
   assert.ok(
-    !prereleaseWorkflow.includes("require-signed-artifacts: 'false'"),
-    'prerelease publishing should fail instead of shipping unsigned Firefox assets'
+    prereleaseWorkflow.includes("require-signed-artifacts: 'false'"),
+    'prerelease publishing should allow fallback browser assets while runtime health rejects disabled Firefox extensions'
   );
 
   assert.ok(
