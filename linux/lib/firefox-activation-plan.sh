@@ -383,15 +383,16 @@ run_firefox_activation_probe() {
     local firefox_args=()
     local xauthority_path="$profile_home/.Xauthority"
 
-    if [ -n "${DISPLAY:-}" ]; then
-        display_env+=("DISPLAY=$DISPLAY")
-    elif [ -S /tmp/.X11-unix/X0 ]; then
-        display_env+=("DISPLAY=:0")
-    fi
     if [ -n "${XAUTHORITY:-}" ]; then
         display_env+=("XAUTHORITY=$XAUTHORITY")
     elif [ -f "$xauthority_path" ]; then
         display_env+=("XAUTHORITY=$xauthority_path")
+    fi
+
+    if [ -n "${DISPLAY:-}" ]; then
+        display_env+=("DISPLAY=$DISPLAY")
+    elif [ -S /tmp/.X11-unix/X0 ] && [ "${#display_env[@]}" -gt 0 ]; then
+        display_env+=("DISPLAY=:0")
     fi
 
     if [ "${#display_env[@]}" -gt 0 ]; then

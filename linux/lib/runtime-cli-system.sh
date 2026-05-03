@@ -409,6 +409,11 @@ cmd_health() {
 
         if [ -f "$firefox_ready_file" ] \
             && grep -q "extension_id=monitor-bloqueos@openpath" "$firefox_ready_file" 2>/dev/null \
+            && awk -F= '
+                $1 == "target_count" { target = $2 + 0 }
+                $1 == "registered_count" { registered = $2 + 0 }
+                END { exit !(target > 0 && registered == target) }
+            ' "$firefox_ready_file" \
             && ! grep -Eq '\|disabled\||extensions\.json-disabled|active=false|userDisabled=true|signedState=-1' "$firefox_ready_file" 2>/dev/null; then
             echo -e "  Firefox extension: ${GREEN}✓ registered${NC}"
         elif [ -f "$firefox_ready_file" ] \

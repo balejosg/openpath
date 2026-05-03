@@ -327,7 +327,7 @@ with open("$FIREFOX_POLICIES", "r", encoding="utf-8") as fh:
 
 policy_root = policies["policies"]
 assert "monitor-bloqueos@openpath" in policy_root.get("ExtensionSettings", {})
-assert "https://downloads.example/openpath-managed.xpi" in policy_root.get("Extensions", {}).get("Install", [])
+assert "https://downloads.example/openpath-managed.xpi" not in policy_root.get("Extensions", {}).get("Install", [])
 assert "monitor-bloqueos@openpath" in policy_root.get("Extensions", {}).get("Locked", [])
 assert "WebsiteFilter" not in policy_root
 assert "SearchEngines" not in policy_root

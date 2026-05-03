@@ -240,12 +240,16 @@ def cmd_mutate_firefox_policies(args: argparse.Namespace) -> int:
                     except Exception:
                         pass
 
-        if isinstance(installs, list) and install_targets:
-            installs = [item for item in installs if item not in install_targets]
-            extensions["Install"] = installs
-
-        if install_entry and install_entry not in installs:
-            installs.append(install_entry)
+        if isinstance(installs, list):
+            installs = [
+                item
+                for item in installs
+                if item not in install_targets and item != ext_id and ext_id not in str(item)
+            ]
+            if installs:
+                extensions["Install"] = installs
+            else:
+                extensions.pop("Install", None)
 
         locked = extensions.setdefault("Locked", [])
         if ext_id not in locked:

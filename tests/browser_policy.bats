@@ -73,14 +73,20 @@ PYEOF
     grep -q "test-ext@test" "$FIREFOX_POLICIES"
 }
 
-@test "add_extension_to_policies adds to Extensions.Install" {
+@test "add_extension_to_policies does not duplicate force-installed extension through Extensions.Install" {
     source "$PROJECT_DIR/linux/lib/browser.sh"
 
     run add_extension_to_policies "test-ext@test" "/path/to/ext"
     [ "$status" -eq 0 ]
 
-    grep -q "Extensions" "$FIREFOX_POLICIES"
-    grep -q "Install" "$FIREFOX_POLICIES"
+    python3 - <<PYEOF
+import json
+
+with open("$FIREFOX_POLICIES", "r", encoding="utf-8") as fh:
+    policies = json.load(fh)
+
+assert policies["policies"].get("Extensions", {}).get("Install", []) == []
+PYEOF
 }
 
 @test "add_extension_to_policies locks extension" {
@@ -109,7 +115,7 @@ with open("$FIREFOX_POLICIES", "r", encoding="utf-8") as fh:
 
 entry = policies["policies"]["ExtensionSettings"]["test-ext@test"]
 assert entry["install_url"] == "https://downloads.example/test-ext.xpi"
-assert "https://downloads.example/test-ext.xpi" in policies["policies"]["Extensions"]["Install"]
+assert "https://downloads.example/test-ext.xpi" not in policies["policies"].get("Extensions", {}).get("Install", [])
 PYEOF
 }
 
@@ -131,10 +137,10 @@ import json
 with open("$FIREFOX_POLICIES", "r", encoding="utf-8") as fh:
     policies = json.load(fh)
 
-install_entries = policies["policies"]["Extensions"]["Install"]
+install_entries = policies["policies"].get("Extensions", {}).get("Install", [])
 old_entry = "$TEST_TMP_DIR/unpacked-extension"
 assert old_entry not in install_entries, install_entries
-assert install_entries.count("https://school.example/api/extensions/firefox/openpath.xpi") == 1
+assert "https://school.example/api/extensions/firefox/openpath.xpi" not in install_entries
 assert policies["policies"]["ExtensionSettings"]["monitor-bloqueos@openpath"]["install_url"] == "https://school.example/api/extensions/firefox/openpath.xpi"
 PYEOF
 }
