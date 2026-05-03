@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { prepareFirefoxReleaseArtifacts } from './build-firefox-release.mjs';
@@ -18,6 +18,9 @@ const defaultWebExtSignMaxThrottleWaitSeconds = 900;
 const defaultWebExtSignApprovalTimeoutSeconds = 7200;
 const defaultWebExtSignRequestTimeoutSeconds = 120;
 const defaultWebExtSignProcessTimeoutBufferSeconds = 120;
+const defaultWebExtSignRecoveryTimeoutSeconds = 7200;
+const defaultWebExtSignRecoveryPollSeconds = 60;
+const defaultAmoBaseUrl = 'https://addons.mozilla.org/api/v5/';
 
 function fail(message) {
   throw new Error(message);
@@ -52,7 +55,7 @@ export function buildWebExtSignArgs(options) {
     `--api-secret=${apiSecret}`,
   ];
 
-  if (Number.isFinite(approvalTimeoutMs) && approvalTimeoutMs > 0) {
+  if (Number.isFinite(approvalTimeoutMs) && approvalTimeoutMs >= 0) {
     args.push(`--approval-timeout=${approvalTimeoutMs}`);
   }
   if (Number.isFinite(requestTimeoutMs) && requestTimeoutMs > 0) {
@@ -70,6 +73,219 @@ function parseNonNegativeInteger(value, fallback) {
 export function parseWebExtThrottleDelaySeconds(output) {
   const match = /Expected available in\s+(\d+)\s+seconds?/i.exec(output);
   return match ? Number.parseInt(match[1], 10) : null;
+}
+
+export function parseAmoVersionEditUrl(output) {
+  const match =
+    /https:\/\/addons\.mozilla\.org\/[^\s"'<>]+\/developers\/addon\/([^/\s"'<>]+)\/versions\/(\d+)/i.exec(
+      output
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const editUrl = (match[0] ?? '').replace(/[),.;]+$/, '');
+  return {
+    addonId: decodeURIComponent(match[1] ?? ''),
+    versionId: match[2] ?? '',
+    editUrl,
+  };
+}
+
+export function isAmoApprovalTimeout(output) {
+  return /Approval:\s*timeout exceeded/i.test(output);
+}
+
+export function isAmoVersionAlreadyExists(output) {
+  return /Version already exists/i.test(output);
+}
+
+function normalizeAmoBaseUrl(amoBaseUrl = defaultAmoBaseUrl) {
+  const baseUrl = new URL(amoBaseUrl);
+  if (!baseUrl.pathname.endsWith('/')) {
+    baseUrl.pathname += '/';
+  }
+  return baseUrl;
+}
+
+export function buildAmoVersionDetailUrl(options) {
+  const { amoBaseUrl = defaultAmoBaseUrl, addonId, versionId = '', version = '' } = options;
+  const versionLookup = versionId.trim() || `v${version.trim()}`;
+
+  if (!addonId?.trim()) {
+    fail('AMO addon id is required for signed XPI recovery');
+  }
+  if (!versionLookup || versionLookup === 'v') {
+    fail('AMO version id or version is required for signed XPI recovery');
+  }
+
+  return new URL(
+    `addons/addon/${encodeURIComponent(addonId.trim())}/versions/${encodeURIComponent(
+      versionLookup
+    )}/`,
+    normalizeAmoBaseUrl(amoBaseUrl)
+  );
+}
+
+function base64UrlJson(value) {
+  return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+}
+
+export function createAmoJwt(options) {
+  const { apiKey, apiSecret, nowMs = Date.now(), jti = randomUUID() } = options;
+  const issuedAtSeconds = Math.floor(nowMs / 1000);
+  const header = base64UrlJson({ alg: 'HS256', typ: 'JWT' });
+  const payload = base64UrlJson({
+    iss: apiKey,
+    jti,
+    iat: issuedAtSeconds,
+    exp: issuedAtSeconds + 300,
+  });
+  const signature = createHmac('sha256', apiSecret)
+    .update(`${header}.${payload}`)
+    .digest('base64url');
+
+  return `${header}.${payload}.${signature}`;
+}
+
+function buildAmoAuthHeaders(options) {
+  const { apiKey, apiSecret } = options;
+  return {
+    Authorization: `JWT ${createAmoJwt({ apiKey, apiSecret })}`,
+    Accept: 'application/json',
+    'User-Agent': `openpath-firefox-release/${readDeclaredWebExtVersion()}`,
+  };
+}
+
+async function fetchAmoJson(options) {
+  const { url, apiKey, apiSecret, fetchImpl = fetch } = options;
+  const response = await fetchImpl(url, {
+    method: 'GET',
+    headers: buildAmoAuthHeaders({ apiKey, apiSecret }),
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : {};
+
+  if (!response.ok) {
+    fail(`AMO request failed: ${response.status} ${response.statusText} ${text}`.trim());
+  }
+
+  return data;
+}
+
+async function downloadAmoSignedXpi(options) {
+  const { fileUrl, apiKey, apiSecret, artifactsDir, fetchImpl = fetch } = options;
+  fs.mkdirSync(artifactsDir, { recursive: true });
+
+  const url = new URL(fileUrl);
+  const filename = path.basename(url.pathname) || 'openpath-firefox-extension.xpi';
+  const outputPath = path.join(
+    artifactsDir,
+    filename.endsWith('.xpi') ? filename : `${filename}.xpi`
+  );
+  const response = await fetchImpl(url, {
+    method: 'GET',
+    headers: buildAmoAuthHeaders({ apiKey, apiSecret }),
+  });
+
+  if (!response.ok) {
+    fail(`AMO signed XPI download failed: ${response.status} ${response.statusText}`.trim());
+  }
+
+  fs.writeFileSync(outputPath, Buffer.from(await response.arrayBuffer()));
+  return outputPath;
+}
+
+async function sleep(milliseconds) {
+  if (milliseconds <= 0) {
+    return;
+  }
+  await new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+export async function waitForAmoSignedXpi(options) {
+  const {
+    apiKey,
+    apiSecret,
+    addonId,
+    versionId = '',
+    version = '',
+    artifactsDir,
+    amoBaseUrl = defaultAmoBaseUrl,
+    timeoutMs,
+    pollIntervalMs,
+    fetchImpl = fetch,
+    sleepImpl = sleep,
+    nowImpl = Date.now,
+    stdout = process.stdout,
+  } = options;
+  const versionUrl = buildAmoVersionDetailUrl({ amoBaseUrl, addonId, versionId, version });
+  const deadline = nowImpl() + timeoutMs;
+  let attempt = 0;
+
+  while (true) {
+    attempt += 1;
+    const detail = await fetchAmoJson({
+      url: versionUrl,
+      apiKey,
+      apiSecret,
+      fetchImpl,
+    });
+    const fileStatus = detail?.file?.status ?? 'missing';
+    const fileUrl = detail?.file?.url ?? '';
+
+    stdout.write(
+      [
+        '[sign:firefox-release] AMO version status',
+        `addonId=${addonId}`,
+        versionId ? `versionId=${versionId}` : `version=${version}`,
+        `fileStatus=${fileStatus}`,
+        `attempt=${attempt}`,
+      ].join(' ') + '\n'
+    );
+
+    if (fileStatus === 'public' && fileUrl) {
+      const signedXpiPath = await downloadAmoSignedXpi({
+        fileUrl,
+        apiKey,
+        apiSecret,
+        artifactsDir,
+        fetchImpl,
+      });
+      stdout.write(`[sign:firefox-release] Downloaded AMO signed XPI ${signedXpiPath}\n`);
+      return signedXpiPath;
+    }
+
+    if (fileStatus === 'disabled') {
+      fail(`AMO version ${versionId || version} is disabled and cannot be recovered`);
+    }
+
+    const remainingMs = deadline - nowImpl();
+    if (remainingMs <= 0) {
+      fail(
+        `Timed out waiting for AMO signed XPI addonId=${addonId} version=${
+          versionId || version
+        } lastStatus=${fileStatus}`
+      );
+    }
+
+    await sleepImpl(Math.min(pollIntervalMs, remainingMs));
+  }
+}
+
+function readFirefoxExtensionId(sourceDir) {
+  const manifest = readManifest(path.join(sourceDir, 'manifest.json'));
+  const extensionId =
+    manifest.browser_specific_settings?.gecko?.id ?? manifest.applications?.gecko?.id ?? '';
+
+  if (!extensionId) {
+    fail(`manifest.json at ${sourceDir} must define browser_specific_settings.gecko.id`);
+  }
+
+  return String(extensionId);
 }
 
 function sleepSync(milliseconds) {
@@ -358,6 +574,78 @@ Options:
   return parsed;
 }
 
+function createCaptureStream(target, chunks) {
+  return {
+    write(chunk) {
+      const text = String(chunk);
+      chunks.push(text);
+      return target.write(text);
+    },
+  };
+}
+
+async function recoverSignedXpiFromAmo(options) {
+  const {
+    output,
+    apiKey,
+    apiSecret,
+    signingSourceDir,
+    effectiveVersion,
+    artifactsDir,
+    env,
+    stdout = process.stdout,
+  } = options;
+  const editUrl = parseAmoVersionEditUrl(output);
+  const versionAlreadyExists = isAmoVersionAlreadyExists(output);
+
+  if (!editUrl && !versionAlreadyExists) {
+    return null;
+  }
+
+  const recoveryTimeoutMs =
+    parseNonNegativeInteger(
+      env.WEB_EXT_SIGN_RECOVERY_TIMEOUT_SECONDS,
+      defaultWebExtSignRecoveryTimeoutSeconds
+    ) * 1000;
+  const recoveryPollMs =
+    parseNonNegativeInteger(
+      env.WEB_EXT_SIGN_RECOVERY_POLL_SECONDS,
+      defaultWebExtSignRecoveryPollSeconds
+    ) * 1000;
+
+  if (recoveryTimeoutMs === 0) {
+    fail('AMO signed XPI recovery is disabled by WEB_EXT_SIGN_RECOVERY_TIMEOUT_SECONDS=0');
+  }
+
+  if (editUrl) {
+    stdout.write(`[sign:firefox-release] Resuming AMO approval from ${editUrl.editUrl}\n`);
+    return waitForAmoSignedXpi({
+      apiKey,
+      apiSecret,
+      addonId: editUrl.addonId,
+      versionId: editUrl.versionId,
+      artifactsDir,
+      timeoutMs: recoveryTimeoutMs,
+      pollIntervalMs: recoveryPollMs,
+    });
+  }
+
+  const addonId = readFirefoxExtensionId(signingSourceDir);
+  stdout.write(
+    `[sign:firefox-release] AMO version already exists; polling addonId=${addonId} version=${effectiveVersion}\n`
+  );
+
+  return waitForAmoSignedXpi({
+    apiKey,
+    apiSecret,
+    addonId,
+    version: effectiveVersion,
+    artifactsDir,
+    timeoutMs: recoveryTimeoutMs,
+    pollIntervalMs: recoveryPollMs,
+  });
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   try {
     const { installUrl, artifactsDir, version } = parseCliArgs(process.argv.slice(2));
@@ -399,26 +687,63 @@ if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
         ].join(' ')
       );
 
+      const apiKey = process.env.WEB_EXT_API_KEY?.trim();
+      const apiSecret = process.env.WEB_EXT_API_SECRET?.trim();
       const args = buildWebExtSignArgs({
-        apiKey: process.env.WEB_EXT_API_KEY?.trim(),
-        apiSecret: process.env.WEB_EXT_API_SECRET?.trim(),
+        apiKey,
+        apiSecret,
         artifactsDir,
         sourceDir: signingSource.sourceDir,
         approvalTimeoutMs,
         requestTimeoutMs,
       });
+      const webExtOutput = [];
 
       const result = runWebExtSignWithRetry({
         args,
         cwd: extensionRoot,
         processTimeoutMs,
+        stdout: createCaptureStream(process.stdout, webExtOutput),
+        stderr: createCaptureStream(process.stderr, webExtOutput),
       });
 
-      if (result.status !== 0) {
-        fail(`web-ext sign failed with status ${String(result.status ?? 'unknown')}`);
+      let signedXpiPath = '';
+      if (result.status === 0) {
+        try {
+          signedXpiPath = findSignedXpiArtifact(artifactsDir);
+        } catch (error) {
+          signedXpiPath =
+            (await recoverSignedXpiFromAmo({
+              output: webExtOutput.join(''),
+              apiKey,
+              apiSecret,
+              signingSourceDir: signingSource.sourceDir,
+              effectiveVersion: signingSource.effectiveVersion,
+              artifactsDir,
+              env: process.env,
+            })) || '';
+
+          if (!signedXpiPath) {
+            throw error;
+          }
+        }
+      } else {
+        signedXpiPath =
+          (await recoverSignedXpiFromAmo({
+            output: webExtOutput.join(''),
+            apiKey,
+            apiSecret,
+            signingSourceDir: signingSource.sourceDir,
+            effectiveVersion: signingSource.effectiveVersion,
+            artifactsDir,
+            env: process.env,
+          })) || '';
+
+        if (!signedXpiPath) {
+          fail(`web-ext sign failed with status ${String(result.status ?? 'unknown')}`);
+        }
       }
 
-      const signedXpiPath = findSignedXpiArtifact(artifactsDir);
       const prepared = prepareFirefoxReleaseArtifacts({
         extensionRoot,
         signedXpiPath,

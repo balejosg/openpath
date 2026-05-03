@@ -46,6 +46,12 @@ interface PrepareFirefoxReleaseArtifactsModule {
 }
 
 interface SignFirefoxReleaseModule {
+  buildAmoVersionDetailUrl: (options: {
+    amoBaseUrl?: string;
+    addonId: string;
+    versionId?: string;
+    version?: string;
+  }) => URL;
   buildWebExtSignArgs: (options: {
     apiKey: string;
     apiSecret: string;
@@ -54,8 +60,19 @@ interface SignFirefoxReleaseModule {
     approvalTimeoutMs?: number;
     requestTimeoutMs?: number;
   }) => string[];
+  createAmoJwt: (options: {
+    apiKey: string;
+    apiSecret: string;
+    nowMs?: number;
+    jti?: string;
+  }) => string;
   computeFirefoxReleasePayloadHash: (options: { sourceDir?: string }) => string;
   findSignedXpiArtifact: (artifactsDir: string) => string;
+  parseAmoVersionEditUrl: (output: string) => {
+    addonId: string;
+    versionId: string;
+    editUrl: string;
+  } | null;
   parseWebExtThrottleDelaySeconds: (output: string) => number | null;
   prepareSigningSourceDir: (options: { sourceDir?: string; version?: string }) => {
     sourceDir: string;
@@ -76,6 +93,20 @@ interface SignFirefoxReleaseModule {
     stderr?: { write: (chunk: string) => unknown };
     processTimeoutMs?: number;
   }) => SpawnSyncReturns<string> | { status: number };
+  waitForAmoSignedXpi: (options: {
+    apiKey: string;
+    apiSecret: string;
+    addonId: string;
+    versionId?: string;
+    version?: string;
+    artifactsDir: string;
+    timeoutMs: number;
+    pollIntervalMs: number;
+    fetchImpl: typeof fetch;
+    sleepImpl?: (milliseconds: number) => Promise<void>;
+    nowImpl?: () => number;
+    stdout?: { write: (chunk: string) => unknown };
+  }) => Promise<string>;
 }
 
 interface VerifyFirefoxReleaseArtifactsModule {
@@ -88,12 +119,16 @@ interface VerifyFirefoxReleaseArtifactsModule {
 const { prepareFirefoxReleaseArtifacts } =
   (await import('../build-firefox-release.mjs')) as PrepareFirefoxReleaseArtifactsModule;
 const {
+  buildAmoVersionDetailUrl,
   buildWebExtSignArgs,
+  createAmoJwt,
   computeFirefoxReleasePayloadHash,
   findSignedXpiArtifact,
+  parseAmoVersionEditUrl,
   parseWebExtThrottleDelaySeconds,
   prepareSigningSourceDir,
   runWebExtSignWithRetry,
+  waitForAmoSignedXpi,
 } = (await import('../sign-firefox-release.mjs')) as SignFirefoxReleaseModule;
 const { verifyFirefoxReleaseArtifacts } =
   (await import('../verify-firefox-release-artifacts.mjs')) as VerifyFirefoxReleaseArtifactsModule;
@@ -294,6 +329,22 @@ void describe('Firefox release signing helpers', () => {
     ]);
   });
 
+  void test('buildWebExtSignArgs preserves an explicit zero approval timeout', () => {
+    const args = buildWebExtSignArgs({
+      apiKey: 'user:123:456',
+      apiSecret: 'top-secret',
+      artifactsDir: 'build/firefox-release/raw-signed',
+      sourceDir: extensionRoot,
+      approvalTimeoutMs: 0,
+      requestTimeoutMs: 120_000,
+    });
+
+    assert.ok(
+      args.includes('--approval-timeout=0'),
+      'approval-timeout=0 must reach web-ext so OpenPath can poll AMO explicitly'
+    );
+  });
+
   void test('findSignedXpiArtifact picks the newest XPI from the artifacts directory', () => {
     const artifactsDir = createTempDir('openpath-firefox-artifacts-');
     const olderXpiPath = path.join(artifactsDir, 'older.xpi');
@@ -316,6 +367,112 @@ void describe('Firefox release signing helpers', () => {
       631
     );
     assert.equal(parseWebExtThrottleDelaySeconds('WebExtError: unrelated failure'), null);
+  });
+
+  void test('parseAmoVersionEditUrl extracts the AMO add-on and version ids', () => {
+    assert.deepEqual(
+      parseAmoVersionEditUrl(
+        'Approval: timeout exceeded. When approved the signed XPI file can be downloaded from https://addons.mozilla.org/en-US/developers/addon/b0694d0ac22b478c88f7/versions/6244849'
+      ),
+      {
+        addonId: 'b0694d0ac22b478c88f7',
+        versionId: '6244849',
+        editUrl:
+          'https://addons.mozilla.org/en-US/developers/addon/b0694d0ac22b478c88f7/versions/6244849',
+      }
+    );
+    assert.equal(parseAmoVersionEditUrl('WebExtError: unrelated failure'), null);
+  });
+
+  void test('buildAmoVersionDetailUrl uses v-prefixed version lookups for reruns', () => {
+    assert.equal(
+      buildAmoVersionDetailUrl({
+        addonId: 'monitor-bloqueos@openpath',
+        version: '2.0.0.777766400',
+      }).href,
+      'https://addons.mozilla.org/api/v5/addons/addon/monitor-bloqueos%40openpath/versions/v2.0.0.777766400/'
+    );
+  });
+
+  void test('createAmoJwt builds an AMO-compatible HMAC token', () => {
+    const token = createAmoJwt({
+      apiKey: 'user:123:456',
+      apiSecret: 'secret',
+      nowMs: 1_700_000_000_000,
+      jti: 'nonce-1',
+    });
+    const [encodedHeader, encodedPayload, encodedSignature] = token.split('.');
+
+    assert.ok(encodedHeader);
+    assert.ok(encodedPayload);
+    assert.ok(encodedSignature);
+    assert.deepEqual(JSON.parse(Buffer.from(encodedHeader, 'base64url').toString('utf8')), {
+      alg: 'HS256',
+      typ: 'JWT',
+    });
+    assert.deepEqual(JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8')), {
+      iss: 'user:123:456',
+      jti: 'nonce-1',
+      iat: 1_700_000_000,
+      exp: 1_700_000_300,
+    });
+  });
+
+  void test('waitForAmoSignedXpi polls AMO status and downloads the public file', async () => {
+    const artifactsDir = createTempDir('openpath-firefox-amo-download-');
+    const requests: string[] = [];
+    const stdoutChunks: string[] = [];
+    const responses = [
+      new Response(
+        JSON.stringify({
+          file: {
+            status: 'unreviewed',
+          },
+        }),
+        { status: 200 }
+      ),
+      new Response(
+        JSON.stringify({
+          file: {
+            status: 'public',
+            url: 'https://addons.mozilla.org/firefox/downloads/file/6244849/signed.xpi',
+          },
+        }),
+        { status: 200 }
+      ),
+      new Response('signed-xpi', { status: 200 }),
+    ];
+
+    const signedXpiPath = await waitForAmoSignedXpi({
+      apiKey: 'user:123:456',
+      apiSecret: 'secret',
+      addonId: 'b0694d0ac22b478c88f7',
+      versionId: '6244849',
+      artifactsDir,
+      timeoutMs: 10_000,
+      pollIntervalMs: 1,
+      nowImpl: () => Date.parse('2026-05-03T05:00:00Z'),
+      sleepImpl: () => Promise.resolve(),
+      stdout: { write: (chunk) => stdoutChunks.push(chunk) },
+      fetchImpl: (input) => {
+        const requestUrl =
+          input instanceof Request ? input.url : input instanceof URL ? input.href : input;
+        requests.push(requestUrl);
+        const response = responses.shift();
+        if (!response) {
+          throw new Error(`unexpected request ${requestUrl}`);
+        }
+        return Promise.resolve(response);
+      },
+    });
+
+    assert.equal(readFileSync(signedXpiPath, 'utf8'), 'signed-xpi');
+    assert.deepEqual(requests, [
+      'https://addons.mozilla.org/api/v5/addons/addon/b0694d0ac22b478c88f7/versions/6244849/',
+      'https://addons.mozilla.org/api/v5/addons/addon/b0694d0ac22b478c88f7/versions/6244849/',
+      'https://addons.mozilla.org/firefox/downloads/file/6244849/signed.xpi',
+    ]);
+    assert.match(stdoutChunks.join(''), /AMO version status addonId=b0694d0ac22b478c88f7/);
   });
 
   void test('runWebExtSignWithRetry waits and retries AMO throttling responses', () => {
