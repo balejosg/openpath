@@ -58,7 +58,8 @@
     "docker:manifests": "node scripts/generate-docker-manifests.mjs",
     "docker:manifests:check": "node scripts/generate-docker-manifests.mjs --check",
     "diagnostics:windows:direct": "node scripts/run-windows-runner-direct.mjs",
-    "diagnostics:linux-student:local": "node scripts/run-linux-student-policy-local.mjs"
+    "diagnostics:linux-student:local": "node scripts/run-linux-student-policy-local.mjs",
+    "ops:change-brief": "node ../scripts/change-brief.mjs --workspace .. --repo openpath"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.4.0",
