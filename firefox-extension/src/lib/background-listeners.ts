@@ -88,6 +88,11 @@ export function registerBackgroundListeners(options: BackgroundListenersOptions)
       const tab = await options.browser.tabs.get(tabId);
       return tab.url;
     },
+    onBackgroundAutoAllowError: (error) => {
+      logger.error('[Monitor] Fallo auto-allow de recurso de pagina', {
+        error: getErrorMessage(error),
+      });
+    },
   });
 
   options.browser.webRequest.onBeforeRequest.addListener(

@@ -16,6 +16,7 @@ export interface PageResourceAutoAllowGateDeps {
     targetUrl: string
   ) => Promise<void>;
   getTabUrl: (tabId: number) => Promise<string | null | undefined>;
+  onBackgroundAutoAllowError?: (error: unknown) => void;
 }
 
 export interface PageResourceAutoAllowGate {
@@ -61,23 +62,27 @@ export function createPageResourceAutoAllowGate(
   const autoAllowBeforeRequestTimeoutMs =
     deps.autoAllowBeforeRequestTimeoutMs ?? AUTO_ALLOW_BEFORE_REQUEST_TIMEOUT_MS;
 
-  async function handlePageResourceCandidateMessage(
+  function handlePageResourceCandidateMessage(
     message: unknown,
     sender: Runtime.MessageSender
   ): Promise<{ error?: string; success: boolean }> {
     const parsed = buildAutoAllowCandidateFromMessage(message, sender);
     if (!parsed.ok) {
-      return { success: false, error: parsed.error };
+      return Promise.resolve({ success: false, error: parsed.error });
     }
 
-    await deps.autoAllowBlockedDomain(
-      parsed.candidate.tabId,
-      parsed.candidate.hostname,
-      parsed.candidate.originPage,
-      parsed.candidate.requestType,
-      parsed.candidate.targetUrl
-    );
-    return { success: true };
+    void deps
+      .autoAllowBlockedDomain(
+        parsed.candidate.tabId,
+        parsed.candidate.hostname,
+        parsed.candidate.originPage,
+        parsed.candidate.requestType,
+        parsed.candidate.targetUrl
+      )
+      .catch((error: unknown) => {
+        deps.onBackgroundAutoAllowError?.(error);
+      });
+    return Promise.resolve({ success: true });
   }
 
   async function triggerAutoAllowForEligibleRequest(details: {

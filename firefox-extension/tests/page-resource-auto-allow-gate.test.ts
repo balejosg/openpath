@@ -80,6 +80,43 @@ void describe('page resource auto-allow gate', () => {
     assert.deepEqual(response, { success: false, error: 'resourceUrl is required' });
   });
 
+  void test('runtime candidate messages acknowledge before background auto-allow completes', async () => {
+    let release: (() => void) | undefined;
+    const calls: unknown[] = [];
+    const gate = createPageResourceAutoAllowGate({
+      autoAllowBlockedDomain: (tabId, hostname, origin, requestType, targetUrl) => {
+        calls.push({ tabId, hostname, origin, requestType, targetUrl });
+        return new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      },
+      getTabUrl: () => Promise.resolve(undefined),
+    });
+
+    const response = await gate.handlePageResourceCandidateMessage(
+      {
+        action: 'openpathPageResourceCandidate',
+        kind: 'script',
+        pageUrl: 'https://lesson.example/app',
+        resourceUrl: 'https://cdn.lesson.example/app.js',
+      },
+      { tab: { id: 9, url: 'https://lesson.example/app' } } as Runtime.MessageSender
+    );
+
+    assert.deepEqual(response, { success: true });
+    assert.deepEqual(calls, [
+      {
+        tabId: 9,
+        hostname: 'cdn.lesson.example',
+        origin: 'https://lesson.example/app',
+        requestType: 'script',
+        targetUrl: 'https://cdn.lesson.example/app.js',
+      },
+    ]);
+
+    release?.();
+  });
+
   void test('missing request type with page context becomes a generic page resource', async () => {
     const calls: unknown[] = [];
     const gate = createPageResourceAutoAllowGate({
